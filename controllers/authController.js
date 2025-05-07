@@ -141,7 +141,7 @@ exports.login = async (req, res) => {
       // You can send OTP to email here using nodemailer or other services
       
       res.json({
-        message: 'OTP sent to your email',
+        message: 'OTP sent to your email.',
         email: user.email,
         otp: otp
       });
