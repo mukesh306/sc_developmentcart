@@ -140,7 +140,11 @@ exports.login = async (req, res) => {
   
       // You can send OTP to email here using nodemailer or other services
       
-      res.json({ message: 'OTP sent to your email', email: user.email });
+      res.json({
+        message: 'OTP sent to your email',
+        email: user.email,
+        otp: otp
+      });
     } catch (err) {
       console.error(err.message);
       res.status(500).send('Server error');
