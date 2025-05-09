@@ -61,6 +61,8 @@ exports.signup = async (req, res) => {
   }
 };
 
+
+
 exports.Userlogin = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -90,6 +92,7 @@ exports.Userlogin = async (req, res) => {
     res.status(500).json({ message: 'Server error during login.' });
   }
 };
+
 
   exports.completeProfile = async (req, res) => {
     try {

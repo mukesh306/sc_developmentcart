@@ -16,7 +16,6 @@ const userSchema = new mongoose.Schema({
   classOrYear: String,
   aadharCard: String,
   lastYearMarksheet: String,
-
   createdAt: { type: Date, default: Date.now }
 });
 

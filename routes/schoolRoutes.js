@@ -9,5 +9,6 @@ router.get('/School', schoolController.getSchools);
 router.get('/college', schoolController.getCollege);
 router.get('/institute', schoolController.institute);
 router.delete('/School/:id', auth, schoolController.deleteSchool);
-router.put('/School/:id', auth, schoolController.updateInstitution);
+router.delete('/college/:id', auth, schoolController.deleteCollege);
+router.put('/update/:id', auth, schoolController.updateInstitution);
 module.exports = router;
