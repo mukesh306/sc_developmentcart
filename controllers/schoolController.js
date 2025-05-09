@@ -102,7 +102,6 @@ exports.getSchools = async (req, res) => {
     }
   };
   
- 
   exports.deleteSchool = async (req, res) => {
     try {
       const { id } = req.params;
@@ -120,16 +119,17 @@ exports.getSchools = async (req, res) => {
     }
   };
 
-exports.institute = async (req, res) => {
-  try {
-    const schools = await School.find();
-    const colleges = await College.find();
-    res.status(200).json({
-      schools,  
-      colleges   
-    });
-  } catch (error) {
-    console.error('Error fetching schools and colleges:', error);
-    res.status(500).json({ message: 'Server error while fetching data' });
-  }
-};
+  exports.institute = async (req, res) => {
+    try {
+      const schools = await School.find();
+      const colleges = await College.find();
+  
+      const institutes = [...schools, ...colleges];
+  
+      res.status(200).json({ institutes });
+    } catch (error) {
+      console.error('Error fetching schools and colleges:', error);
+      res.status(500).json({ message: 'Server error while fetching data' });
+    }
+  };
+  
