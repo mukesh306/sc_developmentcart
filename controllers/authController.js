@@ -49,71 +49,6 @@ exports.register = async (req, res) => {
 };
 
 
-// exports.login = async (req, res) => {
-//   try {
-//     const { email, password } = req.body;
-
-//     if (!email || !password) {
-//       return res.status(400).json({ message: 'Email and password are required.' });
-//     }
-
-//     const user = await User.findOne({ email });
-//     if (!user) {
-//       return res.status(400).json({ message: 'Invalid credentials' });
-//     }
-
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) {
-//       return res.status(400).json({ message: 'Invalid credentials' });
-//     }
-
-//     // Generate OTP and expiry
-//     const otp = Math.floor(100000 + Math.random() * 900000).toString();
-//     const otpExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
-
-//     // Save OTP and expiry to user
-//     user.otp = otp;
-//     user.otpExpires = otpExpires;
-//     await user.save();
-
-//     // Environment variables
-//     const { EMAILJS_SERVICE_ID, EMAILJS_TEMPLATE_ID, EMAILJS_PRIVATE_KEY } = process.env;
-
-//     if (!EMAILJS_SERVICE_ID || !EMAILJS_TEMPLATE_ID || !EMAILJS_PRIVATE_KEY) {
-//       return res.status(500).json({ message: 'EmailJS configuration missing.' });
-//     }
-
-//     // Prepare email data
-//     const emailData = {
-//       service_id: EMAILJS_SERVICE_ID,
-//       template_id: EMAILJS_TEMPLATE_ID,
-//       template_params: {
-//         to_email: user.email,
-//         to_name: user.name || 'User',
-//         otp: otp,
-//       },
-//     };
-
-//     // Send email with Authorization Bearer Token
-//     await axios.post('https://api.emailjs.com/api/v1.0/email/send', emailData, {
-//       headers: {
-//         'Content-Type': 'application/json',
-//         'Authorization': `Bearer ${EMAILJS_PRIVATE_KEY}`,
-//       },
-//     });
-
-//     return res.status(200).json({ message: 'OTP sent to email.' });
-
-//   } catch (err) {
-//     console.error('Login error:', err.message);
-//     if (err.response) {
-//       console.error('EmailJS error:', err.response.data);
-//     }
-//     return res.status(500).json({ message: 'Server error' });
-//   }
-// };
-
-
 
 const transporter = nodemailer.createTransport({
   service: 'gmail',
@@ -194,37 +129,3 @@ exports.login = async (req, res) => {
     }
   };
   
-
-// exports.login = async (req, res) => {
-//   try {
-//     const { email, password } = req.body;
-    
-//     let user = await User.findOne({ email });
-//     if (!user) {
-//       return res.status(400).json({ message: 'Invalid credentials' });
-//     }
-    
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) {
-//       return res.status(400).json({ message: 'Invalid credentials' });
-//     }
-    
-//     const payload = {
-//       id: user.id
-//     };
-    
-//     jwt.sign(
-//       payload,
-//       process.env.JWT_SECRET,
-//       { expiresIn: '1h' },
-//       (err, token) => {
-//         if (err) throw err;
-//         res.json({ token });
-//       }
-//     );
-//   } catch (err) {
-//     console.error(err.message);
-//     res.status(500).send('Server error');
-//   }
-// };
-
