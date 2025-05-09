@@ -1,33 +1,47 @@
 // controllers/schoolController.js
 
 const School = require('../models/school');
-exports.addSchool = async (req, res) => {
-  try {
-    const { type, price } = req.body;
+const College = require('../models/college');
 
-    if (!type || price === undefined) {
-      return res.status(400).json({ message: 'Type and price are required.' });
+  exports.addInstitution = async (req, res) => {
+    try {
+      const { name, price, type } = req.body;
+  
+      if (!name || price === undefined || !type) {
+        return res.status(400).json({ message: 'Name, price, and type are required.' });
+      }
+  
+      if (typeof price !== 'number' || price < 0) {
+        return res.status(400).json({ message: 'Price must be a positive number.' });
+      }
+  
+      if (!['college', 'school'].includes(type.toLowerCase())) {
+        return res.status(400).json({ message: 'Invalid type. Type must be either "college" or "school".' });
+      }
+  
+      const Model = type.toLowerCase() === 'college' ? College : School;
+  
+      const existing = await Model.findOne({ name: name.trim() });
+      if (existing) {
+        return res.status(400).json({ message: `${type.charAt(0).toUpperCase() + type.slice(1)} already exists.` });
+      }
+  
+      const newInstitution = new Model({
+        name: name.trim(),
+        price,
+        createdBy: req.user._id,
+      });
+  
+      await newInstitution.save();
+  
+      res.status(201).json({ message: `${type.charAt(0).toUpperCase() + type.slice(1)} added successfully.`, data: newInstitution });
+  
+    } catch (error) {
+      console.error('Error adding institution:', error);
+      res.status(500).json({ message: 'Server error while adding institution.' });
     }
-
-    if (typeof price !== 'number' || price < 0) {
-      return res.status(400).json({ message: 'Price must be a positive number.' });
-    }
-
-    const newSchool = new School({
-      type,
-      price,
-      createdBy: req.user._id, 
-    });
-
-    await newSchool.save();
-
-    res.status(201).json({ message: 'School added successfully.', school: newSchool });
-  } catch (error) {
-    console.error('Error adding school:', error);
-    res.status(500).json({ message: 'Server error while adding school.' });
-  }
-};
-
+  };
+  
 
 
 exports.getSchools = async (req, res) => {
@@ -40,26 +54,52 @@ exports.getSchools = async (req, res) => {
     }
   };
   
- 
-  exports.updateSchool = async (req, res) => {
+
+  exports.getCollege = async (req, res) => {
+    try {
+      const colleges = await College.find();
+      res.status(200).json(colleges);
+    } catch (error) {
+      console.error('Error fetching colleges:', error);
+      res.status(500).json({ message: 'Server error while fetching colleges' });
+    }
+  };
+  exports.updateInstitution = async (req, res) => {
     try {
       const { id } = req.params;
-      const { type, price } = req.body;
+      const { name, price, type } = req.body;
   
-      const updatedSchool = await School.findByIdAndUpdate(
-        id,
-        { type, price },
-        { new: true }
-      );
-  
-      if (!updatedSchool) {
-        return res.status(404).json({ message: 'School not found' });
+      if (!id || !type) {
+        return res.status(400).json({ message: 'ID and type are required.' });
       }
   
-      res.status(200).json({ message: 'School updated successfully', school: updatedSchool });
+      if (!['college', 'school'].includes(type.toLowerCase())) {
+        return res.status(400).json({ message: 'Invalid type. Type must be either "college" or "school".' });
+      }
+  
+      const Model = type.toLowerCase() === 'college' ? College : School;
+  
+      const institution = await Model.findById(id);
+      if (!institution) {
+        return res.status(404).json({ message: `${type.charAt(0).toUpperCase() + type.slice(1)} not found.` });
+      }
+  
+      // Optional fields update
+      if (name) institution.name = name.trim();
+      if (price !== undefined) {
+        if (typeof price !== 'number' || price < 0) {
+          return res.status(400).json({ message: 'Price must be a positive number.' });
+        }
+        institution.price = price;
+      }
+  
+      await institution.save();
+  
+      res.status(200).json({ message: `${type.charAt(0).toUpperCase() + type.slice(1)} updated successfully.`, data: institution });
+  
     } catch (error) {
-      console.error('Error updating school:', error);
-      res.status(500).json({ message: 'Server error while updating school' });
+      console.error('Error updating institution:', error);
+      res.status(500).json({ message: 'Server error while updating institution.' });
     }
   };
   
@@ -80,3 +120,19 @@ exports.getSchools = async (req, res) => {
       res.status(500).json({ message: 'Server error while deleting school' });
     }
   };
+
+
+  
+exports.institute = async (req, res) => {
+  try {
+    const schools = await School.find();
+    const colleges = await College.find();
+    res.status(200).json({
+      schools,  
+      colleges   
+    });
+  } catch (error) {
+    console.error('Error fetching schools and colleges:', error);
+    res.status(500).json({ message: 'Server error while fetching data' });
+  }
+};

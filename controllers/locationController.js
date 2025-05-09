@@ -62,68 +62,33 @@ exports.createLocation = async (req, res) => {
 
 
 
-
-
-exports.getAllLocations = async (req, res) => {
+exports.getLocation = async (req, res) => {
   try {
-    const countries = await location.aggregate([
-      { $match: { type: 'country' } },
-      {
-        $lookup: {
-          from: 'locations',
-          localField: '_id',
-          foreignField: 'parent',
-          as: 'states'
-        }
-      },
-      {
-        $unwind: {
-          path: '$states',
-          preserveNullAndEmptyArrays: true
-        }
-      },
-      {
-        $lookup: {
-          from: 'locations',
-          localField: 'states._id',
-          foreignField: 'parent',
-          as: 'cities'
-        }
-      },
-      {
-        $group: {
-          _id: '$_id',
-          name: { $first: '$name' },
-          type: { $first: '$type' },
-          createdBy: { $first: '$createdBy' },
-          states: {
-            $push: {
-              $cond: [
-                { $gt: ['$$ROOT.states', null] },
-                {
-                  _id: '$states._id',
-                  name: '$states.name',
-                  type: '$states.type',
-                  parent: '$states.parent',
-                  cities: '$cities'
-                },
-                '$$REMOVE'
-              ]
-            }
-          }
-        }
-      }
-    ]);
+    const { type, parentId } = req.query;
 
-    res.status(200).json(countries);
+    if (!type) {
+      return res.status(400).json({ message: 'Location type is required.' });
+    }
+
+    if (!['country', 'state', 'city'].includes(type)) {
+      return res.status(400).json({ message: 'Invalid location type.' });
+    }
+
+    const filter = { type };
+
+    // Only add parentId filter for state and city
+    if ((type === 'state' || type === 'city') && parentId) {
+      filter.parent = parentId;
+    }
+
+    const locations = await location.find(filter).select('name type parent createdBy');
+
+    res.status(200).json({ locations });
   } catch (error) {
-    console.error('Error fetching location hierarchy:', error);
-    res.status(500).json({ message: 'Server error while fetching location data.' });
+    console.error('Error fetching locations:', error);
+    res.status(500).json({ message: 'Server error while fetching locations.' });
   }
 };
-
-
-
 
 
 exports.deleteLocation = async (req, res) => {
@@ -135,16 +100,47 @@ exports.deleteLocation = async (req, res) => {
       return res.status(404).json({ message: 'Location not found.' });
     }
 
-    // Check for child locations
-    const child = await location.findOne({ parent: id });
-    if (child) {
-      return res.status(400).json({
-        message: `Cannot delete ${locationToDelete.type} because it has dependent ${child.type}(s).`,
-      });
+    if (locationToDelete.type === 'city') {
+      // City can be deleted anytime
+      await location.findByIdAndDelete(id);
+      return res.status(200).json({ message: 'City deleted successfully.' });
     }
 
-    await location.findByIdAndDelete(id);
-    res.status(200).json({ message: `${locationToDelete.type} deleted successfully.` });
+    if (locationToDelete.type === 'state') {
+      // Check if state has any cities
+      const hasCities = await location.exists({ parent: id, type: 'city' });
+      if (hasCities) {
+        return res.status(400).json({ message: 'Cannot delete state because it has cities.' });
+      }
+
+      // Safe to delete state
+      await location.findByIdAndDelete(id);
+      return res.status(200).json({ message: 'State deleted successfully.' });
+    }
+
+    if (locationToDelete.type === 'country') {
+      // Check for any states under country
+      const states = await location.find({ parent: id, type: 'state' });
+
+      if (states.length > 0) {
+        // Check if any of those states have cities
+        const stateIds = states.map(s => s._id);
+        const cities = await location.find({ parent: { $in: stateIds }, type: 'city' });
+
+        if (cities.length > 0) {
+          return res.status(400).json({ message: 'Cannot delete country because it has states and cities.' });
+        }
+
+        return res.status(400).json({ message: 'Cannot delete country because it has states.' });
+      }
+
+      // Safe to delete country
+      await location.findByIdAndDelete(id);
+      return res.status(200).json({ message: 'Country deleted successfully.' });
+    }
+
+    // Fallback (should not happen)
+    res.status(400).json({ message: 'Invalid location type.' });
 
   } catch (error) {
     console.error('Error deleting location:', error);

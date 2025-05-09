@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const CollegeSchema = new mongoose.Schema({
-    type: { type: String, required: true },
+    name: { type: String, required: true },
     price: { type: Number, required: true },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
     createdAt: {
