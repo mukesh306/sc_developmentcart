@@ -1,7 +1,7 @@
 const User = require('../models/admin');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
-
+const nodemailer = require('nodemailer'); 
 
 const axios = require('axios');
 
@@ -115,42 +115,58 @@ exports.register = async (req, res) => {
 
 
 
+const transporter = nodemailer.createTransport({
+  service: 'gmail',
+  auth: {
+    user: 'mukeshkumarbst33@gmail.com', 
+    pass: 'xdiw vbqx uckh asip' 
+  }
+});
+
 
 exports.login = async (req, res) => {
-    try {
-      const { email, password } = req.body;
-      
-      let user = await User.findOne({ email });
-      if (!user) {
-        return res.status(400).json({ message: 'Invalid credentials' });
-      }
-      
-      const isMatch = await bcrypt.compare(password, user.password);
-      if (!isMatch) {
-        return res.status(400).json({ message: 'Invalid credentials' });
-      }
-  
-      // Generate a 6-digit OTP
-      const otp = Math.floor(100000 + Math.random() * 900000).toString();
-      
-      // Save OTP and expiry (5 minutes)
-      user.otp = otp;
-      user.otpExpires = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
-      await user.save();
-  
-      // You can send OTP to email here using nodemailer or other services
-      
-      res.json({
-        message: 'OTP sent to your email.',
-        email: user.email,
-        otp: otp
-      });
-    } catch (err) {
-      console.error(err.message);
-      res.status(500).send('Server error');
-    }
-  };
+  try {
+    const { email, password } = req.body;
 
+    let user = await User.findOne({ email });
+    if (!user) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch) {
+      return res.status(400).json({ message: 'Invalid credentials' });
+    }
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+
+    user.otp = otp;
+    user.otpExpires = new Date(Date.now() + 5 * 60 * 1000); 
+    await user.save();
+
+    await transporter.sendMail({
+      from: 'mukeshkumarbst33@gmail.com',  
+      to: user.email,
+      subject: 'Your One-Time Password (OTP) Code',
+      text: `Your OTP is ${otp}. It will expire in 5 minutes.`,
+      html: `
+        <div style="font-family: Arial, sans-serif; font-size: 16px;">
+          <p>Hello,</p>
+          <p>Your OTP code is <strong>${otp}</strong>.</p>
+          <p>This code will expire in <strong>5 minutes</strong>.</p>
+          <p>If you did not request this, please ignore this email.</p>
+          <br>
+          <p>Thank you,<br>Your App Team</p>
+        </div>
+      `
+    });
+
+    res.json({ message: 'OTP sent to your email', email: user.email });
+  } catch (err) {
+    console.error(err);
+    res.status(500).send('Server error');
+  }
+};
 
 
   exports.verifyOtp = async (req, res) => {
