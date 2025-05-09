@@ -17,7 +17,6 @@ app.use('/uploads', express.static('uploads'));
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/v1', require('./routes/locationRoutes'));
 
-
 app.use('/api/v1', schoolRoutes);
 
 app.use('/api/v1', userRoutes);

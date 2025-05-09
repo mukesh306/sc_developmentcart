@@ -43,7 +43,6 @@ const College = require('../models/college');
   };
   
 
-
 exports.getSchools = async (req, res) => {
     try {
       const schools = await School.find();
@@ -121,8 +120,6 @@ exports.getSchools = async (req, res) => {
     }
   };
 
-
-  
 exports.institute = async (req, res) => {
   try {
     const schools = await School.find();
