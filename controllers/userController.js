@@ -1,7 +1,9 @@
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
-
-
+const jwt = require('jsonwebtoken');
+const College = require('../models/college');
+const School = require('../models/school');
+const mongoose = require('mongoose');
 exports.signup = async (req, res) => {
   try {
     const {
@@ -53,7 +55,6 @@ exports.signup = async (req, res) => {
 
     await newUser.save();
 
-   
     res.status(201).json({ message: 'Registered successfully. Redirecting to complete your profile.' });
 
   } catch (error) {
@@ -63,58 +64,141 @@ exports.signup = async (req, res) => {
 };
 
 
-exports.Userlogin = async (req, res) => {
-    const { email, password } = req.body;
-  
-    if (!email || !password) return res.status(400).json({ message: 'Email and password are required.' });
-  
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: 'User not found.' });
-  
-    const isMatch = await bcrypt.compare(password, user.password);
-    if (!isMatch) return res.status(401).json({ message: 'Invalid credentials.' });
-  
-    res.status(200).json({ message: 'Login successful.', user });
-  };
-  
 
-  exports.completeProfile = async (req, res) => {
-    try {
-      const userId = req.params.id;
-      const {
-        country, state, city, pincode,
-        institutionType, institutionName,
-        classOrYear
-      } = req.body;
-  
-      if (pincode && !/^\d+$/.test(pincode)) {
-        return res.status(400).json({ message: 'Invalid Pincode' });
-      }
-  
-      const updatedFields = {
-        country,
-        state,
-        city,
-        pincode,
-        institutionType,
-        institutionName,
-        classOrYear
-      };
-  
-      if (req.files?.aadharCard) {
-        updatedFields.aadharCard = req.files.aadharCard[0].path;
-      }
-  
-      if (req.files?.lastYearMarksheet) {
-        updatedFields.lastYearMarksheet = req.files.lastYearMarksheet[0].path;
-      }
-  
-      const updatedUser = await User.findByIdAndUpdate(userId, updatedFields, { new: true });
-  
-      res.status(200).json({ message: 'Profile updated. Redirecting to home page.', user: updatedUser });
-    } catch (error) {
-      const fileError = error.message.includes('file') ? error.message : 'Server error';
-      res.status(500).json({ message: fileError });
+exports.Userlogin = async (req, res) => {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password)
+      return res.status(400).json({ message: 'Email and password are required.' });
+
+    const user = await User.findOne({ email });
+    if (!user)
+      return res.status(404).json({ message: 'User not found.' });
+
+    const isMatch = await bcrypt.compare(password, user.password);
+    if (!isMatch)
+      return res.status(401).json({ message: 'Invalid credentials.' });
+
+    // ✅ Generate JWT token
+    const payload = { id: user._id };
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' });
+
+    res.status(200).json({
+      message: 'Login successful.',
+      user,
+      token
+    });
+  } catch (error) {
+    console.error('Login error:', error);
+    res.status(500).json({ message: 'Server error during login.' });
+  }
+};
+
+
+
+exports.completeProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    let {
+      countryId,
+      stateId,
+      cityId,
+      pincode,
+      studentType,
+      schoolName,
+      instituteName,
+      collegeName,
+      className
+    } = req.body;
+
+    if (pincode && !/^\d+$/.test(pincode)) {
+      return res.status(400).json({ message: 'Invalid Pincode' });
     }
-  };
-  
+
+    const updatedFields = {
+      pincode,
+      studentType,
+      schoolName,
+      instituteName,
+      collegeName,
+    };
+
+    // Only assign ObjectId fields if they are valid non-empty values
+    if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
+    if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
+    if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
+    if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
+
+    // Handle file uploads
+    if (req.files?.aadharCard?.[0]) {
+      updatedFields.aadharCard = req.files.aadharCard[0].path;
+    }
+    if (req.files?.marksheet?.[0]) {
+      updatedFields.marksheet = req.files.marksheet[0].path;
+    }
+
+    let user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
+      .populate('countryId')
+      .populate('stateId')
+      .populate('cityId');
+
+    // Populate className based on studentType
+    let classDetails = null;
+    if (studentType === 'school' && mongoose.Types.ObjectId.isValid(className)) {
+      classDetails = await School.findById(className);
+    } else if (studentType === 'college' && mongoose.Types.ObjectId.isValid(className)) {
+      classDetails = await College.findById(className);
+    } else if (studentType === 'institute' && mongoose.Types.ObjectId.isValid(className)) {
+      classDetails = await Institute.findById(className);
+    }
+
+    // Final user formatting
+    const formattedUser = {
+      ...user._doc,
+      country: user.countryId?.name || '',
+      state: user.stateId?.name || '',
+      city: user.cityId?.name || '',
+      institutionName: schoolName || collegeName || instituteName || '',
+      institutionType: studentType || '',
+      classOrYear: classDetails?.name || '',
+    };
+
+    res.status(200).json({
+      message: 'Profile updated. Redirecting to home page.',
+      user: formattedUser
+    });
+  } catch (error) {
+    console.error('Complete Profile Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+exports.getUserProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await User.findById(userId)
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
+      .populate('className', 'name');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    res.status(200).json({
+      message: 'User profile fetched successfully.',
+      user,
+    });
+  } catch (error) {
+    console.error('Get User Profile Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
