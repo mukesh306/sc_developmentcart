@@ -88,7 +88,7 @@ exports.Userlogin = async (req, res) => {
 
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch)
-      return res.status(401).json({ message: 'Invalid credentials.' });
+      return res.status(401).json({ message: 'Invalid Password.' });
 
     // ✅ Generate JWT token
     const payload = { id: user._id };
@@ -222,7 +222,7 @@ exports.sendResetOTP = async (req, res) => {
     if (!user) return res.status(404).json({ message: 'User not found' });
 
     const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
-    const expiry = new Date(Date.now() + 10 * 60 * 1000); 
+    const expiry = new Date(Date.now() + 5 * 60 * 1000); 
 
     user.resetPasswordOTP = otp;
     user.resetPasswordExpires = expiry;
@@ -282,7 +282,6 @@ exports.loginWithOTP = async (req, res) => {
     res.status(200).json({
       message: 'Login successful',
       token,
-      user,
     });
   } catch (error) {
     console.error('OTP Login Error:', error);
