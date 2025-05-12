@@ -17,5 +17,8 @@ router.post(
 
 
   router.get('/getUserProfile',auth, userController.getUserProfile);
+   router.post('/send-reset-otp', userController.sendResetOTP);
+   router.post('/login-with-otp',userController.loginWithOTP);
+    router.post('/reset-password-after-otp',userController.resetPasswordAfterOTPLogin);
 module.exports = router;
 

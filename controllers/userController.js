@@ -4,6 +4,8 @@ const jwt = require('jsonwebtoken');
 const College = require('../models/college');
 const School = require('../models/school');
 const mongoose = require('mongoose');
+
+const nodemailer = require('nodemailer');
 exports.signup = async (req, res) => {
   try {
     const {
@@ -24,7 +26,6 @@ exports.signup = async (req, res) => {
     if (!password) return res.status(400).json({ message: 'Create Password can’t remain empty.' });
     if (!confirmPassword) return res.status(400).json({ message: 'Confirm Password can’t remain empty.' });
 
-   
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(password)) {
       return res.status(400).json({
@@ -55,7 +56,16 @@ exports.signup = async (req, res) => {
 
     await newUser.save();
 
-    res.status(201).json({ message: 'Registered successfully. Redirecting to complete your profile.' });
+    // Generate token
+    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
+      expiresIn: '7d',
+    });
+
+    res.status(201).json({
+      message: 'Registered successfully. Redirecting to complete your profile.',
+      token,
+      
+    });
 
   } catch (error) {
     console.error('Signup error:', error);
@@ -202,3 +212,110 @@ exports.getUserProfile = async (req, res) => {
 };
 
 
+
+
+exports.sendResetOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
+    const expiry = new Date(Date.now() + 10 * 60 * 1000); 
+
+    user.resetPasswordOTP = otp;
+    user.resetPasswordExpires = expiry;
+    await user.save();
+
+    // Email setup
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'mukeshkumarbst33@gmail.com', 
+    pass: 'xdiw vbqx uckh asip' 
+      },
+    });
+
+    await transporter.sendMail({
+      from: 'mukeshkumarbst33@gmail.com',
+      to: email,
+      subject: 'Login OTP',
+      text: `Your OTP is: ${otp}`,
+    });
+
+    res.status(200).json({ message: 'OTP sent to email.' });
+  } catch (error) {
+    console.error('Send OTP Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+
+exports.loginWithOTP = async (req, res) => {
+  try {
+    const { email, otp } = req.body;
+
+    const user = await User.findOne({ email });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    if (
+      !user.resetPasswordOTP ||
+      user.resetPasswordOTP !== otp ||
+      new Date() > user.resetPasswordExpires
+    ) {
+      return res.status(400).json({ message: 'Invalid or expired OTP' });
+    }
+
+    // Clear OTP fields after successful login
+    user.resetPasswordOTP = undefined;
+    user.resetPasswordExpires = undefined;
+    await user.save();
+ 
+    // Generate JWT token
+    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
+      expiresIn: '7d',
+    });
+
+    res.status(200).json({
+      message: 'Login successful',
+      token,
+      user,
+    });
+  } catch (error) {
+    console.error('OTP Login Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.resetPasswordAfterOTPLogin = async (req, res) => {
+  try {
+    const token = req.headers.authorization?.split(" ")[1];
+    if (!token) return res.status(401).json({ message: 'Token missing' });
+
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id;
+
+    const { newPassword, confirmPassword } = req.body;
+
+    if (!newPassword || !confirmPassword) {
+      return res.status(400).json({ message: 'Both fields are required' });
+    }
+
+    if (newPassword !== confirmPassword) {
+      return res.status(400).json({ message: 'Passwords do not match' });
+    }
+
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+    await User.findByIdAndUpdate(userId, { password: hashedPassword });
+
+    res.status(200).json({ message: 'Password updated successfully' });
+  } catch (error) {
+    console.error('Reset Password Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};

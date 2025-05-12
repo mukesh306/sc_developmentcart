@@ -17,7 +17,8 @@ const userSchema = new mongoose.Schema({
   className: { type: mongoose.Schema.Types.ObjectId, ref: 'School' }, 
   aadharCard: { type: String },
   marksheet: { type: String },
-
+ resetPasswordOTP: { type: String },
+  resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 
