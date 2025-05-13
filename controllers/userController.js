@@ -166,17 +166,16 @@ exports.completeProfile = async (req, res) => {
       .populate('stateId')
       .populate('cityId');
 
-    // Populate className based on studentType
     let classDetails = null;
-    if (studentType === 'school' && mongoose.Types.ObjectId.isValid(className)) {
-      classDetails = await School.findById(className);
-    } else if (studentType === 'college' && mongoose.Types.ObjectId.isValid(className)) {
-      classDetails = await College.findById(className);
-    } else if (studentType === 'institute' && mongoose.Types.ObjectId.isValid(className)) {
-      classDetails = await Institute.findById(className);
+    if (mongoose.Types.ObjectId.isValid(className)) {
+      classDetails =
+        (await School.findById(className)) ||
+        (await College.findById(className)) ||
+        (await Institute.findById(className));
     }
 
-    // Final user formatting
+
+    
     const formattedUser = {
       ...user._doc,
       country: user.countryId?.name || '',
@@ -396,6 +395,7 @@ exports.EmailVerifyOtp = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.updateUser = async (req, res) => {
   try {
