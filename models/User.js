@@ -18,6 +18,11 @@ const userSchema = new mongoose.Schema({
   aadharCard: { type: String },
   marksheet: { type: String },
  resetPasswordOTP: { type: String },
+ status: {
+  type: String,
+  enum: ['no', 'yes'],
+  default: 'no'
+},
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });

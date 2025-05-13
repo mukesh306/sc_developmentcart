@@ -16,6 +16,15 @@ router.post(
     userController.completeProfile
   );
 
+  router.put(
+    '/update-profile',
+    auth,upload.fields([
+      { name: 'aadharCard', maxCount: 1 },
+      { name: 'marksheet', maxCount: 1 }
+    ]),
+    userController.updateProfile
+  );
+
 
   router.get('/getUserProfile',auth, userController.getUserProfile);
    router.post('/send-reset-otp', userController.sendResetOTP);
