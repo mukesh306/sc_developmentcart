@@ -418,8 +418,7 @@ exports.updateUser = async (req, res) => {
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-
-    
+   
     const existingUser = await User.findById(userId);
 
     if (!existingUser) {
@@ -429,8 +428,6 @@ exports.updateProfile = async (req, res) => {
     if (existingUser.status === 'yes') {
       return res.status(403).json({ message: 'You are not eligible to update.' });
     }
-
-   
     let {
       countryId,
       stateId,
@@ -443,7 +440,6 @@ exports.updateProfile = async (req, res) => {
       className
     } = req.body;
 
-    
     if (pincode && !/^\d+$/.test(pincode)) {
       return res.status(400).json({ message: 'Invalid Pincode' });
     }
@@ -463,7 +459,6 @@ exports.updateProfile = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
 
-    
     if (req.files?.aadharCard?.[0]) {
       updatedFields.aadharCard = req.files.aadharCard[0].path;
     }
