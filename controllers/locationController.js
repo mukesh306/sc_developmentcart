@@ -60,29 +60,20 @@ exports.createLocation = async (req, res) => {
   }
 };
 
-
-
 exports.getLocation = async (req, res) => {
   try {
     const { type, parentId } = req.query;
-
     if (!type) {
       return res.status(400).json({ message: 'Location type is required.' });
     }
-
     if (!['country', 'state', 'city'].includes(type)) {
       return res.status(400).json({ message: 'Invalid location type.' });
     }
-
     const filter = { type };
-
-    // Only add parentId filter for state and city
     if ((type === 'state' || type === 'city') && parentId) {
       filter.parent = parentId;
     }
-
     const locations = await location.find(filter).select('name type parent createdBy');
-
     res.status(200).json({ locations });
   } catch (error) {
     console.error('Error fetching locations:', error);
@@ -147,6 +138,8 @@ exports.deleteLocation = async (req, res) => {
     res.status(500).json({ message: 'Server error while deleting location.' });
   }
 };
+
+
 
 exports.updateLocation = async (req, res) => {
   try {

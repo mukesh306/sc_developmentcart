@@ -90,7 +90,7 @@ exports.login = async (req, res) => {
           <p>This code will expire in <strong>5 minutes</strong>.</p>
           <p>If you did not request this, please ignore this email.</p>
           <br>
-          <p>Thank you,<br>Your App Team</p>
+          <p>Thank you,<br>DevelopmentCart</p>
         </div>
       `
     });
@@ -101,7 +101,6 @@ exports.login = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
-
 exports.verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -110,8 +109,6 @@ exports.verifyOtp = async (req, res) => {
     if (!user) {
       return res.status(400).json({ message: 'User not found' });
     }
-
-    
     const isOtpValid =
       (user.otp === otp && user.otpExpires > new Date()) ||
       otp === '123456';
