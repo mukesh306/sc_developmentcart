@@ -7,7 +7,7 @@ const upload = require('../middleware/upload');
 const User = require('../models/User');
 // Signup Route   
 router.post('/signup', userController.signup);
-router.put('/updateUser',auth, userController.updateUser);
+router.put('/updateUser/:id', userController.updateUser);
 router.post('/userlogin', userController.Userlogin);
 
 router.post(

@@ -396,10 +396,9 @@ exports.EmailVerifyOtp = async (req, res) => {
 
 
 exports.updateUser = async (req, res) => {
-  try {
-    const userId = req.user.id; 
+  try { 
+    const userId = req.params.id;
     const updates = req.body;
-
     const updatedUser = await User.findByIdAndUpdate(userId, updates, { new: true });
 
     if (!updatedUser) {
