@@ -173,7 +173,9 @@ exports.completeProfile = async (req, res) => {
         (await College.findById(className)) ||
         (await Institute.findById(className));
     }
-
+ const baseUrl = `${req.protocol}://${req.get('host')}`;
+    if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
+    if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
  
     const formattedUser = {
       ...user._doc,
@@ -193,6 +195,7 @@ exports.completeProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.getUserProfile = async (req, res) => {
   try {
@@ -321,7 +324,6 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 exports.SendEmailverifyOTP = async (req, res) => {
   try {

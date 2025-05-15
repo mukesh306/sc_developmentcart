@@ -3,6 +3,7 @@
 const School = require('../models/school');
 const College = require('../models/college');
 
+
   exports.addInstitution = async (req, res) => {
     try {
       const { name, price, type } = req.body;
@@ -134,7 +135,6 @@ exports.getSchools = async (req, res) => {
   };
   
 
-  
   exports.deleteCollege = async (req, res) => {
     try {
       const { id } = req.params;

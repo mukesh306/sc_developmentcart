@@ -27,6 +27,7 @@ router.post(
     ]),
     userController.updateProfile
   );
+  
   router.get('/getUserProfile',auth, userController.getUserProfile);
    router.post('/send-reset-otp', userController.sendResetOTP);
    router.post('/login-with-otp',userController.loginWithOTP);
@@ -34,7 +35,7 @@ router.post(
 
 // EmailverifytOTP
   router.post('/sendEmailverify', userController.SendEmailverifyOTP);
-    router.post('/emailverifyotp', userController.EmailVerifyOtp);
+  router.post('/emailverifyotp', userController.EmailVerifyOtp);
 
 router.get('/verify-token', (req, res) => {
   const authHeader = req.headers.authorization;
