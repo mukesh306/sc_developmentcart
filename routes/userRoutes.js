@@ -27,7 +27,7 @@ router.post(
     ]),
     userController.updateProfile
   );
-  
+  router.put('/updateProfileStatus',auth, userController.updateProfileStatus);
   router.get('/getUserProfile',auth, userController.getUserProfile);
    router.post('/send-reset-otp', userController.sendResetOTP);
    router.post('/login-with-otp',userController.loginWithOTP);

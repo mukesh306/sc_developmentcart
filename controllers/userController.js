@@ -417,6 +417,7 @@ exports.updateUser = async (req, res) => {
   }
 };
 
+
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -453,7 +454,7 @@ exports.updateProfile = async (req, res) => {
       schoolName,
       instituteName,
       collegeName,
-      status: 'no' 
+      // status: 'no' 
     };
 
     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
@@ -505,3 +506,14 @@ exports.updateProfile = async (req, res) => {
 
 
 
+exports.updateProfileStatus = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const user = await User.findByIdAndUpdate(userId, { status: 'yes' }, { new: true });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+
+    res.status(200).json({ message: 'Status set to yes' });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
