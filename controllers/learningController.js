@@ -21,25 +21,10 @@ exports.getLearning = async (req, res) => {
 };
 
 
-// exports.updateQuote = async (req, res) => {
-//   try {
-//     const quoteId = req.params.id;
-//     const updated = await Quotes.findByIdAndUpdate(quoteId, req.body, { new: true });
-//     if (!updated) return res.status(404).json({ message: 'Quote not found.' });
-
-//     res.status(200).json({ message: 'Quote updated successfully.', data: updated });
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error updating quote.', error: error.message });
-//   }
-// };
-
-
-
 exports.deleteLearning = async (req, res) => {
   try {
     const learningId = req.params.id;
 
-    // Check if the Learning ID is referenced in Assigned schema
     const isAssigned = await Assigned.findOne({ assign: learningId });
 
     if (isAssigned) {
@@ -48,17 +33,53 @@ exports.deleteLearning = async (req, res) => {
       });
     }
 
-    // If not assigned, proceed to delete
     const deleted = await Learning.findByIdAndDelete(learningId);
-
     if (!deleted) {
       return res.status(404).json({ message: 'Learning not found.' });
     }
-
     res.status(200).json({ message: 'Learning deleted successfully.' });
-
   } catch (error) {
     console.error('Delete Learning Error:', error);
     res.status(500).json({ message: 'Error deleting Learning.', error: error.message });
+  }
+};
+
+
+exports.updateLearning = async (req, res) => {
+  try {
+    const learningId = req.params.id;
+    const updateData = req.body;
+
+    const isAssigned = await Assigned.findOne({
+      $or: [
+        { learning: learningId },
+        { learning2: learningId },
+        { learning3: learningId }
+      ]
+    });
+
+    if (isAssigned) {
+      return res.status(400).json({
+        message: 'Cannot update. This Learning is currently assigned.'
+      });
+    }
+
+    const updatedLearning = await Learning.findByIdAndUpdate(
+      learningId,
+      updateData,
+      { new: true }
+    );
+
+    if (!updatedLearning) {
+      return res.status(404).json({ message: 'Learning not found.' });
+    }
+
+    res.status(200).json({
+      message: 'Learning updated successfully.',
+      data: updatedLearning
+    });
+  } catch (error) {
+    console.error('Update Learning Error:', error);
+    res.status(500).json({ message: 'Error updating Learning.', error: error.message });
   }
 };

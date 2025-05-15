@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const AssignSchema = new mongoose.Schema({
-    classId:  { type: mongoose.Schema.Types.ObjectId, ref: 'School' },
+    classId:  { type: mongoose.Schema.Types.ObjectId},
     learning:  { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings' },
     learning2:  { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings' },
     learning3:  { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings' },

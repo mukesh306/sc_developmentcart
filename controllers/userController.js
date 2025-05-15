@@ -195,8 +195,6 @@ exports.completeProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -204,22 +202,47 @@ exports.getUserProfile = async (req, res) => {
     const user = await User.findById(userId)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
-      .populate('cityId', 'name')
-      .populate('className', 'name');
+      .populate('cityId', 'name');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
 
+    const classId = user.className;
+    let classDetails = null;
+
+    if (mongoose.Types.ObjectId.isValid(classId)) {
+      classDetails =
+        (await School.findById(classId)) ||
+        (await College.findById(classId)) ||
+        (await Institute.findById(classId));
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
+    if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
+
+    const formattedUser = {
+      ...user._doc,
+      country: user.countryId?.name || '',
+      state: user.stateId?.name || '',
+      city: user.cityId?.name || '',
+      institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+      institutionType: user.studentType || '',
+      classOrYear: classDetails?.name || '',
+    };
+
     res.status(200).json({
       message: 'User profile fetched successfully.',
-      user,
+      user: formattedUser
     });
   } catch (error) {
     console.error('Get User Profile Error:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
 
 exports.sendResetOTP = async (req, res) => {
@@ -393,7 +416,6 @@ exports.EmailVerifyOtp = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 exports.updateUser = async (req, res) => {
   try { 
