@@ -139,8 +139,6 @@ exports.deleteLocation = async (req, res) => {
   }
 };
 
-
-
 exports.updateLocation = async (req, res) => {
   try {
     const { id } = req.params;
@@ -151,7 +149,6 @@ exports.updateLocation = async (req, res) => {
       return res.status(404).json({ message: 'Location not found.' });
     }
 
-    // Validate new parent if provided
     if (parentId) {
       const parent = await location.findById(parentId);
       if (!parent) {
