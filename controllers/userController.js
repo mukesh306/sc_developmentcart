@@ -195,6 +195,7 @@ exports.completeProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -386,7 +387,6 @@ exports.SendEmailverifyOTP = async (req, res) => {
 };
 
 
-
 exports.EmailVerifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -402,14 +402,14 @@ exports.EmailVerifyOtp = async (req, res) => {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
 
-    // Clear OTP fields after successful EmailVerify
     user.resetPasswordOTP = undefined;
     user.resetPasswordExpires = undefined;
+    user.VerifyEmail = 'Yes'; 
     await user.save();
- 
-    
+
     res.status(200).json({
       message: 'Email Verified Successfully',
+      VerifyEmail: user.VerifyEmail,
     });
   } catch (error) {
     console.error('Email Verify Error:', error);
@@ -526,14 +526,13 @@ exports.updateProfile = async (req, res) => {
 };
 
 
-
 exports.updateProfileStatus = async (req, res) => {
   try {
     const userId = req.user.id;
     const user = await User.findByIdAndUpdate(userId, { status: 'yes' }, { new: true });
     if (!user) return res.status(404).json({ message: 'User not found' });
 
-    res.status(200).json({ message: 'Status set to yes' });
+    res.status(200).json({ message: 'yes' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
