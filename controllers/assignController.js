@@ -1,7 +1,7 @@
 const Assigned = require('../models/assignlearning'); 
 const School = require('../models/school');
 const College = require('../models/college');
-
+const User = require('../models/User');
 exports.createAssigned = async (req, res) => {
   try {
     const {classId, learning,learning2,learning3 } = req.body;
@@ -28,6 +28,7 @@ exports.createAssigned = async (req, res) => {
   }
 };
 
+
 exports.getAssignedList = async (req, res) => {
   try {
     const assignedList = await Assigned.find()
@@ -45,6 +46,70 @@ exports.getAssignedList = async (req, res) => {
     res.status(200).json({ data: assignedList });
   } catch (error) {
     console.error('Get Assigned Error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+
+exports.deleteAssigned = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const assigned = await Assigned.findById(id);
+    if (!assigned) {
+      return res.status(404).json({ message: 'Assigned record not found' });
+    }
+
+    const classId = assigned.classId;
+
+    const usersWithClass = await User.find({ className: classId });
+
+    if (usersWithClass.length > 0) {
+      const hasStatusYes = usersWithClass.some(user => user.status === 'yes');
+      if (hasStatusYes) {
+        return res.status(400).json({ message: 'Cannot delete. One or more users with this class have status "yes".' });
+      }
+    }
+    await Assigned.findByIdAndDelete(id);
+
+    res.status(200).json({ message: 'Assigned record deleted successfully.' });
+  } catch (error) {
+    console.error('Delete Assigned Error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+exports.updateAssigned = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    const assigned = await Assigned.findById(id);
+    if (!assigned) {
+      return res.status(404).json({ message: 'Assigned record not found' });
+    }
+
+    const classId = assigned.classId;
+
+    const usersWithClass = await User.find({ className: classId });
+
+    if (usersWithClass.length > 0) {
+      const hasStatusYes = usersWithClass.some(user => user.status === 'yes');
+      if (hasStatusYes) {
+        return res.status(400).json({
+          message: 'Cannot update. One or more users with this class have status "yes".'
+        });
+      }
+    }
+
+    const updatedAssigned = await Assigned.findByIdAndUpdate(id, updateData, { new: true });
+
+    res.status(200).json({
+      message: 'Assigned record updated successfully.',
+     data: updatedAssigned
+    });
+  } catch (error) {
+    console.error('Update Assigned Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };

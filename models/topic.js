@@ -7,6 +7,7 @@ const TopicSchema = new mongoose.Schema({
    description:{ type: String, required: true },
    image:{ type: String, required: true },
    video:{ type: String, required: true },
+  score: { type: Number, default: "0" },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
     createdAt: {
         type: Date,

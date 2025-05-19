@@ -4,5 +4,7 @@ const assignedController = require('../controllers/assignController');
 const auth = require('../middleware/auth');
 router.post('/assigned',auth, assignedController.createAssigned);
 router.get('/assigned', assignedController.getAssignedList);
+router.delete('/assigned/:id', assignedController.deleteAssigned);
+router.put('/assigned/:id', assignedController.updateAssigned);
 
 module.exports = router;

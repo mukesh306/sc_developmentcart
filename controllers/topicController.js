@@ -158,3 +158,187 @@ exports.getAllTopicNames = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// exports.TopicWithLeaning = async (req, res) => {
+//   try {
+//     const { id } = req.params; 
+//     const { classId } = req.query; 
+
+//     const query = { learningId: id };
+//     if (classId) {
+//       query.classId = classId;
+//     }
+
+//     const topics = await Topic.find(query)
+//       .populate('learningId')
+//       .lean();
+
+//     if (!topics || topics.length === 0) {
+//       return res.status(404).json({ message: 'No topics found for this learningId' });
+//     }
+
+//     for (let topic of topics) {
+//       const quizzes = await Quiz.find({ topicId: topic._id }).select('-__v');
+//       let classInfo = await School.findById(topic.classId).lean();
+//       if (!classInfo) {
+//         classInfo = await College.findById(topic.classId).lean();
+//       }
+//       topic.quizzes = quizzes;
+//       topic.classInfo = classInfo || null;
+//     }
+
+//     res.status(200).json({ topics });
+//   } catch (error) {
+//     console.error('Error fetching topics with learningId:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+exports.TopicWithLeaning = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { classId } = req.query;
+    const query = { learningId: id };
+    if (classId) {
+      query.classId = classId;
+    }
+    const topics = await Topic.find(query)
+      .select('topic score') 
+      .lean();
+    if (!topics || topics.length === 0) {
+      return res.status(404).json({ message: 'No topics found for this learningId' });
+    }
+    res.status(200).json({ topics });
+  } catch (error) {
+    console.error('Error fetching topics with learningId:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+exports.submitQuiz = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { topicId, quizzes } = req.body;
+
+    if (!topicId) {
+      return res.status(400).json({ message: 'topicId is required.' });
+    }
+
+    if (!Array.isArray(quizzes) || quizzes.length === 0) {
+      return res.status(400).json({ message: 'quizzes must be a non-empty array.' });
+    }
+
+    let correctCount = 0;
+    let incorrectCount = 0;
+
+    for (const item of quizzes) {
+      const quiz = await Quiz.findOne({ _id: item.questionId, topicId }).lean();
+      if (!quiz) continue;
+
+      const isCorrect = item.selectedAnswer === quiz.answer;
+      if (isCorrect) correctCount++;
+      else incorrectCount++;
+    }
+    const total = correctCount + incorrectCount;
+    const score = total > 0 ? (correctCount / total) * 100 : 0;
+    const roundedScore = parseFloat(score.toFixed(2));
+    const topic = await Topic.findById(topicId);
+    if (!topic) {
+      return res.status(404).json({ message: 'Topic not found.' });
+    }
+    if (!topic.score || topic.score === 0) {
+    
+      topic.score = roundedScore;
+      await topic.save();
+
+      return res.status(200).json({
+        message: 'Quiz submitted successfully',
+        score: `${roundedScore}%`
+      });
+    } else {
+      return res.status(200).json({
+        message: 'Quiz submitted successfully and score not update'
+      });
+    }
+  } catch (error) {
+    console.error('Error in submitQuiz:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+// exports.submitQuiz = async (req, res) => {
+//   try {
+//     const { quizzes } = req.body;
+//     if (!Array.isArray(quizzes) || quizzes.length === 0) {
+//       return res.status(400).json({ message: 'quizzes must be a non-empty array.' });
+//     }
+//     let correctCount = 0;
+//     let incorrectCount = 0;
+//     const detailedResults = [];
+
+//     for (const item of quizzes) {
+//       const quiz = await Quiz.findById(item.questionId).lean();
+//       if (!quiz) {
+//         detailedResults.push({
+//           questionId: item.questionId,
+//           status: 'not found'
+//         });
+//         continue;
+//       }
+
+//       const isCorrect = item.selectedAnswer === quiz.answer;
+
+//       if (isCorrect) correctCount++;
+//       else incorrectCount++;
+
+//       detailedResults.push({
+//         questionId: quiz._id,
+//         question: quiz.question,
+//         selectedAnswer: item.selectedAnswer,
+//         correctAnswer: quiz.answer,
+//         status: isCorrect ? 'correct' : 'incorrect'
+//       });
+//     }
+
+//     const total = correctCount + incorrectCount;
+//     const score = total > 0 ? (correctCount / total) * 100 : 0;
+
+//     res.status(200).json({
+//       totalQuestions: total,
+//       correctAnswers: correctCount,
+//       incorrectAnswers: incorrectCount,
+//       score: `${score.toFixed(2)}%`,
+//       // detailedResults
+//     });
+//   } catch (error) {
+//     console.error('Error in submitQuiz:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
+exports.getTopicById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const topic = await Topic.findById(id).populate('createdBy', 'email');
+
+    if (!topic) {
+      return res.status(404).json({ message: 'Topic not found.' });
+    }
+
+    res.status(200).json({
+      message: 'Topic fetched successfully.',
+      data: topic
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error fetching topic.',
+      error: error.message
+    });
+  }
+};
+

@@ -11,6 +11,7 @@ exports.createLearning = async (req, res) => {
     res.status(500).json({ message: 'Error creating Learning.', error: error.message });
   }
 };
+
 exports.getLearning = async (req, res) => {
   try {
     const learning = await Learning.find().populate('createdBy', 'email');
