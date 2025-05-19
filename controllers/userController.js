@@ -86,8 +86,6 @@ exports.signup = async (req, res) => {
   }
 };
 
-
-
 exports.Userlogin = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -320,6 +318,36 @@ exports.loginWithOTP = async (req, res) => {
 };
 
 
+// exports.resetPasswordAfterOTPLogin = async (req, res) => {
+//   try {
+//     const token = req.headers.authorization?.split(" ")[1];
+//     if (!token) return res.status(401).json({ message: 'Token missing' });
+
+//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+//     const userId = decoded.id;
+
+//     const { newPassword, confirmPassword } = req.body;
+
+//     if (!newPassword || !confirmPassword) {
+//       return res.status(400).json({ message: 'Both fields are required' });
+//     }
+
+//     if (newPassword !== confirmPassword) {
+//       return res.status(400).json({ message: 'Passwords do not match' });
+//     }
+
+//     const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+//     await User.findByIdAndUpdate(userId, { password: hashedPassword });
+
+//     res.status(200).json({ message: 'Password updated successfully' });
+//   } catch (error) {
+//     console.error('Reset Password Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.resetPasswordAfterOTPLogin = async (req, res) => {
   try {
     const token = req.headers.authorization?.split(" ")[1];
@@ -340,15 +368,29 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(newPassword, 10);
 
-    await User.findByIdAndUpdate(userId, { password: hashedPassword });
+    const user = await User.findByIdAndUpdate(userId, { password: hashedPassword }, { new: true });
 
-    res.status(200).json({ message: 'Password updated successfully' });
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: 'mukeshkumarbst33@gmail.com',
+        pass: 'xdiw vbqx uckh asip',
+      },
+    });
+
+    await transporter.sendMail({
+      from: 'mukeshkumarbst33@gmail.com',
+      to: user.email,
+      subject: 'Password Changed Successfully',
+      text: `Hi ${user.firstName || 'User'},\n\nYour password has been successfully changed. You can now login with your new password.\n\nIf you did not perform this action, please contact support immediately.`,
+    });
+
+    res.status(200).json({ message: 'Password updated successfully.' });
   } catch (error) {
     console.error('Reset Password Error:', error);
     res.status(500).json({ message: error.message });
   }
 };
-
 exports.SendEmailverifyOTP = async (req, res) => {
   try {
     const { email } = req.body;
