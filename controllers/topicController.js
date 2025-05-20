@@ -207,26 +207,63 @@ exports.getAllTopicNames = async (req, res) => {
 //   }
 // };
 
+
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
     const { classId } = req.query;
+
+    // Check user status
+    const user = req.user;
+    if (!user || user.status !== 'yes') {
+      return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
+    }
+
     const query = { learningId: id };
     if (classId) {
       query.classId = classId;
     }
+
     const topics = await Topic.find(query)
-      .select('topic score') 
+      .select('topic score')
       .lean();
+
     if (!topics || topics.length === 0) {
       return res.status(404).json({ message: 'No topics found for this learningId' });
     }
+
     res.status(200).json({ topics });
+
   } catch (error) {
     console.error('Error fetching topics with learningId:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+
+
+// exports.TopicWithLeaning = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { classId } = req.query;
+//     const query = { learningId: id };
+//     if (classId) {
+//       query.classId = classId;
+//     }
+//     const topics = await Topic.find(query)
+//       .select('topic score') 
+//       .lean();
+//     if (!topics || topics.length === 0) {
+//       return res.status(404).json({ message: 'No topics found for this learningId' });
+//     }
+//     res.status(200).json({ topics });
+//   } catch (error) {
+//     console.error('Error fetching topics with learningId:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 
@@ -333,31 +370,50 @@ exports.submitQuiz = async (req, res) => {
 // };
 
 
-
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
+    const { isvideo, isdescription } = req.query;
 
-    const topic = await Topic.findById(id)
+    let topic = await Topic.findById(id)
       .populate('learningId')
-      .populate('createdBy', 'email')
-      .lean(); 
+      .populate('createdBy', 'email');
 
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
+    let updated = false;
+
+    if (isvideo !== undefined) {
+      topic.isvideo = isvideo === 'true' ? 'true' : 'false';
+      updated = true;
+    }
+
+    if (isdescription !== undefined) {
+      topic.isdescription = isdescription === 'true' ? 'true' : 'false';
+      updated = true;
+    }
+
+    if (updated) {
+      await topic.save(); 
+    }
+
+    const topicObj = topic.toObject(); 
+
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
-    topic.classInfo = classInfo || null; 
+    topicObj.classInfo = classInfo || null;
+
+    // Add quizzes
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
-    topic.quizzes = quizzes || [];
+    topicObj.quizzes = quizzes || [];
 
     res.status(200).json({
       message: 'Topic fetched successfully.',
-      data: topic
+      data: topicObj
     });
   } catch (error) {
     console.error('Error fetching topic by ID:', error);
@@ -367,4 +423,3 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
-

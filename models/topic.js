@@ -7,9 +7,9 @@ const TopicSchema = new mongoose.Schema({
    description:{ type: String, required: true },
    image:{ type: String, required: true },
    video:{ type: String, required: true },
-    score: { type: Number, default: "0" },
-      isdescription:{ type: String },
-        isvideo:{ type: String},
+   score: { type: String, default: null },
+        isdescription: { type: String, default: "false" },
+  isvideo: { type: String, default: "false" },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
    createdAt: {
         type: Date,
