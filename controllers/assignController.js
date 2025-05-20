@@ -51,6 +51,38 @@ exports.getAssignedList = async (req, res) => {
 };
 
 
+exports.getAssignedListUser = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const user = await User.findById(userId).lean();
+    if (!user || !user.className) {
+      return res.status(400).json({ message: 'User className not found.' });
+    }
+
+    const assignedList = await Assigned.find({ classId: user.className })
+      .populate('learning')
+      .populate('learning2')
+      .populate('learning3')
+      .lean();
+
+  
+    for (let item of assignedList) {
+      let classInfo = await School.findById(item.classId).lean();
+      if (!classInfo) {
+        classInfo = await College.findById(item.classId).lean();
+      }
+      item.classInfo = classInfo || null;
+    }
+
+    res.status(200).json({ data: assignedList });
+  } catch (error) {
+    console.error('Get Assigned Error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+
 exports.deleteAssigned = async (req, res) => {
   try {
     const { id } = req.params;
@@ -78,6 +110,7 @@ exports.deleteAssigned = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 
 exports.updateAssigned = async (req, res) => {
   try {

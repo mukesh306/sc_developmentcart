@@ -7,11 +7,13 @@ const TopicSchema = new mongoose.Schema({
    description:{ type: String, required: true },
    image:{ type: String, required: true },
    video:{ type: String, required: true },
-  score: { type: Number, default: "0" },
+    score: { type: Number, default: "0" },
+      isdescription:{ type: String },
+        isvideo:{ type: String},
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
-    createdAt: {
+   createdAt: {
         type: Date,
         default: Date.now
-    }
+    } 
 });
 module.exports = mongoose.model('Topic', TopicSchema); 
