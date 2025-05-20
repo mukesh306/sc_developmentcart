@@ -3,39 +3,52 @@ const Quiz = require('../models/quiz');
 const School = require('../models/school');
 const College = require('../models/college');
 
-
 exports.createTopicWithQuiz = async (req, res) => {
   try {
     const {
       classId,
       learningId,
       topic,
-      description
+      description,
+      videoLink
     } = req.body;
+
     const createdBy = req.user._id;
     const image = req.files?.image?.[0]?.path || null;
-    const video = req.files?.video?.[0]?.path || null;
+    const videoFile = req.files?.video?.[0]?.path || null;
+    
+
+    // ✅ Validate: Only one video source allowed
+    if (videoFile && videoLink) {
+      return res.status(400).json({
+        message: 'Please provide either a video file or a video link, not both.'
+      });
+    }
+
+    const video = videoFile || videoLink || null;
+
     const newTopic = new Topic({
       classId,
       learningId,
       topic,
       description,
       image,
-      video,
+      video, // ✅ Only one video source saved
       createdBy
     });
 
     const savedTopic = await newTopic.save();
+
     let quizQuestions = [];
 
     if (req.body.quizQuestions) {
-      
       try {
         quizQuestions = JSON.parse(req.body.quizQuestions);
       } catch (err) {
         return res.status(400).json({ message: 'Invalid quizQuestions format. Must be a valid JSON array.' });
       }
     }
+
     if (Array.isArray(quizQuestions) && quizQuestions.length > 0) {
       const quizData = quizQuestions.map((q) => ({
         topicId: savedTopic._id,
