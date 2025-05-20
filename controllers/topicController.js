@@ -213,7 +213,6 @@ exports.TopicWithLeaning = async (req, res) => {
     const { id } = req.params;
     const { classId } = req.query;
 
-    // Check user status
     const user = req.user;
     if (!user || user.status !== 'yes') {
       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
