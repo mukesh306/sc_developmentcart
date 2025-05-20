@@ -114,7 +114,7 @@ exports.getAllTopicsWithQuizzes = async (req, res) => {
       quizzes: quizzesByTopic[topic._id.toString()] || []
     }));
 
-    res.status(200).json({ topics: result });
+    res.status(200).json({ topics: result }); 
   } catch (error) {
     console.error('Error fetching all topics with quizzes:', error);
     res.status(500).json({ message: error.message });
@@ -319,22 +319,33 @@ exports.submitQuiz = async (req, res) => {
 //   }
 // };
 
-
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const topic = await Topic.findById(id).populate('createdBy', 'email');
+    const topic = await Topic.findById(id)
+      .populate('learningId')
+      .populate('createdBy', 'email')
+      .lean(); 
 
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found.' });
     }
+
+    let classInfo = await School.findById(topic.classId).lean();
+    if (!classInfo) {
+      classInfo = await College.findById(topic.classId).lean();
+    }
+    topic.classInfo = classInfo || null; 
+    const quizzes = await Quiz.find({ topicId: id }).select('-__v');
+    topic.quizzes = quizzes || [];
 
     res.status(200).json({
       message: 'Topic fetched successfully.',
       data: topic
     });
   } catch (error) {
+    console.error('Error fetching topic by ID:', error);
     res.status(500).json({
       message: 'Error fetching topic.',
       error: error.message
