@@ -1,3 +1,47 @@
+
+// exports.TopicWithLeaning = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { classId } = req.query;
+//     const user = req.user;
+
+//     if (!user || user.status !== 'yes') {
+//       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
+//     }
+//     const registrationDate = moment(user.createdAt).startOf('day');
+//     const today = moment().startOf('day');
+//     const daysPassed = today.diff(registrationDate, 'days') + 1;
+
+//     const query = { learningId: id };
+//     if (classId) {
+//       query.classId = classId;
+//     }
+
+//     const allTopics = await Topic.find(query)
+//       .sort({ createdAt: 1 }) 
+//       .select('topic score createdAt')
+//       .lean();
+
+//     if (!allTopics || allTopics.length === 0) {
+//       return res.status(404).json({ message: 'No topics found for this learningId' });
+//     }
+//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
+//       if (topic.score === null) {
+//         const { score, ...rest } = topic;
+//         return rest;
+//       }
+//       return topic;
+//     });
+
+//     res.status(200).json({ topics: unlockedTopics });
+
+//   } catch (error) {
+//     console.error('Error fetching topics with learningId:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+const mongoose = require('mongoose');
 const Topic = require('../models/topic');
 const Quiz = require('../models/quiz');
 const School = require('../models/school');
@@ -205,33 +249,37 @@ exports.getAllTopicNames = async (req, res) => {
 //   }
 // };
 
-
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
-    const { classId } = req.query;
+    const { classId: queryClassId } = req.query;
     const user = req.user;
 
     if (!user || user.status !== 'yes') {
       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
     }
+
     const registrationDate = moment(user.createdAt).startOf('day');
     const today = moment().startOf('day');
     const daysPassed = today.diff(registrationDate, 'days') + 1;
 
-    const query = { learningId: id };
-    if (classId) {
-      query.classId = classId;
+    const query = { learningId: new mongoose.Types.ObjectId(id) };
+
+    if (queryClassId) {
+      query.classId = new mongoose.Types.ObjectId(queryClassId);
+    } else if (user.className) {
+      query.classId = new mongoose.Types.ObjectId(user.className);
     }
 
     const allTopics = await Topic.find(query)
-      .sort({ createdAt: 1 }) 
+      .sort({ createdAt: 1 })
       .select('topic score createdAt')
       .lean();
 
     if (!allTopics || allTopics.length === 0) {
-      return res.status(404).json({ message: 'No topics found for this learningId' });
+      return res.status(404).json({ message: 'No topics found for this learningId or classId' });
     }
+
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
       if (topic.score === null) {
         const { score, ...rest } = topic;
@@ -247,9 +295,6 @@ exports.TopicWithLeaning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
-
 
 // exports.TopicWithLeaning = async (req, res) => {
 //   try {
@@ -271,6 +316,7 @@ exports.TopicWithLeaning = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
+
 
 
 
@@ -298,25 +344,38 @@ exports.submitQuiz = async (req, res) => {
       if (isCorrect) correctCount++;
       else incorrectCount++;
     }
+
     const total = correctCount + incorrectCount;
     const score = total > 0 ? (correctCount / total) * 100 : 0;
     const roundedScore = parseFloat(score.toFixed(2));
+
     const topic = await Topic.findById(topicId);
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found.' });
     }
-    if (!topic.score || topic.score === 0) {
-    
+
+    if (topic.score == null) {
       topic.score = roundedScore;
+      topic.totalQuestions = total;
+      topic.correctAnswers = correctCount;
+      topic.incorrectAnswers = incorrectCount;
+
       await topic.save();
 
       return res.status(200).json({
-        message: 'Quiz submitted successfully',
-        score: `${roundedScore}%`
+        message: 'Quiz submitted successfully and score saved.',
+        score: `${roundedScore}%`,
+        totalQuestions: total,
+        correctAnswers: correctCount,
+        incorrectAnswers: incorrectCount
       });
     } else {
       return res.status(200).json({
-        message: 'Quiz submitted successfully and score not update'
+        message: 'Quiz submitted successfully, score was already saved.',
+        score: `${topic.score}%`,
+        totalQuestions: topic.totalQuestions ?? 0,
+        correctAnswers: topic.correctAnswers ?? 0,
+        incorrectAnswers: topic.incorrectAnswers ?? 0
       });
     }
   } catch (error) {
@@ -328,53 +387,55 @@ exports.submitQuiz = async (req, res) => {
 
 // exports.submitQuiz = async (req, res) => {
 //   try {
-//     const { quizzes } = req.body;
+//     const userId = req.user._id;
+//     const { topicId, quizzes } = req.body;
+
+//     if (!topicId) {
+//       return res.status(400).json({ message: 'topicId is required.' });
+//     }
+
 //     if (!Array.isArray(quizzes) || quizzes.length === 0) {
 //       return res.status(400).json({ message: 'quizzes must be a non-empty array.' });
 //     }
+
 //     let correctCount = 0;
 //     let incorrectCount = 0;
-//     const detailedResults = [];
 
 //     for (const item of quizzes) {
-//       const quiz = await Quiz.findById(item.questionId).lean();
-//       if (!quiz) {
-//         detailedResults.push({
-//           questionId: item.questionId,
-//           status: 'not found'
-//         });
-//         continue;
-//       }
+//       const quiz = await Quiz.findOne({ _id: item.questionId, topicId }).lean();
+//       if (!quiz) continue;
 
 //       const isCorrect = item.selectedAnswer === quiz.answer;
-
 //       if (isCorrect) correctCount++;
 //       else incorrectCount++;
-
-//       detailedResults.push({
-//         questionId: quiz._id,
-//         question: quiz.question,
-//         selectedAnswer: item.selectedAnswer,
-//         correctAnswer: quiz.answer,
-//         status: isCorrect ? 'correct' : 'incorrect'
-//       });
 //     }
-
 //     const total = correctCount + incorrectCount;
 //     const score = total > 0 ? (correctCount / total) * 100 : 0;
+//     const roundedScore = parseFloat(score.toFixed(2));
+//     const topic = await Topic.findById(topicId);
+//     if (!topic) {
+//       return res.status(404).json({ message: 'Topic not found.' });
+//     }
+//     if (!topic.score || topic.score === 0) {
+    
+//       topic.score = roundedScore;
+//       await topic.save();
 
-//     res.status(200).json({
-//       totalQuestions: total,
-//       correctAnswers: correctCount,
-//       incorrectAnswers: incorrectCount,
-//       score: `${score.toFixed(2)}%`,
-//       // detailedResults
-//     });
+//       return res.status(200).json({
+//         message: 'Quiz submitted successfully',
+//         score: `${roundedScore}%`
+//       });
+//     } else {
+//       return res.status(200).json({
+//         message: 'Quiz submitted successfully and score not update'
+//       });
+//     }
 //   } catch (error) {
 //     console.error('Error in submitQuiz:', error);
 //     res.status(500).json({ message: error.message });
 //   }
 // };
+
 
 
 exports.getTopicById = async (req, res) => {
@@ -430,3 +491,4 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
+
