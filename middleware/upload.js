@@ -15,7 +15,7 @@ const allowedTypes = /jpeg|jpg|png|pdf|mp4|mov|avi/;
 
 const upload = multer({
   storage,
-  limits: { fileSize: 100 * 1024 },
+  limits: { fileSize: 100 * 1024 * 1024 },
   fileFilter
 });
 

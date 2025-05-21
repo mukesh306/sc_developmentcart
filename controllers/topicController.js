@@ -2,6 +2,7 @@ const Topic = require('../models/topic');
 const Quiz = require('../models/quiz');
 const School = require('../models/school');
 const College = require('../models/college');
+const moment = require('moment'); 
 
 exports.createTopicWithQuiz = async (req, res) => {
   try {
@@ -172,10 +173,16 @@ exports.getAllTopicNames = async (req, res) => {
   }
 };
 
+
 // exports.TopicWithLeaning = async (req, res) => {
 //   try {
-//     const { id } = req.params; 
-//     const { classId } = req.query; 
+//     const { id } = req.params;
+//     const { classId } = req.query;
+
+//     const user = req.user;
+//     if (!user || user.status !== 'yes') {
+//       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
+//     }
 
 //     const query = { learningId: id };
 //     if (classId) {
@@ -183,24 +190,15 @@ exports.getAllTopicNames = async (req, res) => {
 //     }
 
 //     const topics = await Topic.find(query)
-//       .populate('learningId')
+//       .select('topic score')
 //       .lean();
 
 //     if (!topics || topics.length === 0) {
 //       return res.status(404).json({ message: 'No topics found for this learningId' });
 //     }
 
-//     for (let topic of topics) {
-//       const quizzes = await Quiz.find({ topicId: topic._id }).select('-__v');
-//       let classInfo = await School.findById(topic.classId).lean();
-//       if (!classInfo) {
-//         classInfo = await College.findById(topic.classId).lean();
-//       }
-//       topic.quizzes = quizzes;
-//       topic.classInfo = classInfo || null;
-//     }
-
 //     res.status(200).json({ topics });
+
 //   } catch (error) {
 //     console.error('Error fetching topics with learningId:', error);
 //     res.status(500).json({ message: error.message });
@@ -212,33 +210,43 @@ exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
     const { classId } = req.query;
-
     const user = req.user;
+
     if (!user || user.status !== 'yes') {
       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
     }
+    const registrationDate = moment(user.createdAt).startOf('day');
+    const today = moment().startOf('day');
+    const daysPassed = today.diff(registrationDate, 'days') + 1;
 
     const query = { learningId: id };
     if (classId) {
       query.classId = classId;
     }
 
-    const topics = await Topic.find(query)
-      .select('topic score')
+    const allTopics = await Topic.find(query)
+      .sort({ createdAt: 1 }) 
+      .select('topic score createdAt')
       .lean();
 
-    if (!topics || topics.length === 0) {
+    if (!allTopics || allTopics.length === 0) {
       return res.status(404).json({ message: 'No topics found for this learningId' });
     }
+    const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
+      if (topic.score === null) {
+        const { score, ...rest } = topic;
+        return rest;
+      }
+      return topic;
+    });
 
-    res.status(200).json({ topics });
+    res.status(200).json({ topics: unlockedTopics });
 
   } catch (error) {
     console.error('Error fetching topics with learningId:', error);
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
