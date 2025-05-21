@@ -319,10 +319,9 @@ exports.TopicWithLeaning = async (req, res) => {
 
 
 
-
 exports.submitQuiz = async (req, res) => {
   try {
-    const userId = req.user._id;
+    const userId = req.user._id;   // Assuming auth middleware sets req.user
     const { topicId, quizzes } = req.body;
 
     if (!topicId) {
@@ -336,10 +335,13 @@ exports.submitQuiz = async (req, res) => {
     let correctCount = 0;
     let incorrectCount = 0;
 
+    // Loop over each quiz answer submitted
     for (const item of quizzes) {
+      // Find quiz question by _id and topicId
       const quiz = await Quiz.findOne({ _id: item.questionId, topicId }).lean();
-      if (!quiz) continue;
+      if (!quiz) continue;  // skip if question not found
 
+      // Compare submitted selectedAnswer (full text) with stored answer
       const isCorrect = item.selectedAnswer === quiz.answer;
       if (isCorrect) correctCount++;
       else incorrectCount++;
@@ -349,12 +351,13 @@ exports.submitQuiz = async (req, res) => {
     const score = total > 0 ? (correctCount / total) * 100 : 0;
     const roundedScore = parseFloat(score.toFixed(2));
 
+    // Find Topic and update score fields if not set yet
     const topic = await Topic.findById(topicId);
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
-    if (topic.score == null) {
+    if (topic.score === null || topic.score === undefined) {
       topic.score = roundedScore;
       topic.totalQuestions = total;
       topic.correctAnswers = correctCount;
@@ -364,18 +367,19 @@ exports.submitQuiz = async (req, res) => {
 
       return res.status(200).json({
         message: 'Quiz submitted successfully and score saved.',
-        score: `${roundedScore}%`,
         totalQuestions: total,
         correctAnswers: correctCount,
-        incorrectAnswers: incorrectCount
+        incorrectAnswers: incorrectCount,
+        score: roundedScore
       });
     } else {
+      // Score already saved, return saved data
       return res.status(200).json({
         message: 'Quiz submitted successfully, score was already saved.',
-        score: `${topic.score}%`,
         totalQuestions: topic.totalQuestions ?? 0,
         correctAnswers: topic.correctAnswers ?? 0,
-        incorrectAnswers: topic.incorrectAnswers ?? 0
+        incorrectAnswers: topic.incorrectAnswers ?? 0,
+        score: topic.score
       });
     }
   } catch (error) {
@@ -383,6 +387,7 @@ exports.submitQuiz = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.submitQuiz = async (req, res) => {

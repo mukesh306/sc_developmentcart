@@ -12,8 +12,8 @@ totalQuestions: { type: Number, default: null },
 correctAnswers: { type: Number, default: null },
 incorrectAnswers: { type: Number, default: null },
 
-        isdescription: { type: String, default: "false" },
-  isvideo: { type: String, default: "false" },
+     isdescription: { type: Boolean, default: false },
+  isvideo: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
    createdAt: {
         type: Date,
