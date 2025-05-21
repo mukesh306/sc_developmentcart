@@ -7,6 +7,8 @@ const TopicSchema = new mongoose.Schema({
    description:{ type: String, required: true },
    image:{ type: String, required: true },
    video:{ type: String, required: true },
+   videoTime:{ type: String},
+   testTime:{ type: String},
    score: { type: String, default: null },
 totalQuestions: { type: Number, default: null },
 correctAnswers: { type: Number, default: null },

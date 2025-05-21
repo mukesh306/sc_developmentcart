@@ -48,22 +48,24 @@ const School = require('../models/school');
 const College = require('../models/college');
 const moment = require('moment'); 
 
+
 exports.createTopicWithQuiz = async (req, res) => {
   try {
     const {
       classId,
       learningId,
       topic,
-      description,
-      videoLink
+      testTime,
+      videoTime,
+      description
     } = req.body;
 
     const createdBy = req.user._id;
     const image = req.files?.image?.[0]?.path || null;
-    const videoFile = req.files?.video?.[0]?.path || null;
-    
 
-    // ✅ Validate: Only one video source allowed
+    const videoFile = req.files?.video?.[0]?.path || null;
+    const videoLink = req.body.video || null;
+
     if (videoFile && videoLink) {
       return res.status(400).json({
         message: 'Please provide either a video file or a video link, not both.'
@@ -76,9 +78,11 @@ exports.createTopicWithQuiz = async (req, res) => {
       classId,
       learningId,
       topic,
+      testTime,
+      videoTime,
       description,
       image,
-      video, // ✅ Only one video source saved
+      video,        
       createdBy
     });
 
@@ -118,6 +122,8 @@ exports.createTopicWithQuiz = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
 exports.addQuizToTopic = async (req, res) => {
   try {
