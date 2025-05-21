@@ -249,6 +249,7 @@ exports.getAllTopicNames = async (req, res) => {
 //   }
 // };
 
+
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
@@ -273,7 +274,8 @@ exports.TopicWithLeaning = async (req, res) => {
 
     const allTopics = await Topic.find(query)
       .sort({ createdAt: 1 })
-      .select('topic score createdAt')
+      .select('topic score createdAt isdescription isvideo')
+
       .lean();
 
     if (!allTopics || allTopics.length === 0) {
