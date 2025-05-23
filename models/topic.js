@@ -9,7 +9,6 @@ image:{ type: String, required: true },
 video:{ type: String, required: true },
 videoTime:{ type: String},
 testTime:{ type: String},
-
 score: { type: String, default: null },
 totalQuestions: { type: Number, default: null },
 answeredQuestions: { type: Number, default: null },

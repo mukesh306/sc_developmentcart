@@ -578,7 +578,6 @@ exports.submitQuizAnswer = async (req, res) => {
 
 
 
-
 exports.calculateQuizScore = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -586,10 +585,6 @@ exports.calculateQuizScore = async (req, res) => {
 
     if (!topicId) {
       return res.status(400).json({ message: 'topicId is required.' });
-    }
-
-    if (typeof topicTotalMarks !== 'number' || topicTotalMarks <= 0) {
-      return res.status(400).json({ message: 'Valid topicTotalMarks is required.' });
     }
 
     if (typeof negativeMarking !== 'number' || negativeMarking < 0) {
@@ -603,6 +598,15 @@ exports.calculateQuizScore = async (req, res) => {
 
     const allQuizzes = await Quiz.find({ topicId }).lean();
     const totalQuestions = allQuizzes.length;
+
+    if (totalQuestions === 0) {
+      return res.status(400).json({ message: 'No questions found for this topic.' });
+    }
+
+    // ✅ Default to totalQuestions if topicTotalMarks not provided
+    const totalMarks = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
+      ? topicTotalMarks
+      : totalQuestions;
 
     const answers = await UserQuizAnswer.find({ userId, topicId });
 
@@ -620,27 +624,17 @@ exports.calculateQuizScore = async (req, res) => {
     const answeredQuestions = correctCount + incorrectCount;
     const skippedQuestions = totalQuestions - answeredQuestions;
 
-    // Marks per question (equal weight for all questions)
-    const marksPerQuestion = topicTotalMarks / totalQuestions;
-
-    // Calculate marks obtained:
-    // total positive marks from correct answers
+    const marksPerQuestion = totalMarks / totalQuestions;
     const positiveMarks = correctCount * marksPerQuestion;
-
-    // total negative marks from incorrect answers
     const negativeMarks = incorrectCount * negativeMarking;
 
-    // Final marks after negative marking (minimum 0)
     let marksObtained = positiveMarks - negativeMarks;
     if (marksObtained < 0) marksObtained = 0;
 
     const roundedMarks = parseFloat(marksObtained.toFixed(2));
-
-    // Calculate percentage based on total marks
-    const scorePercent = (roundedMarks / topicTotalMarks) * 100;
+    const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
 
-    // Save only if score not already saved
     if (topic.score === null || topic.score === undefined) {
       topic.score = roundedScorePercent;
       topic.totalQuestions = totalQuestions;
@@ -648,7 +642,7 @@ exports.calculateQuizScore = async (req, res) => {
       topic.incorrectAnswers = incorrectCount;
       topic.skippedQuestions = skippedQuestions;
       topic.marksObtained = roundedMarks;
-      topic.totalMarks = topicTotalMarks;
+      topic.totalMarks = totalMarks;
       topic.negativeMarking = negativeMarking;
       await topic.save();
     }
@@ -661,7 +655,7 @@ exports.calculateQuizScore = async (req, res) => {
       correctAnswers: correctCount,
       incorrectAnswers: incorrectCount,
       marksObtained: roundedMarks,
-      totalMarks: topicTotalMarks,
+      totalMarks,
       negativeMarking,
       scorePercent: roundedScorePercent
     });
