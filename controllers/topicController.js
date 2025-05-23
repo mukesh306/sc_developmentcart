@@ -378,8 +378,9 @@ exports.getTopicById = async (req, res) => {
     if (updated) {
       await topic.save(); 
     }
-
-    const topicObj = topic.toObject(); 
+      const topicObj = topic.toObject(); 
+ 
+    topicObj.testTimeInSeconds = topic.testTime ? topic.testTime * 60 : 0;
 
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
