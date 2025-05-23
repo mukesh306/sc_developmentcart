@@ -348,8 +348,6 @@ exports.TopicWithLeaning = async (req, res) => {
 
 
 
-
-
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -358,7 +356,6 @@ exports.getTopicById = async (req, res) => {
     let topic = await Topic.findById(id)
       .populate('learningId')
       .populate('createdBy', 'email');
-
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found.' });
     }
@@ -381,13 +378,11 @@ exports.getTopicById = async (req, res) => {
       const topicObj = topic.toObject(); 
  
     topicObj.testTimeInSeconds = topic.testTime ? topic.testTime * 60 : 0;
-
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
     topicObj.classInfo = classInfo || null;
-
     topicObj.testTimeInSeconds = topic.testTime ? topic.testTime * 60 : 0;
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
