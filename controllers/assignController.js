@@ -2,9 +2,10 @@ const Assigned = require('../models/assignlearning');
 const School = require('../models/school');
 const College = require('../models/college');
 const User = require('../models/User');
+
 exports.createAssigned = async (req, res) => {
   try {
-    const {classId, learning,learning2,learning3 } = req.body;
+    const {classId, learning,learning2,learning3,learning4} = req.body;
     const createdBy = req.user.id; 
 
     if (!classId || !learning) {
@@ -15,6 +16,7 @@ exports.createAssigned = async (req, res) => {
       learning,
       learning2,
       learning3,
+      learning4,
       createdBy
     });
     const savedAssigned = await assigned.save();
@@ -35,6 +37,7 @@ exports.getAssignedList = async (req, res) => {
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
+      .populate('learning4')
       .lean(); 
     for (let item of assignedList) {
       let classInfo = await School.findById(item.classId).lean();

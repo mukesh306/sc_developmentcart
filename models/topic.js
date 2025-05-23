@@ -11,8 +11,10 @@ const TopicSchema = new mongoose.Schema({
    testTime:{ type: String},
    score: { type: String, default: null },
 totalQuestions: { type: Number, default: null },
+answeredQuestions: { type: Number, default: null },
 correctAnswers: { type: Number, default: null },
 incorrectAnswers: { type: Number, default: null },
+skippedQuestions: { type: Number, default: null },
 
      isdescription: { type: Boolean, default: false },
   isvideo: { type: Boolean, default: false },

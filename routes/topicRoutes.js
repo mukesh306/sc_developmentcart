@@ -20,6 +20,9 @@ router.get('/getTopicWithQuizById/:topicId',topicController.getTopicWithQuizById
 router.get('/TopicWithLeaning/:id',auth,topicController.TopicWithLeaning);
 router.get('/getAllTopics',topicController.getAllTopicNames);
 router.post('/submit-quiz',auth,topicController.submitQuiz);
+router.post('/save-quiz',auth,topicController.saveQuizAnswer);
+router.post('/saveQuizAnswer',auth,topicController.submitQuizAnswer);
+router.post('/calculateQuizScore',auth,topicController.calculateQuizScore);
 router.get('/getTopicById/:id',topicController.getTopicById);
 
 

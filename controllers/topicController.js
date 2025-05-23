@@ -46,8 +46,9 @@ const Topic = require('../models/topic');
 const Quiz = require('../models/quiz');
 const School = require('../models/school');
 const College = require('../models/college');
-const moment = require('moment'); 
-
+const moment = require('moment');
+const Assigned = require('../models/assignlearning');  
+const UserQuizAnswer = require('../models/userQuizAnswer');
 
 exports.createTopicWithQuiz = async (req, res) => {
   try {
@@ -122,8 +123,6 @@ exports.createTopicWithQuiz = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
 
 exports.addQuizToTopic = async (req, res) => {
   try {
@@ -265,13 +264,10 @@ exports.TopicWithLeaning = async (req, res) => {
     if (!user || user.status !== 'yes') {
       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
     }
-
     const registrationDate = moment(user.createdAt).startOf('day');
     const today = moment().startOf('day');
     const daysPassed = today.diff(registrationDate, 'days') + 1;
-
     const query = { learningId: new mongoose.Types.ObjectId(id) };
-
     if (queryClassId) {
       query.classId = new mongoose.Types.ObjectId(queryClassId);
     } else if (user.className) {
@@ -281,28 +277,53 @@ exports.TopicWithLeaning = async (req, res) => {
     const allTopics = await Topic.find(query)
       .sort({ createdAt: 1 })
       .select('topic score createdAt isdescription isvideo')
-
       .lean();
-
     if (!allTopics || allTopics.length === 0) {
       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
     }
-
+    const validScores = allTopics
+      .map(topic => parseFloat(topic.score))
+      .filter(score => !isNaN(score));
+    const averageScore =
+      validScores.length > 0
+        ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
+        : null;
+    const assignedRecord = await Assigned.findOne({
+      classId: query.classId
+    });
+    if (assignedRecord) {  
+      if (assignedRecord.learning?.toString() === id) {
+        assignedRecord.learningAverage = averageScore;
+      } else if (assignedRecord.learning2?.toString() === id) {
+        assignedRecord.learning2Average = averageScore;
+      } else if (assignedRecord.learning3?.toString() === id) {
+        assignedRecord.learning3Average = averageScore;
+      } else if (assignedRecord.learning4?.toString() === id) {
+        assignedRecord.learning4Average = averageScore;
+      }
+      await assignedRecord.save();
+    }
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
-      if (topic.score === null) {
+      if (topic.score === null || topic.score === undefined) {
         const { score, ...rest } = topic;
         return rest;
       }
       return topic;
     });
 
-    res.status(200).json({ topics: unlockedTopics });
+    res.status(200).json({
+      averageScore,
+      topics: unlockedTopics
+    });
 
   } catch (error) {
     console.error('Error fetching topics with learningId:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
 
 // exports.TopicWithLeaning = async (req, res) => {
 //   try {
@@ -326,128 +347,6 @@ exports.TopicWithLeaning = async (req, res) => {
 // };
 
 
-
-exports.submitQuiz = async (req, res) => {
-  try {
-    const userId = req.user._id;   // Assuming auth middleware sets req.user
-    const { topicId, quizzes } = req.body;
-
-    if (!topicId) {
-      return res.status(400).json({ message: 'topicId is required.' });
-    }
-
-    if (!Array.isArray(quizzes) || quizzes.length === 0) {
-      return res.status(400).json({ message: 'quizzes must be a non-empty array.' });
-    }
-
-    let correctCount = 0;
-    let incorrectCount = 0;
-
-    // Loop over each quiz answer submitted
-    for (const item of quizzes) {
-      // Find quiz question by _id and topicId
-      const quiz = await Quiz.findOne({ _id: item.questionId, topicId }).lean();
-      if (!quiz) continue;  // skip if question not found
-
-      // Compare submitted selectedAnswer (full text) with stored answer
-      const isCorrect = item.selectedAnswer === quiz.answer;
-      if (isCorrect) correctCount++;
-      else incorrectCount++;
-    }
-
-    const total = correctCount + incorrectCount;
-    const score = total > 0 ? (correctCount / total) * 100 : 0;
-    const roundedScore = parseFloat(score.toFixed(2));
-
-    // Find Topic and update score fields if not set yet
-    const topic = await Topic.findById(topicId);
-    if (!topic) {
-      return res.status(404).json({ message: 'Topic not found.' });
-    }
-
-    if (topic.score === null || topic.score === undefined) {
-      topic.score = roundedScore;
-      topic.totalQuestions = total;
-      topic.correctAnswers = correctCount;
-      topic.incorrectAnswers = incorrectCount;
-
-      await topic.save();
-
-      return res.status(200).json({
-        message: 'Quiz submitted successfully and score saved.',
-        totalQuestions: total,
-        correctAnswers: correctCount,
-        incorrectAnswers: incorrectCount,
-        score: roundedScore
-      });
-    } else {
-      // Score already saved, return saved data
-      return res.status(200).json({
-        message: 'Quiz submitted successfully, score was already saved.',
-        totalQuestions: topic.totalQuestions ?? 0,
-        correctAnswers: topic.correctAnswers ?? 0,
-        incorrectAnswers: topic.incorrectAnswers ?? 0,
-        score: topic.score
-      });
-    }
-  } catch (error) {
-    console.error('Error in submitQuiz:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-
-
-// exports.submitQuiz = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const { topicId, quizzes } = req.body;
-
-//     if (!topicId) {
-//       return res.status(400).json({ message: 'topicId is required.' });
-//     }
-
-//     if (!Array.isArray(quizzes) || quizzes.length === 0) {
-//       return res.status(400).json({ message: 'quizzes must be a non-empty array.' });
-//     }
-
-//     let correctCount = 0;
-//     let incorrectCount = 0;
-
-//     for (const item of quizzes) {
-//       const quiz = await Quiz.findOne({ _id: item.questionId, topicId }).lean();
-//       if (!quiz) continue;
-
-//       const isCorrect = item.selectedAnswer === quiz.answer;
-//       if (isCorrect) correctCount++;
-//       else incorrectCount++;
-//     }
-//     const total = correctCount + incorrectCount;
-//     const score = total > 0 ? (correctCount / total) * 100 : 0;
-//     const roundedScore = parseFloat(score.toFixed(2));
-//     const topic = await Topic.findById(topicId);
-//     if (!topic) {
-//       return res.status(404).json({ message: 'Topic not found.' });
-//     }
-//     if (!topic.score || topic.score === 0) {
-    
-//       topic.score = roundedScore;
-//       await topic.save();
-
-//       return res.status(200).json({
-//         message: 'Quiz submitted successfully',
-//         score: `${roundedScore}%`
-//       });
-//     } else {
-//       return res.status(200).json({
-//         message: 'Quiz submitted successfully and score not update'
-//       });
-//     }
-//   } catch (error) {
-//     console.error('Error in submitQuiz:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 
@@ -505,3 +404,257 @@ exports.getTopicById = async (req, res) => {
   }
 };
 
+
+// exports.submitQuiz = async (req, res) => {
+//   try {
+//     const userId = req.user._id;   
+//     const { topicId, quizzes } = req.body;
+//     if (!topicId) {
+//       return res.status(400).json({ message: 'topicId is required.' });
+//     }
+//     if (!Array.isArray(quizzes) || quizzes.length === 0) {
+//       return res.status(400).json({ message: 'quizzes must be a non-empty array.' });
+//     }
+//     let correctCount = 0;
+//     let incorrectCount = 0;
+//     for (const item of quizzes) { 
+//       const quiz = await Quiz.findOne({ _id: item.questionId, topicId }).lean();
+//       if (!quiz) continue;  
+//       const isCorrect = item.selectedAnswer === quiz.answer;
+//       if (isCorrect) correctCount++;
+//       else incorrectCount++;
+//     }
+//     const total = correctCount + incorrectCount;
+//     const score = total > 0 ? (correctCount / total) * 100 : 0;
+//     const roundedScore = parseFloat(score.toFixed(2));
+//     const topic = await Topic.findById(topicId);
+//     if (!topic) {
+//       return res.status(404).json({ message: 'Topic not found.' });
+//     }
+//     if (topic.score === null || topic.score === undefined) {
+//       topic.score = roundedScore;
+//       topic.totalQuestions = total;
+//       topic.correctAnswers = correctCount;
+//       topic.incorrectAnswers = incorrectCount;
+//       await topic.save();
+//       return res.status(200).json({
+//         message: 'Quiz submitted successfully and score saved.',
+//         totalQuestions: total,
+//         correctAnswers: correctCount,
+//         incorrectAnswers: incorrectCount,
+//         score: roundedScore
+//       });
+//     } else {   
+//       return res.status(200).json({
+//         message: 'Quiz submitted successfully, score was already saved.',
+//         totalQuestions: topic.totalQuestions ?? 0,
+//         correctAnswers: topic.correctAnswers ?? 0,
+//         incorrectAnswers: topic.incorrectAnswers ?? 0,
+//         score: topic.score
+//       });
+//     }
+//   } catch (error) {
+//     console.error('Error in submitQuiz:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
+exports.submitQuiz = async (req, res) => {
+  try {
+    const userId = req.user._id;   
+    const { topicId, quizzes } = req.body;
+    if (!topicId) {
+      return res.status(400).json({ message: 'topicId is required.' });
+    }
+    if (!Array.isArray(quizzes) || quizzes.length === 0) {
+      return res.status(400).json({ message: 'quizzes must be a non-empty array.' });
+    }
+    let correctCount = 0;
+    let incorrectCount = 0;
+    for (const item of quizzes) { 
+      const quiz = await Quiz.findOne({ _id: item.questionId, topicId }).lean();
+      if (!quiz) continue;  
+      const isCorrect = item.selectedAnswer === quiz.answer;
+      if (isCorrect) correctCount++;
+      else incorrectCount++;
+    }
+    const total = correctCount + incorrectCount;
+    const score = total > 0 ? (correctCount / total) * 100 : 0;
+    const roundedScore = parseFloat(score.toFixed(2));
+    const topic = await Topic.findById(topicId);
+    if (!topic) {
+      return res.status(404).json({ message: 'Topic not found.' });
+    }
+    if (topic.score === null || topic.score === undefined) {
+      topic.score = roundedScore;
+      topic.totalQuestions = total;
+      topic.correctAnswers = correctCount;
+      topic.incorrectAnswers = incorrectCount;
+      await topic.save();
+      return res.status(200).json({
+        message: 'Quiz submitted successfully and score saved.',
+        totalQuestions: total,
+        correctAnswers: correctCount,
+        incorrectAnswers: incorrectCount,
+        score: roundedScore
+      });
+    } else {   
+      return res.status(200).json({
+        message: 'Quiz submitted successfully, score was already saved.',
+        totalQuestions: topic.totalQuestions ?? 0,
+        correctAnswers: topic.correctAnswers ?? 0,
+        incorrectAnswers: topic.incorrectAnswers ?? 0,
+        score: topic.score
+      });
+    }
+  } catch (error) {
+    console.error('Error in submitQuiz:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.saveQuizAnswer = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { topicId, questionId, selectedAnswer } = req.body;
+
+    if (!topicId || !questionId) {
+      return res.status(400).json({ message: 'topicId and questionId are required.' });
+    }
+
+    const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
+    if (!quiz) {
+      return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
+    }
+
+    if (selectedAnswer) {
+      await UserQuizAnswer.findOneAndUpdate(
+        { userId, topicId, questionId },
+        { selectedAnswer },
+        { upsert: true, new: true }
+      );
+      return res.status(200).json({ message: 'Answer saved successfully.' });
+    } else {
+      await UserQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
+      return res.status(200).json({ message: 'Question skipped (no answer saved).' });
+    }
+
+  } catch (error) {
+    console.error('Error in saveQuizAnswer:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+exports.submitQuizAnswer = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { topicId, questionId, selectedAnswer } = req.body;
+
+    // Validate required fields
+    if (!topicId || !questionId) {
+      return res.status(400).json({ message: 'topicId and questionId are required.' });
+    }
+
+    // Check if the quiz question exists
+    const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
+    if (!quiz) {
+      return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
+    }
+
+    // If user selected an answer, save or update it
+    if (selectedAnswer) {
+      await UserQuizAnswer.findOneAndUpdate(
+        { userId, topicId, questionId },
+        { selectedAnswer },
+        { upsert: true, new: true }
+      );
+      return res.status(200).json({ message: 'Answer saved successfully.' });
+    } else {
+      // No selectedAnswer means the user skipped the question
+      await UserQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
+      return res.status(200).json({ message: 'Question skipped (no answer saved).' });
+    }
+
+  } catch (error) {
+    console.error('Error in saveQuizAnswer:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.calculateQuizScore = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { topicId } = req.body;
+
+    if (!topicId) {
+      return res.status(400).json({ message: 'topicId is required.' });
+    }
+
+    const topic = await Topic.findById(topicId);
+    if (!topic) {
+      return res.status(404).json({ message: 'Topic not found.' });
+    }
+
+    // If the score is already saved, just return it without recalculating or updating DB
+    if (topic.score !== null && topic.score !== undefined) {
+      return res.status(200).json({
+        message: 'Score already calculated.',
+        totalQuestions: topic.totalQuestions ?? 0,
+        answeredQuestions: (topic.totalQuestions ?? 0) - (topic.skippedQuestions ?? 0),
+        skippedQuestions: topic.skippedQuestions ?? 0,
+        correctAnswers: topic.correctAnswers ?? 0,
+        incorrectAnswers: topic.incorrectAnswers ?? 0,
+        score: topic.score
+      });
+    }
+
+    // Otherwise, calculate and save
+    const allQuizzes = await Quiz.find({ topicId }).lean();
+    const allQuestionIds = allQuizzes.map(q => q._id.toString());
+
+    const answers = await UserQuizAnswer.find({ userId, topicId });
+    const answeredQuestionIds = answers.map(a => a.questionId.toString());
+
+    let correctCount = 0;
+    let incorrectCount = 0;
+
+    for (const answer of answers) {
+      const quiz = allQuizzes.find(q => q._id.toString() === answer.questionId.toString());
+      if (!quiz) continue;
+
+      if (answer.selectedAnswer === quiz.answer) correctCount++;
+      else incorrectCount++;
+    }
+
+    const totalQuestions = allQuestionIds.length;
+    const answeredQuestions = answeredQuestionIds.length;
+    const skippedQuestions = totalQuestions - answeredQuestions;
+    const score = answeredQuestions > 0 ? (correctCount / answeredQuestions) * 100 : 0;
+    const roundedScore = parseFloat(score.toFixed(2));
+
+    topic.score = roundedScore;
+    topic.totalQuestions = totalQuestions;
+    topic.correctAnswers = correctCount;
+    topic.incorrectAnswers = incorrectCount;
+    topic.skippedQuestions = skippedQuestions;
+    await topic.save();
+
+    return res.status(200).json({
+      message: 'Score calculated and saved successfully.',
+      totalQuestions,
+      answeredQuestions,
+      skippedQuestions,
+      correctAnswers: correctCount,
+      incorrectAnswers: incorrectCount,
+      score: roundedScore
+    });
+  } catch (error) {
+    console.error('Error in calculateQuizScore:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
