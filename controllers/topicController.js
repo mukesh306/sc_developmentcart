@@ -387,7 +387,7 @@ exports.getTopicById = async (req, res) => {
     }
     topicObj.classInfo = classInfo || null;
 
-    // Add quizzes
+    topicObj.testTimeInSeconds = topic.testTime ? topic.testTime * 60 : 0;
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
@@ -603,7 +603,6 @@ exports.calculateQuizScore = async (req, res) => {
       return res.status(400).json({ message: 'No questions found for this topic.' });
     }
 
-    // ✅ Default to totalQuestions if topicTotalMarks not provided
     const totalMarks = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
       ? topicTotalMarks
       : totalQuestions;
