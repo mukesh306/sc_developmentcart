@@ -548,24 +548,17 @@ exports.saveQuizAnswer = async (req, res) => {
 };
 
 
-
 exports.submitQuizAnswer = async (req, res) => {
   try {
     const userId = req.user._id;
     const { topicId, questionId, selectedAnswer } = req.body;
-
-    // Validate required fields
     if (!topicId || !questionId) {
       return res.status(400).json({ message: 'topicId and questionId are required.' });
     }
-
-    // Check if the quiz question exists
     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
     }
-
-    // If user selected an answer, save or update it
     if (selectedAnswer) {
       await UserQuizAnswer.findOneAndUpdate(
         { userId, topicId, questionId },
@@ -574,11 +567,9 @@ exports.submitQuizAnswer = async (req, res) => {
       );
       return res.status(200).json({ message: 'Answer saved successfully.' });
     } else {
-      // No selectedAnswer means the user skipped the question
       await UserQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
       return res.status(200).json({ message: 'Question skipped (no answer saved).' });
     }
-
   } catch (error) {
     console.error('Error in saveQuizAnswer:', error);
     res.status(500).json({ message: error.message });
@@ -586,13 +577,23 @@ exports.submitQuizAnswer = async (req, res) => {
 };
 
 
+
+
 exports.calculateQuizScore = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { topicId } = req.body;
+    const { topicId, topicTotalMarks, negativeMarking = 0 } = req.body;
 
     if (!topicId) {
       return res.status(400).json({ message: 'topicId is required.' });
+    }
+
+    if (typeof topicTotalMarks !== 'number' || topicTotalMarks <= 0) {
+      return res.status(400).json({ message: 'Valid topicTotalMarks is required.' });
+    }
+
+    if (typeof negativeMarking !== 'number' || negativeMarking < 0) {
+      return res.status(400).json({ message: 'negativeMarking must be a non-negative number.' });
     }
 
     const topic = await Topic.findById(topicId);
@@ -600,25 +601,10 @@ exports.calculateQuizScore = async (req, res) => {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
-    // If the score is already saved, just return it without recalculating or updating DB
-    if (topic.score !== null && topic.score !== undefined) {
-      return res.status(200).json({
-        message: 'Score already calculated.',
-        totalQuestions: topic.totalQuestions ?? 0,
-        answeredQuestions: (topic.totalQuestions ?? 0) - (topic.skippedQuestions ?? 0),
-        skippedQuestions: topic.skippedQuestions ?? 0,
-        correctAnswers: topic.correctAnswers ?? 0,
-        incorrectAnswers: topic.incorrectAnswers ?? 0,
-        score: topic.score
-      });
-    }
-
-    // Otherwise, calculate and save
     const allQuizzes = await Quiz.find({ topicId }).lean();
-    const allQuestionIds = allQuizzes.map(q => q._id.toString());
+    const totalQuestions = allQuizzes.length;
 
     const answers = await UserQuizAnswer.find({ userId, topicId });
-    const answeredQuestionIds = answers.map(a => a.questionId.toString());
 
     let correctCount = 0;
     let incorrectCount = 0;
@@ -631,28 +617,55 @@ exports.calculateQuizScore = async (req, res) => {
       else incorrectCount++;
     }
 
-    const totalQuestions = allQuestionIds.length;
-    const answeredQuestions = answeredQuestionIds.length;
+    const answeredQuestions = correctCount + incorrectCount;
     const skippedQuestions = totalQuestions - answeredQuestions;
-    const score = answeredQuestions > 0 ? (correctCount / answeredQuestions) * 100 : 0;
-    const roundedScore = parseFloat(score.toFixed(2));
 
-    topic.score = roundedScore;
-    topic.totalQuestions = totalQuestions;
-    topic.correctAnswers = correctCount;
-    topic.incorrectAnswers = incorrectCount;
-    topic.skippedQuestions = skippedQuestions;
-    await topic.save();
+    // Marks per question (equal weight for all questions)
+    const marksPerQuestion = topicTotalMarks / totalQuestions;
+
+    // Calculate marks obtained:
+    // total positive marks from correct answers
+    const positiveMarks = correctCount * marksPerQuestion;
+
+    // total negative marks from incorrect answers
+    const negativeMarks = incorrectCount * negativeMarking;
+
+    // Final marks after negative marking (minimum 0)
+    let marksObtained = positiveMarks - negativeMarks;
+    if (marksObtained < 0) marksObtained = 0;
+
+    const roundedMarks = parseFloat(marksObtained.toFixed(2));
+
+    // Calculate percentage based on total marks
+    const scorePercent = (roundedMarks / topicTotalMarks) * 100;
+    const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
+
+    // Save only if score not already saved
+    if (topic.score === null || topic.score === undefined) {
+      topic.score = roundedScorePercent;
+      topic.totalQuestions = totalQuestions;
+      topic.correctAnswers = correctCount;
+      topic.incorrectAnswers = incorrectCount;
+      topic.skippedQuestions = skippedQuestions;
+      topic.marksObtained = roundedMarks;
+      topic.totalMarks = topicTotalMarks;
+      topic.negativeMarking = negativeMarking;
+      await topic.save();
+    }
 
     return res.status(200).json({
-      message: 'Score calculated and saved successfully.',
+      message: 'Score calculated successfully.',
       totalQuestions,
       answeredQuestions,
       skippedQuestions,
       correctAnswers: correctCount,
       incorrectAnswers: incorrectCount,
-      score: roundedScore
+      marksObtained: roundedMarks,
+      totalMarks: topicTotalMarks,
+      negativeMarking,
+      scorePercent: roundedScorePercent
     });
+
   } catch (error) {
     console.error('Error in calculateQuizScore:', error);
     res.status(500).json({ message: error.message });

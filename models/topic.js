@@ -1,22 +1,26 @@
 const mongoose = require('mongoose');
 
 const TopicSchema = new mongoose.Schema({
-    classId:  { type: mongoose.Schema.Types.ObjectId},
-    learningId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings' },
-   topic:{ type: String, required: true },
-   description:{ type: String, required: true },
-   image:{ type: String, required: true },
-   video:{ type: String, required: true },
-   videoTime:{ type: String},
-   testTime:{ type: String},
-   score: { type: String, default: null },
+classId:  { type: mongoose.Schema.Types.ObjectId},
+learningId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings' },
+topic:{ type: String, required: true },
+description:{ type: String, required: true },
+image:{ type: String, required: true },
+video:{ type: String, required: true },
+videoTime:{ type: String},
+testTime:{ type: String},
+
+score: { type: String, default: null },
 totalQuestions: { type: Number, default: null },
 answeredQuestions: { type: Number, default: null },
 correctAnswers: { type: Number, default: null },
 incorrectAnswers: { type: Number, default: null },
 skippedQuestions: { type: Number, default: null },
-
-     isdescription: { type: Boolean, default: false },
+marksObtained: { type: Number, default: null },
+totalMarks: { type: Number, default: null },
+negativeMarking: { type: Number, default: null },
+scorePercent: { type: Number, default: null },
+isdescription: { type: Boolean, default: false },
   isvideo: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
    createdAt: {
@@ -25,3 +29,5 @@ skippedQuestions: { type: Number, default: null },
     } 
 });
 module.exports = mongoose.model('Topic', TopicSchema); 
+
+ 
