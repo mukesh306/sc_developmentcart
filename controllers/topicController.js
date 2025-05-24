@@ -223,38 +223,6 @@ exports.getAllTopicNames = async (req, res) => {
 };
 
 
-// exports.TopicWithLeaning = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { classId } = req.query;
-
-//     const user = req.user;
-//     if (!user || user.status !== 'yes') {
-//       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
-//     }
-
-//     const query = { learningId: id };
-//     if (classId) {
-//       query.classId = classId;
-//     }
-
-//     const topics = await Topic.find(query)
-//       .select('topic score')
-//       .lean();
-
-//     if (!topics || topics.length === 0) {
-//       return res.status(404).json({ message: 'No topics found for this learningId' });
-//     }
-
-//     res.status(200).json({ topics });
-
-//   } catch (error) {
-//     console.error('Error fetching topics with learningId:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
