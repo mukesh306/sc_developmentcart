@@ -18,9 +18,6 @@ jobs:
       with:
         node-version: '20'  # Adjust if needed
 
-    - name: Install dependencies
-     run: npm install 
-
     - name: Copy files to server (scp)
       uses: appleboy/scp-action@master
       with:
