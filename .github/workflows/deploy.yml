@@ -33,7 +33,7 @@ jobs:
       with:
         host: 157.20.190.21
         username: ubuntu
-        password: r@ck@1234$#@
+        password: r@ck@1234$#@!
         port: 22
         script: |
           cd /var/www/html/shiksha_new_backend
