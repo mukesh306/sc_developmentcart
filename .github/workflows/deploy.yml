@@ -36,6 +36,6 @@ jobs:
         password: r@ck@1234$#@
         port: 22
         script: |
-          cd /home/ubuntu/your-app-folder
+          cd /var/www/html/shiksha_new_backend
           npm install
           pm2 restart 0
