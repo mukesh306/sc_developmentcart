@@ -19,10 +19,7 @@ jobs:
         node-version: '20'  # Adjust if needed
 
     - name: Install dependencies
-  #    run: sudo npm install -f
-
-    - name: Build (if needed)
-   #   run: sudo npm run build  # Optional; remove if no build step
+     run: sudo npm install -f
 
     - name: Copy files to server (scp)
       uses: appleboy/scp-action@master
