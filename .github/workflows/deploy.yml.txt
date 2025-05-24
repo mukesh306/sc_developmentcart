@@ -1,0 +1,47 @@
+name: 🚀 Deploy Node.js App to Server
+
+on:
+  push:
+    branches:
+      - main  # Change if your branch is different
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'  # Adjust if needed
+
+    - name: Install dependencies
+      run: npm install
+
+    - name: Build (if needed)
+      run: npm run build  # Optional; remove if no build step
+
+    - name: Copy files to server (scp)
+      uses: appleboy/scp-action@master
+      with:
+        host: 157.20.190.21
+        username: ubuntu
+        password: r@ck@1234$#@!
+        port: 22
+        source: "."
+        target: "/var/www/html/shiksha_new_backend"
+
+    - name: SSH and deploy app
+      uses: appleboy/ssh-action@master
+      with:
+        host: 157.20.190.21
+        username: ubuntu
+        password: r@ck@1234$#@
+        port: 22
+        script: |
+          cd /home/ubuntu/your-app-folder
+          npm install
+          pm2 restart 0

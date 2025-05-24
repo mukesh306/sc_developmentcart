@@ -543,7 +543,6 @@ exports.saveQuizAnswer = async (req, res) => {
   }
 };
 
-
 exports.submitQuizAnswer = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -571,8 +570,6 @@ exports.submitQuizAnswer = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
 
 exports.calculateQuizScore = async (req, res) => {
   try {
