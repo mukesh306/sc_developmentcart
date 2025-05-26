@@ -7,6 +7,7 @@ const College = require('../models/college');
 const moment = require('moment');
 const Assigned = require('../models/assignlearning');  
 const UserQuizAnswer = require('../models/userQuizAnswer');
+const MarkingSetting = require('../models/markingSetting');
 
 exports.createTopicWithQuiz = async (req, res) => {
   try {
@@ -270,6 +271,7 @@ exports.TopicWithLeaning = async (req, res) => {
 //   }
 // };
 
+
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -284,8 +286,6 @@ exports.getTopicById = async (req, res) => {
     }
 
     let updated = false;
-
-    // Handle optional updates via query
     if (isvideo !== undefined) {
       topic.isvideo = isvideo === 'true' ? 'true' : 'false';
       updated = true;
@@ -296,7 +296,6 @@ exports.getTopicById = async (req, res) => {
       updated = true;
     }
 
-    // Auto-calculate and save testTimeInSeconds if not already set
     if (!topic.testTimeInSeconds || topic.testTimeInSeconds === 0) {
       if (topic.testTime && topic.testTime > 0) {
         topic.testTimeInSeconds = topic.testTime * 60;
@@ -310,17 +309,13 @@ exports.getTopicById = async (req, res) => {
 
     const topicObj = topic.toObject();
 
-    // Always return saved value
     topicObj.testTimeInSeconds = topic.testTimeInSeconds || 0;
-
-    // Class Info
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
     topicObj.classInfo = classInfo || null;
 
-    // Quizzes
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
@@ -481,6 +476,7 @@ exports.saveQuizAnswer = async (req, res) => {
   }
 };
 
+
 exports.submitQuizAnswer = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -509,17 +505,133 @@ exports.submitQuizAnswer = async (req, res) => {
   }
 };
 
+
+
+// exports.calculateQuizScore = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { topicId, topicTotalMarks, negativeMarking = 0 } = req.body;
+
+//     if (!topicId) {
+//       return res.status(400).json({ message: 'topicId is required.' });
+//     }
+
+//     if (typeof negativeMarking !== 'number' || negativeMarking < 0) {
+//       return res.status(400).json({ message: 'negativeMarking must be a non-negative number.' });
+//     }
+
+//     const topic = await Topic.findById(topicId);
+//     if (!topic) {
+//       return res.status(404).json({ message: 'Topic not found.' });
+//     }
+
+//     const allQuizzes = await Quiz.find({ topicId }).lean();
+//     const totalQuestions = allQuizzes.length;
+
+//     if (totalQuestions === 0) {
+//       return res.status(400).json({ message: 'No questions found for this topic.' });
+//     }
+
+//     const totalMarks = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
+//       ? topicTotalMarks
+//       : totalQuestions;
+
+//     const answers = await UserQuizAnswer.find({ userId, topicId });
+//     let correctCount = 0;
+//     let incorrectCount = 0;
+
+//     for (const answer of answers) {
+//       const quiz = allQuizzes.find(q => q._id.toString() === answer.questionId.toString());
+//       if (!quiz) continue;
+
+//       if (answer.selectedAnswer === quiz.answer) correctCount++;
+//       else incorrectCount++;
+//     }
+
+//     const answeredQuestions = correctCount + incorrectCount;
+//     const skippedQuestions = totalQuestions - answeredQuestions;
+
+//     const marksPerQuestion = totalMarks / totalQuestions;
+//     const positiveMarks = correctCount * marksPerQuestion;
+//     const negativeMarks = incorrectCount * negativeMarking;
+
+//     let marksObtained = positiveMarks - negativeMarks;
+//     if (marksObtained < 0) marksObtained = 0;
+
+//     const roundedMarks = parseFloat(marksObtained.toFixed(2));
+//     const scorePercent = (roundedMarks / totalMarks) * 100;
+//     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
+
+//     if (topic.score === null || topic.score === undefined) {
+//       topic.score = roundedScorePercent;
+//       topic.totalQuestions = totalQuestions;
+//       topic.correctAnswers = correctCount;
+//       topic.incorrectAnswers = incorrectCount;
+//       topic.skippedQuestions = skippedQuestions;
+//       topic.marksObtained = roundedMarks;
+//       topic.totalMarks = totalMarks;
+//       topic.negativeMarking = negativeMarking;
+//       await topic.save();
+//     }
+
+//     return res.status(200).json({
+//       message: 'Score calculated successfully.',
+//       totalQuestions,
+//       answeredQuestions,
+//       skippedQuestions,
+//       correctAnswers: correctCount,
+//       incorrectAnswers: incorrectCount,
+//       marksObtained: roundedMarks,
+//       totalMarks,
+//       negativeMarking,
+//       scorePercent: roundedScorePercent,
+//       testTime: topic.testTime || 0
+//     });
+
+//   } catch (error) {
+//     console.error('Error in calculateQuizScore:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
+exports.updateTestTimeInSeconds = async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const { testTimeInSeconds } = req.body;
+    if (typeof testTimeInSeconds !== 'number' || testTimeInSeconds < 0) {
+      return res.status(400).json({ message: 'testTimeInSeconds must be a non-negative number.' });
+    }
+    const topic = await Topic.findById(topicId);
+    if (!topic) {
+      return res.status(404).json({ message: 'Topic not found.' });
+    }
+    if (topic.testTimeInSeconds !== undefined) {
+      topic.testTimeInSeconds = testTimeInSeconds;
+      await topic.save();
+
+      return res.status(200).json({
+        message: 'testTimeInSeconds updated successfully.',
+        testTimeInSeconds: topic.testTimeInSeconds
+      });
+    } else {
+      return res.status(400).json({ message: 'testTimeInSeconds field does not exist in topic.' });
+    }
+  } catch (error) {
+    console.error('Error updating testTimeInSeconds:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
 exports.calculateQuizScore = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { topicId, topicTotalMarks, negativeMarking = 0 } = req.body;
+    const { topicId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
 
     if (!topicId) {
       return res.status(400).json({ message: 'topicId is required.' });
-    }
-
-    if (typeof negativeMarking !== 'number' || negativeMarking < 0) {
-      return res.status(400).json({ message: 'negativeMarking must be a non-negative number.' });
     }
 
     const topic = await Topic.findById(topicId);
@@ -534,9 +646,16 @@ exports.calculateQuizScore = async (req, res) => {
       return res.status(400).json({ message: 'No questions found for this topic.' });
     }
 
-    const totalMarks = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
-      ? topicTotalMarks
-      : totalQuestions;
+    const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
+    const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
+      ? topicTotalMarks / totalQuestions
+      : (markingSetting?.maxMarkPerQuestion || 1);
+
+    const negativeMarking = (typeof inputNegativeMarking === 'number')
+      ? inputNegativeMarking
+      : (markingSetting?.negativeMarking || 0);
+
+    const totalMarks = maxMarkPerQuestion * totalQuestions;
 
     const answers = await UserQuizAnswer.find({ userId, topicId });
     let correctCount = 0;
@@ -553,8 +672,7 @@ exports.calculateQuizScore = async (req, res) => {
     const answeredQuestions = correctCount + incorrectCount;
     const skippedQuestions = totalQuestions - answeredQuestions;
 
-    const marksPerQuestion = totalMarks / totalQuestions;
-    const positiveMarks = correctCount * marksPerQuestion;
+    const positiveMarks = correctCount * maxMarkPerQuestion;
     const negativeMarks = incorrectCount * negativeMarking;
 
     let marksObtained = positiveMarks - negativeMarks;
@@ -563,7 +681,6 @@ exports.calculateQuizScore = async (req, res) => {
     const roundedMarks = parseFloat(marksObtained.toFixed(2));
     const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
-
     if (topic.score === null || topic.score === undefined) {
       topic.score = roundedScorePercent;
       topic.totalQuestions = totalQuestions;
@@ -592,35 +709,6 @@ exports.calculateQuizScore = async (req, res) => {
 
   } catch (error) {
     console.error('Error in calculateQuizScore:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
-
-exports.updateTestTimeInSeconds = async (req, res) => {
-  try {
-    const { topicId } = req.params;
-    const { testTimeInSeconds } = req.body;
-    if (typeof testTimeInSeconds !== 'number' || testTimeInSeconds < 0) {
-      return res.status(400).json({ message: 'testTimeInSeconds must be a non-negative number.' });
-    }
-    const topic = await Topic.findById(topicId);
-    if (!topic) {
-      return res.status(404).json({ message: 'Topic not found.' });
-    }
-    if (topic.testTimeInSeconds !== undefined) {
-      topic.testTimeInSeconds = testTimeInSeconds;
-      await topic.save();
-
-      return res.status(200).json({
-        message: 'testTimeInSeconds updated successfully.',
-        testTimeInSeconds: topic.testTimeInSeconds
-      });
-    } else {
-      return res.status(400).json({ message: 'testTimeInSeconds field does not exist in topic.' });
-    }
-  } catch (error) {
-    console.error('Error updating testTimeInSeconds:', error);
     res.status(500).json({ message: error.message });
   }
 };

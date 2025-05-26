@@ -3,7 +3,6 @@ const MarkingSetting = require('../models/markingSetting');
 
 exports.createOrUpdateSettings = async (req, res) => {
   const { maxMarkPerQuestion, negativeMarking } = req.body;
-
   if (maxMarkPerQuestion === undefined || negativeMarking === undefined) {
     return res.status(400).json({ message: "Both maxMarkPerQuestion and negativeMarking are required." });
   }
@@ -21,7 +20,7 @@ exports.createOrUpdateSettings = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
+ 
 exports.getSettings = async (req, res) => {
   try {
     const setting = await MarkingSetting.findOne();

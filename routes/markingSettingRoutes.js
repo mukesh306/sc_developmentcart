@@ -4,9 +4,9 @@ const router = express.Router();
 const MarkingSettingController = require('../controllers/markingSettingCotroller');
 
 
-router.get('/', MarkingSettingController.getSettings);
+router.get('/marking', MarkingSettingController.getSettings);
 
-router.post('/update', MarkingSettingController.createOrUpdateSettings);
+router.post('/marking', MarkingSettingController.createOrUpdateSettings);
 
 
 module.exports = router;
