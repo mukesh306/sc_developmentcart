@@ -13,6 +13,7 @@ exports.createOrUpdateSettings = async (req, res) => {
         createdBy: userId,
       });
 
+    
       if (maxMarkPerQuestion !== undefined) {
         setting.maxMarkPerQuestion = maxMarkPerQuestion;
       }
