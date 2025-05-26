@@ -1,56 +1,5 @@
 const ExperiencePoint = require('../models/experiencePoint');
 
-
-// exports.upsertSettings = async (req, res) => {
-//   try {
-//     const {
-//       perLevel,
-//       maxExpDaily,
-//       deductions,
-//       eachQuestion,
-//       negativeMarking,
-//       streak7Days,
-//       streak30Days
-//     } = req.body;
-
-//     const maxExp = Number(maxExpDaily);
-//     const allotmentFormula = (maxExp / 100) * score;
-//     let settings = await ExperiencePoint.findOne();
-//     if (!settings) {
-//       settings = new ExperiencePoint({
-//         perLevel,
-//         maxExpDaily,
-//         allotmentFormula,
-//         deductions,
-//         eachQuestion,
-//         negativeMarking,
-//         streak7Days,
-//         streak30Days
-//       });
-//     } else {
-//       settings.perLevel = perLevel;
-//       settings.maxExpDaily = maxExpDaily;
-//       settings.allotmentFormula = allotmentFormula;
-//       settings.deductions = deductions;
-//       settings.eachQuestion = eachQuestion;
-//       settings.negativeMarking = negativeMarking;
-//       settings.streak7Days = streak7Days;
-//       settings.streak30Days = streak30Days;
-//     }
-
-//     await settings.save();
-
-//     res.status(200).json({
-//       message: 'Settings saved successfully',
-//       data: settings
-//     });
-
-//   } catch (err) {
-//     console.error(err);
-//     res.status(500).json({ message: 'Internal server error' });
-//   }
-// };
-
 exports.upsertSettings = async (req, res) => {
   try {
     const {
@@ -61,13 +10,12 @@ exports.upsertSettings = async (req, res) => {
       negativeMarking,
       streak7Days,
       streak30Days,
-      learningId, // <-- Make sure frontend sends this in request body
-      classId      // <-- Optional, if needed to narrow search
+      learningId, 
+      classId      
     } = req.body;
 
     const maxExp = Number(maxExpDaily);
 
-    // 🔍 Fetch assigned record to get average score for learningId
     const assigned = await Assigned.findOne({
       $or: [
         { learning: learningId },
@@ -75,14 +23,13 @@ exports.upsertSettings = async (req, res) => {
         { learning3: learningId },
         { learning4: learningId }
       ],
-      ...(classId && { classId }) // Optional filter
+      ...(classId && { classId }) 
     });
 
     if (!assigned) {
       return res.status(404).json({ message: 'Assigned record not found for the provided learningId' });
     }
 
-    // ✅ Identify which learning average score to use
     let score = null;
     if (assigned.learning?.toString() === learningId) {
       score = assigned.learningAverage;

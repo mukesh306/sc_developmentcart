@@ -1,46 +1,4 @@
 
-// exports.TopicWithLeaning = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { classId } = req.query;
-//     const user = req.user;
-
-//     if (!user || user.status !== 'yes') {
-//       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
-//     }
-//     const registrationDate = moment(user.createdAt).startOf('day');
-//     const today = moment().startOf('day');
-//     const daysPassed = today.diff(registrationDate, 'days') + 1;
-
-//     const query = { learningId: id };
-//     if (classId) {
-//       query.classId = classId;
-//     }
-
-//     const allTopics = await Topic.find(query)
-//       .sort({ createdAt: 1 }) 
-//       .select('topic score createdAt')
-//       .lean();
-
-//     if (!allTopics || allTopics.length === 0) {
-//       return res.status(404).json({ message: 'No topics found for this learningId' });
-//     }
-//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
-//       if (topic.score === null) {
-//         const { score, ...rest } = topic;
-//         return rest;
-//       }
-//       return topic;
-//     });
-
-//     res.status(200).json({ topics: unlockedTopics });
-
-//   } catch (error) {
-//     console.error('Error fetching topics with learningId:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
 const mongoose = require('mongoose');
 const Topic = require('../models/topic');
 const Quiz = require('../models/quiz');
@@ -291,8 +249,6 @@ exports.TopicWithLeaning = async (req, res) => {
 };
 
 
-
-
 // exports.TopicWithLeaning = async (req, res) => {
 //   try {
 //     const { id } = req.params;
@@ -313,7 +269,6 @@ exports.TopicWithLeaning = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
-
 
 
 exports.getTopicById = async (req, res) => {
@@ -617,7 +572,8 @@ exports.calculateQuizScore = async (req, res) => {
       marksObtained: roundedMarks,
       totalMarks,
       negativeMarking,
-      scorePercent: roundedScorePercent
+      scorePercent: roundedScorePercent,
+      testTime: topic.testTime || 0
     });
 
   } catch (error) {
