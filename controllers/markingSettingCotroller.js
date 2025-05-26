@@ -7,12 +7,15 @@ exports.createOrUpdateSettings = async (req, res) => {
     return res.status(400).json({ message: "Both maxMarkPerQuestion and negativeMarking are required." });
   }
   try {
+     const userId = req.user._id;
     let setting = await MarkingSetting.findOne();
     if (!setting) {
-      setting = new MarkingSetting({ maxMarkPerQuestion, negativeMarking });
+      setting = new MarkingSetting({ maxMarkPerQuestion, negativeMarking,createdBy: userId });
     } else {
       setting.maxMarkPerQuestion = maxMarkPerQuestion;
       setting.negativeMarking = negativeMarking;
+       setting.createdBy = userId;
+       
     }
     await setting.save();
     res.status(200).json({ message: "Marking settings updated successfully.", setting });
@@ -23,7 +26,7 @@ exports.createOrUpdateSettings = async (req, res) => {
  
 exports.getSettings = async (req, res) => {
   try {
-    const setting = await MarkingSetting.findOne();
+    const setting = await MarkingSetting.findOne().populate('createdBy', 'email');
     if (!setting) {
       return res.status(404).json({ message: "Marking settings not found." });
     }

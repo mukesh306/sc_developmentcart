@@ -9,7 +9,8 @@ const MarkingSettingSchema = new mongoose.Schema({
   negativeMarking: {
     type: Number,
     required: true
-  }
+  },
+  createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
 }, { timestamps: true });
 
 module.exports = mongoose.model('MarkingSetting', MarkingSettingSchema);
