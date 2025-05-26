@@ -524,7 +524,6 @@ exports.calculateQuizScore = async (req, res) => {
       : totalQuestions;
 
     const answers = await UserQuizAnswer.find({ userId, topicId });
-
     let correctCount = 0;
     let incorrectCount = 0;
 
@@ -578,6 +577,36 @@ exports.calculateQuizScore = async (req, res) => {
 
   } catch (error) {
     console.error('Error in calculateQuizScore:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+exports.updateTestTimeInSeconds = async (req, res) => {
+  try {
+    const { topicId } = req.params;
+    const { testTimeInSeconds } = req.body;
+    if (typeof testTimeInSeconds !== 'number' || testTimeInSeconds < 0) {
+      return res.status(400).json({ message: 'testTimeInSeconds must be a non-negative number.' });
+    }
+    const topic = await Topic.findById(topicId);
+    if (!topic) {
+      return res.status(404).json({ message: 'Topic not found.' });
+    }
+    if (topic.testTimeInSeconds !== undefined) {
+      topic.testTimeInSeconds = testTimeInSeconds;
+      await topic.save();
+
+      return res.status(200).json({
+        message: 'testTimeInSeconds updated successfully.',
+        testTimeInSeconds: topic.testTimeInSeconds
+      });
+    } else {
+      return res.status(400).json({ message: 'testTimeInSeconds field does not exist in topic.' });
+    }
+  } catch (error) {
+    console.error('Error updating testTimeInSeconds:', error);
     res.status(500).json({ message: error.message });
   }
 };

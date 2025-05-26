@@ -25,6 +25,7 @@ router.post('/saveQuizAnswer',auth,topicController.submitQuizAnswer);
 router.post('/calculateQuizScore',auth,topicController.calculateQuizScore);
 router.get('/getTopicById/:id',topicController.getTopicById);
 
+router.post('/topics/:topicId', topicController.updateTestTimeInSeconds);
 
 
 

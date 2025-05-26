@@ -13,6 +13,7 @@ const userRoutes = require('./routes/userRoutes');
 const assignedRoutes = require('./routes/assignRoutes');
 const topic = require('./routes/topicRoutes');
 const experiencePoint = require('./routes/experiencePointRoutes');
+const MarkingSetting = require('./routes/markingSettingRoutes');
 connectDB();
 app.use(cors());
 app.use(express.json());
@@ -24,6 +25,7 @@ app.use('/api/v1', require('./routes/learningRoutes'));
 app.use('/api/v1', require('./routes/assignRoutes'));
 app.use('/api/v1', require('./routes/topicRoutes'));
 app.use('/api/v1', require('./routes/experiencePointRoutes'));
+app.use('/api/v1', require('./routes/markingSettingRoutes'));
 
 app.use('/api/v1', schoolRoutes);
 app.use('/api/v1', quoteRoutes);
@@ -32,6 +34,7 @@ app.use('/api/v1', assignedRoutes);
 app.use('/api/v1', userRoutes);
 app.use('/api/v1', topic);
 app.use('/api/v1', experiencePoint);
+app.use('/api/v1', MarkingSetting);
 
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));

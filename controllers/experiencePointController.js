@@ -82,8 +82,6 @@ exports.upsertSettings = async (req, res) => {
   }
 };
 
-
-
 exports.getSettings = async (req, res) => {
   try {
     const settings = await ExperiencePoint.findOne().lean();
