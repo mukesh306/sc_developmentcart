@@ -270,7 +270,6 @@ exports.TopicWithLeaning = async (req, res) => {
 //   }
 // };
 
-
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -279,12 +278,14 @@ exports.getTopicById = async (req, res) => {
     let topic = await Topic.findById(id)
       .populate('learningId')
       .populate('createdBy', 'email');
+
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
     let updated = false;
 
+    // Handle optional updates via query
     if (isvideo !== undefined) {
       topic.isvideo = isvideo === 'true' ? 'true' : 'false';
       updated = true;
@@ -295,18 +296,31 @@ exports.getTopicById = async (req, res) => {
       updated = true;
     }
 
-    if (updated) {
-      await topic.save(); 
+    // Auto-calculate and save testTimeInSeconds if not already set
+    if (!topic.testTimeInSeconds || topic.testTimeInSeconds === 0) {
+      if (topic.testTime && topic.testTime > 0) {
+        topic.testTimeInSeconds = topic.testTime * 60;
+        updated = true;
+      }
     }
-      const topicObj = topic.toObject(); 
- 
-    topicObj.testTimeInSeconds = topic.testTime ? topic.testTime * 60 : 0;
+
+    if (updated) {
+      await topic.save();
+    }
+
+    const topicObj = topic.toObject();
+
+    // Always return saved value
+    topicObj.testTimeInSeconds = topic.testTimeInSeconds || 0;
+
+    // Class Info
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
     topicObj.classInfo = classInfo || null;
-    topicObj.testTimeInSeconds = topic.testTime ? topic.testTime * 60 : 0;
+
+    // Quizzes
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
@@ -322,6 +336,7 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
+
 
 
 // exports.submitQuiz = async (req, res) => {
@@ -580,7 +595,6 @@ exports.calculateQuizScore = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 exports.updateTestTimeInSeconds = async (req, res) => {
