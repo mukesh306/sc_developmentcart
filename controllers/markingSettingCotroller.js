@@ -1,26 +1,50 @@
 
 const MarkingSetting = require('../models/markingSetting');
-
 exports.createOrUpdateSettings = async (req, res) => {
   const { maxMarkPerQuestion, negativeMarking } = req.body;
-  
+
   try {
-     const userId = req.user._id;
+    const userId = req.user._id;
+
     let setting = await MarkingSetting.findOne();
+
     if (!setting) {
-      setting = new MarkingSetting({ maxMarkPerQuestion, negativeMarking,createdBy: userId });
+      setting = new MarkingSetting({
+        createdBy: userId,
+      });
+
+      if (maxMarkPerQuestion !== undefined) {
+        setting.maxMarkPerQuestion = maxMarkPerQuestion;
+      }
+
+      if (negativeMarking !== undefined) {
+        setting.negativeMarking = negativeMarking;
+      }
     } else {
-      setting.maxMarkPerQuestion = maxMarkPerQuestion;
-      setting.negativeMarking = negativeMarking;
-       setting.createdBy = userId;
-       
+      if (maxMarkPerQuestion !== undefined) {
+        setting.maxMarkPerQuestion = maxMarkPerQuestion;
+      }
+
+      if (negativeMarking !== undefined) {
+        setting.negativeMarking = negativeMarking;
+      }
+
+      setting.createdBy = userId;
     }
+
     await setting.save();
-    res.status(200).json({ message: "Marking settings updated successfully.", setting });
+
+    res.status(200).json({
+      message: "Marking settings saved successfully.",
+      setting,
+    });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
+
  
 exports.getSettings = async (req, res) => {
   try {
