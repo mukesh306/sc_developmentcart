@@ -3,12 +3,11 @@ const mongoose = require('mongoose');
 
 const MarkingSettingSchema = new mongoose.Schema({
   maxMarkPerQuestion: {
-    type: Number,
-    required: true
+    type: Number
+  
   },
   negativeMarking: {
-    type: Number,
-    required: true
+    type: Number
   },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
 }, { timestamps: true });
