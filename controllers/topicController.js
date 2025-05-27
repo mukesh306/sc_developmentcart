@@ -691,6 +691,7 @@ exports.calculateQuizScore = async (req, res) => {
       topic.totalMarks = totalMarks;
       topic.negativeMarking = negativeMarking;
       await topic.save();
+      
     }
 
     return res.status(200).json({

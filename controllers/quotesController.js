@@ -20,15 +20,6 @@ exports.getQuotes = async (req, res) => {
   }
 };
 
-// exports.getQuotes = async (req, res) => {
-//   try {
-//     const quotes = await Quotes.find().populate('createdBy', 'email');
-//     res.status(200).json({ message: 'Quotes fetched successfully.', data: quotes });
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error fetching quotes.', error: error.message });
-//   }
-// };
-
 
 
 exports.updateQuote = async (req, res) => {
