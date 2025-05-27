@@ -10,6 +10,7 @@ exports.createOrUpdateSettings = async (req, res) => {
 
     let setting = await MarkingSetting.findOne();
 
+    
     if (!setting) {
       setting = new MarkingSetting({
         createdBy: userId,
