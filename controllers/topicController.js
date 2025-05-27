@@ -181,7 +181,6 @@ exports.getAllTopicNames = async (req, res) => {
   }
 };
 
-
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;

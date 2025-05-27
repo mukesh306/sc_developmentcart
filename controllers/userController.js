@@ -53,7 +53,7 @@ exports.signup = async (req, res) => {
  
     const existingUser = await User.findOne({ $or: [{ email }, { mobileNumber }] });
     if (existingUser) {
-      return res.status(400).json({ message: 'User with this email or mobile already exists.' });
+      return res.status(409).json({ message: 'User with this email or mobile already exists.' });
     }
 
     
@@ -114,7 +114,6 @@ exports.Userlogin = async (req, res) => {
     res.status(500).json({ message: 'Server error during login.' });
   }
 };
-
 
 
 exports.completeProfile = async (req, res) => {
@@ -297,12 +296,10 @@ exports.loginWithOTP = async (req, res) => {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
 
-    // Clear OTP fields after successful login
     user.resetPasswordOTP = undefined;
     user.resetPasswordExpires = undefined;
     await user.save();
  
-    // Generate JWT token
     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
       expiresIn: '7d',
     });
