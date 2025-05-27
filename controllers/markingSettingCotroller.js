@@ -5,13 +5,14 @@ const MarkingSetting = require('../models/markingSetting');
 exports.createOrUpdateSettings = async (req, res) => {
   const { maxMarkPerQuestion, negativeMarking } = req.body;
 
+  
   try {
     const userId = req.user._id;
 
     let setting = await MarkingSetting.findOne();
 
 
-    
+
     if (!setting) {
       setting = new MarkingSetting({
         createdBy: userId,
