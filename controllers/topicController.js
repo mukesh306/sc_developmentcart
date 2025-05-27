@@ -728,7 +728,7 @@ exports.updateTopicWithQuiz = async (req, res) => {
       testTime,
       videoTime,
       description,
-      userId // optional if you want to log who updated
+      userId 
     } = req.body;
 
     const image = req.files?.image?.[0]?.path || null;
@@ -771,3 +771,22 @@ exports.updateTopicWithQuiz = async (req, res) => {
   }
 };
 
+exports.deleteTopicWithQuiz = async (req, res) => {
+  try {
+    const topicId = req.params.id;
+
+    const topic = await Topic.findById(topicId);
+    if (!topic) {
+      return res.status(404).json({ message: 'Topic not found.' });
+    }
+
+    await Quiz.deleteMany({ topicId });
+
+    await Topic.findByIdAndDelete(topicId);
+
+    res.status(200).json({ message: 'Topic and related quiz deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting topic and quiz:', error);
+    res.status(500).json({ message: error.message });
+  }
+};

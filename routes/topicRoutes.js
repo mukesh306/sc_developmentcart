@@ -33,6 +33,7 @@ router.put('/updateTopicWithQuiz/:id', upload.fields([
   { name: 'video', maxCount: 1 }
 ]), topicController.updateTopicWithQuiz);
 
+router.delete('/deleteTopic/:id',topicController.deleteTopicWithQuiz);
 
 
 module.exports = router;
