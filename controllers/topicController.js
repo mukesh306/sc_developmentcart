@@ -779,6 +779,7 @@ exports.deleteTopicWithQuiz = async (req, res) => {
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found.' });
     }
+    
 
     await Quiz.deleteMany({ topicId });
 
