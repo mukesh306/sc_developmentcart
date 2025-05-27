@@ -28,6 +28,11 @@ router.get('/getTopicById/:id',topicController.getTopicById);
 router.post('/topics/:topicId', topicController.updateTestTimeInSeconds);
 
 
+router.put('/updateTopicWithQuiz/:id', upload.fields([
+  { name: 'image', maxCount: 1 },
+  { name: 'video', maxCount: 1 }
+]), topicController.updateTopicWithQuiz);
+
 
 
 module.exports = router;

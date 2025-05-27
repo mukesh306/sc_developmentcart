@@ -9,6 +9,8 @@ const Assigned = require('../models/assignlearning');
 const UserQuizAnswer = require('../models/userQuizAnswer');
 const MarkingSetting = require('../models/markingSetting');
 
+
+
 exports.createTopicWithQuiz = async (req, res) => {
   try {
     const {
@@ -712,3 +714,60 @@ exports.calculateQuizScore = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+
+exports.updateTopicWithQuiz = async (req, res) => {
+  try {
+    const topicId = req.params.id;
+    const {
+      classId,
+      learningId,
+      topic,
+      testTime,
+      videoTime,
+      description,
+      userId // optional if you want to log who updated
+    } = req.body;
+
+    const image = req.files?.image?.[0]?.path || null;
+    const videoFile = req.files?.video?.[0]?.path || null;
+    const videoLink = req.body.video || null;
+
+    if (videoFile && videoLink) {
+      return res.status(400).json({
+        message: 'Please provide either a video file or a video link, not both.'
+      });
+    }
+
+    const video = videoFile || videoLink || null;
+
+    const topicToUpdate = await Topic.findById(topicId);
+    if (!topicToUpdate) {
+      return res.status(404).json({ message: "Topic not found." });
+    }
+
+    // Update fields only if provided
+    if (classId) topicToUpdate.classId = classId;
+    if (learningId) topicToUpdate.learningId = learningId;
+    if (topic) topicToUpdate.topic = topic;
+    if (testTime) topicToUpdate.testTime = testTime;
+    if (videoTime) topicToUpdate.videoTime = videoTime;
+    if (description) topicToUpdate.description = description;
+    if (image) topicToUpdate.image = image;
+    if (video) topicToUpdate.video = video;
+    if (userId) topicToUpdate.updatedBy = userId;
+
+    await topicToUpdate.save();
+
+    res.status(200).json({
+      message: "Topic updated successfully.",
+      topicId: topicToUpdate._id
+    });
+  } catch (error) {
+    console.error("Error updating topic:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
