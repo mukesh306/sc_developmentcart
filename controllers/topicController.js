@@ -793,65 +793,58 @@ exports.deleteTopicWithQuiz = async (req, res) => {
 
 
 
-exports.TopicWithLeaningAdmin = async (req, res) => {
+ exports.TopicWithLeaningAdmin = async (req, res) => {
   try {
-    const { id } = req.params;
+    const { id } = req.params; 
     const { classId: queryClassId } = req.query;
     const user = req.user;
 
-    const query = {
+    const filter = {
       learningId: new mongoose.Types.ObjectId(id)
     };
 
     if (queryClassId) {
-      query.classId = new mongoose.Types.ObjectId(queryClassId);
+      filter.classId = new mongoose.Types.ObjectId(queryClassId);
     } else if (user?.className) {
-      query.classId = new mongoose.Types.ObjectId(user.className);
+      filter.classId = new mongoose.Types.ObjectId(user.className);
     } else {
       return res.status(400).json({ message: 'Class ID is required via query or user.' });
     }
 
-    const allTopics = await Topic.find(query)
+    const topics = await Topic.find(filter)
+      .populate('learningId')
       .sort({ createdAt: 1 })
-      .select('topic score createdAt isdescription isvideo')
       .lean();
 
-    if (!allTopics.length) {
-      return res.status(404).json({ message: 'No topics found for this learningId or classId.' });
-    }
-
-    // Calculate average score
-    const validScores = allTopics
-      .map(topic => parseFloat(topic.score))
-      .filter(score => !isNaN(score));
-
-    const averageScore = validScores.length > 0
-      ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-      : null;
-
-    // Update average score in Assigned record
-    const assignedRecord = await Assigned.findOne({ classId: query.classId });
-
-    if (assignedRecord) {
-      if (assignedRecord.learning?.toString() === id) {
-        assignedRecord.learningAverage = averageScore;
-      } else if (assignedRecord.learning2?.toString() === id) {
-        assignedRecord.learning2Average = averageScore;
-      } else if (assignedRecord.learning3?.toString() === id) {
-        assignedRecord.learning3Average = averageScore;
-      } else if (assignedRecord.learning4?.toString() === id) {
-        assignedRecord.learning4Average = averageScore;
+    for (let topic of topics) {
+      let classInfo = await School.findById(topic.classId).lean();
+      if (!classInfo) {
+        classInfo = await College.findById(topic.classId).lean();
       }
-      await assignedRecord.save();
+      topic.classInfo = classInfo || null;
     }
 
-    res.status(200).json({
-      averageScore,
-      topics: allTopics
+    const topicIds = topics.map(t => t._id);
+    const quizzes = await Quiz.find({ topicId: { $in: topicIds } }).select('-__v');
+    const quizzesByTopic = {};
+
+    quizzes.forEach((quiz) => {
+      const id = quiz.topicId.toString();
+      if (!quizzesByTopic[id]) {
+        quizzesByTopic[id] = [];
+      }
+      quizzesByTopic[id].push(quiz);
     });
 
+    const result = topics.map(topic => ({
+      ...topic,
+      quizzes: quizzesByTopic[topic._id.toString()] || []
+    }));
+
+    res.status(200).json({ topics: result });
+
   } catch (error) {
-    console.error('Error fetching topics with learningId:', error);
+    console.error('Error fetching topics with quizzes by learningId:', error);
     res.status(500).json({ message: error.message });
   }
 };
