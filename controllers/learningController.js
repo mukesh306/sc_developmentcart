@@ -98,13 +98,13 @@ exports.scoreCard = async (req, res) => {
 
     const classId = new mongoose.Types.ObjectId(user.className);
 
-    // Fetch topics that have a score (user has studied them)
     const topics = await Topic.find({
       classId,
-      score: { $ne: null } // Only include topics with a score
+      score: { $ne: null } 
     })
-      .sort({ createdAt: 1 }) // Sort by creation time (earliest first)
+      .sort({ createdAt: 1 })
       .select('topic createdAt learningId score')
+      .populate('learningId')
       .lean();
 
     if (!topics.length) {
