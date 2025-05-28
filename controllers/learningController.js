@@ -99,13 +99,13 @@ exports.scoreCard = async (req, res) => {
 
     const classId = new mongoose.Types.ObjectId(user.className);
 
-    // Get all topics with scores for this class
     const topics = await Topic.find({
       classId,
-      score: { $ne: null }
+      score: { $ne: null },
+      scoreUpdatedAt: { $exists: true }
     })
-      .sort({ createdAt: 1 }) // important: sort by createdAt ascending
-      .select('topic createdAt learningId score')
+      .sort({ scoreUpdatedAt: 1 }) // Sort by scoreUpdatedAt ASC
+      .select('topic scoreUpdatedAt learningId score')
       .populate('learningId')
       .lean();
 
@@ -117,10 +117,10 @@ exports.scoreCard = async (req, res) => {
     const seenDates = new Set();
 
     for (const topic of topics) {
-      const dateKey = moment(topic.createdAt).format('YYYY-MM-DD');
+      const dateKey = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
       if (!seenDates.has(dateKey)) {
         seenDates.add(dateKey);
-        firstScoredTopicsPerDay.push(topic); 
+        firstScoredTopicsPerDay.push(topic);
       }
     }
 
@@ -134,3 +134,4 @@ exports.scoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
