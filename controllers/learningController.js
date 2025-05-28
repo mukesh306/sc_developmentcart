@@ -1,6 +1,8 @@
 const Learning = require('../models/learning');
 const Assigned = require('../models/assignlearning'); 
-
+const moment = require('moment');
+const mongoose = require('mongoose');
+const Topic = require('../models/topic');
 exports.createLearning = async (req, res) => {
   try {
     const { name} = req.body;
@@ -82,5 +84,51 @@ exports.updateLearning = async (req, res) => {
   } catch (error) {
     console.error('Update Learning Error:', error);
     res.status(500).json({ message: 'Error updating Learning.', error: error.message });
+  }
+};
+
+
+exports.scoreCard = async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (!user || !user.className) {
+      return res.status(400).json({ message: 'User class is missing.' });
+    }
+
+    const classId = new mongoose.Types.ObjectId(user.className);
+
+    // Fetch topics that have a score (user has studied them)
+    const topics = await Topic.find({
+      classId,
+      score: { $ne: null } // Only include topics with a score
+    })
+      .sort({ createdAt: 1 }) // Sort by creation time (earliest first)
+      .select('topic createdAt learningId score')
+      .lean();
+
+    if (!topics.length) {
+      return res.status(404).json({ message: 'No scored topics found for this class.' });
+    }
+
+    const firstScoredTopicsPerDay = [];
+    const seenDates = new Set();
+
+    for (const topic of topics) {
+      const dateKey = moment(topic.createdAt).format('YYYY-MM-DD');
+      if (!seenDates.has(dateKey)) {
+        seenDates.add(dateKey);
+        firstScoredTopicsPerDay.push(topic);
+      }
+    }
+
+    res.status(200).json({
+      message: 'First scored topic per day fetched successfully.',
+      topics: firstScoredTopicsPerDay
+    });
+
+  } catch (error) {
+    console.error('Error fetching first scored topic per day:', error);
+    res.status(500).json({ message: error.message });
   }
 };

@@ -18,6 +18,7 @@ router.post('/createQuiz',auth,topicController.addQuizToTopic);
 router.get('/getAllTopicsWithQuizzes',topicController.getAllTopicsWithQuizzes);
 router.get('/getTopicWithQuizById/:topicId',topicController.getTopicWithQuizById);
 router.get('/TopicWithLeaning/:id',auth,topicController.TopicWithLeaning);
+router.get('/TopicWithLeaningadmin/:id',topicController.TopicWithLeaningAdmin);
 router.get('/getAllTopics',topicController.getAllTopicNames);
 router.post('/submit-quiz',auth,topicController.submitQuiz);
 router.post('/save-quiz',auth,topicController.saveQuizAnswer);

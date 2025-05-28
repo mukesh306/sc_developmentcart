@@ -780,7 +780,6 @@ exports.deleteTopicWithQuiz = async (req, res) => {
       return res.status(404).json({ message: 'Topic not found.' });
     }
     
-
     await Quiz.deleteMany({ topicId });
 
     await Topic.findByIdAndDelete(topicId);
@@ -788,6 +787,71 @@ exports.deleteTopicWithQuiz = async (req, res) => {
     res.status(200).json({ message: 'Topic and related quiz deleted successfully.' });
   } catch (error) {
     console.error('Error deleting topic and quiz:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+exports.TopicWithLeaningAdmin = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { classId: queryClassId } = req.query;
+    const user = req.user;
+
+    const query = {
+      learningId: new mongoose.Types.ObjectId(id)
+    };
+
+    if (queryClassId) {
+      query.classId = new mongoose.Types.ObjectId(queryClassId);
+    } else if (user?.className) {
+      query.classId = new mongoose.Types.ObjectId(user.className);
+    } else {
+      return res.status(400).json({ message: 'Class ID is required via query or user.' });
+    }
+
+    const allTopics = await Topic.find(query)
+      .sort({ createdAt: 1 })
+      .select('topic score createdAt isdescription isvideo')
+      .lean();
+
+    if (!allTopics.length) {
+      return res.status(404).json({ message: 'No topics found for this learningId or classId.' });
+    }
+
+    // Calculate average score
+    const validScores = allTopics
+      .map(topic => parseFloat(topic.score))
+      .filter(score => !isNaN(score));
+
+    const averageScore = validScores.length > 0
+      ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
+      : null;
+
+    // Update average score in Assigned record
+    const assignedRecord = await Assigned.findOne({ classId: query.classId });
+
+    if (assignedRecord) {
+      if (assignedRecord.learning?.toString() === id) {
+        assignedRecord.learningAverage = averageScore;
+      } else if (assignedRecord.learning2?.toString() === id) {
+        assignedRecord.learning2Average = averageScore;
+      } else if (assignedRecord.learning3?.toString() === id) {
+        assignedRecord.learning3Average = averageScore;
+      } else if (assignedRecord.learning4?.toString() === id) {
+        assignedRecord.learning4Average = averageScore;
+      }
+      await assignedRecord.save();
+    }
+
+    res.status(200).json({
+      averageScore,
+      topics: allTopics
+    });
+
+  } catch (error) {
+    console.error('Error fetching topics with learningId:', error);
     res.status(500).json({ message: error.message });
   }
 };
