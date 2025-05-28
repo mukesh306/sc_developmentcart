@@ -102,7 +102,7 @@ exports.scoreCard = async (req, res) => {
       score: { $ne: null },
       scoreUpdatedAt: { $exists: true }
     })
-      .sort({ scoreUpdatedAt: -1 }) 
+      .sort({ scoreUpdatedAt: 1 }) 
       .select('topic scoreUpdatedAt learningId score')
       .populate('learningId')
       .lean();
