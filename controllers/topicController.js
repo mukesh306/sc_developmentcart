@@ -648,6 +648,7 @@ exports.calculateQuizScore = async (req, res) => {
     }
 
     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
+
     const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
       ? topicTotalMarks / totalQuestions
       : (markingSetting?.maxMarkPerQuestion || 1);
@@ -682,6 +683,8 @@ exports.calculateQuizScore = async (req, res) => {
     const roundedMarks = parseFloat(marksObtained.toFixed(2));
     const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
+
+    // Save score if not already present
     if (topic.score === null || topic.score === undefined) {
       topic.score = roundedScorePercent;
       topic.totalQuestions = totalQuestions;
@@ -691,8 +694,8 @@ exports.calculateQuizScore = async (req, res) => {
       topic.marksObtained = roundedMarks;
       topic.totalMarks = totalMarks;
       topic.negativeMarking = negativeMarking;
-      await topic.save();
-  
+      topic.scoreUpdatedAt = new Date(); // explicitly set score update time
+      await topic.save(); // updates updatedAt automatically
     }
 
     return res.status(200).json({
@@ -706,7 +709,9 @@ exports.calculateQuizScore = async (req, res) => {
       totalMarks,
       negativeMarking,
       scorePercent: roundedScorePercent,
-      testTime: topic.testTime || 0
+      testTime: topic.testTime || 0,
+      scoreUpdatedAt: topic.scoreUpdatedAt,
+      updatedAt: topic.updatedAt // shows updatedAt from timestamps
     });
 
   } catch (error) {
@@ -714,6 +719,7 @@ exports.calculateQuizScore = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
@@ -823,7 +829,7 @@ exports.deleteTopicWithQuiz = async (req, res) => {
       }
       topic.classInfo = classInfo || null;
     }
-    
+
 
     const topicIds = topics.map(t => t._id);
     const quizzes = await Quiz.find({ topicId: { $in: topicIds } }).select('-__v');

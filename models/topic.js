@@ -26,8 +26,9 @@ isdescription: { type: Boolean, default: false },
    createdAt: {
         type: Date,
         default: Date.now
-    } 
-});
+    } ,
+    scoreUpdatedAt: { type: Date },
+},{ timestamps: true });
 module.exports = mongoose.model('Topic', TopicSchema); 
 
  

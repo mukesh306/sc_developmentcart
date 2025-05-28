@@ -89,7 +89,6 @@ exports.updateLearning = async (req, res) => {
   }
 };
 
-
 exports.scoreCard = async (req, res) => {
   try {
     const user = req.user;
@@ -100,11 +99,12 @@ exports.scoreCard = async (req, res) => {
 
     const classId = new mongoose.Types.ObjectId(user.className);
 
+    // Get all topics with scores for this class
     const topics = await Topic.find({
       classId,
-      score: { $ne: null } 
+      score: { $ne: null }
     })
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: 1 }) // important: sort by createdAt ascending
       .select('topic createdAt learningId score')
       .populate('learningId')
       .lean();
@@ -120,7 +120,7 @@ exports.scoreCard = async (req, res) => {
       const dateKey = moment(topic.createdAt).format('YYYY-MM-DD');
       if (!seenDates.has(dateKey)) {
         seenDates.add(dateKey);
-        firstScoredTopicsPerDay.push(topic);
+        firstScoredTopicsPerDay.push(topic); 
       }
     }
 
