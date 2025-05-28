@@ -823,6 +823,7 @@ exports.deleteTopicWithQuiz = async (req, res) => {
       }
       topic.classInfo = classInfo || null;
     }
+    
 
     const topicIds = topics.map(t => t._id);
     const quizzes = await Quiz.find({ topicId: { $in: topicIds } }).select('-__v');
