@@ -107,6 +107,7 @@ exports.scoreCard = async (req, res) => {
       .populate('learningId')
       .lean();
 
+      
     if (!topics.length) {
       return res.status(404).json({ message: 'No scored topics found for this class.' });
     }
