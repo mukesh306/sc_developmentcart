@@ -25,7 +25,6 @@ exports.getLearning = async (req, res) => {
   }
 };
 
-
 exports.deleteLearning = async (req, res) => {
   try {
     const learningId = req.params.id;
@@ -48,7 +47,6 @@ exports.deleteLearning = async (req, res) => {
     res.status(500).json({ message: 'Error deleting Learning.', error: error.message });
   }
 };
-
 
 exports.updateLearning = async (req, res) => {
   try {
@@ -104,7 +102,7 @@ exports.scoreCard = async (req, res) => {
       score: { $ne: null },
       scoreUpdatedAt: { $exists: true }
     })
-      .sort({ scoreUpdatedAt: 1 }) 
+      .sort({ scoreUpdatedAt: -1 }) 
       .select('topic scoreUpdatedAt learningId score')
       .populate('learningId')
       .lean();
