@@ -8,8 +8,8 @@ const moment = require('moment');
 const Assigned = require('../models/assignlearning');  
 const UserQuizAnswer = require('../models/userQuizAnswer');
 const PracticesQuizAnswer = require('../models/practicestest');
-const MarkingSetting = require('../models/markingSetting');
-
+const MarkingSetting = require('../models/markingSetting'); 
+const Learning = require('../models/learning'); 
 
 
 exports.createTopicWithQuiz = async (req, res) => {
@@ -810,4 +810,110 @@ exports.PracticeTest = async (req, res) => {
   }
 };
 
+
+
+exports.calculateQuizScoreByLearning = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { learningId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
+
+    if (!learningId) {
+      return res.status(400).json({ message: 'learningId is required.' });
+    }
+
+    const topics = await Topic.find({ learningId }).lean();
+    if (!topics.length) {
+      return res.status(404).json({ message: 'No topics found for this learning.' });
+    }
+
+    const topicIds = topics.map(t => t._id.toString());
+
+    const allQuizzes = await Quiz.find({ topicId: { $in: topicIds } }).lean();
+    const totalQuestions = allQuizzes.length;
+
+    if (totalQuestions === 0) {
+      return res.status(400).json({ message: 'No questions found for this learning.' });
+    }
+
+    const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
+
+    const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
+      ? topicTotalMarks / totalQuestions
+      : (markingSetting?.maxMarkPerQuestion || 1);
+
+    const negativeMarking = (typeof inputNegativeMarking === 'number')
+      ? inputNegativeMarking
+      : (markingSetting?.negativeMarking || 0);
+
+    const totalMarks = maxMarkPerQuestion * totalQuestions;
+
+    const answers = await PracticesQuizAnswer.find({
+      userId,
+      learningId,
+      topicId: { $in: topicIds }
+    });
+
+    let correctCount = 0;
+    let incorrectCount = 0;
+
+    for (const answer of answers) {
+      const quiz = allQuizzes.find(q => q._id.toString() === answer.questionId.toString());
+      if (!quiz) continue;
+
+      if (answer.selectedAnswer === quiz.answer) correctCount++;
+      else incorrectCount++;
+    }
+
+    const answeredQuestions = correctCount + incorrectCount;
+    const skippedQuestions = totalQuestions - answeredQuestions;
+
+    const positiveMarks = correctCount * maxMarkPerQuestion;
+    const negativeMarks = incorrectCount * negativeMarking;
+
+    let marksObtained = positiveMarks - negativeMarks;
+    if (marksObtained < 0) marksObtained = 0;
+
+    const roundedMarks = parseFloat(marksObtained.toFixed(2));
+    const scorePercent = (roundedMarks / totalMarks) * 100;
+    const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
+
+    // Save score in Learning
+    const learning = await Learning.findById(learningId);
+    if (!learning) {
+      return res.status(404).json({ message: 'Learning not found.' });
+    }
+
+    learning.score = roundedScorePercent;
+    learning.totalQuestions = totalQuestions;
+    learning.answeredQuestions = answeredQuestions;
+    learning.correctAnswers = correctCount;
+    learning.incorrectAnswers = incorrectCount;
+    learning.skippedQuestions = skippedQuestions;
+    learning.marksObtained = roundedMarks;
+    learning.totalMarks = totalMarks;
+    learning.negativeMarking = negativeMarking;
+    learning.scorePercent = roundedScorePercent;
+    learning.scoreUpdatedAt = new Date();
+
+    await learning.save();
+
+    return res.status(200).json({
+      message: 'Score calculated and saved in learning successfully.',
+      totalQuestions,
+      answeredQuestions,
+      skippedQuestions,
+      correctAnswers: correctCount,
+      incorrectAnswers: incorrectCount,
+      marksObtained: roundedMarks,
+      totalMarks,
+      negativeMarking,
+      scorePercent: roundedScorePercent,
+      scoreUpdatedAt: learning.scoreUpdatedAt
+    });
+
+  } catch (error) {
+    console.error('Error in calculateQuizScoreByLearning:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
