@@ -811,7 +811,6 @@ exports.PracticeTest = async (req, res) => {
 };
 
 
-
 exports.calculateQuizScoreByLearning = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -828,36 +827,41 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 
     const topicIds = topics.map(t => t._id.toString());
 
-    const allQuizzes = await Quiz.find({ topicId: { $in: topicIds } }).lean();
-    const totalQuestions = allQuizzes.length;
-
-    if (totalQuestions === 0) {
-      return res.status(400).json({ message: 'No questions found for this learning.' });
-    }
-
     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
-
-    const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
-      ? topicTotalMarks / totalQuestions
-      : (markingSetting?.maxMarkPerQuestion || 1);
 
     const negativeMarking = (typeof inputNegativeMarking === 'number')
       ? inputNegativeMarking
       : (markingSetting?.negativeMarking || 0);
 
-    const totalMarks = maxMarkPerQuestion * totalQuestions;
-
+    // 👇 Get only answered questions
     const answers = await PracticesQuizAnswer.find({
       userId,
       learningId,
       topicId: { $in: topicIds }
     });
 
+    const answeredQuestionIds = answers.map(ans => ans.questionId.toString());
+
+    // 👇 Fetch only quizzes that were answered (not all quizzes)
+    const answeredQuizzes = await Quiz.find({ _id: { $in: answeredQuestionIds } }).lean();
+
+    const totalQuestions = answers.length;
+
+    if (totalQuestions === 0) {
+      return res.status(400).json({ message: 'No answers submitted for this learning.' });
+    }
+
+    const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
+      ? topicTotalMarks / totalQuestions
+      : (markingSetting?.maxMarkPerQuestion || 1);
+
+    const totalMarks = maxMarkPerQuestion * totalQuestions;
+
     let correctCount = 0;
     let incorrectCount = 0;
 
     for (const answer of answers) {
-      const quiz = allQuizzes.find(q => q._id.toString() === answer.questionId.toString());
+      const quiz = answeredQuizzes.find(q => q._id.toString() === answer.questionId.toString());
       if (!quiz) continue;
 
       if (answer.selectedAnswer === quiz.answer) correctCount++;
@@ -865,7 +869,7 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     }
 
     const answeredQuestions = correctCount + incorrectCount;
-    const skippedQuestions = totalQuestions - answeredQuestions;
+    const skippedQuestions = 0; // ✅ Since we’re only counting answered ones
 
     const positiveMarks = correctCount * maxMarkPerQuestion;
     const negativeMarks = incorrectCount * negativeMarking;
@@ -877,7 +881,6 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
 
-    // Save score in Learning
     const learning = await Learning.findById(learningId);
     if (!learning) {
       return res.status(404).json({ message: 'Learning not found.' });
@@ -898,12 +901,12 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     await learning.save();
 
     return res.status(200).json({
-      message: 'Score calculated and saved in learning successfully.',
+      message: 'Score calculated from answered questions only.',
       totalQuestions,
       answeredQuestions,
-      skippedQuestions,
       correctAnswers: correctCount,
       incorrectAnswers: incorrectCount,
+      skippedQuestions,
       marksObtained: roundedMarks,
       totalMarks,
       negativeMarking,
