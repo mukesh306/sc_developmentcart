@@ -57,7 +57,7 @@ exports.signup = async (req, res) => {
     }
 
     
-    
+
     const hashedPassword = await bcrypt.hash(password, 10);
 
    
@@ -315,35 +315,6 @@ exports.loginWithOTP = async (req, res) => {
   }
 };
 
-
-// exports.resetPasswordAfterOTPLogin = async (req, res) => {
-//   try {
-//     const token = req.headers.authorization?.split(" ")[1];
-//     if (!token) return res.status(401).json({ message: 'Token missing' });
-
-//     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-//     const userId = decoded.id;
-
-//     const { newPassword, confirmPassword } = req.body;
-
-//     if (!newPassword || !confirmPassword) {
-//       return res.status(400).json({ message: 'Both fields are required' });
-//     }
-
-//     if (newPassword !== confirmPassword) {
-//       return res.status(400).json({ message: 'Passwords do not match' });
-//     }
-
-//     const hashedPassword = await bcrypt.hash(newPassword, 10);
-
-//     await User.findByIdAndUpdate(userId, { password: hashedPassword });
-
-//     res.status(200).json({ message: 'Password updated successfully' });
-//   } catch (error) {
-//     console.error('Reset Password Error:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 exports.resetPasswordAfterOTPLogin = async (req, res) => {

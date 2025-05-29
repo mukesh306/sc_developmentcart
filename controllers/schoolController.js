@@ -1,4 +1,3 @@
-// controllers/schoolController.js
 
 const School = require('../models/school');
 const College = require('../models/college');

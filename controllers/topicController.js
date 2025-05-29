@@ -251,28 +251,6 @@ exports.TopicWithLeaning = async (req, res) => {
 };
 
 
-// exports.TopicWithLeaning = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { classId } = req.query;
-//     const query = { learningId: id };
-//     if (classId) {
-//       query.classId = classId;
-//     }
-//     const topics = await Topic.find(query)
-//       .select('topic score') 
-//       .lean();
-//     if (!topics || topics.length === 0) {
-//       return res.status(404).json({ message: 'No topics found for this learningId' });
-//     }
-//     res.status(200).json({ topics });
-//   } catch (error) {
-//     console.error('Error fetching topics with learningId:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -333,61 +311,6 @@ exports.getTopicById = async (req, res) => {
   }
 };
 
-
-
-// exports.submitQuiz = async (req, res) => {
-//   try {
-//     const userId = req.user._id;   
-//     const { topicId, quizzes } = req.body;
-//     if (!topicId) {
-//       return res.status(400).json({ message: 'topicId is required.' });
-//     }
-//     if (!Array.isArray(quizzes) || quizzes.length === 0) {
-//       return res.status(400).json({ message: 'quizzes must be a non-empty array.' });
-//     }
-//     let correctCount = 0;
-//     let incorrectCount = 0;
-//     for (const item of quizzes) { 
-//       const quiz = await Quiz.findOne({ _id: item.questionId, topicId }).lean();
-//       if (!quiz) continue;  
-//       const isCorrect = item.selectedAnswer === quiz.answer;
-//       if (isCorrect) correctCount++;
-//       else incorrectCount++;
-//     }
-//     const total = correctCount + incorrectCount;
-//     const score = total > 0 ? (correctCount / total) * 100 : 0;
-//     const roundedScore = parseFloat(score.toFixed(2));
-//     const topic = await Topic.findById(topicId);
-//     if (!topic) {
-//       return res.status(404).json({ message: 'Topic not found.' });
-//     }
-//     if (topic.score === null || topic.score === undefined) {
-//       topic.score = roundedScore;
-//       topic.totalQuestions = total;
-//       topic.correctAnswers = correctCount;
-//       topic.incorrectAnswers = incorrectCount;
-//       await topic.save();
-//       return res.status(200).json({
-//         message: 'Quiz submitted successfully and score saved.',
-//         totalQuestions: total,
-//         correctAnswers: correctCount,
-//         incorrectAnswers: incorrectCount,
-//         score: roundedScore
-//       });
-//     } else {   
-//       return res.status(200).json({
-//         message: 'Quiz submitted successfully, score was already saved.',
-//         totalQuestions: topic.totalQuestions ?? 0,
-//         correctAnswers: topic.correctAnswers ?? 0,
-//         incorrectAnswers: topic.incorrectAnswers ?? 0,
-//         score: topic.score
-//       });
-//     }
-//   } catch (error) {
-//     console.error('Error in submitQuiz:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 exports.submitQuiz = async (req, res) => {
@@ -507,93 +430,6 @@ exports.submitQuizAnswer = async (req, res) => {
 };
 
 
-
-// exports.calculateQuizScore = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const { topicId, topicTotalMarks, negativeMarking = 0 } = req.body;
-
-//     if (!topicId) {
-//       return res.status(400).json({ message: 'topicId is required.' });
-//     }
-
-//     if (typeof negativeMarking !== 'number' || negativeMarking < 0) {
-//       return res.status(400).json({ message: 'negativeMarking must be a non-negative number.' });
-//     }
-
-//     const topic = await Topic.findById(topicId);
-//     if (!topic) {
-//       return res.status(404).json({ message: 'Topic not found.' });
-//     }
-
-//     const allQuizzes = await Quiz.find({ topicId }).lean();
-//     const totalQuestions = allQuizzes.length;
-
-//     if (totalQuestions === 0) {
-//       return res.status(400).json({ message: 'No questions found for this topic.' });
-//     }
-
-//     const totalMarks = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
-//       ? topicTotalMarks
-//       : totalQuestions;
-
-//     const answers = await UserQuizAnswer.find({ userId, topicId });
-//     let correctCount = 0;
-//     let incorrectCount = 0;
-
-//     for (const answer of answers) {
-//       const quiz = allQuizzes.find(q => q._id.toString() === answer.questionId.toString());
-//       if (!quiz) continue;
-
-//       if (answer.selectedAnswer === quiz.answer) correctCount++;
-//       else incorrectCount++;
-//     }
-
-//     const answeredQuestions = correctCount + incorrectCount;
-//     const skippedQuestions = totalQuestions - answeredQuestions;
-
-//     const marksPerQuestion = totalMarks / totalQuestions;
-//     const positiveMarks = correctCount * marksPerQuestion;
-//     const negativeMarks = incorrectCount * negativeMarking;
-
-//     let marksObtained = positiveMarks - negativeMarks;
-//     if (marksObtained < 0) marksObtained = 0;
-
-//     const roundedMarks = parseFloat(marksObtained.toFixed(2));
-//     const scorePercent = (roundedMarks / totalMarks) * 100;
-//     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
-
-//     if (topic.score === null || topic.score === undefined) {
-//       topic.score = roundedScorePercent;
-//       topic.totalQuestions = totalQuestions;
-//       topic.correctAnswers = correctCount;
-//       topic.incorrectAnswers = incorrectCount;
-//       topic.skippedQuestions = skippedQuestions;
-//       topic.marksObtained = roundedMarks;
-//       topic.totalMarks = totalMarks;
-//       topic.negativeMarking = negativeMarking;
-//       await topic.save();
-//     }
-
-//     return res.status(200).json({
-//       message: 'Score calculated successfully.',
-//       totalQuestions,
-//       answeredQuestions,
-//       skippedQuestions,
-//       correctAnswers: correctCount,
-//       incorrectAnswers: incorrectCount,
-//       marksObtained: roundedMarks,
-//       totalMarks,
-//       negativeMarking,
-//       scorePercent: roundedScorePercent,
-//       testTime: topic.testTime || 0
-//     });
-
-//   } catch (error) {
-//     console.error('Error in calculateQuizScore:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 exports.updateTestTimeInSeconds = async (req, res) => {
