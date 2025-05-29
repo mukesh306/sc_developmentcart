@@ -31,7 +31,7 @@ router.post('/PracticeTest',auth,topicController.PracticeTest);
 router.post('/saveQuizAnswer',auth,topicController.submitQuizAnswer);
 
 router.post('/calculateQuizScore',auth,topicController.calculateQuizScore);
-router.post('/calculatePracticeScore',auth,topicController.calculatePracticeScore);
+// router.post('/calculatePracticeScore',auth,topicController.calculatePracticeScore);
 
 router.get('/getTopicById/:id',topicController.getTopicById);
 
