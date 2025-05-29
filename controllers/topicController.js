@@ -695,6 +695,45 @@ exports.deleteTopicWithQuiz = async (req, res) => {
 
 
 
+// exports.getAllQuizzesByLearningId = async (req, res) => {
+//   try {
+//     const { id } = req.params; 
+//     const { classId: queryClassId } = req.query;
+//     const user = req.user;
+
+//     if (!user || user.status !== 'yes') {
+//       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
+//     }
+
+//     const query = { learningId: new mongoose.Types.ObjectId(id) };
+//     if (queryClassId) {
+//       query.classId = new mongoose.Types.ObjectId(queryClassId);
+//     } else if (user.className) {
+//       query.classId = new mongoose.Types.ObjectId(user.className);
+//     }
+
+//     const topics = await Topic.find(query).select('_id').lean();
+//     if (!topics.length) {
+//       return res.status(404).json({ message: 'No topics found for this learningId.' });
+//     }
+
+//     const topicIds = topics.map(t => t._id);
+//     const quizzes = await Quiz.find({ topicId: { $in: topicIds } }).lean();
+
+//     res.status(200).json({
+//       message: 'All quizzes fetched successfully.',
+//       totalQuestions: quizzes.length,
+//       quizzes
+//     });
+
+//   } catch (error) {
+//     console.error('Error fetching quizzes:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
+
 exports.getAllQuizzesByLearningId = async (req, res) => {
   try {
     const { id } = req.params; 
@@ -719,13 +758,30 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 
     const topicIds = topics.map(t => t._id);
 
-    // Step 2: Find all quizzes for those topics
-    const quizzes = await Quiz.find({ topicId: { $in: topicIds } }).lean();
+    const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
+    if (!markingSetting) {
+      return res.status(404).json({ message: 'No marking settings found.' });
+    }
+
+    const { totalquiz, totalnoofquestion, maxMarkPerQuestion } = markingSetting;
+
+
+    const allQuizzes = await Quiz.find({ topicId: { $in: topicIds } }).lean();
+
+    const shuffledQuizzes = allQuizzes.sort(() => 0.5 - Math.random());
+    const selectedQuizzes = shuffledQuizzes.slice(0, totalquiz || allQuizzes.length);
+
+    const quizzesWithMarks = selectedQuizzes.map(quiz => ({
+      ...quiz,
+      mark: maxMarkPerQuestion || 1
+    }));
 
     res.status(200).json({
-      message: 'All quizzes fetched successfully.',
-      totalQuestions: quizzes.length,
-      quizzes
+      message: 'Quizzes fetched successfully.',
+      totalQuestions: totalnoofquestion,
+      totalquiz: quizzesWithMarks.length,
+      maxMarkPerQuestion,
+      quizzes: quizzesWithMarks
     });
 
   } catch (error) {

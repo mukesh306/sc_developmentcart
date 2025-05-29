@@ -1,41 +1,40 @@
 
 const MarkingSetting = require('../models/markingSetting');
 
-
 exports.createOrUpdateSettings = async (req, res) => {
-  const { maxMarkPerQuestion, negativeMarking } = req.body;
+  const {
+    maxMarkPerQuestion,
+    negativeMarking,
+    totalquiz,
+    totalnoofquestion,
+  } = req.body;
 
-  
   try {
     const userId = req.user._id;
 
     let setting = await MarkingSetting.findOne();
 
-
-
     if (!setting) {
-      setting = new MarkingSetting({
-        createdBy: userId,
-      });
-
-    
-      if (maxMarkPerQuestion !== undefined) {
-        setting.maxMarkPerQuestion = maxMarkPerQuestion;
-      }
-
-      if (negativeMarking !== undefined) {
-        setting.negativeMarking = negativeMarking;
-      }
+      setting = new MarkingSetting({ createdBy: userId });
     } else {
-      if (maxMarkPerQuestion !== undefined) {
-        setting.maxMarkPerQuestion = maxMarkPerQuestion;
-      }
+      setting.createdBy = userId; 
+    }
 
-      if (negativeMarking !== undefined) {
-        setting.negativeMarking = negativeMarking;
-      }
+    // Update fields if provided
+    if (maxMarkPerQuestion !== undefined) {
+      setting.maxMarkPerQuestion = maxMarkPerQuestion;
+    }
 
-      setting.createdBy = userId;
+    if (negativeMarking !== undefined) {
+      setting.negativeMarking = negativeMarking;
+    }
+
+    if (totalquiz !== undefined) {
+      setting.totalquiz = totalquiz;
+    }
+
+    if (totalnoofquestion !== undefined) {
+      setting.totalnoofquestion = totalnoofquestion;
     }
 
     await setting.save();
@@ -46,9 +45,11 @@ exports.createOrUpdateSettings = async (req, res) => {
     });
 
   } catch (err) {
-    res.status(500).json({ message: err.message });
+    console.error("Error in createOrUpdateSettings:", err);
+    res.status(500).json({ message: "Internal server error", error: err.message });
   }
 };
+
  
 exports.getSettings = async (req, res) => {
   try {

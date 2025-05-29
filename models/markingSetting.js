@@ -1,12 +1,17 @@
 // models/MarkingSettingModel.js
 const mongoose = require('mongoose');
-
 const MarkingSettingSchema = new mongoose.Schema({
   maxMarkPerQuestion: {
     type: Number
   
   },
   negativeMarking: {
+    type: Number
+  },
+  totalquiz: {
+    type: Number
+  },
+  totalnoofquestion: {
     type: Number
   },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
