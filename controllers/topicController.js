@@ -733,10 +733,9 @@ exports.deleteTopicWithQuiz = async (req, res) => {
 // };
 
 
-
 exports.getAllQuizzesByLearningId = async (req, res) => {
   try {
-    const { id } = req.params; 
+    const { id } = req.params;
     const { classId: queryClassId } = req.query;
     const user = req.user;
 
@@ -763,25 +762,20 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
       return res.status(404).json({ message: 'No marking settings found.' });
     }
 
-    const { totalquiz, totalnoofquestion, maxMarkPerQuestion } = markingSetting;
+    const { totalquiz, totalnoofquestion } = markingSetting;
 
-
+    
     const allQuizzes = await Quiz.find({ topicId: { $in: topicIds } }).lean();
 
+   
     const shuffledQuizzes = allQuizzes.sort(() => 0.5 - Math.random());
     const selectedQuizzes = shuffledQuizzes.slice(0, totalquiz || allQuizzes.length);
 
-    const quizzesWithMarks = selectedQuizzes.map(quiz => ({
-      ...quiz,
-      mark: maxMarkPerQuestion || 1
-    }));
-
     res.status(200).json({
       message: 'Quizzes fetched successfully.',
-      totalQuestions: totalnoofquestion,
-      totalquiz: quizzesWithMarks.length,
-      maxMarkPerQuestion,
-      quizzes: quizzesWithMarks
+      totalQuestions: selectedQuizzes.length,
+      timeLimitInSeconds: totalnoofquestion * 60, 
+      quizzes: selectedQuizzes
     });
 
   } catch (error) {
