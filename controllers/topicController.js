@@ -781,37 +781,35 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 
 
 
+  
 exports.PracticeTest = async (req, res) => {
   try {
     const userId = req.user._id;
     const { topicId, questionId, selectedAnswer } = req.body;
-
     if (!topicId || !questionId) {
       return res.status(400).json({ message: 'topicId and questionId are required.' });
     }
-
-    const quiz = await PracticesQuizAnswer.findOne({ _id: questionId, topicId }).lean();
+    const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
     }
-
-    if (selectedAnswer !== undefined && selectedAnswer !== null) {
-      await PracticeQuizAnswer.findOneAndUpdate(
+    if (selectedAnswer) {
+      await PracticesQuizAnswer.findOneAndUpdate(
         { userId, topicId, questionId },
         { selectedAnswer },
         { upsert: true, new: true }
       );
       return res.status(200).json({ message: 'Answer saved successfully.' });
     } else {
-      await PracticeQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
+      await PracticesQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
       return res.status(200).json({ message: 'Question skipped (no answer saved).' });
     }
-
   } catch (error) {
     console.error('Error in saveQuizAnswer:', error);
-    res.status(500).json({ message: 'Internal server error.' });
+    res.status(500).json({ message: error.message });
   }
 };
+
 
 
 exports.calculatePracticeScore = async (req, res) => {
