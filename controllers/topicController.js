@@ -461,8 +461,6 @@ exports.updateTestTimeInSeconds = async (req, res) => {
   }
 };
 
-
-
 exports.calculateQuizScore = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -521,7 +519,6 @@ exports.calculateQuizScore = async (req, res) => {
     const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
 
-    // Save score if not already present
     if (topic.score === null || topic.score === undefined) {
       topic.score = roundedScorePercent;
       topic.totalQuestions = totalQuestions;
@@ -531,8 +528,8 @@ exports.calculateQuizScore = async (req, res) => {
       topic.marksObtained = roundedMarks;
       topic.totalMarks = totalMarks;
       topic.negativeMarking = negativeMarking;
-      topic.scoreUpdatedAt = new Date(); // explicitly set score update time
-      await topic.save(); // updates updatedAt automatically
+      topic.scoreUpdatedAt = new Date();
+      await topic.save();
     }
 
     return res.status(200).json({
@@ -544,11 +541,12 @@ exports.calculateQuizScore = async (req, res) => {
       incorrectAnswers: incorrectCount,
       marksObtained: roundedMarks,
       totalMarks,
+      maxMarkPerQuestion, 
       negativeMarking,
       scorePercent: roundedScorePercent,
       testTime: topic.testTime || 0,
       scoreUpdatedAt: topic.scoreUpdatedAt,
-      updatedAt: topic.updatedAt // shows updatedAt from timestamps
+      updatedAt: topic.updatedAt
     });
 
   } catch (error) {
@@ -810,7 +808,6 @@ exports.PracticeTest = async (req, res) => {
   }
 };
 
-
 exports.calculateQuizScoreByLearning = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -833,7 +830,6 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
       ? inputNegativeMarking
       : (markingSetting?.negativeMarking || 0);
 
-    // 👇 Get only answered questions
     const answers = await PracticesQuizAnswer.find({
       userId,
       learningId,
@@ -842,7 +838,6 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 
     const answeredQuestionIds = answers.map(ans => ans.questionId.toString());
 
-    // 👇 Fetch only quizzes that were answered (not all quizzes)
     const answeredQuizzes = await Quiz.find({ _id: { $in: answeredQuestionIds } }).lean();
 
     const totalQuestions = answers.length;
@@ -869,7 +864,7 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     }
 
     const answeredQuestions = correctCount + incorrectCount;
-    const skippedQuestions = 0; // ✅ Since we’re only counting answered ones
+    const skippedQuestions = 0;
 
     const positiveMarks = correctCount * maxMarkPerQuestion;
     const negativeMarks = incorrectCount * negativeMarking;
@@ -910,6 +905,7 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
       marksObtained: roundedMarks,
       totalMarks,
       negativeMarking,
+      maxMarkPerQuestion, 
       scorePercent: roundedScorePercent,
       scoreUpdatedAt: learning.scoreUpdatedAt
     });
