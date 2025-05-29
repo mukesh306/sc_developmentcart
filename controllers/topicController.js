@@ -7,6 +7,7 @@ const College = require('../models/college');
 const moment = require('moment');
 const Assigned = require('../models/assignlearning');  
 const UserQuizAnswer = require('../models/userQuizAnswer');
+const PracticesQuizAnswer = require('../models/practicestest');
 const MarkingSetting = require('../models/markingSetting');
 
 
@@ -761,25 +762,171 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
     if (!markingSetting) {
       return res.status(404).json({ message: 'No marking settings found.' });
     }
-
     const { totalquiz, totalnoofquestion } = markingSetting;
-
-    
     const allQuizzes = await Quiz.find({ topicId: { $in: topicIds } }).lean();
-
-   
     const shuffledQuizzes = allQuizzes.sort(() => 0.5 - Math.random());
     const selectedQuizzes = shuffledQuizzes.slice(0, totalquiz || allQuizzes.length);
-
     res.status(200).json({
       message: 'Quizzes fetched successfully.',
       totalQuestions: selectedQuizzes.length,
       timeLimitInSeconds: totalnoofquestion * 60, 
       quizzes: selectedQuizzes
     });
-
   } catch (error) {
     console.error('Error fetching quizzes:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+
+exports.PracticeTest = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { topicId, questionId, selectedAnswer } = req.body;
+
+    if (!topicId || !questionId) {
+      return res.status(400).json({ message: 'topicId and questionId are required.' });
+    }
+
+    const quiz = await PracticesQuizAnswer.findOne({ _id: questionId, topicId }).lean();
+    if (!quiz) {
+      return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
+    }
+
+    if (selectedAnswer !== undefined && selectedAnswer !== null) {
+      await PracticeQuizAnswer.findOneAndUpdate(
+        { userId, topicId, questionId },
+        { selectedAnswer },
+        { upsert: true, new: true }
+      );
+      return res.status(200).json({ message: 'Answer saved successfully.' });
+    } else {
+      await PracticeQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
+      return res.status(200).json({ message: 'Question skipped (no answer saved).' });
+    }
+
+  } catch (error) {
+    console.error('Error in saveQuizAnswer:', error);
+    res.status(500).json({ message: 'Internal server error.' });
+  }
+};
+
+
+exports.calculatePracticeScore = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { topicId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
+
+    if (!topicId) {
+      return res.status(400).json({ message: 'topicId is required.' });
+    }
+
+    const topic = await Topic.findById(topicId);
+    if (!topic) {
+      return res.status(404).json({ message: 'Topic not found.' });
+    }
+
+   
+    if (topic.practicescore !== null && topic.practicescore !== undefined) {
+      return res.status(200).json({
+        message: 'Practice score already calculated.',
+        totalQuestions: topic.practicetotalQuestions,
+        answeredQuestions: topic.practiceansweredQuestions,
+        skippedQuestions: topic.practiceskippedQuestions,
+        correctAnswers: topic.practicecorrectAnswers,
+        incorrectAnswers: topic.practiceincorrectAnswers,
+        marksObtained: topic.practicemarksObtained,
+        totalMarks: topic.practicetotalMarks,
+        negativeMarking: topic.practicenegativeMarking,
+        scorePercent: topic.practicescorePercent,
+        testTime: topic.testTime || 0,
+        scoreUpdatedAt: topic.practicescoreUpdatedAt,
+        updatedAt: topic.updatedAt
+      });
+    }
+
+    const allQuizzes = await PracticesQuizAnswer.find({ topicId }).lean();
+    const totalQuestions = allQuizzes.length;
+
+    if (totalQuestions === 0) {
+      return res.status(400).json({ message: 'No questions found for this topic.' });
+    }
+
+    const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
+
+    const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
+      ? topicTotalMarks / totalQuestions
+      : (markingSetting?.maxMarkPerQuestion || 1);
+
+    const negativeMarking = (typeof inputNegativeMarking === 'number')
+      ? inputNegativeMarking
+      : (markingSetting?.negativeMarking || 0);
+
+    const totalMarks = maxMarkPerQuestion * totalQuestions;
+
+    const answers = await UserQuizAnswer.find({ userId, topicId });
+    let correctCount = 0;
+    let incorrectCount = 0;
+
+    for (const answer of answers) {
+      const quiz = allQuizzes.find(q => q._id.toString() === answer.questionId.toString());
+      if (!quiz) continue;
+
+      if (answer.selectedAnswer === quiz.answer) correctCount++;
+      else incorrectCount++;
+    }
+
+    const answeredQuestions = correctCount + incorrectCount;
+    const skippedQuestions = totalQuestions - answeredQuestions;
+
+    const positiveMarks = correctCount * maxMarkPerQuestion;
+    const negativeMarks = incorrectCount * negativeMarking;
+
+    let marksObtained = positiveMarks - negativeMarks;
+    if (marksObtained < 0) marksObtained = 0;
+
+    const roundedMarks = parseFloat(marksObtained.toFixed(2));
+    const scorePercent = (roundedMarks / totalMarks) * 100;
+    const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
+
+    // ✅ Save practice score (only first time)
+    topic.practicescore = roundedScorePercent;
+    topic.practicetotalQuestions = totalQuestions;
+    topic.practiceansweredQuestions = answeredQuestions;
+    topic.practicecorrectAnswers = correctCount;
+    topic.practiceincorrectAnswers = incorrectCount;
+    topic.practiceskippedQuestions = skippedQuestions;
+    topic.practicemarksObtained = roundedMarks;
+    topic.practicetotalMarks = totalMarks;
+    topic.practicenegativeMarking = negativeMarking;
+    topic.practicescorePercent = roundedScorePercent;
+    topic.practicescoreUpdatedAt = new Date();
+
+    await topic.save();
+
+    return res.status(200).json({
+      message: 'Practice score calculated successfully.',
+      totalQuestions,
+      answeredQuestions,
+      skippedQuestions,
+      correctAnswers: correctCount,
+      incorrectAnswers: incorrectCount,
+      marksObtained: roundedMarks,
+      totalMarks,
+      negativeMarking,
+      scorePercent: roundedScorePercent,
+      testTime: topic.testTime || 0,
+      scoreUpdatedAt: topic.practicescoreUpdatedAt,
+      updatedAt: topic.updatedAt
+    });
+
+  } catch (error) {
+    console.error('Error in calculatePracticeScore:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+

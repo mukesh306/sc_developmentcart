@@ -20,14 +20,27 @@ marksObtained: { type: Number, default: null },
 totalMarks: { type: Number, default: null },
 negativeMarking: { type: Number, default: null },
 scorePercent: { type: Number, default: null },
+
+practicescore: { type: String, default: null },
+practicetotalQuestions: { type: Number, default: null },
+practiceansweredQuestions: { type: Number, default: null },
+practicecorrectAnswers: { type: Number, default: null },
+practiceincorrectAnswers: { type: Number, default: null },
+practiceskippedQuestions: { type: Number, default: null },
+practicemarksObtained: { type: Number, default: null },
+practicetotalMarks: { type: Number, default: null },
+practicenegativeMarking: { type: Number, default: null },
+practicescorePercent: { type: Number, default: null },
+
 isdescription: { type: Boolean, default: false },
-  isvideo: { type: Boolean, default: false },
+isvideo: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
    createdAt: {
         type: Date,
         default: Date.now
     } ,
     scoreUpdatedAt: { type: Date },
+    practicescoreUpdatedAt: { type: Date },
 },{ timestamps: true });
 module.exports = mongoose.model('Topic', TopicSchema); 
 

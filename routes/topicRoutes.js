@@ -24,9 +24,15 @@ router.get('/TopicWithLeaning/:id',auth,topicController.TopicWithLeaning);
 router.get('/TopicWithLeaningadmin/:id',topicController.TopicWithLeaningAdmin);
 router.get('/getAllTopics',topicController.getAllTopicNames);
 router.post('/submit-quiz',auth,topicController.submitQuiz);
+
 router.post('/save-quiz',auth,topicController.saveQuizAnswer);
+router.post('/PracticeTest',auth,topicController.PracticeTest);
+
 router.post('/saveQuizAnswer',auth,topicController.submitQuizAnswer);
+
 router.post('/calculateQuizScore',auth,topicController.calculateQuizScore);
+router.post('/calculatePracticeScore',auth,topicController.calculatePracticeScore);
+
 router.get('/getTopicById/:id',topicController.getTopicById);
 
 
