@@ -24,6 +24,7 @@ scorePercent: { type: Number, default: null },
 
 
 isdescription: { type: Boolean, default: false },
+  strickStatus: { type: Boolean, default: false },
 isvideo: { type: Boolean, default: false },
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
    createdAt: {

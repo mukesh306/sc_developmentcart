@@ -184,7 +184,6 @@ exports.getAllTopicNames = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
@@ -194,9 +193,11 @@ exports.TopicWithLeaning = async (req, res) => {
     if (!user || user.status !== 'yes') {
       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
     }
+
     const registrationDate = moment(user.createdAt).startOf('day');
     const today = moment().startOf('day');
     const daysPassed = today.diff(registrationDate, 'days') + 1;
+
     const query = { learningId: new mongoose.Types.ObjectId(id) };
     if (queryClassId) {
       query.classId = new mongoose.Types.ObjectId(queryClassId);
@@ -204,24 +205,32 @@ exports.TopicWithLeaning = async (req, res) => {
       query.classId = new mongoose.Types.ObjectId(user.className);
     }
 
+    // ✅ Fetch learning name
+    const learningData = await Learning.findById(id).select('name').lean();
+    if (!learningData) {
+      return res.status(404).json({ message: 'Learning not found.' });
+    }
+
     const allTopics = await Topic.find(query)
       .sort({ createdAt: 1 })
       .select('topic score createdAt isdescription isvideo')
       .lean();
+
     if (!allTopics || allTopics.length === 0) {
       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
     }
+
     const validScores = allTopics
       .map(topic => parseFloat(topic.score))
       .filter(score => !isNaN(score));
+
     const averageScore =
       validScores.length > 0
         ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
         : null;
-    const assignedRecord = await Assigned.findOne({
-      classId: query.classId
-    });
-    if (assignedRecord) {  
+
+    const assignedRecord = await Assigned.findOne({ classId: query.classId });
+    if (assignedRecord) {
       if (assignedRecord.learning?.toString() === id) {
         assignedRecord.learningAverage = averageScore;
       } else if (assignedRecord.learning2?.toString() === id) {
@@ -233,6 +242,7 @@ exports.TopicWithLeaning = async (req, res) => {
       }
       await assignedRecord.save();
     }
+
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
       if (topic.score === null || topic.score === undefined) {
         const { score, ...rest } = topic;
@@ -242,6 +252,7 @@ exports.TopicWithLeaning = async (req, res) => {
     });
 
     res.status(200).json({
+      learningName: learningData.name, 
       averageScore,
       topics: unlockedTopics
     });
@@ -251,6 +262,7 @@ exports.TopicWithLeaning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 exports.getTopicById = async (req, res) => {

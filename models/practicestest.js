@@ -6,6 +6,7 @@ const PracticesQuizAnswerSchema = new mongoose.Schema({
   learningId: { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings' },
   questionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
   selectedAnswer: { type: String, required: true },
+  strickStatus: { type: Boolean, default: false },
 }, { timestamps: true });
 
 module.exports = mongoose.model('PracticesQuizAnswer', PracticesQuizAnswerSchema);
