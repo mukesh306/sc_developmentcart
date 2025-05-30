@@ -791,47 +791,39 @@ exports.PracticeTest = async (req, res) => {
   }
 };
 
+
 exports.calculateQuizScoreByLearning = async (req, res) => {
   try {
     const userId = req.user._id;
     const { learningId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
-
     if (!learningId) {
       return res.status(400).json({ message: 'learningId is required.' });
     }
-
     const topics = await Topic.find({ learningId }).lean();
     if (!topics.length) {
       return res.status(404).json({ message: 'No topics found for this learning.' });
     }
-
     const topicIds = topics.map(t => t._id.toString());
-
     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
     const negativeMarking = (typeof inputNegativeMarking === 'number')
       ? inputNegativeMarking
       : (markingSetting?.negativeMarking || 0);
-
     const now = new Date();
     const startOfDay = new Date(now.setHours(0, 0, 0, 0));
     const endOfDay = new Date(now.setHours(23, 59, 59, 999));
-
     const answers = await PracticesQuizAnswer.find({
       userId,
       learningId,
       topicId: { $in: topicIds },
       createdAt: { $gte: startOfDay, $lte: endOfDay }
     });
-
     if (!answers.length) {
       return res.status(400).json({ message: 'No answers submitted today for this learning.' });
     }
-
     const answeredQuestionIds = answers.map(ans => ans.questionId.toString());
     const answeredQuizzes = await Quiz.find({ _id: { $in: answeredQuestionIds } }).lean();
 
     const totalQuestions = answers.length;
-
     const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
       ? topicTotalMarks / totalQuestions
       : (markingSetting?.maxMarkPerQuestion || 1);
@@ -862,7 +854,23 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
 
-    // Check if score already exists
+    const scoreData = {
+      userId,
+      learningId,
+      score: roundedScorePercent,
+      totalQuestions,
+      answeredQuestions,
+      correctAnswers: correctCount,
+      incorrectAnswers: incorrectCount,
+      skippedQuestions,
+      marksObtained: roundedMarks,
+      totalMarks,
+      maxMarkPerQuestion,
+      negativeMarking,
+      scorePercent: roundedScorePercent,
+      scoreDate: startOfDay
+    };
+
     const existingScore = await LearningScore.findOne({
       userId,
       learningId,
@@ -870,63 +878,17 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     });
 
     if (!existingScore) {
-      // Save only on first attempt of the day
-      const newScore = new LearningScore({
-        userId,
-        learningId,
-        score: roundedScorePercent,
-        totalQuestions,
-        answeredQuestions,
-        correctAnswers: correctCount,
-        incorrectAnswers: incorrectCount,
-        skippedQuestions,
-        marksObtained: roundedMarks,
-        totalMarks,
-        maxMarkPerQuestion,
-        negativeMarking,
-        scorePercent: roundedScorePercent,
-        scoreDate: startOfDay,
-        strickStatus: true // ✅ Save true only on first save
-      });
-
+      const newScore = new LearningScore(scoreData);
       await newScore.save();
-
       return res.status(200).json({
         message: 'Score calculated and saved for today.',
-        userId,
-        learningId,
-        totalQuestions,
-        answeredQuestions,
-        correctAnswers: correctCount,
-        incorrectAnswers: incorrectCount,
-        skippedQuestions,
-        marksObtained: roundedMarks,
-        totalMarks,
-        maxMarkPerQuestion,
-        negativeMarking,
-        scorePercent: roundedScorePercent,
-        scoreDate: startOfDay,
-        strickStatus: true,
+        ...scoreData,
         saved: true
       });
     } else {
-      
       return res.status(200).json({
         message: 'Score already submitted today. New score calculated but not saved.',
-        userId,
-        learningId,
-        totalQuestions,
-        answeredQuestions,
-        correctAnswers: correctCount,
-        incorrectAnswers: incorrectCount,
-        skippedQuestions,
-        marksObtained: roundedMarks,
-        totalMarks,
-        maxMarkPerQuestion,
-        negativeMarking,
-        scorePercent: roundedScorePercent,
-        scoreDate: startOfDay,
-        strickStatus: existingScore.strickStatus || false,
+        ...scoreData,
         saved: false
       });
     }
