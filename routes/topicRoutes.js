@@ -32,7 +32,7 @@ router.post('/saveQuizAnswer',auth,topicController.submitQuizAnswer);
 
 router.post('/calculateQuizScore',auth,topicController.calculateQuizScore);
 router.post('/calculatePracticeScore',auth,topicController.calculateQuizScoreByLearning);
-router.post('/getUserScoresByDate',auth,topicController.getUserScoresByDate);
+router.get('/getUserScoresByDate',auth,topicController.getUserScoresByDate);
 
 router.get('/getTopicById/:id',topicController.getTopicById);
 
