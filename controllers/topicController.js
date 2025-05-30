@@ -860,6 +860,7 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
       skippedQuestions,
       marksObtained: roundedMarks,
       totalMarks,
+      maxMarkPerQuestion,
       negativeMarking,
       scorePercent: roundedScorePercent,
       scoreDate: startOfDay
