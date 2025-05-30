@@ -924,3 +924,63 @@ exports.getUserScoresByDate = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+
+
+exports.StrictScore = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const scores = await LearningScore.find({
+      userId,
+      strickStatus: true,
+      scoreUpdatedAt: { $exists: true }
+    }).lean();
+
+    if (!scores.length) {
+      return res.status(404).json({ message: 'No strict scores found.' });
+    }
+    const groupedByDate = {};
+
+    for (const score of scores) {
+      const scoreDate = moment(score.scoreUpdatedAt).startOf('day').format('YYYY-MM-DD');
+
+      if (!groupedByDate[scoreDate]) {
+        groupedByDate[scoreDate] = {
+          date: scoreDate,
+          scores: [],
+          topics: []
+        };
+      }
+
+      groupedByDate[scoreDate].scores.push(score);
+    }
+    const allDates = Object.keys(groupedByDate);
+
+    for (const dateStr of allDates) {
+      const startOfDay = moment(dateStr).startOf('day').toDate();
+      const endOfDay = moment(dateStr).endOf('day').toDate();
+
+      const topics = await Topic.find({
+        strickStatus: true,
+        scoreUpdatedAt: { $gte: startOfDay, $lte: endOfDay }
+      }).lean();
+
+      groupedByDate[dateStr].topics = topics;
+    }
+
+  
+    const finalData = Object.values(groupedByDate).filter(item => item.topics.length > 0);
+
+    if (!finalData.length) {
+      return res.status(404).json({ message: 'No matching strict topics found for score dates.' });
+    }
+
+    res.status(200).json({ data: finalData });
+
+  } catch (error) {
+    console.error('Error in getAllStrictScoresWithMatchingTopics:', error);
+    res.status(500).json({ message: error.message });
+  }
+};

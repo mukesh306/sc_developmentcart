@@ -38,6 +38,7 @@ router.get('/getTopicById/:id',topicController.getTopicById);
 
 
 router.post('/topics/:topicId', topicController.updateTestTimeInSeconds);
+router.get('/strict', auth, topicController.StrictScore);
 
 
 router.put('/updateTopicWithQuiz/:id', upload.fields([
