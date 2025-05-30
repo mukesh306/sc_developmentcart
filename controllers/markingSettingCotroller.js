@@ -50,7 +50,7 @@ exports.createOrUpdateSettings = async (req, res) => {
   }
 };
 
- 
+
 exports.getSettings = async (req, res) => {
   try {
     const setting = await MarkingSetting.findOne().populate('createdBy', 'email');
