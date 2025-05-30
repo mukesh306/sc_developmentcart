@@ -10,7 +10,7 @@ const UserQuizAnswer = require('../models/userQuizAnswer');
 const PracticesQuizAnswer = require('../models/practicestest');
 const MarkingSetting = require('../models/markingSetting'); 
 const Learning = require('../models/learning'); 
-
+const LearningScore = require('../models/learningScore');
 
 exports.createTopicWithQuiz = async (req, res) => {
   try {
