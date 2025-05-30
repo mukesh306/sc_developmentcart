@@ -12,6 +12,7 @@ const MarkingSetting = require('../models/markingSetting');
 const Learning = require('../models/learning'); 
 const LearningScore = require('../models/learningScore');
 
+
 exports.createTopicWithQuiz = async (req, res) => {
   try {
     const {
@@ -776,7 +777,6 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
   }
 };
 
-
 exports.PracticeTest = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -810,7 +810,6 @@ exports.PracticeTest = async (req, res) => {
 };
 
 
-
 exports.calculateQuizScoreByLearning = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -820,48 +819,54 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
       return res.status(400).json({ message: 'learningId is required.' });
     }
 
-    const topicIdsFromLearning = await Topic.find({ learningId }).distinct('_id');
-    if (!topicIdsFromLearning.length) {
-      return res.status(404).json({ message: 'No topics found for the given learning.' });
+    const topics = await Topic.find({ learningId }).lean();
+    if (!topics.length) {
+      return res.status(404).json({ message: 'No topics found for this learning.' });
     }
 
+    const topicIds = topics.map(t => t._id.toString());
+
     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
+
     const negativeMarking = (typeof inputNegativeMarking === 'number')
       ? inputNegativeMarking
       : (markingSetting?.negativeMarking || 0);
 
-    // Adjust timezone if needed (example: IST is UTC+5:30)
-    const tzOffset = 5.5 * 60; // in minutes
+    // Calculate today's date range (start and end of day)
     const now = new Date();
-    const localNow = new Date(now.getTime() + tzOffset * 60000);
+    const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+    const endOfDay = new Date(now.setHours(23, 59, 59, 999));
 
-    const startOfDay = new Date(localNow);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(localNow);
-    endOfDay.setHours(23, 59, 59, 999);
-
+    // Check if today's score already exists
     const existingScore = await LearningScore.findOne({
       userId,
       learningId,
       scoreDate: { $gte: startOfDay, $lte: endOfDay }
     });
 
+    if (existingScore) {
+      return res.status(200).json({
+        message: 'Score already calculated for today.',
+        ...existingScore.toObject(),
+        saved: false
+      });
+    }
+
     const answers = await PracticesQuizAnswer.find({
       userId,
-      topicId: { $in: topicIdsFromLearning },
-      createdAt: { $gte: startOfDay, $lte: endOfDay }
+      learningId,
+      topicId: { $in: topicIds },
+      createdAt: { $gte: startOfDay, $lte: endOfDay } // Only today's answers
     });
 
     if (!answers.length) {
-      return res.status(400).json({ message: 'No answers submitted for today.' });
+      return res.status(400).json({ message: 'No answers submitted today for this learning.' });
     }
 
     const answeredQuestionIds = answers.map(ans => ans.questionId.toString());
     const answeredQuizzes = await Quiz.find({ _id: { $in: answeredQuestionIds } }).lean();
 
     const totalQuestions = answers.length;
-
     const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
       ? topicTotalMarks / totalQuestions
       : (markingSetting?.maxMarkPerQuestion || 1);
@@ -875,11 +880,8 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
       const quiz = answeredQuizzes.find(q => q._id.toString() === answer.questionId.toString());
       if (!quiz) continue;
 
-      if (answer.selectedAnswer === quiz.answer) {
-        correctCount++;
-      } else {
-        incorrectCount++;
-      }
+      if (answer.selectedAnswer === quiz.answer) correctCount++;
+      else incorrectCount++;
     }
 
     const answeredQuestions = correctCount + incorrectCount;
@@ -895,30 +897,11 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
 
-    if (!existingScore) {
-      const newScore = new LearningScore({
-        userId,
-        learningId,
-        score: roundedScorePercent,
-        totalQuestions,
-        answeredQuestions,
-        correctAnswers: correctCount,
-        incorrectAnswers: incorrectCount,
-        skippedQuestions,
-        marksObtained: roundedMarks,
-        totalMarks,
-        negativeMarking,
-        scorePercent: roundedScorePercent,
-        scoreDate: startOfDay
-      });
-
-      await newScore.save();
-    }
-
-    return res.status(200).json({
-      message: existingScore
-        ? 'Today\'s score already saved, returning calculated result only.'
-        : 'Score calculated and saved for today.',
+    // Save in LearningScore
+    const newScore = new LearningScore({
+      userId,
+      learningId,
+      score: roundedScorePercent,
       totalQuestions,
       answeredQuestions,
       correctAnswers: correctCount,
@@ -927,18 +910,23 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
       marksObtained: roundedMarks,
       totalMarks,
       negativeMarking,
-      maxMarkPerQuestion,
       scorePercent: roundedScorePercent,
-      scoreDate: startOfDay,
-      saved: !existingScore
+      scoreDate: startOfDay
+    });
+
+    await newScore.save();
+
+    return res.status(200).json({
+      message: 'Score calculated and saved for today.',
+      ...newScore.toObject(),
+      saved: true
     });
 
   } catch (error) {
     console.error('Error in calculateQuizScoreByLearning:', error);
-    return res.status(500).json({ message: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
