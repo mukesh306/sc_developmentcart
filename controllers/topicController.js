@@ -809,22 +809,19 @@ exports.PracticeTest = async (req, res) => {
   }
 };
 
-
 exports.calculateQuizScoreByLearning = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { learningId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
+    const { topicId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
 
-    if (!learningId) {
-      return res.status(400).json({ message: 'learningId is required.' });
+    if (!topicId) {
+      return res.status(400).json({ message: 'topicId is required.' });
     }
 
-    const topics = await Topic.find({ learningId }).lean();
-    if (!topics.length) {
-      return res.status(404).json({ message: 'No topics found for this learning.' });
+    const topic = await Topic.findById(topicId).lean();
+    if (!topic) {
+      return res.status(404).json({ message: 'Topic not found.' });
     }
-
-    const topicIds = topics.map(t => t._id.toString());
 
     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
 
@@ -832,7 +829,6 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
       ? inputNegativeMarking
       : (markingSetting?.negativeMarking || 0);
 
-    // Calculate today's date range (start and end of day)
     const now = new Date();
     const startOfDay = new Date(now.setHours(0, 0, 0, 0));
     const endOfDay = new Date(now.setHours(23, 59, 59, 999));
@@ -840,7 +836,7 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     // Check if today's score already exists
     const existingScore = await LearningScore.findOne({
       userId,
-      learningId,
+      topicId,
       scoreDate: { $gte: startOfDay, $lte: endOfDay }
     });
 
@@ -854,13 +850,12 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 
     const answers = await PracticesQuizAnswer.find({
       userId,
-      learningId,
-      topicId: { $in: topicIds },
-      createdAt: { $gte: startOfDay, $lte: endOfDay } // Only today's answers
+      topicId,
+      createdAt: { $gte: startOfDay, $lte: endOfDay }
     });
 
     if (!answers.length) {
-      return res.status(400).json({ message: 'No answers submitted today for this learning.' });
+      return res.status(400).json({ message: 'No answers submitted today for this topic.' });
     }
 
     const answeredQuestionIds = answers.map(ans => ans.questionId.toString());
@@ -897,10 +892,9 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
 
-    // Save in LearningScore
     const newScore = new LearningScore({
       userId,
-      learningId,
+      topicId,
       score: roundedScorePercent,
       totalQuestions,
       answeredQuestions,
@@ -923,10 +917,11 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error in calculateQuizScoreByLearning:', error);
+    console.error('Error in calculateQuizScore:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
