@@ -3,7 +3,7 @@ const moment = require('moment');
 const mongoose = require('mongoose');
 const Learning = require('../models/learning');
 const Assigned = require('../models/assignlearning'); 
-
+const LearningScore = require('../models/learningScore');
 const Topic = require('../models/topic');
 exports.createLearning = async (req, res) => {
   try {
@@ -87,6 +87,7 @@ exports.updateLearning = async (req, res) => {
   }
 };
 
+
 exports.scoreCard = async (req, res) => {
   try {
     const user = req.user;
@@ -107,7 +108,7 @@ exports.scoreCard = async (req, res) => {
       .populate('learningId')
       .lean();
 
-      
+
     if (!topics.length) {
       return res.status(404).json({ message: 'No scored topics found for this class.' });
     }
@@ -134,3 +135,22 @@ exports.scoreCard = async (req, res) => {
   }
 };
 
+
+
+exports.getStrictUserScores = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const scores = await LearningScore.find({
+      userId,
+      strickStatus: true
+    })
+      .populate('learningId', 'name')
+      .sort({ scoreDate: -1 });
+
+    res.status(200).json({ scores });
+  } catch (error) {
+    console.error('Error in getStrictUserScores:', error);
+    res.status(500).json({ message: error.message });
+  }
+};

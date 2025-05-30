@@ -7,5 +7,6 @@ router.get('/learning', learningController.getLearning);
 router.delete('/learning/:id', learningController.deleteLearning);
 router.put('/learning/:id', learningController.updateLearning);
 router.get('/scorecard', auth, learningController.scoreCard);
+router.get('/StrictScores', auth, learningController.getStrictUserScores);
 
 module.exports = router;
