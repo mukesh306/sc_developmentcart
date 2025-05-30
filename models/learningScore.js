@@ -13,8 +13,13 @@ const LearningScoreSchema = new mongoose.Schema({
   totalMarks: { type: Number },
   negativeMarking: { type: Number },
   scorePercent: { type: Number },
-  scoreDate: { type: Date, required: true },
-  createdAt: { type: Date, default: Date.now }
-});
+
+  createdAt: {
+        type: Date,
+        default: Date.now
+    } ,
+    scoreDate: { type: Date },
+  
+},{ timestamps: true });
 
 module.exports = mongoose.model('LearningScore', LearningScoreSchema);
