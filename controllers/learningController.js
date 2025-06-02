@@ -243,14 +243,14 @@ exports.StrikeBothSameDate = async (req, res) => {
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
-      scoreDateMap.get(date).push({ ...score, type: 'practice' }); // tag it
+      scoreDateMap.get(date).push({ strickStatus: score.strickStatus, type: 'practice' });
     });
 
     const topicDateMap = new Map();
     topics.forEach(topic => {
       const date = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
       if (!topicDateMap.has(date)) topicDateMap.set(date, []);
-      topicDateMap.get(date).push({ ...topic, type: 'topic' }); // tag it
+       topicDateMap.get(date).push({ strickStatus: topic.strickStatus, type: 'topic' });
     });
 
     const result = [];
