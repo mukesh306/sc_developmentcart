@@ -794,7 +794,7 @@ exports.PracticeTest = async (req, res) => {
 };
 
 exports.calculateQuizScoreByLearning = async (req, res) => {
-  try {
+  try { 
     const userId = req.user._id;
     const { learningId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
 

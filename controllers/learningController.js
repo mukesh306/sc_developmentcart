@@ -225,43 +225,40 @@ exports.Topicstrikes = async (req, res) => {
 
 
 
-
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
 
-  
     const scores = await LearningScore.find({
       userId,
       strickStatus: true
     }).populate('learningId', 'name').lean();
 
-   
     const topics = await Topic.find({
       strickStatus: true,
       scoreUpdatedAt: { $exists: true }
     }).populate('learningId', 'name').lean();
+
     const scoreDateMap = new Map();
-    scores.forEach(s => {
-      const date = moment(s.scoreDate).format('YYYY-MM-DD');
+    scores.forEach(score => {
+      const date = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
-      scoreDateMap.get(date).push(s);
+      scoreDateMap.get(date).push({ ...score, type: 'practice' }); // tag it
     });
 
     const topicDateMap = new Map();
-    topics.forEach(t => {
-      const date = moment(t.scoreUpdatedAt).format('YYYY-MM-DD');
+    topics.forEach(topic => {
+      const date = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
       if (!topicDateMap.has(date)) topicDateMap.set(date, []);
-      topicDateMap.get(date).push(t);
+      topicDateMap.get(date).push({ ...topic, type: 'topic' }); // tag it
     });
+
     const result = [];
+
     for (let [date, scoreItems] of scoreDateMap.entries()) {
       if (topicDateMap.has(date)) {
-        result.push({
-          date,
-          scores: scoreItems,
-          topics: topicDateMap.get(date)
-        });
+        const combined = [...scoreItems, ...topicDateMap.get(date)];
+        result.push({ date, data: combined });
       }
     }
 
