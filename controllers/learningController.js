@@ -181,44 +181,93 @@ exports.Topicstrikes = async (req, res) => {
 
 
 
+// exports.StrikeBothSameDate = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     const scores = await LearningScore.find({
+//       userId,
+//       strickStatus: true
+//     }).lean();
+//     const topics = await Topic.find({
+//       strickStatus: true,
+//       scoreUpdatedAt: { $exists: true }
+//     }).lean();
+
+//     const scoreDates = new Set(
+//       scores.map(s => moment(s.scoreDate).format('YYYY-MM-DD'))
+//     );
+//     const topicDates = new Set(
+//       topics.map(t => moment(t.scoreUpdatedAt).format('YYYY-MM-DD'))
+//     );
+
+   
+//     const commonDates = [...scoreDates].filter(date => topicDates.has(date));
+
+    
+//     const filteredScores = scores.filter(s =>
+//       commonDates.includes(moment(s.scoreDate).format('YYYY-MM-DD'))
+//     );
+//     const filteredTopics = topics.filter(t =>
+//       commonDates.includes(moment(t.scoreUpdatedAt).format('YYYY-MM-DD'))
+//     );
+
+//     res.status(200).json({
+//       commonDates,
+//       scores: filteredScores,
+//       topics: filteredTopics
+//     });
+//   } catch (error) {
+//     console.error('Error in StrikeBothSameDate:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
+
+
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
 
+  
     const scores = await LearningScore.find({
       userId,
       strickStatus: true
-    }).lean();
+    }).populate('learningId', 'name').lean();
+
+   
     const topics = await Topic.find({
       strickStatus: true,
       scoreUpdatedAt: { $exists: true }
-    }).lean();
-
-    const scoreDates = new Set(
-      scores.map(s => moment(s.scoreDate).format('YYYY-MM-DD'))
-    );
-    const topicDates = new Set(
-      topics.map(t => moment(t.scoreUpdatedAt).format('YYYY-MM-DD'))
-    );
-
-   
-    const commonDates = [...scoreDates].filter(date => topicDates.has(date));
-
-    
-    const filteredScores = scores.filter(s =>
-      commonDates.includes(moment(s.scoreDate).format('YYYY-MM-DD'))
-    );
-    const filteredTopics = topics.filter(t =>
-      commonDates.includes(moment(t.scoreUpdatedAt).format('YYYY-MM-DD'))
-    );
-
-    res.status(200).json({
-      commonDates,
-      scores: filteredScores,
-      topics: filteredTopics
+    }).populate('learningId', 'name').lean();
+    const scoreDateMap = new Map();
+    scores.forEach(s => {
+      const date = moment(s.scoreDate).format('YYYY-MM-DD');
+      if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
+      scoreDateMap.get(date).push(s);
     });
+
+    const topicDateMap = new Map();
+    topics.forEach(t => {
+      const date = moment(t.scoreUpdatedAt).format('YYYY-MM-DD');
+      if (!topicDateMap.has(date)) topicDateMap.set(date, []);
+      topicDateMap.get(date).push(t);
+    });
+    const result = [];
+    for (let [date, scoreItems] of scoreDateMap.entries()) {
+      if (topicDateMap.has(date)) {
+        result.push({
+          date,
+          scores: scoreItems,
+          topics: topicDateMap.get(date)
+        });
+      }
+    }
+
+    res.status(200).json({ dates: result });
   } catch (error) {
-    console.error('Error in StrikeBothSameDate:', error);
+    console.error('Error in StrikeBothSameDateGrouped:', error);
     res.status(500).json({ message: error.message });
   }
 };
