@@ -145,7 +145,7 @@ exports.Practicestrike = async (req, res) => {
       userId,
       strickStatus: true
     })
-      .populate('learningId', 'name')
+      .select('strickStatus scoreDate score') 
       .sort({ scoreDate: -1 });
 
     res.status(200).json({ scores });
@@ -156,15 +156,13 @@ exports.Practicestrike = async (req, res) => {
 };
 
 
-
 exports.Topicstrikes = async (req, res) => {
   try {
- 
     const topics = await Topic.find({
       strickStatus: true,
       scoreUpdatedAt: { $exists: true }
     })
-      .populate('learningId', 'name')
+      .select('strickStatus scoreUpdatedAt score')
       .sort({ scoreUpdatedAt: -1 });
 
     if (!topics.length) {
@@ -177,7 +175,6 @@ exports.Topicstrikes = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
