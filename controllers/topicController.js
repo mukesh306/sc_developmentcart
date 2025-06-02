@@ -758,7 +758,6 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
   }
 };
 
-
 exports.PracticeTest = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -773,23 +772,28 @@ exports.PracticeTest = async (req, res) => {
       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
     }
 
-    if (selectedAnswer) {
-      await PracticesQuizAnswer.findOneAndUpdate(
-        { userId, topicId, questionId },
-        { selectedAnswer, learningId },
-        { upsert: true, new: true }
-      );
-      return res.status(200).json({ message: 'Answer saved successfully.' });
-    } else {
-      await PracticesQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
-      return res.status(200).json({ message: 'Question skipped (no answer saved).' });
-    }
+   
+    const answerToSave = selectedAnswer ? selectedAnswer : null;
+
+    await PracticesQuizAnswer.findOneAndUpdate(
+      { userId, topicId, questionId },
+      {
+        selectedAnswer: answerToSave,
+        learningId,
+        isSkipped: !selectedAnswer 
+      },
+      { upsert: true, new: true }
+    );
+
+    const message = selectedAnswer ? 'Answer saved successfully.' : 'Question skipped and recorded.';
+    return res.status(200).json({ message });
 
   } catch (error) {
     console.error('Error in PracticeTest:', error);
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.calculateQuizScoreByLearning = async (req, res) => {
   try {
