@@ -224,7 +224,6 @@ exports.Topicstrikes = async (req, res) => {
 // };
 
 
-
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -240,31 +239,49 @@ exports.StrikeBothSameDate = async (req, res) => {
     }).populate('learningId', 'name').lean();
 
     const scoreDateMap = new Map();
+    const topicDateMap = new Map();
+    const allDatesSet = new Set();
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
+      allDatesSet.add(date);
       if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
-      scoreDateMap.get(date).push({ strickStatus: score.strickStatus,score: score.score, type: 'practice' });
+      scoreDateMap.get(date).push({
+        strickStatus: score.strickStatus,
+        score: score.score,
+        type: 'practice'
+      });
     });
-
-    const topicDateMap = new Map();
     topics.forEach(topic => {
       const date = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
+      allDatesSet.add(date);
       if (!topicDateMap.has(date)) topicDateMap.set(date, []);
-       topicDateMap.get(date).push({ strickStatus: topic.strickStatus,score: topic.score, type: 'topic' });
+      topicDateMap.get(date).push({
+        strickStatus: topic.strickStatus,
+        score: topic.score,
+        type: 'topic'
+      });
     });
 
     const result = [];
+    for (let date of allDatesSet) {
+      const scoreItems = scoreDateMap.get(date) || [];
+      const topicItems = topicDateMap.get(date) || [];
 
-    for (let [date, scoreItems] of scoreDateMap.entries()) {
-      if (topicDateMap.has(date)) {
-        const combined = [...scoreItems, ...topicDateMap.get(date)];
+      const hasPractice = scoreItems.length > 0;
+      const hasTopic = topicItems.length > 0;
+
+      if (hasPractice && hasTopic) {
+        const combined = [...scoreItems, ...topicItems];
         result.push({ date, data: combined });
       }
     }
 
+   
+    result.sort((a, b) => new Date(b.date) - new Date(a.date));
+
     res.status(200).json({ dates: result });
   } catch (error) {
-    console.error('Error in StrikeBothSameDateGrouped:', error);
+    console.error('Error in StrikeBothSameDate:', error);
     res.status(500).json({ message: error.message });
   }
 };
