@@ -772,7 +772,6 @@ exports.PracticeTest = async (req, res) => {
       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
     }
 
-   
     const answerToSave = selectedAnswer ? selectedAnswer : null;
 
     await PracticesQuizAnswer.findOneAndUpdate(
@@ -793,7 +792,6 @@ exports.PracticeTest = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 exports.calculateQuizScoreByLearning = async (req, res) => {
   try {
@@ -843,17 +841,23 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 
     let correctCount = 0;
     let incorrectCount = 0;
+    let skippedCount = 0;
 
     for (const answer of answers) {
       const quiz = answeredQuizzes.find(q => q._id.toString() === answer.questionId.toString());
       if (!quiz) continue;
 
-      if (answer.selectedAnswer === quiz.answer) correctCount++;
-      else incorrectCount++;
+      if (answer.selectedAnswer === null || answer.selectedAnswer === undefined) {
+        skippedCount++;
+      } else if (answer.selectedAnswer === quiz.answer) {
+        correctCount++;
+      } else {
+        incorrectCount++;
+      }
     }
 
     const answeredQuestions = correctCount + incorrectCount;
-    const skippedQuestions = totalQuestions - answeredQuestions;
+    const skippedQuestions = skippedCount;
 
     const positiveMarks = correctCount * maxMarkPerQuestion;
     const negativeMarks = incorrectCount * negativeMarking;
@@ -889,7 +893,6 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     };
 
     if (!existingScore) {
-      // Only save strickStatus if saving new score
       const newScore = new LearningScore({ ...scoreData, strickStatus: true });
       await newScore.save();
 
@@ -911,6 +914,7 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
