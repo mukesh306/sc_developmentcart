@@ -137,7 +137,7 @@ exports.scoreCard = async (req, res) => {
 
 
 
-exports.getStrictUserScores = async (req, res) => {
+exports.Practicestrike = async (req, res) => {
   try {
     const userId = req.user._id;
 
@@ -151,6 +151,29 @@ exports.getStrictUserScores = async (req, res) => {
     res.status(200).json({ scores });
   } catch (error) {
     console.error('Error in getStrictUserScores:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+exports.Topicstrikes = async (req, res) => {
+  try {
+ 
+    const topics = await Topic.find({
+      strickStatus: true,
+      scoreUpdatedAt: { $exists: true }
+    })
+      .populate('learningId', 'name')
+      .sort({ scoreUpdatedAt: -1 });
+
+    if (!topics.length) {
+      return res.status(404).json({ message: 'No strict topics found.' });
+    }
+
+    res.status(200).json({ topics });
+  } catch (error) {
+    console.error('Error in Topicstrikes:', error);
     res.status(500).json({ message: error.message });
   }
 };
