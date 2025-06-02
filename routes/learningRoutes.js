@@ -9,5 +9,6 @@ router.put('/learning/:id', learningController.updateLearning);
 router.get('/scorecard', auth, learningController.scoreCard);
 router.get('/StrictPractice', auth, learningController.Practicestrike);
 router.get('/Topicstrikes', auth, learningController.Topicstrikes);
+router.get('/Strike', auth, learningController.StrikeBothSameDate);
 
 module.exports = router;

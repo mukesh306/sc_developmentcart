@@ -177,3 +177,48 @@ exports.Topicstrikes = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+
+exports.StrikeBothSameDate = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const scores = await LearningScore.find({
+      userId,
+      strickStatus: true
+    }).lean();
+    const topics = await Topic.find({
+      strickStatus: true,
+      scoreUpdatedAt: { $exists: true }
+    }).lean();
+
+    const scoreDates = new Set(
+      scores.map(s => moment(s.scoreDate).format('YYYY-MM-DD'))
+    );
+    const topicDates = new Set(
+      topics.map(t => moment(t.scoreUpdatedAt).format('YYYY-MM-DD'))
+    );
+
+   
+    const commonDates = [...scoreDates].filter(date => topicDates.has(date));
+
+    
+    const filteredScores = scores.filter(s =>
+      commonDates.includes(moment(s.scoreDate).format('YYYY-MM-DD'))
+    );
+    const filteredTopics = topics.filter(t =>
+      commonDates.includes(moment(t.scoreUpdatedAt).format('YYYY-MM-DD'))
+    );
+
+    res.status(200).json({
+      commonDates,
+      scores: filteredScores,
+      topics: filteredTopics
+    });
+  } catch (error) {
+    console.error('Error in StrikeBothSameDate:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
