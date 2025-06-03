@@ -221,15 +221,13 @@ exports.Topicstrikes = async (req, res) => {
 //   }
 // };
 
-
-
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
 
-  
     const { type, startDate, endDate } = req.body;
 
+    // Normalize `type` filter
     let types = [];
     if (!type) {
       types = ['practice', 'topic'];
@@ -242,16 +240,13 @@ exports.StrikeBothSameDate = async (req, res) => {
     const isPracticeEnabled = types.includes('practice');
     const isTopicEnabled = types.includes('topic');
 
-   
+    // Handle date range filters
     const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
     const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
 
     let scores = [];
     if (isPracticeEnabled) {
-      const practiceQuery = {
-        userId,
-        strickStatus: true,
-      };
+      const practiceQuery = { userId, strickStatus: true };
       if (start && end) {
         practiceQuery.scoreDate = { $gte: start.toDate(), $lte: end.toDate() };
       }
@@ -262,10 +257,7 @@ exports.StrikeBothSameDate = async (req, res) => {
 
     let topics = [];
     if (isTopicEnabled) {
-      const topicQuery = {
-        strickStatus: true,
-        scoreUpdatedAt: { $exists: true },
-      };
+      const topicQuery = { strickStatus: true, scoreUpdatedAt: { $exists: true } };
       if (start && end) {
         topicQuery.scoreUpdatedAt = { $gte: start.toDate(), $lte: end.toDate() };
       }
@@ -274,16 +266,17 @@ exports.StrikeBothSameDate = async (req, res) => {
         .lean();
     }
 
+    // Prepare maps for grouping
     const scoreDateMap = new Map();
     const topicDateMap = new Map();
     const allDatesSet = new Set();
     const updatedDateSet = new Set();
 
     scores.forEach(score => {
-      const formattedDate = moment(score.scoreDate).format('YYYY-MM-DD');
-      allDatesSet.add(formattedDate);
-      if (!scoreDateMap.has(formattedDate)) scoreDateMap.set(formattedDate, []);
-      scoreDateMap.get(formattedDate).push({
+      const date = moment(score.scoreDate).format('YYYY-MM-DD');
+      allDatesSet.add(date);
+      if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
+      scoreDateMap.get(date).push({
         strickStatus: score.strickStatus,
         score: score.score,
         updatedAt: score.updatedAt,
@@ -294,10 +287,10 @@ exports.StrikeBothSameDate = async (req, res) => {
     });
 
     topics.forEach(topic => {
-      const formattedDate = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
-      allDatesSet.add(formattedDate);
-      if (!topicDateMap.has(formattedDate)) topicDateMap.set(formattedDate, []);
-      topicDateMap.get(formattedDate).push({
+      const date = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
+      allDatesSet.add(date);
+      if (!topicDateMap.has(date)) topicDateMap.set(date, []);
+      topicDateMap.get(date).push({
         strickStatus: topic.strickStatus,
         score: topic.score,
         updatedAt: topic.updatedAt,
@@ -306,25 +299,25 @@ exports.StrikeBothSameDate = async (req, res) => {
       updatedDateSet.add(moment(topic.updatedAt).format('YYYY-MM-DD'));
     });
 
+    // Build final result list
     const result = [];
     for (let date of allDatesSet) {
-      const scoreItems = isPracticeEnabled ? (scoreDateMap.get(date) || []) : [];
-      const topicItems = isTopicEnabled ? (topicDateMap.get(date) || []) : [];
-      const combined = [...scoreItems, ...topicItems];
-      const mDate = moment(date, 'YYYY-MM-DD');
+      const dateMoment = moment(date, 'YYYY-MM-DD');
       if (
-        (!start || mDate.isSameOrAfter(start, 'day')) &&
-        (!end || mDate.isSameOrBefore(end, 'day'))
+        (!start || dateMoment.isSameOrAfter(start, 'day')) &&
+        (!end || dateMoment.isSameOrBefore(end, 'day'))
       ) {
-        if (combined.length > 0) {
-          result.push({ date, data: combined });
-        }
+        const combinedData = [
+          ...(scoreDateMap.get(date) || []),
+          ...(topicDateMap.get(date) || [])
+        ];
+        result.push({ date, data: combinedData });
       }
     }
 
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // --- Calculate Streaks ---
+    // Calculate streak
     const updatedDateArray = Array.from(updatedDateSet).sort((a, b) => new Date(a) - new Date(b));
     let maxStreak = 1;
     let currentStreak = 1;
@@ -339,6 +332,7 @@ exports.StrikeBothSameDate = async (req, res) => {
       }
     }
 
+    // Add bonus info
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
     const response = { dates: result };
 
@@ -356,6 +350,7 @@ exports.StrikeBothSameDate = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.StrikeBothSameDate = async (req, res) => {
