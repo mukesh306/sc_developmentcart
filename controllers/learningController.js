@@ -298,7 +298,7 @@ exports.StrikeBothSameDate = async (req, res) => {
 
     const response = { dates: result };
 
-    if (maxStreak >= 7 && markingSetting?.weeklyBonus) {
+    if (maxStreak >= 2 && markingSetting?.weeklyBonus) {
       response.weeklyBonus = markingSetting.weeklyBonus;
     }
 
