@@ -222,16 +222,17 @@ exports.Topicstrikes = async (req, res) => {
 // };
 
 
-
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
 
+    // Fetch scores
     const scores = await LearningScore.find({
       userId,
       strickStatus: true
     }).populate('learningId', 'name').lean();
 
+    // Fetch topics
     const topics = await Topic.find({
       strickStatus: true,
       scoreUpdatedAt: { $exists: true }
@@ -240,55 +241,61 @@ exports.StrikeBothSameDate = async (req, res) => {
     const scoreDateMap = new Map();
     const topicDateMap = new Map();
     const allDatesSet = new Set();
+    const updatedDateSet = new Set(); // For streak check
 
+    // Process scores
     scores.forEach(score => {
-      const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      allDatesSet.add(date);
-      if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
-      scoreDateMap.get(date).push({
+      const formattedDate = moment(score.scoreDate).format('YYYY-MM-DD');
+      allDatesSet.add(formattedDate);
+      if (!scoreDateMap.has(formattedDate)) scoreDateMap.set(formattedDate, []);
+      scoreDateMap.get(formattedDate).push({
         strickStatus: score.strickStatus,
         score: score.score,
-        updatedAt:score.updatedAt,
-        scoreDate:score.scoreDate,
+        updatedAt: score.updatedAt,
+        scoreDate: score.scoreDate,
         type: 'practice'
       });
+
+      // Add updatedAt date for streak
+      updatedDateSet.add(moment(score.updatedAt).format('YYYY-MM-DD'));
     });
 
+    // Process topics
     topics.forEach(topic => {
-      const date = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
-      allDatesSet.add(date);
-      if (!topicDateMap.has(date)) topicDateMap.set(date, []);
-      topicDateMap.get(date).push({
+      const formattedDate = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
+      allDatesSet.add(formattedDate);
+      if (!topicDateMap.has(formattedDate)) topicDateMap.set(formattedDate, []);
+      topicDateMap.get(formattedDate).push({
         strickStatus: topic.strickStatus,
         score: topic.score,
-        updatedAt:topic.updatedAt,
+        updatedAt: topic.updatedAt,
         type: 'topic'
       });
+
+      // Add updatedAt date for streak
+      updatedDateSet.add(moment(topic.updatedAt).format('YYYY-MM-DD'));
     });
 
+    // Combine practice + topic on same date
     const result = [];
     for (let date of allDatesSet) {
       const scoreItems = scoreDateMap.get(date) || [];
       const topicItems = topicDateMap.get(date) || [];
-      const hasPractice = scoreItems.length > 0;
-      const hasTopic = topicItems.length > 0;
-
-      if (hasPractice && hasTopic) {
+      if (scoreItems.length > 0 && topicItems.length > 0) {
         const combined = [...scoreItems, ...topicItems];
         result.push({ date, data: combined });
       }
     }
 
-    result.sort((a, b) => new Date(a.date) - new Date(b.date)); // sort oldest to newest
+    result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Check for streaks
+    const updatedDateArray = Array.from(updatedDateSet).sort((a, b) => new Date(a) - new Date(b));
     let maxStreak = 1;
     let currentStreak = 1;
-
-    for (let i = 1; i < result.length; i++) {
-      const prevDate = moment(result[i - 1].date);
-      const currDate = moment(result[i].date);
-      if (currDate.diff(prevDate, 'days') === 1) {
+    for (let i = 1; i < updatedDateArray.length; i++) {
+      const prev = moment(updatedDateArray[i - 1]);
+      const curr = moment(updatedDateArray[i]);
+      if (curr.diff(prev, 'days') === 1) {
         currentStreak++;
         maxStreak = Math.max(maxStreak, currentStreak);
       } else {
@@ -296,12 +303,10 @@ exports.StrikeBothSameDate = async (req, res) => {
       }
     }
 
-
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-
     const response = { dates: result };
 
-    if (maxStreak >= 3 && markingSetting?.weeklyBonus) {
+    if (maxStreak >= 2 && markingSetting?.weeklyBonus) {
       response.weeklyBonus = markingSetting.weeklyBonus;
     }
 
@@ -312,11 +317,9 @@ exports.StrikeBothSameDate = async (req, res) => {
     return res.status(200).json(response);
   } catch (error) {
     console.error('Error in StrikeBothSameDate:', error);
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
-
-
 
 
 // exports.StrikeBothSameDate = async (req, res) => {
