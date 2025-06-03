@@ -155,7 +155,6 @@ exports.Practicestrike = async (req, res) => {
   }
 };
 
-
 exports.Topicstrikes = async (req, res) => {
   try {
     const topics = await Topic.find({
@@ -224,7 +223,6 @@ exports.Topicstrikes = async (req, res) => {
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const scores = await LearningScore.find({
       userId,
       strickStatus: true
@@ -263,7 +261,6 @@ exports.StrikeBothSameDate = async (req, res) => {
     for (let date of allDatesSet) {
       const scoreItems = scoreDateMap.get(date) || [];
       const topicItems = topicDateMap.get(date) || [];
-
       const hasPractice = scoreItems.length > 0;
       const hasTopic = topicItems.length > 0;
 
@@ -273,7 +270,6 @@ exports.StrikeBothSameDate = async (req, res) => {
       }
     }
 
-   
     result.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     res.status(200).json({ dates: result });

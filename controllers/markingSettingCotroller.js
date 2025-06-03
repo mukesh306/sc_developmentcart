@@ -7,6 +7,8 @@ exports.createOrUpdateSettings = async (req, res) => {
     negativeMarking,
     totalquiz,
     totalnoofquestion,
+    weeklyBonus,
+    monthlyBonus
   } = req.body;
 
   try {
@@ -35,6 +37,14 @@ exports.createOrUpdateSettings = async (req, res) => {
 
     if (totalnoofquestion !== undefined) {
       setting.totalnoofquestion = totalnoofquestion;
+    }
+
+    if (weeklyBonus !== undefined) {
+      setting.weeklyBonus = weeklyBonus;
+    }
+
+    if (monthlyBonus !== undefined) {
+      setting.monthlyBonus = monthlyBonus;
     }
 
     await setting.save();

@@ -14,6 +14,13 @@ const MarkingSettingSchema = new mongoose.Schema({
   totalnoofquestion: {
     type: Number
   },
+  weeklyBonus: {
+    type: Number
+  },
+  monthlyBonus: {
+    type: Number
+  },
+
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
 }, { timestamps: true });
 
