@@ -232,7 +232,7 @@ exports.StrikeBothSameDate = async (req, res) => {
       strickStatus: true
     }).populate('learningId', 'name').lean();
 
-    // Fetch topics
+
     const topics = await Topic.find({
       strickStatus: true,
       scoreUpdatedAt: { $exists: true }
@@ -241,9 +241,8 @@ exports.StrikeBothSameDate = async (req, res) => {
     const scoreDateMap = new Map();
     const topicDateMap = new Map();
     const allDatesSet = new Set();
-    const updatedDateSet = new Set(); // For streak check
+    const updatedDateSet = new Set(); 
 
-    // Process scores
     scores.forEach(score => {
       const formattedDate = moment(score.scoreDate).format('YYYY-MM-DD');
       allDatesSet.add(formattedDate);
@@ -256,11 +255,8 @@ exports.StrikeBothSameDate = async (req, res) => {
         type: 'practice'
       });
 
-      // Add updatedAt date for streak
       updatedDateSet.add(moment(score.updatedAt).format('YYYY-MM-DD'));
     });
-
-    // Process topics
     topics.forEach(topic => {
       const formattedDate = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
       allDatesSet.add(formattedDate);
@@ -272,11 +268,9 @@ exports.StrikeBothSameDate = async (req, res) => {
         type: 'topic'
       });
 
-      // Add updatedAt date for streak
       updatedDateSet.add(moment(topic.updatedAt).format('YYYY-MM-DD'));
     });
 
-    // Combine practice + topic on same date
     const result = [];
     for (let date of allDatesSet) {
       const scoreItems = scoreDateMap.get(date) || [];
