@@ -222,96 +222,95 @@ exports.Topicstrikes = async (req, res) => {
 // };
 
 
-
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
+    const { type = [], startDate, endDate } = req.body;
 
-    // Normalize type from body
-    const typeParam = req.body.type;
-    let types = [];
+    const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
+    const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
 
-    if (!typeParam) {
-      types = ['practice', 'topic']; // default: both
-    } else if (typeof typeParam === 'string') {
-      types = [typeParam.toLowerCase()];
-    } else if (Array.isArray(typeParam)) {
-      types = typeParam.map(t => t.toLowerCase());
+    const scoreQuery = {
+      userId,
+      strickStatus: true,
+    };
+    if (start && end) {
+      scoreQuery.scoreDate = { $gte: start.toDate(), $lte: end.toDate() };
     }
 
-    const isPracticeEnabled = types.includes('practice');
-    const isTopicEnabled = types.includes('topic');
-
-    // Fetch data based on type
-    let scores = [];
-    if (isPracticeEnabled) {
-      scores = await LearningScore.find({
-        userId,
-        strickStatus: true
-      }).populate('learningId', 'name').lean();
+    const topicQuery = {
+      strickStatus: true,
+      scoreUpdatedAt: { $exists: true },
+    };
+    if (start && end) {
+      topicQuery.scoreUpdatedAt = { $gte: start.toDate(), $lte: end.toDate() };
     }
 
-    let topics = [];
-    if (isTopicEnabled) {
-      topics = await Topic.find({
-        strickStatus: true,
-        scoreUpdatedAt: { $exists: true }
-      }).populate('learningId', 'name').lean();
-    }
+    const scores = await LearningScore.find(scoreQuery).populate('learningId', 'name').lean();
+    const topics = await Topic.find(topicQuery).populate('learningId', 'name').lean();
 
     const scoreDateMap = new Map();
     const topicDateMap = new Map();
     const allDatesSet = new Set();
-    const updatedDateSet = new Set(); 
+    const updatedDateSet = new Set();
 
-    // Process scores (practice)
     scores.forEach(score => {
-      const formattedDate = moment(score.scoreDate).format('YYYY-MM-DD');
-      allDatesSet.add(formattedDate);
-      if (!scoreDateMap.has(formattedDate)) scoreDateMap.set(formattedDate, []);
-      scoreDateMap.get(formattedDate).push({
+      const date = moment(score.scoreDate).format('YYYY-MM-DD');
+      allDatesSet.add(date);
+      if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
+      scoreDateMap.get(date).push({
         strickStatus: score.strickStatus,
         score: score.score,
         updatedAt: score.updatedAt,
         scoreDate: score.scoreDate,
-        type: 'practice'
+        type: 'practice',
       });
 
       updatedDateSet.add(moment(score.updatedAt).format('YYYY-MM-DD'));
     });
 
-    // Process topics
     topics.forEach(topic => {
-      const formattedDate = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
-      allDatesSet.add(formattedDate);
-      if (!topicDateMap.has(formattedDate)) topicDateMap.set(formattedDate, []);
-      topicDateMap.get(formattedDate).push({
+      const date = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
+      allDatesSet.add(date);
+      if (!topicDateMap.has(date)) topicDateMap.set(date, []);
+      topicDateMap.get(date).push({
         strickStatus: topic.strickStatus,
         score: topic.score,
         updatedAt: topic.updatedAt,
-        type: 'topic'
+        type: 'topic',
       });
 
       updatedDateSet.add(moment(topic.updatedAt).format('YYYY-MM-DD'));
     });
 
-    // Merge results
     const result = [];
+
     for (let date of allDatesSet) {
-      const scoreItems = isPracticeEnabled ? (scoreDateMap.get(date) || []) : [];
-      const topicItems = isTopicEnabled ? (topicDateMap.get(date) || []) : [];
+      const scoreItems = scoreDateMap.get(date) || [];
+      const topicItems = topicDateMap.get(date) || [];
       const combined = [...scoreItems, ...topicItems];
-      if (combined.length > 0) {
-        result.push({ date, data: combined });
+
+      if (Array.isArray(type) && type.includes('topic') && type.includes('practice')) {
+        if (scoreItems.length > 0 && topicItems.length > 0) {
+          result.push({ date, data: combined });
+        }
+      } else if (type === 'practice' || (Array.isArray(type) && type.length === 1 && type[0] === 'practice')) {
+        if (scoreItems.length > 0) {
+          result.push({ date, data: scoreItems });
+        }
+      } else if (type === 'topic' || (Array.isArray(type) && type.length === 1 && type[0] === 'topic')) {
+        if (topicItems.length > 0) {
+          result.push({ date, data: topicItems });
+        }
       }
     }
 
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Calculate streaks
     const updatedDateArray = Array.from(updatedDateSet).sort((a, b) => new Date(a) - new Date(b));
     let maxStreak = 1;
     let currentStreak = 1;
+
     for (let i = 1; i < updatedDateArray.length; i++) {
       const prev = moment(updatedDateArray[i - 1]);
       const curr = moment(updatedDateArray[i]);
