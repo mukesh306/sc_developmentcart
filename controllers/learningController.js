@@ -221,7 +221,6 @@ exports.Topicstrikes = async (req, res) => {
 //   }
 // };
 
-
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -307,13 +306,22 @@ exports.StrikeBothSameDate = async (req, res) => {
 
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    const updatedDateArray = Array.from(updatedDateSet).sort((a, b) => new Date(a) - new Date(b));
+    // New logic to calculate max streak for both topic and practice on same day
+    const bothTypesDates = [];
+    for (let date of allDatesSet) {
+      if (scoreDateMap.has(date) && topicDateMap.has(date)) {
+        bothTypesDates.push(date);
+      }
+    }
+
+    const sortedBothDates = bothTypesDates.sort((a, b) => new Date(a) - new Date(b));
     let maxStreak = 1;
     let currentStreak = 1;
 
-    for (let i = 1; i < updatedDateArray.length; i++) {
-      const prev = moment(updatedDateArray[i - 1]);
-      const curr = moment(updatedDateArray[i]);
+    for (let i = 1; i < sortedBothDates.length; i++) {
+      const prev = moment(sortedBothDates[i - 1]);
+      const curr = moment(sortedBothDates[i]);
+
       if (curr.diff(prev, 'days') === 1) {
         currentStreak++;
         maxStreak = Math.max(maxStreak, currentStreak);
