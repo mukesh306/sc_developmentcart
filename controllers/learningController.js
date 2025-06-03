@@ -248,6 +248,8 @@ exports.StrikeBothSameDate = async (req, res) => {
       scoreDateMap.get(date).push({
         strickStatus: score.strickStatus,
         score: score.score,
+        updatedAt:score.updatedAt,
+        scoreDate:score.scoreDate,
         type: 'practice'
       });
     });
@@ -259,6 +261,7 @@ exports.StrikeBothSameDate = async (req, res) => {
       topicDateMap.get(date).push({
         strickStatus: topic.strickStatus,
         score: topic.score,
+        updatedAt:topic.updatedAt,
         type: 'topic'
       });
     });
@@ -298,7 +301,7 @@ exports.StrikeBothSameDate = async (req, res) => {
 
     const response = { dates: result };
 
-    if (maxStreak >= 2 && markingSetting?.weeklyBonus) {
+    if (maxStreak >= 3 && markingSetting?.weeklyBonus) {
       response.weeklyBonus = markingSetting.weeklyBonus;
     }
 
