@@ -13,12 +13,12 @@ exports.createLocation = async (req, res) => {
       return res.status(400).json({ message: 'Invalid location type.' });
     }
 
-    // For state and city, parentId must be provided
+   
     if ((type === 'state' || type === 'city') && !parentId) {
       return res.status(400).json({ message: 'Parent ID is required for state and city.' });
     }
 
-    // Validate parent exists
+ 
     if (parentId) {
       const parent = await location.findById(parentId);
       if (!parent) {
@@ -104,17 +104,17 @@ exports.deleteLocation = async (req, res) => {
         return res.status(400).json({ message: 'Cannot delete state because it has cities.' });
       }
 
-      // Safe to delete state
+      
       await location.findByIdAndDelete(id);
       return res.status(200).json({ message: 'State deleted successfully.' });
     }
 
     if (locationToDelete.type === 'country') {
-      // Check for any states under country
+     
       const states = await location.find({ parent: id, type: 'state' });
 
       if (states.length > 0) {
-        // Check if any of those states have cities
+       
         const stateIds = states.map(s => s._id);
         const cities = await location.find({ parent: { $in: stateIds }, type: 'city' });
 
@@ -125,12 +125,11 @@ exports.deleteLocation = async (req, res) => {
         return res.status(400).json({ message: 'Cannot delete country because it has states.' });
       }
 
-      // Safe to delete country
+   
       await location.findByIdAndDelete(id);
       return res.status(200).json({ message: 'Country deleted successfully.' });
     }
 
-    // Fallback (should not happen)
     res.status(400).json({ message: 'Invalid location type.' });
 
   } catch (error) {

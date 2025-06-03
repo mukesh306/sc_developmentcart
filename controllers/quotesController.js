@@ -35,38 +35,6 @@ exports.updateQuote = async (req, res) => {
 };
 
 
-// exports.StatusUpdateQuote = async (req, res) => {
-//   try {
-//     const quoteId = req.params.id;
-//     const { Status } = req.body;
-
-//     if (typeof Status === 'undefined') {
-//       return res.status(400).json({ message: 'Status is required for update.' });
-//     }
-
-//     if (Status === "Published") {
-//       const existingPublicQuote = await Quotes.findOne({ Status: "Published", _id: { $ne: quoteId } });
-
-//       if (existingPublicQuote) {
-       
-//         await Quotes.findByIdAndUpdate(existingPublicQuote._id, { Status: "Used" });
-//       }
-//     }
-//     const updated = await Quotes.findByIdAndUpdate(
-//       quoteId,
-//       { Status },
-//       { new: true }
-//     );
-//     if (!updated) {
-//       return res.status(404).json({ message: 'Quote not found.' });
-//     }
-//     res.status(200).json({ message: 'Quote status updated successfully.', data: updated });
-//   } catch (error) {
-//     res.status(500).json({ message: 'Error updating quote status.', error: error.message });
-//   }
-// };
-
-
 
 exports.StatusUpdateQuote = async (req, res) => {
   try {
