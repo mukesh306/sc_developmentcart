@@ -19,6 +19,6 @@ jobs:
         chmod 600 ~/.ssh/id_rsa
         ssh-keyscan -p 19021 -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-    - name: Run command on remote server
+    - name: Run command on remote server.
       run: |
         ssh -p 19021 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "hostname && uptime"
