@@ -330,7 +330,7 @@ exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
     const { isvideo, isdescription } = req.query;
-    const userId = req.user?._id; 
+    const userId = req.user._id;
 
     let topic = await Topic.findById(id)
       .populate('learningId')
@@ -341,11 +341,6 @@ exports.getTopicById = async (req, res) => {
     }
 
     let updated = false;
-
-    // Track the original values before update
-    const originalIsVideo = topic.isvideo;
-    const originalIsDescription = topic.isdescription;
-
     if (isvideo !== undefined) {
       topic.isvideo = isvideo === 'true';
       updated = true;
@@ -366,18 +361,15 @@ exports.getTopicById = async (req, res) => {
     if (updated) {
       await topic.save();
 
-      // Save record in DescriptionVideo only if isvideo or isdescription changed
-      if ((isvideo !== undefined && topic.isvideo !== originalIsVideo) ||
-          (isdescription !== undefined && topic.isdescription !== originalIsDescription)) {
-        await DescriptionVideo.create({
-          userId,
-          topicId: topic._id,
-          learningId: topic.learningId?._id || topic.learningId,
-          isvideo: topic.isvideo,
-          isdescription: topic.isdescription,
-          scoreDate: new Date()
-        });
-      }
+      // Save to descriptionvideo model
+      await DescriptionVideo.create({
+        userId,
+        topicId: topic._id,
+        learningId: topic.learningId?._id || null,
+        isvideo: topic.isvideo,
+        isdescription: topic.isdescription,
+        scoreDate: new Date()
+      });
     }
 
     const topicObj = topic.toObject();
