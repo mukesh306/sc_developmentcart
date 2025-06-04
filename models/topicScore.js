@@ -2,7 +2,6 @@ const mongoose = require('mongoose');
 
 const topicScoreSchema = new mongoose.Schema({
   userId: { type: mongoose.Schema.Types.ObjectId, ref: 'Users', required: true },
-  learningId: { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings', required: true },
   topicId: { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings', required: true },
   score: { type: Number },
   totalQuestions: { type: Number },
