@@ -154,7 +154,7 @@ exports.scoreCard = async (req, res) => {
     const userId = req.user._id;
 
     const scores = await TopicScore.find({ userId })
-      .populate('topicId', 'name')
+      .populate('topicId', 'topic')
       .sort({ scoreDate: -1 });
 
     res.status(200).json({ scores });
