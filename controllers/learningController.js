@@ -90,47 +90,45 @@ exports.updateLearning = async (req, res) => {
   }
 };
 
+
 exports.scoreCard = async (req, res) => {
   try {
     const user = req.user;
 
-    if (!user || !user._id || !user.className) {
-      return res.status(400).json({ message: 'User or class information is missing.' });
+    if (!user || !user.className) {
+      return res.status(400).json({ message: 'User class is missing.' });
     }
 
-    const userId = new mongoose.Types.ObjectId(user._id);
     const classId = new mongoose.Types.ObjectId(user.className);
 
+    // Fetch TopicScores for the user and populate topicId with matching classId
     const topicScores = await TopicScore.find({
-      userId,
+      userId: user._id,
       score: { $ne: null },
       scoreDate: { $exists: true }
     })
-      .sort({ scoreDate: 1 }) 
+      .sort({ scoreDate: 1 })
       .populate({
         path: 'topicId',
-        match: { classId },
-        select: 'topic learningId classId',
-        populate: {
-          path: 'learningId',
-          select: 'title description'
-        }
+        match: { classId }, // filter only topics matching user's class
+        select: 'topic learningId'
       })
       .lean();
 
     if (!topicScores.length) {
-      return res.status(404).json({ message: 'No scored topics found for this user.' });
+      return res.status(404).json({ message: 'No scored topics found for this class.' });
     }
 
-    const seenDates = new Set();
     const firstScoredTopicsPerDay = [];
+    const seenDates = new Set();
 
     for (const score of topicScores) {
-      if (!score.topicId) continue; 
+      if (!score.topicId) continue; // skip if topic was not matched/populated
 
       const dateKey = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!seenDates.has(dateKey)) {
         seenDates.add(dateKey);
+
         firstScoredTopicsPerDay.push({
           topic: score.topicId.topic,
           learning: score.topicId.learningId,
@@ -146,10 +144,11 @@ exports.scoreCard = async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error in scoreCard:', error);
+    console.error('Error fetching first scored topic per day:', error);
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 exports.Practicestrike = async (req, res) => {
