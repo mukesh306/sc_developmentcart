@@ -8,6 +8,7 @@ const MarkingSetting = require('../models/markingSetting');
 const Topic = require('../models/topic');
 const TopicScore = require('../models/topicScore');
 
+
 exports.createLearning = async (req, res) => {
   try {
     const { name} = req.body;

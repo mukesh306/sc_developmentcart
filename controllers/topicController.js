@@ -12,6 +12,8 @@ const MarkingSetting = require('../models/markingSetting');
 const Learning = require('../models/learning'); 
 const LearningScore = require('../models/learningScore');
 const TopicScore = require('../models/topicScore');
+const DescriptionVideo = require('../models/descriptionvideo'); 
+
 
 exports.createTopicWithQuiz = async (req, res) => {
   try {
@@ -264,10 +266,71 @@ exports.TopicWithLeaning = async (req, res) => {
 };
 
 
+// exports.getTopicById = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { isvideo, isdescription } = req.query;
+
+//     let topic = await Topic.findById(id)
+//       .populate('learningId')
+//       .populate('createdBy', 'email');
+
+//     if (!topic) {
+//       return res.status(404).json({ message: 'Topic not found.' });
+//     }
+
+//     let updated = false;
+//     if (isvideo !== undefined) {
+//       topic.isvideo = isvideo === 'true' ? 'true' : 'false';
+//       updated = true;
+//     }
+
+//     if (isdescription !== undefined) {
+//       topic.isdescription = isdescription === 'true' ? 'true' : 'false';
+//       updated = true;
+//     }
+
+//     if (!topic.testTimeInSeconds || topic.testTimeInSeconds === 0) {
+//       if (topic.testTime && topic.testTime > 0) {
+//         topic.testTimeInSeconds = topic.testTime * 60;
+//         updated = true;
+//       }
+//     }
+
+//     if (updated) {
+//       await topic.save();
+//     }
+
+//     const topicObj = topic.toObject();
+
+//     topicObj.testTimeInSeconds = topic.testTimeInSeconds || 0;
+//     let classInfo = await School.findById(topic.classId).lean();
+//     if (!classInfo) {
+//       classInfo = await College.findById(topic.classId).lean();
+//     }
+//     topicObj.classInfo = classInfo || null;
+
+//     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
+//     topicObj.quizzes = quizzes || [];
+//     res.status(200).json({
+//       message: 'Topic fetched successfully.',
+//       data: topicObj
+//     });
+//   } catch (error) {
+//     console.error('Error fetching topic by ID:', error);
+//     res.status(500).json({
+//       message: 'Error fetching topic.',
+//       error: error.message
+//     });
+//   }
+// };
+
+
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
     const { isvideo, isdescription } = req.query;
+    const userId = req.user?._id; 
 
     let topic = await Topic.findById(id)
       .populate('learningId')
@@ -278,13 +341,18 @@ exports.getTopicById = async (req, res) => {
     }
 
     let updated = false;
+
+    // Track the original values before update
+    const originalIsVideo = topic.isvideo;
+    const originalIsDescription = topic.isdescription;
+
     if (isvideo !== undefined) {
-      topic.isvideo = isvideo === 'true' ? 'true' : 'false';
+      topic.isvideo = isvideo === 'true';
       updated = true;
     }
 
     if (isdescription !== undefined) {
-      topic.isdescription = isdescription === 'true' ? 'true' : 'false';
+      topic.isdescription = isdescription === 'true';
       updated = true;
     }
 
@@ -297,11 +365,24 @@ exports.getTopicById = async (req, res) => {
 
     if (updated) {
       await topic.save();
+
+      // Save record in DescriptionVideo only if isvideo or isdescription changed
+      if ((isvideo !== undefined && topic.isvideo !== originalIsVideo) ||
+          (isdescription !== undefined && topic.isdescription !== originalIsDescription)) {
+        await DescriptionVideo.create({
+          userId,
+          topicId: topic._id,
+          learningId: topic.learningId?._id || topic.learningId,
+          isvideo: topic.isvideo,
+          isdescription: topic.isdescription,
+          scoreDate: new Date()
+        });
+      }
     }
 
     const topicObj = topic.toObject();
-
     topicObj.testTimeInSeconds = topic.testTimeInSeconds || 0;
+
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
@@ -310,10 +391,12 @@ exports.getTopicById = async (req, res) => {
 
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
+
     res.status(200).json({
       message: 'Topic fetched successfully.',
       data: topicObj
     });
+
   } catch (error) {
     console.error('Error fetching topic by ID:', error);
     res.status(500).json({
@@ -322,6 +405,7 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
+
 
 
 
@@ -470,6 +554,7 @@ exports.updateTestTimeInSeconds = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.calculateQuizScore = async (req, res) => {
