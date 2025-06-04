@@ -568,10 +568,10 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 exports.calculateQuizScore = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { topicId, topicTotalMarks, negativeMarking: inputNegativeMarking, learningId } = req.body;
+    const { topicId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
 
-    if (!topicId || !learningId) {
-      return res.status(400).json({ message: 'topicId and learningId are required.' });
+    if (!topicId ) {
+      return res.status(400).json({ message: 'topicId  are required.' });
     }
 
     const topic = await Topic.findById(topicId);
