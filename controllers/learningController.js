@@ -221,6 +221,9 @@ exports.Topicstrikes = async (req, res) => {
 //   }
 // };
 
+
+
+
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -251,7 +254,6 @@ exports.StrikeBothSameDate = async (req, res) => {
     const scoreDateMap = new Map();
     const topicDateMap = new Map();
     const allDatesSet = new Set();
-    const updatedDateSet = new Set();
 
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
@@ -263,9 +265,8 @@ exports.StrikeBothSameDate = async (req, res) => {
         updatedAt: score.updatedAt,
         scoreDate: score.scoreDate,
         type: 'practice',
+        learningId: score.learningId
       });
-
-      updatedDateSet.add(moment(score.updatedAt).format('YYYY-MM-DD'));
     });
 
     topics.forEach(topic => {
@@ -277,9 +278,8 @@ exports.StrikeBothSameDate = async (req, res) => {
         score: topic.score,
         updatedAt: topic.updatedAt,
         type: 'topic',
+        learningId: topic.learningId
       });
-
-      updatedDateSet.add(moment(topic.updatedAt).format('YYYY-MM-DD'));
     });
 
     const result = [];
@@ -306,7 +306,7 @@ exports.StrikeBothSameDate = async (req, res) => {
 
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // New logic to calculate max streak for both topic and practice on same day
+    // Calculate largest streak of consecutive days with both topic and practice
     const bothTypesDates = [];
     for (let date of allDatesSet) {
       if (scoreDateMap.has(date) && topicDateMap.has(date)) {
@@ -315,8 +315,16 @@ exports.StrikeBothSameDate = async (req, res) => {
     }
 
     const sortedBothDates = bothTypesDates.sort((a, b) => new Date(a) - new Date(b));
-    let maxStreak = 1;
+
+    let maxStreak = 0;
     let currentStreak = 1;
+    let streakStart = null;
+    let streakEnd = null;
+    let tempStart = null;
+
+    if (sortedBothDates.length > 0) {
+      tempStart = sortedBothDates[0];
+    }
 
     for (let i = 1; i < sortedBothDates.length; i++) {
       const prev = moment(sortedBothDates[i - 1]);
@@ -324,14 +332,33 @@ exports.StrikeBothSameDate = async (req, res) => {
 
       if (curr.diff(prev, 'days') === 1) {
         currentStreak++;
-        maxStreak = Math.max(maxStreak, currentStreak);
       } else {
+        if (currentStreak > maxStreak) {
+          maxStreak = currentStreak;
+          streakStart = tempStart;
+          streakEnd = sortedBothDates[i - 1];
+        }
         currentStreak = 1;
+        tempStart = sortedBothDates[i];
       }
     }
 
+    // Final check after loop
+    if (currentStreak > maxStreak) {
+      maxStreak = currentStreak;
+      streakStart = tempStart;
+      streakEnd = sortedBothDates[sortedBothDates.length - 1];
+    }
+
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-    const response = { dates: result };
+    const response = {
+      dates: result,
+      largestStreak: {
+        count: maxStreak,
+        startDate: streakStart || null,
+        endDate: streakEnd || null,
+      },
+    };
 
     if (maxStreak >= 7 && markingSetting?.weeklyBonus) {
       response.weeklyBonus = markingSetting.weeklyBonus;
@@ -347,6 +374,7 @@ exports.StrikeBothSameDate = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.StrikeBothSameDate = async (req, res) => {
