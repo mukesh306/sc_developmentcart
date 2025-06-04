@@ -427,14 +427,13 @@ exports.TopicWithLeaning = async (req, res) => {
 //   }
 // };
 
-
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
     const { isvideo, isdescription } = req.query;
     const userId = req.user._id;
 
-    let topic = await Topic.findById(id)
+    const topic = await Topic.findById(id)
       .populate('learningId')
       .populate('createdBy', 'email');
 
@@ -442,6 +441,9 @@ exports.getTopicById = async (req, res) => {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
+    let savedDescription = null;
+
+    // Create and retrieve description entry if query params are provided
     if (isvideo !== undefined || isdescription !== undefined) {
       await DescriptionVideo.create({
         userId,
@@ -451,6 +453,13 @@ exports.getTopicById = async (req, res) => {
         isdescription: isdescription === 'true',
         scoreDate: new Date()
       });
+
+      // Fetch the saved description
+      savedDescription = await DescriptionVideo.findOne({
+        userId,
+        topicId: topic._id,
+        learningId: topic.learningId?._id || null
+      }).select('-__v -createdAt -updatedAt');
     }
 
     const topicObj = topic.toObject();
@@ -465,6 +474,10 @@ exports.getTopicById = async (req, res) => {
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
+    if (savedDescription) {
+      topicObj.descriptionVideo = savedDescription;
+    }
+
     res.status(200).json({
       message: 'Topic fetched successfully.',
       data: topicObj
@@ -478,7 +491,6 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
-
 
 exports.submitQuiz = async (req, res) => {
   try {
