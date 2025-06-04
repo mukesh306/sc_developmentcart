@@ -1,56 +1,24 @@
-name: 🚀 Deploy Node.js App to Server
+name: Remote SSH Deploy
 
 on:
   push:
-    branches:
-      - main  # Change if your branch is different
+    branches: main
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-    - name: Checkout code
+    - name: Checkout Code
       uses: actions/checkout@v4
 
-    - name: Set up Node.js
-      uses: actions/setup-node@v4
-      with:
-        node-version: '20'
+    - name: Set up SSH key
+      run: |
+        mkdir -p ~/.ssh
+        echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+        chmod 600 ~/.ssh/id_rsa
+        ssh-keyscan -p 19021 -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
 
-    - name: Cleanup server before copy (excluding .env and ecosystem.config.js)
-      uses: appleboy/ssh-action@master
-      with:
-        host: 157.20.190.21
-        username: ubuntu
-        password: r@ck@1234$#@!
-        port: 22
-        script: |
-          if [ -d "/var/www/html/shiksha_new_backend" ]; then
-            echo "Directory exists. Cleaning up except .env and ecosystem.config.js..."
-            find /var/www/html/shiksha_new_backend -mindepth 1 ! -name '.env' ! -name 'ecosystem.config.js' -exec rm -rf {} +
-          else
-            echo "Directory does not exist. Skipping cleanup."
-          fi
-
-    - name: Copy files to server (scp)
-      uses: appleboy/scp-action@master
-      with:
-        host: 157.20.190.21
-        username: ubuntu
-        password: r@ck@1234$#@!
-        port: 22
-        source: "."
-        target: "/var/www/html/shiksha_new_backend"
-
-    - name: SSH and deploy app
-      uses: appleboy/ssh-action@master
-      with:
-        host: 157.20.190.21
-        username: ubuntu
-        password: r@ck@1234$#@!
-        port: 22
-        script: |
-          cd /var/www/html/shiksha_new_backend
-          npm install
-          pm2 restart 0
+    - name: Run command on remote server
+      run: |
+        ssh -p 19021 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "hostname && uptime"
