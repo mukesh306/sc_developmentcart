@@ -31,7 +31,7 @@ router.post('/saveQuizAnswer',auth,topicController.submitQuizAnswer);
 
 router.post('/calculateQuizScore',auth,topicController.calculateQuizScore);
 
-router.get('/getUserScoresByDate',auth,topicController.getUserScoresByDate);
+router.get('/PracticescoreCard',auth,topicController.PracticescoreCard);
 
 router.get('/getTopicById/:id',topicController.getTopicById);
 
