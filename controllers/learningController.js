@@ -149,10 +149,10 @@ exports.updateLearning = async (req, res) => {
 //   }
 // };
 
+
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const scores = await TopicScore.find({ userId })
       .populate('topicId', 'topic')
       .sort({ scoreDate: -1 });

@@ -564,17 +564,16 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //   }
 // };
 
-
 exports.calculateQuizScore = async (req, res) => {
   try {
     const userId = req.user._id;
     const { topicId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
 
-    if (!topicId ) {
-      return res.status(400).json({ message: 'topicId  are required.' });
+    if (!topicId) {
+      return res.status(400).json({ message: 'topicId is required.' });
     }
 
-    const topic = await Topic.findById(topicId);
+    const topic = await Topic.findById(topicId).lean();
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found.' });
     }
@@ -586,6 +585,7 @@ exports.calculateQuizScore = async (req, res) => {
     }
 
     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
+
     const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
       ? topicTotalMarks / totalQuestions
       : (markingSetting?.maxMarkPerQuestion || 1);
@@ -625,6 +625,7 @@ exports.calculateQuizScore = async (req, res) => {
       await TopicScore.create({
         userId,
         topicId,
+        learningId: topic.learningId, // ✅ save learningId
         score: roundedScorePercent,
         totalQuestions,
         answeredQuestions,
