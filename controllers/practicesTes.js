@@ -11,7 +11,7 @@ const PracticesQuizAnswer = require('../models/practicestest');
 const MarkingSetting = require('../models/markingSetting'); 
 const Learning = require('../models/learning'); 
 const LearningScore = require('../models/learningScore');
-
+const User = require('../models/User');
 
 
 exports.PracticeTest = async (req, res) => {
