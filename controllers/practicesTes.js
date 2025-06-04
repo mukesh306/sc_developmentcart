@@ -243,7 +243,7 @@ exports.TopicWithLeaningpractice = async (req, res) => {
 
     res.status(200).json({
       learningName: learningData.name,
-      score, // 👈 Only first score
+      score, 
       topics: unlockedTopics
     });
 
