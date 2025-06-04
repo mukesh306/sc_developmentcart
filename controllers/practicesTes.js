@@ -252,3 +252,52 @@ exports.TopicWithLeaningpractice = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+exports.PracticescoreCard = async (req, res) => {
+  try {
+    const user = req.user;
+
+    if (!user || !user.className) {
+      return res.status(400).json({ message: 'User class is missing.' });
+    }
+
+    const classId = new mongoose.Types.ObjectId(user.className);
+
+    const topics = await LearningScore.find({
+      classId,
+      score: { $ne: null },
+      scoreUpdatedAt: { $exists: true }
+    })
+      .sort({ scoreUpdatedAt: 1 }) 
+      .select('topic scoreUpdatedAt learningId score')
+      .populate('learningId')
+      .lean();
+
+
+    if (!topics.length) {
+      return res.status(404).json({ message: 'No scored topics found for this class.' });
+    }
+
+    const firstScoredTopicsPerDay = [];
+    const seenDates = new Set();
+
+    for (const topic of topics) {
+      const dateKey = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
+      if (!seenDates.has(dateKey)) {
+        seenDates.add(dateKey);
+        firstScoredTopicsPerDay.push(topic);
+      }
+    }
+
+    res.status(200).json({
+      message: 'First scored topic per day fetched successfully.',
+      topics: firstScoredTopicsPerDay
+    });
+
+  } catch (error) {
+    console.error('Error fetching first scored topic per day:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
