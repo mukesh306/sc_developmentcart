@@ -625,7 +625,6 @@ exports.calculateQuizScore = async (req, res) => {
       await TopicScore.create({
         userId,
         topicId,
-        learningId,
         score: roundedScorePercent,
         totalQuestions,
         answeredQuestions,
