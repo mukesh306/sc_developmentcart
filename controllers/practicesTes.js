@@ -190,8 +190,6 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
 exports.TopicWithLeaningpractice = async (req, res) => {
   try {
     const { id } = req.params;
@@ -227,27 +225,13 @@ exports.TopicWithLeaningpractice = async (req, res) => {
       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
     }
 
-    // 👇 Get first LearningScore record for user and learningId
-    const firstLearningScore = await LearningScore.findOne({
+    // ✅ Fetch first score from LearningScore
+    const firstScoreRecord = await LearningScore.findOne({
       userId: user._id,
       learningId: id
     }).sort({ createdAt: 1 }).lean();
 
-    const averageScore = firstLearningScore ? firstLearningScore.score : null;
-
-    const assignedRecord = await Assigned.findOne({ classId: query.classId });
-    if (assignedRecord) {
-      if (assignedRecord.learning?.toString() === id) {
-        assignedRecord.learningAverage = averageScore;
-      } else if (assignedRecord.learning2?.toString() === id) {
-        assignedRecord.learning2Average = averageScore;
-      } else if (assignedRecord.learning3?.toString() === id) {
-        assignedRecord.learning3Average = averageScore;
-      } else if (assignedRecord.learning4?.toString() === id) {
-        assignedRecord.learning4Average = averageScore;
-      }
-      await assignedRecord.save();
-    }
+    const score = firstScoreRecord ? firstScoreRecord.score : null;
 
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
       if (topic.score === null || topic.score === undefined) {
@@ -259,7 +243,7 @@ exports.TopicWithLeaningpractice = async (req, res) => {
 
     res.status(200).json({
       learningName: learningData.name,
-      averageScore,
+      score, // 👈 Only first score
       topics: unlockedTopics
     });
 
