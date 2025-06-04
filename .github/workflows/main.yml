@@ -32,7 +32,7 @@ jobs:
             git pull origin UAT
 
             echo "Building and starting services (zero downtime attempt)"
-            docker-compose up -d --build
+            docker compose up -d --build
 
             echo "Deployment completed with minimal downtime"
           EOF
