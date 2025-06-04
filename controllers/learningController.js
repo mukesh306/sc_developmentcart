@@ -6,6 +6,7 @@ const Assigned = require('../models/assignlearning');
 const LearningScore = require('../models/learningScore');
 const MarkingSetting = require('../models/markingSetting');
 const Topic = require('../models/topic');
+const TopicScore = require('../models/topicScore');
 
 exports.createLearning = async (req, res) => {
   try {
@@ -89,53 +90,66 @@ exports.updateLearning = async (req, res) => {
   }
 };
 
-
 exports.scoreCard = async (req, res) => {
   try {
     const user = req.user;
 
-    if (!user || !user.className) {
-      return res.status(400).json({ message: 'User class is missing.' });
+    if (!user || !user._id || !user.className) {
+      return res.status(400).json({ message: 'User or class information is missing.' });
     }
 
+    const userId = new mongoose.Types.ObjectId(user._id);
     const classId = new mongoose.Types.ObjectId(user.className);
 
-    const topics = await Topic.find({
-      classId,
+    const topicScores = await TopicScore.find({
+      userId,
       score: { $ne: null },
-      scoreUpdatedAt: { $exists: true }
+      scoreDate: { $exists: true }
     })
-      .sort({ scoreUpdatedAt: 1 }) 
-      .select('topic scoreUpdatedAt learningId score')
-      .populate('learningId')
+      .sort({ scoreDate: 1 }) 
+      .populate({
+        path: 'topicId',
+        match: { classId },
+        select: 'topic learningId classId',
+        populate: {
+          path: 'learningId',
+          select: 'title description'
+        }
+      })
       .lean();
 
-    if (!topics.length) {
-      return res.status(404).json({ message: 'No scored topics found for this class.' });
+    if (!topicScores.length) {
+      return res.status(404).json({ message: 'No scored topics found for this user.' });
     }
 
-    const firstScoredTopicsPerDay = [];
     const seenDates = new Set();
+    const firstScoredTopicsPerDay = [];
 
-    for (const topic of topics) {
-      const dateKey = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
+    for (const score of topicScores) {
+      if (!score.topicId) continue; 
+
+      const dateKey = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!seenDates.has(dateKey)) {
         seenDates.add(dateKey);
-        firstScoredTopicsPerDay.push(topic);
+        firstScoredTopicsPerDay.push({
+          topic: score.topicId.topic,
+          learning: score.topicId.learningId,
+          score: score.score,
+          scoreDate: score.scoreDate
+        });
       }
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       message: 'First scored topic per day fetched successfully.',
       topics: firstScoredTopicsPerDay
     });
 
   } catch (error) {
-    console.error('Error fetching first scored topic per day:', error);
-    res.status(500).json({ message: error.message });
+    console.error('Error in scoreCard:', error);
+    return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 exports.Practicestrike = async (req, res) => {
