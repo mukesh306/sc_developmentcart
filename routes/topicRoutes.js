@@ -33,7 +33,7 @@ router.post('/calculateQuizScore',auth,topicController.calculateQuizScore);
 
 router.get('/PracticescoreCard',auth,topicController.PracticescoreCard);
 
-router.get('/getTopicById/:id',topicController.getTopicById);
+router.get('/getTopicById/:id',auth,topicController.getTopicById);
 
 
 router.post('/topics/:topicId', topicController.updateTestTimeInSeconds);
