@@ -91,65 +91,78 @@ exports.updateLearning = async (req, res) => {
 };
 
 
+// exports.scoreCard = async (req, res) => {
+//   try {
+//     const user = req.user;
+
+//     if (!user || !user.className) {
+//       return res.status(400).json({ message: 'User class is missing.' });
+//     }
+
+//     const classId = new mongoose.Types.ObjectId(user.className);
+
+//     // Fetch TopicScores for the user and populate topicId with matching classId
+//     const topicScores = await TopicScore.find({
+//       userId: user._id,
+//       score: { $ne: null },
+//       scoreDate: { $exists: true }
+//     })
+//       .sort({ scoreDate: 1 })
+//       .populate({
+//         path: 'topicId',
+//         match: { classId }, 
+//         select: 'topic learningId'
+//       })
+//       .lean();
+
+//     if (!topicScores.length) {
+//       return res.status(404).json({ message: 'No scored topics found for this class.' });
+//     }
+
+//     const firstScoredTopicsPerDay = [];
+//     const seenDates = new Set();
+
+//     for (const score of topicScores) {
+//       if (!score.topicId) continue; 
+
+//       const dateKey = moment(score.scoreDate).format('YYYY-MM-DD');
+//       if (!seenDates.has(dateKey)) {
+//         seenDates.add(dateKey);
+
+//         firstScoredTopicsPerDay.push({
+//           topic: score.topicId.topic,
+//           learning: score.topicId.learningId,
+//           score: score.score,
+//           scoreDate: score.scoreDate
+//         });
+//       }
+//     }
+
+//     return res.status(200).json({
+//       message: 'First scored topic per day fetched successfully.',
+//       topics: firstScoredTopicsPerDay
+//     });
+
+//   } catch (error) {
+//     console.error('Error fetching first scored topic per day:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.scoreCard = async (req, res) => {
   try {
-    const user = req.user;
+    const userId = req.user._id;
 
-    if (!user || !user.className) {
-      return res.status(400).json({ message: 'User class is missing.' });
-    }
+    const scores = await TopicScore.find({ userId })
+      .populate('topicId', 'name')
+      .sort({ scoreDate: -1 });
 
-    const classId = new mongoose.Types.ObjectId(user.className);
-
-    // Fetch TopicScores for the user and populate topicId with matching classId
-    const topicScores = await TopicScore.find({
-      userId: user._id,
-      score: { $ne: null },
-      scoreDate: { $exists: true }
-    })
-      .sort({ scoreDate: 1 })
-      .populate({
-        path: 'topicId',
-        match: { classId }, // filter only topics matching user's class
-        select: 'topic learningId'
-      })
-      .lean();
-
-    if (!topicScores.length) {
-      return res.status(404).json({ message: 'No scored topics found for this class.' });
-    }
-
-    const firstScoredTopicsPerDay = [];
-    const seenDates = new Set();
-
-    for (const score of topicScores) {
-      if (!score.topicId) continue; // skip if topic was not matched/populated
-
-      const dateKey = moment(score.scoreDate).format('YYYY-MM-DD');
-      if (!seenDates.has(dateKey)) {
-        seenDates.add(dateKey);
-
-        firstScoredTopicsPerDay.push({
-          topic: score.topicId.topic,
-          learning: score.topicId.learningId,
-          score: score.score,
-          scoreDate: score.scoreDate
-        });
-      }
-    }
-
-    return res.status(200).json({
-      message: 'First scored topic per day fetched successfully.',
-      topics: firstScoredTopicsPerDay
-    });
-
+    res.status(200).json({ scores });
   } catch (error) {
-    console.error('Error fetching first scored topic per day:', error);
-    return res.status(500).json({ message: error.message });
+    console.error('Error in getUserScoresByDate:', error);
+    res.status(500).json({ message: error.message });
   }
 };
-
-
 
 exports.Practicestrike = async (req, res) => {
   try {
