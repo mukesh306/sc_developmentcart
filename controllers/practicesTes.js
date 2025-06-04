@@ -254,7 +254,6 @@ exports.TopicWithLeaningpractice = async (req, res) => {
 };
 
 
-
 exports.PracticescoreCard = async (req, res) => {
   try {
     const user = req.user;
@@ -267,14 +266,12 @@ exports.PracticescoreCard = async (req, res) => {
 
     const topics = await LearningScore.find({
       classId,
-      score: { $ne: null },
-      scoreUpdatedAt: { $exists: true }
+      score: { $ne: null }
     })
-      .sort({ scoreUpdatedAt: 1 }) 
-      .select('topic scoreUpdatedAt learningId score')
+      .sort({ createdAt: 1 }) // ✅ Sort by createdAt (first saved)
+      .select('topic createdAt learningId score')
       .populate('learningId')
       .lean();
-
 
     if (!topics.length) {
       return res.status(404).json({ message: 'No scored topics found for this class.' });
@@ -284,7 +281,7 @@ exports.PracticescoreCard = async (req, res) => {
     const seenDates = new Set();
 
     for (const topic of topics) {
-      const dateKey = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
+      const dateKey = moment(topic.createdAt).format('YYYY-MM-DD'); // ✅ Use createdAt
       if (!seenDates.has(dateKey)) {
         seenDates.add(dateKey);
         firstScoredTopicsPerDay.push(topic);
