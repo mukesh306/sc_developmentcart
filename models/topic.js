@@ -22,7 +22,6 @@ totalMarks: { type: Number, default: null },
 negativeMarking: { type: Number, default: null },
 scorePercent: { type: Number, default: null },
 
-
 isdescription: { type: Boolean, default: false },
   strickStatus: { type: Boolean, default: false },
 isvideo: { type: Boolean, default: false },

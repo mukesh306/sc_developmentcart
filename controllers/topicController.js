@@ -11,7 +11,7 @@ const PracticesQuizAnswer = require('../models/practicestest');
 const MarkingSetting = require('../models/markingSetting'); 
 const Learning = require('../models/learning'); 
 const LearningScore = require('../models/learningScore');
-
+const TopicScore = require('../models/topicScore');
 
 exports.createTopicWithQuiz = async (req, res) => {
   try {
@@ -564,13 +564,14 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //   }
 // };
 
+
 exports.calculateQuizScore = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { topicId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
+    const { topicId, topicTotalMarks, negativeMarking: inputNegativeMarking, learningId } = req.body;
 
-    if (!topicId) {
-      return res.status(400).json({ message: 'topicId is required.' });
+    if (!topicId || !learningId) {
+      return res.status(400).json({ message: 'topicId and learningId are required.' });
     }
 
     const topic = await Topic.findById(topicId);
@@ -580,7 +581,6 @@ exports.calculateQuizScore = async (req, res) => {
 
     const allQuizzes = await Quiz.find({ topicId }).lean();
     const totalQuestions = allQuizzes.length;
-
     if (totalQuestions === 0) {
       return res.status(400).json({ message: 'No questions found for this topic.' });
     }
@@ -603,7 +603,6 @@ exports.calculateQuizScore = async (req, res) => {
     for (const answer of answers) {
       const quiz = allQuizzes.find(q => q._id.toString() === answer.questionId.toString());
       if (!quiz) continue;
-
       if (answer.selectedAnswer === quiz.answer) correctCount++;
       else incorrectCount++;
     }
@@ -613,7 +612,6 @@ exports.calculateQuizScore = async (req, res) => {
 
     const positiveMarks = correctCount * maxMarkPerQuestion;
     const negativeMarks = incorrectCount * negativeMarking;
-
     let marksObtained = positiveMarks - negativeMarks;
     if (marksObtained < 0) marksObtained = 0;
 
@@ -621,24 +619,30 @@ exports.calculateQuizScore = async (req, res) => {
     const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
 
-    const alreadyCalculated = topic.score !== null && topic.score !== undefined;
+    const existingScore = await TopicScore.findOne({ userId, topicId });
 
-    if (!alreadyCalculated) {
-      topic.score = roundedScorePercent;
-      topic.totalQuestions = totalQuestions;
-      topic.correctAnswers = correctCount;
-      topic.incorrectAnswers = incorrectCount;
-      topic.skippedQuestions = skippedQuestions;
-      topic.marksObtained = roundedMarks;
-      topic.totalMarks = totalMarks;
-      topic.negativeMarking = negativeMarking;
-      topic.scoreUpdatedAt = new Date();
-      topic.strickStatus = true;
-      await topic.save();
+    if (!existingScore) {
+      await TopicScore.create({
+        userId,
+        topicId,
+        learningId,
+        score: roundedScorePercent,
+        totalQuestions,
+        answeredQuestions,
+        correctAnswers: correctCount,
+        incorrectAnswers: incorrectCount,
+        skippedQuestions,
+        marksObtained: roundedMarks,
+        totalMarks,
+        negativeMarking,
+        scorePercent: roundedScorePercent,
+        scoreDate: new Date(),
+        strickStatus: true
+      });
     }
 
     return res.status(200).json({
-      message: alreadyCalculated
+      message: existingScore
         ? 'Score already saved. Recalculated result returned for display only.'
         : 'Score calculated and saved successfully.',
       totalQuestions,
@@ -652,9 +656,8 @@ exports.calculateQuizScore = async (req, res) => {
       negativeMarking,
       scorePercent: roundedScorePercent,
       testTime: topic.testTime || 0,
-      scoreUpdatedAt: topic.scoreUpdatedAt,
-      updatedAt: topic.updatedAt,
-      strickStatus: topic.strickStatus || false
+      strickStatus: true,
+      scoreUpdatedAt: new Date()
     });
 
   } catch (error) {
