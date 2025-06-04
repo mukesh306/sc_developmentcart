@@ -6,7 +6,7 @@ const auth = require('../middleware/auth');
 
 
 router.post('/PracticeTest',auth,practiceController.PracticeTest);
-router.get('/TopicWithLeaningpractices/:id',auth,practiceController.TopicWithLeaningpractice);
+router.get('/getAssignedListUserpractice',auth,practiceController.getAssignedListUserpractice);
 router.post('/calculatePracticeScore',auth,practiceController.calculateQuizScoreByLearning);
 
 

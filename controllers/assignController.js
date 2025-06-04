@@ -62,14 +62,12 @@ exports.getAssignedListUser = async (req, res) => {
     if (!user || !user.className) {
       return res.status(400).json({ message: 'User className not found.' });
     }
-
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
       .lean();
 
-  
     for (let item of assignedList) {
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
@@ -77,7 +75,6 @@ exports.getAssignedListUser = async (req, res) => {
       }
       item.classInfo = classInfo || null;
     }
-
     res.status(200).json({ data: assignedList });
   } catch (error) {
     console.error('Get Assigned Error:', error);

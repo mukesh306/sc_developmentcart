@@ -190,66 +190,64 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-exports.TopicWithLeaningpractice = async (req, res) => {
+
+
+exports.getAssignedListUserpractice = async (req, res) => {
   try {
-    const { id } = req.params;
-    const { classId: queryClassId } = req.query;
-    const user = req.user;
+    const userId = req.user._id;
 
-    if (!user || user.status !== 'yes') {
-      return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
+    const user = await User.findById(userId).lean();
+    if (!user || !user.className) {
+      return res.status(400).json({ message: 'User className not found.' });
     }
 
-    const registrationDate = moment(user.createdAt).startOf('day');
-    const today = moment().startOf('day');
-    const daysPassed = today.diff(registrationDate, 'days') + 1;
-
-    const query = { learningId: new mongoose.Types.ObjectId(id) };
-    if (queryClassId) {
-      query.classId = new mongoose.Types.ObjectId(queryClassId);
-    } else if (user.className) {
-      query.classId = new mongoose.Types.ObjectId(user.className);
-    }
-
-    const learningData = await Learning.findById(id).select('name').lean();
-    if (!learningData) {
-      return res.status(404).json({ message: 'Learning not found.' });
-    }
-
-    const allTopics = await Topic.find(query)
-      .sort({ createdAt: 1 })
-      .select('topic score createdAt isdescription isvideo')
+    const assignedList = await Assigned.find({ classId: user.className })
+      .populate('learning')
+      .populate('learning2')
+      .populate('learning3')
       .lean();
 
-    if (!allTopics || allTopics.length === 0) {
-      return res.status(404).json({ message: 'No topics found for this learningId or classId' });
+    for (let item of assignedList) {
+      // Add classInfo (from School or College)
+      let classInfo = await School.findById(item.classId).lean();
+      if (!classInfo) {
+        classInfo = await College.findById(item.classId).lean();
+      }
+      item.classInfo = classInfo || null;
+
+      // Fetch first score for learning
+      if (item.learning?._id) {
+        const scoreRecord = await LearningScore.findOne({
+          userId,
+          learningId: item.learning._id
+        }).sort({ createdAt: 1 }).lean();
+        item.learning.firstScore = scoreRecord?.score || null;
+      }
+
+      // Fetch first score for learning2
+      if (item.learning2?._id) {
+        const scoreRecord2 = await LearningScore.findOne({
+          userId,
+          learningId: item.learning2._id
+        }).sort({ createdAt: 1 }).lean();
+        item.learning2.firstScore = scoreRecord2?.score || null;
+      }
+
+      // Fetch first score for learning3
+      if (item.learning3?._id) {
+        const scoreRecord3 = await LearningScore.findOne({
+          userId,
+          learningId: item.learning3._id
+        }).sort({ createdAt: 1 }).lean();
+        item.learning3.firstScore = scoreRecord3?.score || null;
+      }
     }
 
-    // ✅ Fetch first score from LearningScore
-    const firstScoreRecord = await LearningScore.findOne({
-      userId: user._id,
-      learningId: id
-    }).sort({ createdAt: 1 }).lean();
-
-    const score = firstScoreRecord ? firstScoreRecord.score : null;
-
-    const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
-      if (topic.score === null || topic.score === undefined) {
-        const { score, ...rest } = topic;
-        return rest;
-      }
-      return topic;
-    });
-
-    res.status(200).json({
-      learningName: learningData.name,
-      score, 
-      topics: unlockedTopics
-    });
-
+    res.status(200).json({ data: assignedList });
   } catch (error) {
-    console.error('Error fetching topics with learningId:', error);
-    res.status(500).json({ message: error.message });
+    console.error('Get Assigned Error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 
