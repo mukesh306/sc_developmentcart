@@ -340,40 +340,20 @@ exports.getTopicById = async (req, res) => {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
-    let updated = false;
-    if (isvideo !== undefined) {
-      topic.isvideo = isvideo === 'true';
-      updated = true;
-    }
-
-    if (isdescription !== undefined) {
-      topic.isdescription = isdescription === 'true';
-      updated = true;
-    }
-
-    if (!topic.testTimeInSeconds || topic.testTimeInSeconds === 0) {
-      if (topic.testTime && topic.testTime > 0) {
-        topic.testTimeInSeconds = topic.testTime * 60;
-        updated = true;
-      }
-    }
-
-    if (updated) {
-      await topic.save();
-
-      // Save to descriptionvideo model
+    // Save isvideo/isdescription to descriptionvideo model only (no Topic update)
+    if (isvideo !== undefined || isdescription !== undefined) {
       await DescriptionVideo.create({
         userId,
         topicId: topic._id,
         learningId: topic.learningId?._id || null,
-        isvideo: topic.isvideo,
-        isdescription: topic.isdescription,
+        isvideo: isvideo === 'true',
+        isdescription: isdescription === 'true',
         scoreDate: new Date()
       });
     }
 
     const topicObj = topic.toObject();
-    topicObj.testTimeInSeconds = topic.testTimeInSeconds || 0;
+    topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
 
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
@@ -397,6 +377,7 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
+
 
 
 
