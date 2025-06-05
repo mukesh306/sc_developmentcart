@@ -267,6 +267,8 @@ exports.getAllTopicNames = async (req, res) => {
 //   }
 // };
 
+
+
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
@@ -453,14 +455,13 @@ exports.getTopicById = async (req, res) => {
 
     const learningId = topic.learningId?._id || null;
 
-    // Find existing DescriptionVideo for this user/topic
+    // Find or update DescriptionVideo
     let existingRecord = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
       learningId
     });
 
-    // Case 1: Create new if isdescription=true and no record exists
     if (!existingRecord && isdescription === 'true') {
       existingRecord = await DescriptionVideo.create({
         userId,
@@ -472,20 +473,25 @@ exports.getTopicById = async (req, res) => {
       });
     }
 
-    // Case 2: Update existing record if isvideo=true
     if (existingRecord && isvideo === 'true' && !existingRecord.isvideo) {
       existingRecord.isvideo = true;
       await existingRecord.save();
     }
 
-    // Fetch latest DescriptionVideo for this topic and user
     const latestDescription = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
       learningId
     }).sort({ createdAt: -1 }).select('isvideo isdescription');
 
-    // Convert topic to plain object
+    // ✅ Fetch topicScore with only required fields
+    const topicScoreData = await topicScore.findOne({
+      userId,
+      topicId: topic._id
+    }).select(
+      'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
+    ).lean();
+
     const topicObj = topic.toObject();
     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
 
@@ -500,11 +506,27 @@ exports.getTopicById = async (req, res) => {
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
-    // Add isvideo and isdescription to response
+    // Add video/description flags
     topicObj.isvideo = latestDescription?.isvideo || false;
     topicObj.isdescription = latestDescription?.isdescription || false;
 
-    // Final response
+    // 🔥 Add filtered topicScore data directly (flattened)
+    topicObj.score = topicScoreData?.score || 0;
+    topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
+    topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
+    topicObj.correctAnswers = topicScoreData?.correctAnswers || 0;
+    topicObj.incorrectAnswers = topicScoreData?.incorrectAnswers || 0;
+    topicObj.skippedQuestions = topicScoreData?.skippedQuestions || 0;
+    topicObj.marksObtained = topicScoreData?.marksObtained || 0;
+    topicObj.totalMarks = topicScoreData?.totalMarks || 0;
+    topicObj.negativeMarking = topicScoreData?.negativeMarking || 0;
+    topicObj.scorePercent = topicScoreData?.scorePercent || 0;
+    topicObj.strickStatus = topicScoreData?.strickStatus || false;
+    topicObj.scoreDate = topicScoreData?.scoreDate || null;
+    topicObj.createdAt = topicScoreData?.createdAt || null;
+    topicObj.updatedAt = topicScoreData?.updatedAt || null;
+
+    // Send response
     res.status(200).json({
       message: 'Topic fetched successfully.',
       data: topicObj
@@ -518,6 +540,7 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
+
 
 
 
