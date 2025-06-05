@@ -1,0 +1,38 @@
+name: Remote SSH Deploy
+
+on:
+  push:
+    branches:
+      - UAT
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p 19021 -H ${{ secrets.SSH_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy via SSH using Docker Compose (zero downtime)
+        run: |
+          ssh -p 19021 ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} << 'EOF'
+            set -e  # Exit on error
+            
+            # Navigate to app directory
+            cd /home/ubuntu/Docker/SC_Backend
+
+            echo "Pulling latest code from Git"
+            git pull origin UAT
+
+            echo "Building and starting services (zero downtime attempt)"
+            docker compose up -d --build
+
+            echo "Deployment completed with minimal downtime"
+          EOF
