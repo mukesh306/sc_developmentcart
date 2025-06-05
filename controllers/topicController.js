@@ -302,7 +302,7 @@ exports.TopicWithLeaning = async (req, res) => {
       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
     }
 
-    // Fetch descriptionvideo entries for the user + learningId
+    // Fetch DescriptionVideo entries
     const userDescriptionVideos = await DescriptionVideo.find({
       userId: user._id,
       learningId: id
@@ -316,18 +316,28 @@ exports.TopicWithLeaning = async (req, res) => {
       };
     });
 
-  
-    const validScores = allTopics
-      .map(topic => parseFloat(topic.score))
+    // Fetch topic scores
+    const topicScores = await TopicScore.find({
+      userId: user._id,
+      learningId: id
+    }).select('topicId score').lean();
+
+    const scoreMap = {};
+    topicScores.forEach(entry => {
+      scoreMap[entry.topicId.toString()] = entry.score;
+    });
+
+    // Calculate average score from topicScore entries
+    const validScores = topicScores
+      .map(s => parseFloat(s.score))
       .filter(score => !isNaN(score));
 
-    const averageScore =
-      validScores.length > 0
-        ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-        : null;
+    const averageScore = validScores.length > 0
+      ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
+      : null;
 
-  
-    const assignedRecord = await Assigned.findOne({ classId: query.classId });
+    // Update Assigned document if needed
+    const assignedRecord = await Assigned.findOne({ classId: query.classId || user.className });
     if (assignedRecord) {
       if (assignedRecord.learning?.toString() === id) {
         assignedRecord.learningAverage = averageScore;
@@ -341,14 +351,18 @@ exports.TopicWithLeaning = async (req, res) => {
       await assignedRecord.save();
     }
 
-  
+    // Build unlocked topics response
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
-      const extra = descriptionMap[topic._id.toString()] || { isvideo: false, isdescription: false };
-      const { score, ...rest } = topic;
+      const topicIdStr = topic._id.toString();
+      const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
+      const topicScoreValue = scoreMap[topicIdStr] || null;
+
+      const { score, ...rest } = topic; // omit original static topic score
       return {
         ...rest,
         isvideo: extra.isvideo,
-        isdescription: extra.isdescription
+        isdescription: extra.isdescription,
+        score: topicScoreValue
       };
     });
 
@@ -363,9 +377,6 @@ exports.TopicWithLeaning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
-
 
 // exports.getTopicById = async (req, res) => {
 //   try {
