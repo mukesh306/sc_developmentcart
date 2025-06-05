@@ -483,7 +483,7 @@ exports.getTopicById = async (req, res) => {
     }).sort({ createdAt: -1 }).select('isvideo isdescription');
 
     // ✅ Fetch topicScore with only required fields
-    const topicScoreData = await topicScore.findOne({
+    const topicScoreData = await TopicScore.findOne({
       userId,
       topicId: topic._id
     }).select(
