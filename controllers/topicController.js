@@ -268,6 +268,7 @@ exports.getAllTopicNames = async (req, res) => {
 // };
 
 
+
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
@@ -303,7 +304,6 @@ exports.TopicWithLeaning = async (req, res) => {
       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
     }
 
-    // Fetch DescriptionVideo entries
     const userDescriptionVideos = await DescriptionVideo.find({
       userId: user._id,
       learningId: id
@@ -317,7 +317,6 @@ exports.TopicWithLeaning = async (req, res) => {
       };
     });
 
-    // Fetch topic scores
     const topicScores = await TopicScore.find({
       userId: user._id,
       learningId: id
@@ -328,17 +327,17 @@ exports.TopicWithLeaning = async (req, res) => {
       scoreMap[entry.topicId.toString()] = entry.score;
     });
 
-    // ✅ Calculate average score of all available topic scores for this learningId
+    // ✅ Filter out null/undefined scores, but include 0
     const validScores = topicScores
-      .map(s => parseFloat(s.score))
-      .filter(score => !isNaN(score));
+      .filter(s => s.score !== null && s.score !== undefined)
+      .map(s => Number(s.score));
 
     const averageScore = validScores.length > 0
       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
       : null;
 
-    // Update Assigned learning averages
-    const assignedRecord = await Assigned.findOne({ classId: query.classId || user.className });
+    // Update Assigned document with correct average
+    const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
     if (assignedRecord) {
       if (assignedRecord.learning?.toString() === id) {
         assignedRecord.learningAverage = averageScore;
@@ -352,11 +351,11 @@ exports.TopicWithLeaning = async (req, res) => {
       await assignedRecord.save();
     }
 
-    // Build unlocked topics response
+    // ✅ Include score 0 if it exists, keep null if no score
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
       const topicIdStr = topic._id.toString();
       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
-      const topicScoreValue = scoreMap[topicIdStr] ?? null; // allow 0
+      const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : null;
 
       return {
         _id: topic._id,
@@ -379,6 +378,7 @@ exports.TopicWithLeaning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.getTopicById = async (req, res) => {
