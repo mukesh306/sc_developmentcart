@@ -302,6 +302,7 @@ exports.TopicWithLeaning = async (req, res) => {
       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
     }
 
+    // Fetch descriptionvideo entries for the user + learningId
     const userDescriptionVideos = await DescriptionVideo.find({
       userId: user._id,
       learningId: id
@@ -315,20 +316,7 @@ exports.TopicWithLeaning = async (req, res) => {
       };
     });
 
-    // 🆕 Fetch topic scores for this user and learningId
-    const topicScores = await topicScore.find({
-      userId: user._id,
-      learningId: id
-    }).select('topicId score scorePercent').lean();
-
-    const scoreMap = {};
-    topicScores.forEach(score => {
-      scoreMap[score.topicId.toString()] = {
-        score: score.score,
-        scorePercent: score.scorePercent
-      };
-    });
-
+  
     const validScores = allTopics
       .map(topic => parseFloat(topic.score))
       .filter(score => !isNaN(score));
@@ -338,6 +326,7 @@ exports.TopicWithLeaning = async (req, res) => {
         ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
         : null;
 
+  
     const assignedRecord = await Assigned.findOne({ classId: query.classId });
     if (assignedRecord) {
       if (assignedRecord.learning?.toString() === id) {
@@ -352,17 +341,14 @@ exports.TopicWithLeaning = async (req, res) => {
       await assignedRecord.save();
     }
 
-    // 🆕 Include score info while mapping unlocked topics
+  
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
       const extra = descriptionMap[topic._id.toString()] || { isvideo: false, isdescription: false };
-      const scoreInfo = scoreMap[topic._id.toString()] || { score: null, scorePercent: null };
       const { score, ...rest } = topic;
       return {
         ...rest,
         isvideo: extra.isvideo,
-        isdescription: extra.isdescription,
-        score: scoreInfo.score,
-        scorePercent: scoreInfo.scorePercent
+        isdescription: extra.isdescription
       };
     });
 
@@ -377,7 +363,6 @@ exports.TopicWithLeaning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
