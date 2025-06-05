@@ -5,6 +5,9 @@ const Learning = require('../models/learning');
 const Assigned = require('../models/assignlearning'); 
 const LearningScore = require('../models/learningScore');
 const MarkingSetting = require('../models/markingSetting');
+const Topic = require('../models/topic');
+const TopicScore = require('../models/topicScore');
+
 
 exports.createLearning = async (req, res) => {
   try {
@@ -89,54 +92,79 @@ exports.updateLearning = async (req, res) => {
 };
 
 
+// exports.scoreCard = async (req, res) => {
+//   try {
+//     const user = req.user;
+
+//     if (!user || !user.className) {
+//       return res.status(400).json({ message: 'User class is missing.' });
+//     }
+
+//     const classId = new mongoose.Types.ObjectId(user.className);
+
+//     // Fetch TopicScores for the user and populate topicId with matching classId
+//     const topicScores = await TopicScore.find({
+//       userId: user._id,
+//       score: { $ne: null },
+//       scoreDate: { $exists: true }
+//     })
+//       .sort({ scoreDate: 1 })
+//       .populate({
+//         path: 'topicId',
+//         match: { classId }, 
+//         select: 'topic learningId'
+//       })
+//       .lean();
+
+//     if (!topicScores.length) {
+//       return res.status(404).json({ message: 'No scored topics found for this class.' });
+//     }
+
+//     const firstScoredTopicsPerDay = [];
+//     const seenDates = new Set();
+
+//     for (const score of topicScores) {
+//       if (!score.topicId) continue; 
+
+//       const dateKey = moment(score.scoreDate).format('YYYY-MM-DD');
+//       if (!seenDates.has(dateKey)) {
+//         seenDates.add(dateKey);
+
+//         firstScoredTopicsPerDay.push({
+//           topic: score.topicId.topic,
+//           learning: score.topicId.learningId,
+//           score: score.score,
+//           scoreDate: score.scoreDate
+//         });
+//       }
+//     }
+
+//     return res.status(200).json({
+//       message: 'First scored topic per day fetched successfully.',
+//       topics: firstScoredTopicsPerDay
+//     });
+
+//   } catch (error) {
+//     console.error('Error fetching first scored topic per day:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.scoreCard = async (req, res) => {
   try {
-    const user = req.user;
+    const userId = req.user._id;
+    const scores = await TopicScore.find({ userId })
+      .populate('topicId', 'topic')
+      .populate('learningId', 'name')
+      .sort({ scoreDate: -1 });
 
-    if (!user || !user.className) {
-      return res.status(400).json({ message: 'User class is missing.' });
-    }
-
-    const classId = new mongoose.Types.ObjectId(user.className);
-
-    const topics = await Topic.find({
-      classId,
-      score: { $ne: null },
-      scoreUpdatedAt: { $exists: true }
-    })
-      .sort({ scoreUpdatedAt: 1 }) 
-      .select('topic scoreUpdatedAt learningId score')
-      .populate('learningId')
-      .lean();
-
-
-    if (!topics.length) {
-      return res.status(404).json({ message: 'No scored topics found for this class.' });
-    }
-
-    const firstScoredTopicsPerDay = [];
-    const seenDates = new Set();
-
-    for (const topic of topics) {
-      const dateKey = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
-      if (!seenDates.has(dateKey)) {
-        seenDates.add(dateKey);
-        firstScoredTopicsPerDay.push(topic);
-      }
-    }
-
-    res.status(200).json({
-      message: 'First scored topic per day fetched successfully.',
-      topics: firstScoredTopicsPerDay
-    });
-
+    res.status(200).json({ scores });
   } catch (error) {
-    console.error('Error fetching first scored topic per day:', error);
+    console.error('Error in getUserScoresByDate:', error);
     res.status(500).json({ message: error.message });
   }
 };
-
-
 
 exports.Practicestrike = async (req, res) => {
   try {
@@ -222,19 +250,33 @@ exports.Topicstrikes = async (req, res) => {
 
 
 
+
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
+    const { type = [], startDate, endDate } = req.body;
 
-    const scores = await LearningScore.find({
+    const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
+    const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
+
+    const scoreQuery = {
       userId,
-      strickStatus: true
-    }).populate('learningId', 'name').lean();
-
-    const topics = await Topic.find({
       strickStatus: true,
-      scoreUpdatedAt: { $exists: true }
-    }).populate('learningId', 'name').lean();
+    };
+    if (start && end) {
+      scoreQuery.scoreDate = { $gte: start.toDate(), $lte: end.toDate() };
+    }
+
+    const topicQuery = {
+      strickStatus: true,
+      scoreUpdatedAt: { $exists: true },
+    };
+    if (start && end) {
+      topicQuery.scoreUpdatedAt = { $gte: start.toDate(), $lte: end.toDate() };
+    }
+
+    const scores = await LearningScore.find(scoreQuery).populate('learningId', 'name').lean();
+    const topics = await Topic.find(topicQuery).populate('learningId', 'name').lean();
 
     const scoreDateMap = new Map();
     const topicDateMap = new Map();
@@ -247,7 +289,10 @@ exports.StrikeBothSameDate = async (req, res) => {
       scoreDateMap.get(date).push({
         strickStatus: score.strickStatus,
         score: score.score,
-        type: 'practice'
+        updatedAt: score.updatedAt,
+        scoreDate: score.scoreDate,
+        type: 'practice',
+        learningId: score.learningId
       });
     });
 
@@ -258,43 +303,89 @@ exports.StrikeBothSameDate = async (req, res) => {
       topicDateMap.get(date).push({
         strickStatus: topic.strickStatus,
         score: topic.score,
-        type: 'topic'
+        updatedAt: topic.updatedAt,
+        type: 'topic',
+        learningId: topic.learningId
       });
     });
 
     const result = [];
+
     for (let date of allDatesSet) {
       const scoreItems = scoreDateMap.get(date) || [];
       const topicItems = topicDateMap.get(date) || [];
-      const hasPractice = scoreItems.length > 0;
-      const hasTopic = topicItems.length > 0;
+      const combined = [...scoreItems, ...topicItems];
 
-      if (hasPractice && hasTopic) {
-        const combined = [...scoreItems, ...topicItems];
-        result.push({ date, data: combined });
+      if (Array.isArray(type) && type.includes('topic') && type.includes('practice')) {
+        if (scoreItems.length > 0 && topicItems.length > 0) {
+          result.push({ date, data: combined });
+        }
+      } else if (type === 'practice' || (Array.isArray(type) && type.length === 1 && type[0] === 'practice')) {
+        if (scoreItems.length > 0) {
+          result.push({ date, data: scoreItems });
+        }
+      } else if (type === 'topic' || (Array.isArray(type) && type.length === 1 && type[0] === 'topic')) {
+        if (topicItems.length > 0) {
+          result.push({ date, data: topicItems });
+        }
       }
     }
 
-    result.sort((a, b) => new Date(a.date) - new Date(b.date)); // sort oldest to newest
+    result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Check for streaks
-    let maxStreak = 1;
+    // Calculate largest streak of consecutive days with both topic and practice
+    const bothTypesDates = [];
+    for (let date of allDatesSet) {
+      if (scoreDateMap.has(date) && topicDateMap.has(date)) {
+        bothTypesDates.push(date);
+      }
+    }
+
+    const sortedBothDates = bothTypesDates.sort((a, b) => new Date(a) - new Date(b));
+
+    let maxStreak = 0;
     let currentStreak = 1;
+    let streakStart = null;
+    let streakEnd = null;
+    let tempStart = null;
 
-    for (let i = 1; i < result.length; i++) {
-      const prevDate = moment(result[i - 1].date);
-      const currDate = moment(result[i].date);
-      if (currDate.diff(prevDate, 'days') === 1) {
+    if (sortedBothDates.length > 0) {
+      tempStart = sortedBothDates[0];
+    }
+
+    for (let i = 1; i < sortedBothDates.length; i++) {
+      const prev = moment(sortedBothDates[i - 1]);
+      const curr = moment(sortedBothDates[i]);
+
+      if (curr.diff(prev, 'days') === 1) {
         currentStreak++;
-        maxStreak = Math.max(maxStreak, currentStreak);
       } else {
+        if (currentStreak > maxStreak) {
+          maxStreak = currentStreak;
+          streakStart = tempStart;
+          streakEnd = sortedBothDates[i - 1];
+        }
         currentStreak = 1;
+        tempStart = sortedBothDates[i];
       }
     }
 
-    const markingSetting = await MarkingSetting.findOne({}).sort({ createdAt: -1 }).lean();
+    // Final check after loop
+    if (currentStreak > maxStreak) {
+      maxStreak = currentStreak;
+      streakStart = tempStart;
+      streakEnd = sortedBothDates[sortedBothDates.length - 1];
+    }
 
-    const response = { dates: result };
+    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
+    const response = {
+      dates: result,
+      largestStreak: {
+        count: maxStreak,
+        startDate: streakStart || null,
+        endDate: streakEnd || null,
+      },
+    };
 
     if (maxStreak >= 7 && markingSetting?.weeklyBonus) {
       response.weeklyBonus = markingSetting.weeklyBonus;
@@ -307,10 +398,9 @@ exports.StrikeBothSameDate = async (req, res) => {
     return res.status(200).json(response);
   } catch (error) {
     console.error('Error in StrikeBothSameDate:', error);
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 

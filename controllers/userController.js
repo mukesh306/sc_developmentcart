@@ -102,7 +102,7 @@ exports.Userlogin = async (req, res) => {
     if (!isMatch)
       return res.status(401).json({ message: 'Invalid Password.' });
 
-    // ✅ Generate JWT token
+    
     const payload = { id: user._id };
     const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '24h' });
 
@@ -145,13 +145,13 @@ exports.completeProfile = async (req, res) => {
       collegeName,
     };
 
-    // Only assign ObjectId fields if they are valid non-empty values
+   
     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
     if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
 
-    // Handle file uploads
+  
     if (req.files?.aadharCard?.[0]) {
       updatedFields.aadharCard = req.files.aadharCard[0].path;
     }
@@ -258,7 +258,7 @@ exports.sendResetOTP = async (req, res) => {
     user.resetPasswordExpires = expiry;
     await user.save();
 
-    // Email setup
+    
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {

@@ -11,6 +11,8 @@ const PracticesQuizAnswer = require('../models/practicestest');
 const MarkingSetting = require('../models/markingSetting'); 
 const Learning = require('../models/learning'); 
 const LearningScore = require('../models/learningScore');
+const TopicScore = require('../models/topicScore');
+const DescriptionVideo = require('../models/descriptionvideo'); 
 
 
 exports.createTopicWithQuiz = async (req, res) => {
@@ -185,6 +187,87 @@ exports.getAllTopicNames = async (req, res) => {
   }
 };
 
+
+
+// exports.TopicWithLeaning = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { classId: queryClassId } = req.query;
+//     const user = req.user;
+
+//     if (!user || user.status !== 'yes') {
+//       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
+//     }
+
+//     const registrationDate = moment(user.createdAt).startOf('day');
+//     const today = moment().startOf('day');
+//     const daysPassed = today.diff(registrationDate, 'days') + 1;
+
+//     const query = { learningId: new mongoose.Types.ObjectId(id) };
+//     if (queryClassId) {
+//       query.classId = new mongoose.Types.ObjectId(queryClassId);
+//     } else if (user.className) {
+//       query.classId = new mongoose.Types.ObjectId(user.className);
+//     }
+
+//     const learningData = await Learning.findById(id).select('name').lean();
+//     if (!learningData) {
+//       return res.status(404).json({ message: 'Learning not found.' });
+//     }
+
+//     const allTopics = await Topic.find(query)
+//       .sort({ createdAt: 1 })
+//       .select('topic score createdAt isdescription isvideo')
+//       .lean();
+
+//     if (!allTopics || allTopics.length === 0) {
+//       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
+//     }
+
+//     const validScores = allTopics
+//       .map(topic => parseFloat(topic.score))
+//       .filter(score => !isNaN(score));
+
+//     const averageScore =
+//       validScores.length > 0
+//         ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
+//         : null;
+
+//     const assignedRecord = await Assigned.findOne({ classId: query.classId });
+//     if (assignedRecord) {
+//       if (assignedRecord.learning?.toString() === id) {
+//         assignedRecord.learningAverage = averageScore;
+//       } else if (assignedRecord.learning2?.toString() === id) {
+//         assignedRecord.learning2Average = averageScore;
+//       } else if (assignedRecord.learning3?.toString() === id) {
+//         assignedRecord.learning3Average = averageScore;
+//       } else if (assignedRecord.learning4?.toString() === id) {
+//         assignedRecord.learning4Average = averageScore;
+//       }
+//       await assignedRecord.save();
+//     }
+
+//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
+//       if (topic.score === null || topic.score === undefined) {
+//         const { score, ...rest } = topic;
+//         return rest;
+//       }
+//       return topic;
+//     });
+
+//     res.status(200).json({
+//       learningName: learningData.name, 
+//       averageScore,
+//       topics: unlockedTopics
+//     });
+
+//   } catch (error) {
+//     console.error('Error fetching topics with learningId:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
@@ -213,23 +296,62 @@ exports.TopicWithLeaning = async (req, res) => {
 
     const allTopics = await Topic.find(query)
       .sort({ createdAt: 1 })
-      .select('topic score createdAt isdescription isvideo')
+      .select('topic createdAt')
       .lean();
 
     if (!allTopics || allTopics.length === 0) {
       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
     }
 
-    const validScores = allTopics
-      .map(topic => parseFloat(topic.score))
-      .filter(score => !isNaN(score));
+    const userDescriptionVideos = await DescriptionVideo.find({
+      userId: user._id,
+      learningId: id
+    }).select('topicId isvideo isdescription').lean();
 
-    const averageScore =
-      validScores.length > 0
-        ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-        : null;
+    const descriptionMap = {};
+    userDescriptionVideos.forEach(entry => {
+      descriptionMap[entry.topicId.toString()] = {
+        isvideo: entry.isvideo,
+        isdescription: entry.isdescription
+      };
+    });
 
-    const assignedRecord = await Assigned.findOne({ classId: query.classId });
+    const topicScores = await TopicScore.find({
+      userId: user._id,
+      learningId: id
+    }).select('topicId score').lean();
+
+    const scoreMap = {};
+    topicScores.forEach(entry => {
+      scoreMap[entry.topicId.toString()] = entry.score;
+    });
+
+   
+    const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
+      const topicIdStr = topic._id.toString();
+      const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
+      const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : null;
+
+      return {
+        _id: topic._id,
+        topic: topic.topic,
+        createdAt: topic.createdAt,
+        isvideo: extra.isvideo,
+        isdescription: extra.isdescription,
+        score: topicScoreValue
+      };
+    });
+
+    const validScores = unlockedTopics
+      .map(t => t.score)
+      .filter(score => score !== null && score !== undefined)
+      .map(score => Number(score));
+
+    const averageScore = validScores.length > 0
+      ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
+      : null;
+
+    const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
     if (assignedRecord) {
       if (assignedRecord.learning?.toString() === id) {
         assignedRecord.learningAverage = averageScore;
@@ -243,16 +365,8 @@ exports.TopicWithLeaning = async (req, res) => {
       await assignedRecord.save();
     }
 
-    const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
-      if (topic.score === null || topic.score === undefined) {
-        const { score, ...rest } = topic;
-        return rest;
-      }
-      return topic;
-    });
-
     res.status(200).json({
-      learningName: learningData.name, 
+      learningName: learningData.name,
       averageScore,
       topics: unlockedTopics
     });
@@ -264,13 +378,72 @@ exports.TopicWithLeaning = async (req, res) => {
 };
 
 
+// exports.getTopicById = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { isvideo, isdescription } = req.query;
+
+//     let topic = await Topic.findById(id)
+//       .populate('learningId')
+//       .populate('createdBy', 'email');
+
+//     if (!topic) {
+//       return res.status(404).json({ message: 'Topic not found.' });
+//     }
+
+//     let updated = false;
+//     if (isvideo !== undefined) {
+//       topic.isvideo = isvideo === 'true' ? 'true' : 'false';
+//       updated = true;
+//     }
+
+//     if (isdescription !== undefined) {
+//       topic.isdescription = isdescription === 'true' ? 'true' : 'false';
+//       updated = true;
+//     }
+
+//     if (!topic.testTimeInSeconds || topic.testTimeInSeconds === 0) {
+//       if (topic.testTime && topic.testTime > 0) {
+//         topic.testTimeInSeconds = topic.testTime * 60;
+//         updated = true;
+//       }
+//     }
+
+//     if (updated) {
+//       await topic.save();
+//     }
+
+//     const topicObj = topic.toObject();
+
+//     topicObj.testTimeInSeconds = topic.testTimeInSeconds || 0;
+//     let classInfo = await School.findById(topic.classId).lean();
+//     if (!classInfo) {
+//       classInfo = await College.findById(topic.classId).lean();
+//     }
+//     topicObj.classInfo = classInfo || null;
+
+//     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
+//     topicObj.quizzes = quizzes || [];
+//     res.status(200).json({
+//       message: 'Topic fetched successfully.',
+//       data: topicObj
+//     });
+//   } catch (error) {
+//     console.error('Error fetching topic by ID:', error);
+//     res.status(500).json({
+//       message: 'Error fetching topic.',
+//       error: error.message
+//     });
+//   }
+// };
 
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
     const { isvideo, isdescription } = req.query;
+    const userId = req.user._id;
 
-    let topic = await Topic.findById(id)
+    const topic = await Topic.findById(id)
       .populate('learningId')
       .populate('createdBy', 'email');
 
@@ -278,43 +451,85 @@ exports.getTopicById = async (req, res) => {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
-    let updated = false;
-    if (isvideo !== undefined) {
-      topic.isvideo = isvideo === 'true' ? 'true' : 'false';
-      updated = true;
+    const learningId = topic.learningId?._id || null;
+
+    // Find or update DescriptionVideo
+    let existingRecord = await DescriptionVideo.findOne({
+      userId,
+      topicId: topic._id,
+      learningId
+    });
+
+    if (!existingRecord && isdescription === 'true') {
+      existingRecord = await DescriptionVideo.create({
+        userId,
+        topicId: topic._id,
+        learningId,
+        isvideo: false,
+        isdescription: true,
+        scoreDate: new Date()
+      });
     }
 
-    if (isdescription !== undefined) {
-      topic.isdescription = isdescription === 'true' ? 'true' : 'false';
-      updated = true;
+    if (existingRecord && isvideo === 'true' && !existingRecord.isvideo) {
+      existingRecord.isvideo = true;
+      await existingRecord.save();
     }
 
-    if (!topic.testTimeInSeconds || topic.testTimeInSeconds === 0) {
-      if (topic.testTime && topic.testTime > 0) {
-        topic.testTimeInSeconds = topic.testTime * 60;
-        updated = true;
-      }
-    }
+    const latestDescription = await DescriptionVideo.findOne({
+      userId,
+      topicId: topic._id,
+      learningId
+    }).sort({ createdAt: -1 }).select('isvideo isdescription');
 
-    if (updated) {
-      await topic.save();
-    }
+    // ✅ Fetch topicScore with only required fields
+    const topicScoreData = await TopicScore.findOne({
+      userId,
+      topicId: topic._id
+    }).select(
+      'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
+    ).lean();
 
     const topicObj = topic.toObject();
+    topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
 
-    topicObj.testTimeInSeconds = topic.testTimeInSeconds || 0;
+    // Add class info
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
     topicObj.classInfo = classInfo || null;
 
+    // Add quizzes
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
+
+    // Add video/description flags
+    topicObj.isvideo = latestDescription?.isvideo || false;
+    topicObj.isdescription = latestDescription?.isdescription || false;
+
+    // 🔥 Add filtered topicScore data directly (flattened)
+    topicObj.score = topicScoreData?.score || 0;
+    topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
+    topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
+    topicObj.correctAnswers = topicScoreData?.correctAnswers || 0;
+    topicObj.incorrectAnswers = topicScoreData?.incorrectAnswers || 0;
+    topicObj.skippedQuestions = topicScoreData?.skippedQuestions || 0;
+    topicObj.marksObtained = topicScoreData?.marksObtained || 0;
+    topicObj.totalMarks = topicScoreData?.totalMarks || 0;
+    topicObj.negativeMarking = topicScoreData?.negativeMarking || 0;
+    topicObj.scorePercent = topicScoreData?.scorePercent || 0;
+    topicObj.strickStatus = topicScoreData?.strickStatus || false;
+    topicObj.scoreDate = topicScoreData?.scoreDate || null;
+    topicObj.createdAt = topicScoreData?.createdAt || null;
+    topicObj.updatedAt = topicScoreData?.updatedAt || null;
+
+    // Send response
     res.status(200).json({
       message: 'Topic fetched successfully.',
       data: topicObj
     });
+
   } catch (error) {
     console.error('Error fetching topic by ID:', error);
     res.status(500).json({
@@ -323,6 +538,7 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
+
 
 
 
@@ -472,6 +688,100 @@ exports.updateTestTimeInSeconds = async (req, res) => {
   }
 };
 
+
+
+// exports.calculateQuizScore = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { topicId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
+
+//     if (!topicId) {
+//       return res.status(400).json({ message: 'topicId is required.' });
+//     }
+
+//     const topic = await Topic.findById(topicId);
+//     if (!topic) {
+//       return res.status(404).json({ message: 'Topic not found.' });
+//     }
+
+//     const allQuizzes = await Quiz.find({ topicId }).lean();
+//     const totalQuestions = allQuizzes.length;
+
+//     if (totalQuestions === 0) {
+//       return res.status(400).json({ message: 'No questions found for this topic.' });
+//     }
+//     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
+//     const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
+//       ? topicTotalMarks / totalQuestions
+//       : (markingSetting?.maxMarkPerQuestion || 1);
+
+//     const negativeMarking = (typeof inputNegativeMarking === 'number')
+//       ? inputNegativeMarking
+//       : (markingSetting?.negativeMarking || 0);
+
+//     const totalMarks = maxMarkPerQuestion * totalQuestions;
+
+//     const answers = await UserQuizAnswer.find({ userId, topicId });
+//     let correctCount = 0;
+//     let incorrectCount = 0;
+//     for (const answer of answers) {
+//       const quiz = allQuizzes.find(q => q._id.toString() === answer.questionId.toString());
+//       if (!quiz) continue;
+
+//       if (answer.selectedAnswer === quiz.answer) correctCount++;
+//       else incorrectCount++;
+//     }
+//     const answeredQuestions = correctCount + incorrectCount;
+//     const skippedQuestions = totalQuestions - answeredQuestions;
+
+//     const positiveMarks = correctCount * maxMarkPerQuestion;
+//     const negativeMarks = incorrectCount * negativeMarking;
+
+//     let marksObtained = positiveMarks - negativeMarks;
+//     if (marksObtained < 0) marksObtained = 0;
+
+//     const roundedMarks = parseFloat(marksObtained.toFixed(2));
+//     const scorePercent = (roundedMarks / totalMarks) * 100;
+//     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
+
+//     if (topic.score === null || topic.score === undefined) {
+//       topic.score = roundedScorePercent;
+//       topic.totalQuestions = totalQuestions;
+//       topic.correctAnswers = correctCount;
+//       topic.incorrectAnswers = incorrectCount;
+//       topic.skippedQuestions = skippedQuestions;
+//       topic.marksObtained = roundedMarks;
+//       topic.totalMarks = totalMarks;
+//       topic.negativeMarking = negativeMarking;
+//       topic.scoreUpdatedAt = new Date();
+//       topic.strickStatus = true;
+//       await topic.save();
+//     }
+
+//     return res.status(200).json({
+//       message: 'Score calculated successfully.',
+//       totalQuestions,
+//       answeredQuestions,
+//       skippedQuestions,
+//       correctAnswers: correctCount,
+//       incorrectAnswers: incorrectCount,
+//       marksObtained: roundedMarks,
+//       totalMarks,
+//       maxMarkPerQuestion, 
+//       negativeMarking,
+//       scorePercent: roundedScorePercent,
+//       testTime: topic.testTime || 0,
+//       scoreUpdatedAt: topic.scoreUpdatedAt,
+//       updatedAt: topic.updatedAt,
+//       strickStatus: topic.strickStatus || false
+//     });
+
+//   } catch (error) {
+//     console.error('Error in calculateQuizScore:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.calculateQuizScore = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -481,14 +791,13 @@ exports.calculateQuizScore = async (req, res) => {
       return res.status(400).json({ message: 'topicId is required.' });
     }
 
-    const topic = await Topic.findById(topicId);
+    const topic = await Topic.findById(topicId).lean();
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
     const allQuizzes = await Quiz.find({ topicId }).lean();
     const totalQuestions = allQuizzes.length;
-
     if (totalQuestions === 0) {
       return res.status(400).json({ message: 'No questions found for this topic.' });
     }
@@ -512,7 +821,6 @@ exports.calculateQuizScore = async (req, res) => {
     for (const answer of answers) {
       const quiz = allQuizzes.find(q => q._id.toString() === answer.questionId.toString());
       if (!quiz) continue;
-
       if (answer.selectedAnswer === quiz.answer) correctCount++;
       else incorrectCount++;
     }
@@ -522,7 +830,6 @@ exports.calculateQuizScore = async (req, res) => {
 
     const positiveMarks = correctCount * maxMarkPerQuestion;
     const negativeMarks = incorrectCount * negativeMarking;
-
     let marksObtained = positiveMarks - negativeMarks;
     if (marksObtained < 0) marksObtained = 0;
 
@@ -530,22 +837,32 @@ exports.calculateQuizScore = async (req, res) => {
     const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
 
-    if (topic.score === null || topic.score === undefined) {
-      topic.score = roundedScorePercent;
-      topic.totalQuestions = totalQuestions;
-      topic.correctAnswers = correctCount;
-      topic.incorrectAnswers = incorrectCount;
-      topic.skippedQuestions = skippedQuestions;
-      topic.marksObtained = roundedMarks;
-      topic.totalMarks = totalMarks;
-      topic.negativeMarking = negativeMarking;
-      topic.scoreUpdatedAt = new Date();
-      topic.strickStatus = true;
-      await topic.save();
+    const existingScore = await TopicScore.findOne({ userId, topicId });
+
+    if (!existingScore) {
+      await TopicScore.create({
+        userId,
+        topicId,
+        learningId: topic.learningId, // ✅ save learningId
+        score: roundedScorePercent,
+        totalQuestions,
+        answeredQuestions,
+        correctAnswers: correctCount,
+        incorrectAnswers: incorrectCount,
+        skippedQuestions,
+        marksObtained: roundedMarks,
+        totalMarks,
+        negativeMarking,
+        scorePercent: roundedScorePercent,
+        scoreDate: new Date(),
+        strickStatus: true
+      });
     }
 
     return res.status(200).json({
-      message: 'Score calculated successfully.',
+      message: existingScore
+        ? 'Score already saved. Recalculated result returned for display only.'
+        : 'Score calculated and saved successfully.',
       totalQuestions,
       answeredQuestions,
       skippedQuestions,
@@ -553,13 +870,12 @@ exports.calculateQuizScore = async (req, res) => {
       incorrectAnswers: incorrectCount,
       marksObtained: roundedMarks,
       totalMarks,
-      maxMarkPerQuestion, 
+      maxMarkPerQuestion,
       negativeMarking,
       scorePercent: roundedScorePercent,
       testTime: topic.testTime || 0,
-      scoreUpdatedAt: topic.scoreUpdatedAt,
-      updatedAt: topic.updatedAt,
-      strickStatus: topic.strickStatus || false
+      strickStatus: true,
+      scoreUpdatedAt: new Date()
     });
 
   } catch (error) {
@@ -567,7 +883,6 @@ exports.calculateQuizScore = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
@@ -758,167 +1073,47 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
   }
 };
 
-exports.PracticeTest = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { topicId, questionId, selectedAnswer, learningId } = req.body;
 
-    if (!topicId || !questionId || !learningId) {
-      return res.status(400).json({ message: 'topicId, questionId, and learningId are required.' });
-    }
 
-    const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
-    if (!quiz) {
-      return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
-    }
 
-    const answerToSave = selectedAnswer ? selectedAnswer : null;
+// exports.PracticeTest = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { topicId, questionId, selectedAnswer, learningId } = req.body;
 
-    await PracticesQuizAnswer.findOneAndUpdate(
-      { userId, topicId, questionId },
-      {
-        selectedAnswer: answerToSave,
-        learningId,
-        isSkipped: !selectedAnswer 
-      },
-      { upsert: true, new: true }
-    );
+//     if (!topicId || !questionId || !learningId) {
+//       return res.status(400).json({ message: 'topicId, questionId, and learningId are required.' });
+//     }
 
-    const message = selectedAnswer ? 'Answer saved successfully.' : 'Question skipped and recorded.';
-    return res.status(200).json({ message });
+//     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
+//     if (!quiz) {
+//       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
+//     }
 
-  } catch (error) {
-    console.error('Error in PracticeTest:', error);
-    return res.status(500).json({ message: error.message });
-  }
-};
+//     const answerToSave = selectedAnswer ? selectedAnswer : null;
+//     await PracticesQuizAnswer.findOneAndUpdate(
+//       { userId, topicId, questionId },
+//       {
+//         selectedAnswer: answerToSave,
+//         learningId,
+//         isSkipped: !selectedAnswer 
+//       },
+//       { upsert: true, new: true }
+//     );
 
-exports.calculateQuizScoreByLearning = async (req, res) => {
-  try { 
-    const userId = req.user._id;
-    const { learningId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
+//     const message = selectedAnswer ? 'Answer saved successfully.' : 'Question skipped and recorded.';
+//     return res.status(200).json({ message });
 
-    if (!learningId) {
-      return res.status(400).json({ message: 'learningId is required.' });
-    }
-
-    const topics = await Topic.find({ learningId }).lean();
-    if (!topics.length) {
-      return res.status(404).json({ message: 'No topics found for this learning.' });
-    }
-
-    const topicIds = topics.map(t => t._id.toString());
-
-    const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
-    const negativeMarking = (typeof inputNegativeMarking === 'number')
-      ? inputNegativeMarking
-      : (markingSetting?.negativeMarking || 0);
-
-    const now = new Date();
-    const startOfDay = new Date(now.setHours(0, 0, 0, 0));
-    const endOfDay = new Date(now.setHours(23, 59, 59, 999));
-
-    const answers = await PracticesQuizAnswer.find({
-      userId,
-      learningId,
-      topicId: { $in: topicIds },
-      createdAt: { $gte: startOfDay, $lte: endOfDay }
-    });
-
-    if (!answers.length) {
-      return res.status(400).json({ message: 'No answers submitted today for this learning.' });
-    }
-
-    const answeredQuestionIds = answers.map(ans => ans.questionId.toString());
-    const answeredQuizzes = await Quiz.find({ _id: { $in: answeredQuestionIds } }).lean();
-
-    const totalQuestions = answers.length;
-    const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
-      ? topicTotalMarks / totalQuestions
-      : (markingSetting?.maxMarkPerQuestion || 1);
-
-    const totalMarks = maxMarkPerQuestion * totalQuestions;
-
-    let correctCount = 0;
-    let incorrectCount = 0;
-    let skippedCount = 0;
-
-    for (const answer of answers) {
-      const quiz = answeredQuizzes.find(q => q._id.toString() === answer.questionId.toString());
-      if (!quiz) continue;
-
-      if (answer.selectedAnswer === null || answer.selectedAnswer === undefined) {
-        skippedCount++;
-      } else if (answer.selectedAnswer === quiz.answer) {
-        correctCount++;
-      } else {
-        incorrectCount++;
-      }
-    }
-
-    const answeredQuestions = correctCount + incorrectCount;
-    const skippedQuestions = skippedCount;
-
-    const positiveMarks = correctCount * maxMarkPerQuestion;
-    const negativeMarks = incorrectCount * negativeMarking;
-
-    let marksObtained = positiveMarks - negativeMarks;
-    if (marksObtained < 0) marksObtained = 0;
-
-    const roundedMarks = parseFloat(marksObtained.toFixed(2));
-    const scorePercent = (roundedMarks / totalMarks) * 100;
-    const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
-
-    const existingScore = await LearningScore.findOne({
-      userId,
-      learningId,
-      scoreDate: { $gte: startOfDay, $lte: endOfDay }
-    });
-
-    const scoreData = {
-      userId,
-      learningId,
-      score: roundedScorePercent,
-      totalQuestions,
-      answeredQuestions,
-      correctAnswers: correctCount,
-      incorrectAnswers: incorrectCount,
-      skippedQuestions,
-      marksObtained: roundedMarks,
-      totalMarks,
-      maxMarkPerQuestion,
-      negativeMarking,
-      scorePercent: roundedScorePercent,
-      scoreDate: startOfDay
-    };
-
-    if (!existingScore) {
-      const newScore = new LearningScore({ ...scoreData, strickStatus: true });
-      await newScore.save();
-
-      return res.status(200).json({
-        message: 'Score calculated and saved for today.',
-        ...scoreData,
-        strickStatus: true,
-        saved: true
-      });
-    } else {
-      return res.status(200).json({
-        message: 'Score already submitted today. New score calculated but not saved.',
-        ...scoreData,
-        saved: false
-      });
-    }
-  } catch (error) {
-    console.error('Error in calculateQuizScoreByLearning:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
+//   } catch (error) {
+//     console.error('Error in PracticeTest:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 
 
-exports.getUserScoresByDate = async (req, res) => {
+exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 

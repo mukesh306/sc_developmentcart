@@ -5,7 +5,7 @@ const PracticesQuizAnswerSchema = new mongoose.Schema({
   topicId: { type: mongoose.Schema.Types.ObjectId, ref: 'Topic', required: true },
   learningId: { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings' },
   questionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
-  selectedAnswer: { type: String, required: true },
+  selectedAnswer: { type: String,  },
   strickStatus: { type: Boolean, default: false },
 }, { timestamps: true });
 
