@@ -205,6 +205,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
+      .populate('learning4')
       .lean();
 
     for (let item of assignedList) {

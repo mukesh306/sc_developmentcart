@@ -3,6 +3,7 @@ const School = require('../models/school');
 const College = require('../models/college');
 const User = require('../models/User');
 
+
 exports.createAssigned = async (req, res) => {
   try {
     const {classId, learning,learning2,learning3,learning4} = req.body;
@@ -30,7 +31,6 @@ exports.createAssigned = async (req, res) => {
   }
 };
 
-
 exports.getAssignedList = async (req, res) => {
   try {
     const assignedList = await Assigned.find()
@@ -57,7 +57,6 @@ exports.getAssignedList = async (req, res) => {
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const user = await User.findById(userId).lean();
     if (!user || !user.className) {
       return res.status(400).json({ message: 'User className not found.' });
@@ -66,6 +65,7 @@ exports.getAssignedListUser = async (req, res) => {
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
+      .populate('learning4')
       .lean();
 
     for (let item of assignedList) {
