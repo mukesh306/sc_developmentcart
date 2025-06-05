@@ -450,7 +450,7 @@ exports.getTopicById = async (req, res) => {
       learningId
     });
 
-    // Case 1: No existing record and isdescription=true
+    // Case 1: Create new if isdescription=true and no record exists
     if (!existingRecord && isdescription === 'true') {
       existingRecord = await DescriptionVideo.create({
         userId,
@@ -462,36 +462,39 @@ exports.getTopicById = async (req, res) => {
       });
     }
 
-    // Case 2: Existing record and isvideo=true
+    // Case 2: Update existing record if isvideo=true
     if (existingRecord && isvideo === 'true' && !existingRecord.isvideo) {
       existingRecord.isvideo = true;
       await existingRecord.save();
     }
 
-    // Fetch updated latest info (in case record changed)
+    // Fetch latest DescriptionVideo for this topic and user
     const latestDescription = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
       learningId
     }).sort({ createdAt: -1 }).select('isvideo isdescription');
 
+    // Convert topic to plain object
     const topicObj = topic.toObject();
     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
 
+    // Add class info
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
     topicObj.classInfo = classInfo || null;
 
+    // Add quizzes
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
-    if (latestDescription) {
-      topicObj.isvideo = latestDescription.isvideo;
-      topicObj.isdescription = latestDescription.isdescription;
-    }
+    // Add isvideo and isdescription to response
+    topicObj.isvideo = latestDescription?.isvideo || false;
+    topicObj.isdescription = latestDescription?.isdescription || false;
 
+    // Final response
     res.status(200).json({
       message: 'Topic fetched successfully.',
       data: topicObj
@@ -505,7 +508,6 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
-
 
 
 
