@@ -268,7 +268,6 @@ exports.getAllTopicNames = async (req, res) => {
 // };
 
 
-
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
@@ -297,7 +296,7 @@ exports.TopicWithLeaning = async (req, res) => {
 
     const allTopics = await Topic.find(query)
       .sort({ createdAt: 1 })
-      .select('topic score createdAt')
+      .select('topic createdAt')
       .lean();
 
     if (!allTopics || allTopics.length === 0) {
@@ -329,7 +328,7 @@ exports.TopicWithLeaning = async (req, res) => {
       scoreMap[entry.topicId.toString()] = entry.score;
     });
 
-    // Calculate average score from topicScore entries
+    // ✅ Calculate average score of all available topic scores for this learningId
     const validScores = topicScores
       .map(s => parseFloat(s.score))
       .filter(score => !isNaN(score));
@@ -338,7 +337,7 @@ exports.TopicWithLeaning = async (req, res) => {
       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
       : null;
 
-    // Update Assigned document if needed
+    // Update Assigned learning averages
     const assignedRecord = await Assigned.findOne({ classId: query.classId || user.className });
     if (assignedRecord) {
       if (assignedRecord.learning?.toString() === id) {
@@ -357,11 +356,12 @@ exports.TopicWithLeaning = async (req, res) => {
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
       const topicIdStr = topic._id.toString();
       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
-      const topicScoreValue = scoreMap[topicIdStr] || null;
+      const topicScoreValue = scoreMap[topicIdStr] ?? null; // allow 0
 
-      const { score, ...rest } = topic; // omit original static topic score
       return {
-        ...rest,
+        _id: topic._id,
+        topic: topic.topic,
+        createdAt: topic.createdAt,
         isvideo: extra.isvideo,
         isdescription: extra.isdescription,
         score: topicScoreValue
@@ -379,6 +379,7 @@ exports.TopicWithLeaning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // exports.getTopicById = async (req, res) => {
 //   try {
