@@ -268,7 +268,6 @@ exports.getAllTopicNames = async (req, res) => {
 // };
 
 
-
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
@@ -327,31 +326,7 @@ exports.TopicWithLeaning = async (req, res) => {
       scoreMap[entry.topicId.toString()] = entry.score;
     });
 
-    // ✅ Filter out null/undefined scores, but include 0
-    const validScores = topicScores
-      .filter(s => s.score !== null && s.score !== undefined)
-      .map(s => Number(s.score));
-
-    const averageScore = validScores.length > 0
-      ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-      : null;
-
-    // Update Assigned document with correct average
-    const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
-    if (assignedRecord) {
-      if (assignedRecord.learning?.toString() === id) {
-        assignedRecord.learningAverage = averageScore;
-      } else if (assignedRecord.learning2?.toString() === id) {
-        assignedRecord.learning2Average = averageScore;
-      } else if (assignedRecord.learning3?.toString() === id) {
-        assignedRecord.learning3Average = averageScore;
-      } else if (assignedRecord.learning4?.toString() === id) {
-        assignedRecord.learning4Average = averageScore;
-      }
-      await assignedRecord.save();
-    }
-
-    // ✅ Include score 0 if it exists, keep null if no score
+    // Get topics unlocked by days passed
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
       const topicIdStr = topic._id.toString();
       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
@@ -367,6 +342,31 @@ exports.TopicWithLeaning = async (req, res) => {
       };
     });
 
+    // Calculate averageScore only from unlocked topic scores
+    const validScores = unlockedTopics
+      .map(t => t.score)
+      .filter(score => score !== null && score !== undefined)
+      .map(score => Number(score));
+
+    const averageScore = validScores.length > 0
+      ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
+      : null;
+
+    // Save averageScore in Assigned collection
+    const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
+    if (assignedRecord) {
+      if (assignedRecord.learning?.toString() === id) {
+        assignedRecord.learningAverage = averageScore;
+      } else if (assignedRecord.learning2?.toString() === id) {
+        assignedRecord.learning2Average = averageScore;
+      } else if (assignedRecord.learning3?.toString() === id) {
+        assignedRecord.learning3Average = averageScore;
+      } else if (assignedRecord.learning4?.toString() === id) {
+        assignedRecord.learning4Average = averageScore;
+      }
+      await assignedRecord.save();
+    }
+
     res.status(200).json({
       learningName: learningData.name,
       averageScore,
@@ -378,7 +378,6 @@ exports.TopicWithLeaning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 // exports.getTopicById = async (req, res) => {
