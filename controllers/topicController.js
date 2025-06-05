@@ -441,26 +441,39 @@ exports.getTopicById = async (req, res) => {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
-    let savedDescription = null;
+    const learningId = topic.learningId?._id || null;
 
-    // Create and retrieve description entry if query params are provided
-    if (isvideo !== undefined || isdescription !== undefined) {
-      await DescriptionVideo.create({
+    // Find existing DescriptionVideo for this user/topic
+    let existingRecord = await DescriptionVideo.findOne({
+      userId,
+      topicId: topic._id,
+      learningId
+    });
+
+    // Case 1: No existing record and isdescription=true
+    if (!existingRecord && isdescription === 'true') {
+      existingRecord = await DescriptionVideo.create({
         userId,
         topicId: topic._id,
-        learningId: topic.learningId?._id || null,
-        isvideo: isvideo === 'true',
-        isdescription: isdescription === 'true',
+        learningId,
+        isvideo: false,
+        isdescription: true,
         scoreDate: new Date()
       });
-
-      // Fetch the saved description
-      savedDescription = await DescriptionVideo.findOne({
-        userId,
-        topicId: topic._id,
-        learningId: topic.learningId?._id || null
-      }).select('-__v -createdAt -updatedAt');
     }
+
+    // Case 2: Existing record and isvideo=true
+    if (existingRecord && isvideo === 'true' && !existingRecord.isvideo) {
+      existingRecord.isvideo = true;
+      await existingRecord.save();
+    }
+
+    // Fetch updated latest info (in case record changed)
+    const latestDescription = await DescriptionVideo.findOne({
+      userId,
+      topicId: topic._id,
+      learningId
+    }).sort({ createdAt: -1 }).select('isvideo isdescription');
 
     const topicObj = topic.toObject();
     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
@@ -474,8 +487,9 @@ exports.getTopicById = async (req, res) => {
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
-    if (savedDescription) {
-      topicObj.descriptionVideo = savedDescription;
+    if (latestDescription) {
+      topicObj.isvideo = latestDescription.isvideo;
+      topicObj.isdescription = latestDescription.isdescription;
     }
 
     res.status(200).json({
@@ -491,6 +505,9 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
+
+
+
 
 exports.submitQuiz = async (req, res) => {
   try {
