@@ -312,17 +312,13 @@ exports.StrikeBothSameDate = async (req, res) => {
   }
 };
 
-
 exports.Strikecalculation = async (req, res) => {
   try {
     const userId = req.user._id;
     const { type = '' } = req.query;
     const typeArray = Array.isArray(type) ? type : type.split(',');
 
-    // --- PRACTICE SCORE QUERY ---
     const scoreQuery = { userId, strickStatus: true };
-
-    // --- TOPIC SCORE QUERY ---
     const topicScoreQuery = { userId, strickStatus: true };
 
     const scores = await LearningScore.find(scoreQuery)
@@ -341,27 +337,14 @@ exports.Strikecalculation = async (req, res) => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       allDatesSet.add(date);
       if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
-      scoreDateMap.get(date).push({
-        strickStatus: score.strickStatus,
-        score: score.score,
-        updatedAt: score.updatedAt,
-        scoreDate: score.scoreDate,
-        type: 'practice',
-        learningId: score.learningId
-      });
+      scoreDateMap.get(date).push({ type: 'practice' });
     });
 
     topicScores.forEach(score => {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
       allDatesSet.add(date);
       if (!topicDateMap.has(date)) topicDateMap.set(date, []);
-      topicDateMap.get(date).push({
-        strickStatus: score.strickStatus,
-        score: score.score,
-        updatedAt: score.updatedAt,
-        type: 'topic',
-        learningId: score.learningId
-      });
+      topicDateMap.get(date).push({ type: 'topic' });
     });
 
     const result = [];
@@ -384,40 +367,101 @@ exports.Strikecalculation = async (req, res) => {
       }
     }
 
-    // Sort dates ascending
-    const sortedDates = result.map(r => r.date).sort((a, b) => new Date(a) - new Date(b));
+    result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // --- Largest Streak ---
-    let largestStreak = 1;
-    let tempStreak = 1;
-    for (let i = 1; i < sortedDates.length; i++) {
-      const prev = moment(sortedDates[i - 1]);
+    // --- Streak Calculations ---
+    let largestStreak = { count: 0, startDate: null, endDate: null };
+    let currentStreak = { count: 0, startDate: null, endDate: null };
+    const weeklyBonus = [];
+    const monthlyBonus = [];
+
+    const sortedDates = result.map(r => r.date).sort();
+    let streakStart = null;
+    let tempStreak = [];
+
+    for (let i = 0; i < sortedDates.length; i++) {
       const curr = moment(sortedDates[i]);
-      if (curr.diff(prev, 'days') === 1) {
-        tempStreak++;
-        largestStreak = Math.max(largestStreak, tempStreak);
+      const prev = i > 0 ? moment(sortedDates[i - 1]) : null;
+
+      if (!prev || curr.diff(prev, 'days') === 1) {
+        if (!streakStart) streakStart = sortedDates[i];
+        tempStreak.push(sortedDates[i]);
       } else {
-        tempStreak = 1;
+        // Finalize last streak
+        if (tempStreak.length > largestStreak.count) {
+          largestStreak = {
+            count: tempStreak.length,
+            startDate: streakStart,
+            endDate: tempStreak[tempStreak.length - 1]
+          };
+        }
+
+        // Calculate bonuses in this streak
+        for (let j = 0; j + 6 < tempStreak.length; j += 7) {
+          weeklyBonus.push({
+            week: weeklyBonus.length + 1,
+            startDate: tempStreak[j],
+            endDate: tempStreak[j + 6]
+          });
+        }
+
+        for (let j = 0; j + 29 < tempStreak.length; j += 30) {
+          monthlyBonus.push({
+            month: monthlyBonus.length + 1,
+            startDate: tempStreak[j],
+            endDate: tempStreak[j + 29]
+          });
+        }
+
+        // reset streak
+        streakStart = sortedDates[i];
+        tempStreak = [sortedDates[i]];
       }
     }
 
-    // --- Current Streak ---
-    let currentStreak = 1;
-    for (let i = sortedDates.length - 1; i > 0; i--) {
-      const curr = moment(sortedDates[i]);
-      const prev = moment(sortedDates[i - 1]);
-      if (curr.diff(prev, 'days') === 1) {
-        currentStreak++;
-      } else {
-        break;
+    // Final update after loop ends
+    if (tempStreak.length > 0) {
+      if (tempStreak.length > largestStreak.count) {
+        largestStreak = {
+          count: tempStreak.length,
+          startDate: streakStart,
+          endDate: tempStreak[tempStreak.length - 1]
+        };
       }
+
+      for (let j = 0; j + 6 < tempStreak.length; j += 7) {
+        weeklyBonus.push({
+          week: weeklyBonus.length + 1,
+          startDate: tempStreak[j],
+          endDate: tempStreak[j + 6]
+        });
+      }
+
+      for (let j = 0; j + 29 < tempStreak.length; j += 30) {
+        monthlyBonus.push({
+          month: monthlyBonus.length + 1,
+          startDate: tempStreak[j],
+          endDate: tempStreak[j + 29]
+        });
+      }
+
+      // this is the last streak, so it's current
+      currentStreak = {
+        count: tempStreak.length,
+        startDate: streakStart,
+        endDate: tempStreak[tempStreak.length - 1]
+      };
     }
 
-    return res.status(200).json({
-      dates: sortedDates.map(date => ({ date })),
+    const response = {
+      dates: result,
       largestStreak,
-      currentStreak
-    });
+      currentStreak,
+      weeklyBonus,
+      monthlyBonus
+    };
+
+    return res.status(200).json(response);
   } catch (error) {
     console.error('Error in StrikeBothSameDate:', error);
     return res.status(500).json({ message: error.message });
