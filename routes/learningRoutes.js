@@ -10,5 +10,6 @@ router.get('/scorecard', auth, learningController.scoreCard);
 router.get('/StrictPractice', auth, learningController.Practicestrike);
 router.get('/Topicstrikes', auth, learningController.Topicstrikes);
 router.get('/Strike', auth, learningController.StrikeBothSameDate);
+router.get('/Strikecalculation', auth, learningController.Strikecalculation);
 
 module.exports = router;
