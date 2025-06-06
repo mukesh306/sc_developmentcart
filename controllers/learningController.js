@@ -185,10 +185,12 @@ exports.Practicestrike = async (req, res) => {
 };
 
 exports.Topicstrikes = async (req, res) => {
+  const userId = req.user._id;
   try {
     const topics = await TopicScore.find({
-      strickStatus: true,
-      scoreUpdatedAt: { $exists: true }
+      userId,
+      strickStatus: true
+      // scoreUpdatedAt: { $exists: true }
     })
       .select('strickStatus scoreUpdatedAt score')
       .sort({ scoreUpdatedAt: -1 });
