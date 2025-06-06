@@ -186,7 +186,7 @@ exports.Practicestrike = async (req, res) => {
 
 exports.Topicstrikes = async (req, res) => {
   try {
-    const topics = await Topic.find({
+    const topics = await TopicScore.find({
       strickStatus: true,
       scoreUpdatedAt: { $exists: true }
     })
