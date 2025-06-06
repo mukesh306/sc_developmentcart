@@ -253,9 +253,10 @@ exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
     const { type = [], startDate, endDate } = req.body;
+
     const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
     const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
-    // --- PRACTICE SCORE QUERY ---
+
     const scoreQuery = {
       userId,
       strickStatus: true,
@@ -263,7 +264,7 @@ exports.StrikeBothSameDate = async (req, res) => {
     if (start && end) {
       scoreQuery.scoreDate = { $gte: start.toDate(), $lte: end.toDate() };
     }
-    // --- TOPIC SCORE QUERY (using TopicScore) ---
+
     const topicScoreQuery = {
       userId,
       strickStatus: true,
@@ -271,13 +272,15 @@ exports.StrikeBothSameDate = async (req, res) => {
     if (start && end) {
       topicScoreQuery.updatedAt = { $gte: start.toDate(), $lte: end.toDate() };
     }
+
     const scores = await LearningScore.find(scoreQuery)
       .populate('learningId', 'name')
       .lean();
+
     const topicScores = await TopicScore.find(topicScoreQuery)
       .populate('learningId', 'name')
       .lean();
-    // --- Map Dates ---
+
     const scoreDateMap = new Map();
     const topicDateMap = new Map();
     const allDatesSet = new Set();
@@ -309,32 +312,37 @@ exports.StrikeBothSameDate = async (req, res) => {
       });
     });
 
-    // --- Combine Result by Date ---
     const result = [];
+
     for (let date of allDatesSet) {
       const scoreItems = scoreDateMap.get(date) || [];
       const topicItems = topicDateMap.get(date) || [];
       const combined = [...scoreItems, ...topicItems];
 
-      if (Array.isArray(type) && type.includes('topic') && type.includes('practice')) {
-        if (scoreItems.length > 0 && topicItems.length > 0) {
-          result.push({ date, data: combined });
-        }
-      } else if (type === 'practice' || (Array.isArray(type) && type.length === 1 && type[0] === 'practice')) {
-        if (scoreItems.length > 0) {
-          result.push({ date, data: scoreItems });
-        }
-      } else if (type === 'topic' || (Array.isArray(type) && type.length === 1 && type[0] === 'topic')) {
-        if (topicItems.length > 0) {
-          result.push({ date, data: topicItems });
+      // Sort to get the earliest record of the day
+      combined.sort((a, b) => {
+        const timeA = a.updatedAt || a.scoreDate;
+        const timeB = b.updatedAt || b.scoreDate;
+        return new Date(timeA) - new Date(timeB);
+      });
+
+      const firstItem = combined[0];
+
+      if (firstItem) {
+        if (
+          (Array.isArray(type) && type.includes(firstItem.type)) ||
+          type === firstItem.type ||
+          (Array.isArray(type) && type.length === 0)
+        ) {
+          result.push({ date, data: [firstItem] });
         }
       }
     }
 
-    // --- Sort by Date ---
+    // Sort result by date ascending
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // --- Longest Streak Calculation ---
+    // Calculate longest streak where both topic and practice exist
     const bothTypesDates = [];
     for (let date of allDatesSet) {
       if (scoreDateMap.has(date) && topicDateMap.has(date)) {
@@ -343,15 +351,11 @@ exports.StrikeBothSameDate = async (req, res) => {
     }
 
     const sortedBothDates = bothTypesDates.sort((a, b) => new Date(a) - new Date(b));
-
     let maxStreak = 0;
     let currentStreak = 1;
     let streakStart = null;
     let streakEnd = null;
-    let tempStart = null;
-    if (sortedBothDates.length > 0) {
-      tempStart = sortedBothDates[0];
-    }
+    let tempStart = sortedBothDates.length > 0 ? sortedBothDates[0] : null;
 
     for (let i = 1; i < sortedBothDates.length; i++) {
       const prev = moment(sortedBothDates[i - 1]);
@@ -370,14 +374,12 @@ exports.StrikeBothSameDate = async (req, res) => {
       }
     }
 
-    // Final check
     if (currentStreak > maxStreak) {
       maxStreak = currentStreak;
       streakStart = tempStart;
       streakEnd = sortedBothDates[sortedBothDates.length - 1];
     }
 
-    // --- Fetch Bonus ---
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
 
     const response = {
@@ -403,6 +405,7 @@ exports.StrikeBothSameDate = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.StrikeBothSameDate = async (req, res) => {
