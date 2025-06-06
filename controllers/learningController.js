@@ -150,6 +150,7 @@ exports.updateLearning = async (req, res) => {
 //   }
 // };
 
+
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -269,6 +270,7 @@ exports.Topicstrikes = async (req, res) => {
 // };
 
 
+
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -338,7 +340,7 @@ exports.StrikeBothSameDate = async (req, res) => {
 
       if (Array.isArray(type) && type.includes('topic') && type.includes('practice')) {
         if (scoreItems.length > 0 && topicItems.length > 0) {
-          result.push({ date, data: combined });
+          result.push({ date });
         }
       } else if (type === 'practice' || (Array.isArray(type) && type.length === 1 && type[0] === 'practice')) {
         if (scoreItems.length > 0) {
@@ -361,7 +363,6 @@ exports.StrikeBothSameDate = async (req, res) => {
         bothTypesDates.push(date);
       }
     }
-
     const sortedBothDates = bothTypesDates.sort((a, b) => new Date(a) - new Date(b));
 
     let maxStreak = 0;
