@@ -150,18 +150,38 @@ exports.updateLearning = async (req, res) => {
 //   }
 // };
 
-
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
-    const scores = await TopicScore.find({ userId })
-      .populate('topicId', 'topic')
-      .populate('learningId', 'name')
-      .sort({ scoreDate: -1 });
 
-    res.status(200).json({ scores });
+    // Step 1: Get scores sorted by earliest scoreDate and group by date
+    const rawScores = await TopicScore.aggregate([
+      { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+      { $sort: { scoreDate: 1 } }, // earliest first
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+          },
+          doc: { $first: "$$ROOT" } // get first score per day
+        }
+      },
+      {
+        $replaceRoot: { newRoot: "$doc" }
+      },
+      { $sort: { scoreDate: -1 } } // optional: latest dates on top
+    ]);
+
+    // Step 2: Populate topicId and learningId manually
+    const populatedScores = await TopicScore.populate(rawScores, [
+      { path: 'topicId', select: 'topic' },
+      { path: 'learningId', select: 'name' }
+    ]);
+
+    // Step 3: Return response
+    res.status(200).json({ scores: populatedScores });
   } catch (error) {
-    console.error('Error in getUserScoresByDate:', error);
+    console.error('Error in scoreCard:', error);
     res.status(500).json({ message: error.message });
   }
 };
