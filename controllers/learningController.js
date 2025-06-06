@@ -363,10 +363,8 @@ exports.StrikeBothSameDate = async (req, res) => {
       if (scoreDateMap.has(date) && topicDateMap.has(date)) {
         bothTypesDates.push(date);
       }
-    }
-combined 
+    } 
     const sortedBothDates = bothTypesDates.sort((a, b) => new Date(a) - new Date(b));
-
     let maxStreak = 0;
     let currentStreak = 1;
     let streakStart = null;
