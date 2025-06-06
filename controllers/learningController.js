@@ -253,10 +253,8 @@ exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
     const { type = [], startDate, endDate } = req.body;
-
     const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
     const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
-
     // --- PRACTICE SCORE QUERY ---
     const scoreQuery = {
       userId,
@@ -265,7 +263,6 @@ exports.StrikeBothSameDate = async (req, res) => {
     if (start && end) {
       scoreQuery.scoreDate = { $gte: start.toDate(), $lte: end.toDate() };
     }
-
     // --- TOPIC SCORE QUERY (using TopicScore) ---
     const topicScoreQuery = {
       userId,
@@ -274,15 +271,12 @@ exports.StrikeBothSameDate = async (req, res) => {
     if (start && end) {
       topicScoreQuery.updatedAt = { $gte: start.toDate(), $lte: end.toDate() };
     }
-
     const scores = await LearningScore.find(scoreQuery)
       .populate('learningId', 'name')
       .lean();
-
     const topicScores = await TopicScore.find(topicScoreQuery)
       .populate('learningId', 'name')
       .lean();
-
     // --- Map Dates ---
     const scoreDateMap = new Map();
     const topicDateMap = new Map();
@@ -355,7 +349,6 @@ exports.StrikeBothSameDate = async (req, res) => {
     let streakStart = null;
     let streakEnd = null;
     let tempStart = null;
-
     if (sortedBothDates.length > 0) {
       tempStart = sortedBothDates[0];
     }

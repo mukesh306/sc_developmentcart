@@ -18,7 +18,7 @@ const College = require('../models/college');
       if (!['college', 'school'].includes(type.toLowerCase())) {
         return res.status(400).json({ message: 'Invalid type. Type must be either "college" or "school".' });
       }
-  
+   
       const Model = type.toLowerCase() === 'college' ? College : School;
   
       const existing = await Model.findOne({ name: name.trim() });
