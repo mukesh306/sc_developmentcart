@@ -1117,17 +1117,41 @@ exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const scores = await LearningScore.find({ userId })
-      .populate('learningId', 'name')
-      .sort({ scoreDate: -1 });
+    const rawScores = await LearningScore.aggregate([
+      {
+        $match: { userId: new mongoose.Types.ObjectId(userId) }
+      },
+      {
+        $sort: { scoreDate: 1 } // earliest first
+      },
+      {
+        $group: {
+          _id: {
+            $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+          },
+          doc: { $first: "$$ROOT" }
+        }
+      },
+      {
+        $replaceRoot: { newRoot: "$doc" }
+      },
+      {
+        $sort: { scoreDate: -1 } // latest date on top (optional)
+      }
+    ]);
 
-    res.status(200).json({ scores });
+    // Populate learningId manually to match your previous response format
+    const populatedScores = await LearningScore.populate(rawScores, {
+      path: 'learningId',
+      select: 'name'
+    });
+
+    res.status(200).json({ scores: populatedScores });
   } catch (error) {
-    console.error('Error in getUserScoresByDate:', error);
+    console.error('Error in PracticescoreCard:', error);
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
