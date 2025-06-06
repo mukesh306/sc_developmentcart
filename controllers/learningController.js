@@ -275,63 +275,40 @@ exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
     const { type = [], startDate, endDate } = req.body;
+
     const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
     const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
-    // --- PRACTICE SCORE QUERY ---
-    const scoreQuery = {
-      userId,
-      strickStatus: true,
-    };
+
+    // Queries
+    const scoreQuery = { userId, strickStatus: true };
+    const topicScoreQuery = { userId, strickStatus: true };
+
     if (start && end) {
       scoreQuery.scoreDate = { $gte: start.toDate(), $lte: end.toDate() };
-    }
-    // --- TOPIC SCORE QUERY (using TopicScore) ---
-    const topicScoreQuery = {
-      userId,
-      strickStatus: true,
-    };
-    if (start && end) {
       topicScoreQuery.updatedAt = { $gte: start.toDate(), $lte: end.toDate() };
     }
-    const scores = await LearningScore.find(scoreQuery)
-      .populate('learningId', 'name')
-      .lean();
-    const topicScores = await TopicScore.find(topicScoreQuery)
-      .populate('learningId', 'name')
-      .lean();
-    // --- Map Dates ---
+
+    const scores = await LearningScore.find(scoreQuery).populate('learningId', 'name').lean();
+    const topicScores = await TopicScore.find(topicScoreQuery).populate('learningId', 'name').lean();
+
     const scoreDateMap = new Map();
     const topicDateMap = new Map();
     const allDatesSet = new Set();
 
     scores.forEach(score => {
-      const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      allDatesSet.add(date);
-      if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
-      scoreDateMap.get(date).push({
-        strickStatus: score.strickStatus,
-        score: score.score,
-        updatedAt: score.updatedAt,
-        scoreDate: score.scoreDate,
-        type: 'practice',
-        learningId: score.learningId
-      });
+      const dateISO = new Date(score.scoreDate).toISOString(); // full ISO date
+      allDatesSet.add(dateISO);
+      if (!scoreDateMap.has(dateISO)) scoreDateMap.set(dateISO, []);
+      scoreDateMap.get(dateISO).push(score);
     });
 
     topicScores.forEach(score => {
-      const date = moment(score.updatedAt).format('YYYY-MM-DD');
-      allDatesSet.add(date);
-      if (!topicDateMap.has(date)) topicDateMap.set(date, []);
-      topicDateMap.get(date).push({
-        strickStatus: score.strickStatus,
-        score: score.score,
-        updatedAt: score.updatedAt,
-        type: 'topic',
-        learningId: score.learningId
-      });
+      const dateISO = new Date(score.updatedAt).toISOString(); // full ISO date
+      allDatesSet.add(dateISO);
+      if (!topicDateMap.has(dateISO)) topicDateMap.set(dateISO, []);
+      topicDateMap.get(dateISO).push(score);
     });
 
-    // --- Combine Result by Date ---
     const result = [];
     for (let date of allDatesSet) {
       const scoreItems = scoreDateMap.get(date) || [];
@@ -340,36 +317,37 @@ exports.StrikeBothSameDate = async (req, res) => {
 
       if (Array.isArray(type) && type.includes('topic') && type.includes('practice')) {
         if (scoreItems.length > 0 && topicItems.length > 0) {
-          result.push({ date });
+          result.push({ date: new Date(date) });
         }
       } else if (type === 'practice' || (Array.isArray(type) && type.length === 1 && type[0] === 'practice')) {
         if (scoreItems.length > 0) {
-          result.push({ date, data: scoreItems });
+          result.push({ date: new Date(date) });
         }
       } else if (type === 'topic' || (Array.isArray(type) && type.length === 1 && type[0] === 'topic')) {
         if (topicItems.length > 0) {
-          result.push({ date, data: topicItems });
+          result.push({ date: new Date(date) });
         }
       }
     }
 
-    // --- Sort by Date ---
+    // Sort by ISO date
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // --- Longest Streak Calculation ---
+    // Streak calculation
     const bothTypesDates = [];
     for (let date of allDatesSet) {
       if (scoreDateMap.has(date) && topicDateMap.has(date)) {
         bothTypesDates.push(date);
       }
     }
-    const sortedBothDates = bothTypesDates.sort((a, b) => new Date(a) - new Date(b));
 
+    const sortedBothDates = bothTypesDates.sort((a, b) => new Date(a) - new Date(b));
     let maxStreak = 0;
     let currentStreak = 1;
     let streakStart = null;
     let streakEnd = null;
     let tempStart = null;
+
     if (sortedBothDates.length > 0) {
       tempStart = sortedBothDates[0];
     }
@@ -391,23 +369,21 @@ exports.StrikeBothSameDate = async (req, res) => {
       }
     }
 
-    // Final check
     if (currentStreak > maxStreak) {
       maxStreak = currentStreak;
       streakStart = tempStart;
       streakEnd = sortedBothDates[sortedBothDates.length - 1];
     }
 
-    // --- Fetch Bonus ---
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
 
     const response = {
       dates: result,
       largestStreak: {
         count: maxStreak,
-        startDate: streakStart || null,
-        endDate: streakEnd || null,
-      },
+        startDate: streakStart ? new Date(streakStart) : null,
+        endDate: streakEnd ? new Date(streakEnd) : null
+      }
     };
 
     if (maxStreak >= 7 && markingSetting?.weeklyBonus) {
