@@ -169,30 +169,29 @@ exports.Topicstrikes = async (req, res) => {
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { type = '', startDate, endDate } = req.query;
-    const typeArray = Array.isArray(type) ? type : type.split(',');
+    const { type = [], startDate, endDate } = req.body;
 
     const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
     const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
 
-    // --- PRACTICE SCORE QUERY ---
-    const scoreQuery = { userId, strickStatus: true };
+    const scoreQuery = {
+      userId,
+      strickStatus: true,
+    };
     if (start && end) {
       scoreQuery.scoreDate = { $gte: start.toDate(), $lte: end.toDate() };
     }
 
-    // --- TOPIC SCORE QUERY ---
-    const topicScoreQuery = { userId, strickStatus: true };
+    const topicQuery = {
+      strickStatus: true,
+      scoreUpdatedAt: { $exists: true },
+    };
     if (start && end) {
-      topicScoreQuery.updatedAt = { $gte: start.toDate(), $lte: end.toDate() };
+      topicQuery.scoreUpdatedAt = { $gte: start.toDate(), $lte: end.toDate() };
     }
 
-    const scores = await LearningScore.find(scoreQuery)
-      .populate('learningId', 'name')
-      .lean();
-    const topicScores = await TopicScore.find(topicScoreQuery)
-      .populate('learningId', 'name')
-      .lean();
+    const scores = await LearningScore.find(scoreQuery).populate('learningId', 'name').lean();
+    const topics = await Topic.find(topicQuery).populate('learningId', 'name').lean();
 
     const scoreDateMap = new Map();
     const topicDateMap = new Map();
@@ -212,33 +211,35 @@ exports.StrikeBothSameDate = async (req, res) => {
       });
     });
 
-    topicScores.forEach(score => {
-      const date = moment(score.updatedAt).format('YYYY-MM-DD');
+    topics.forEach(topic => {
+      const date = moment(topic.scoreUpdatedAt).format('YYYY-MM-DD');
       allDatesSet.add(date);
       if (!topicDateMap.has(date)) topicDateMap.set(date, []);
       topicDateMap.get(date).push({
-        strickStatus: score.strickStatus,
-        score: score.score,
-        updatedAt: score.updatedAt,
+        strickStatus: topic.strickStatus,
+        score: topic.score,
+        updatedAt: topic.updatedAt,
         type: 'topic',
-        learningId: score.learningId
+        learningId: topic.learningId
       });
     });
 
     const result = [];
+
     for (let date of allDatesSet) {
       const scoreItems = scoreDateMap.get(date) || [];
       const topicItems = topicDateMap.get(date) || [];
+      const combined = [...scoreItems, ...topicItems];
 
-      if (typeArray.includes('topic') && typeArray.includes('practice')) {
+      if (Array.isArray(type) && type.includes('topic') && type.includes('practice')) {
         if (scoreItems.length > 0 && topicItems.length > 0) {
-          result.push({ date });
+          result.push({ date, data: combined });
         }
-      } else if (typeArray.length === 1 && typeArray.includes('practice')) {
+      } else if (type === 'practice' || (Array.isArray(type) && type.length === 1 && type[0] === 'practice')) {
         if (scoreItems.length > 0) {
           result.push({ date, data: scoreItems });
         }
-      } else if (typeArray.length === 1 && typeArray.includes('topic')) {
+      } else if (type === 'topic' || (Array.isArray(type) && type.length === 1 && type[0] === 'topic')) {
         if (topicItems.length > 0) {
           result.push({ date, data: topicItems });
         }
@@ -247,6 +248,7 @@ exports.StrikeBothSameDate = async (req, res) => {
 
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
+    // Calculate largest streak of consecutive days with both topic and practice
     const bothTypesDates = [];
     for (let date of allDatesSet) {
       if (scoreDateMap.has(date) && topicDateMap.has(date)) {
@@ -255,11 +257,13 @@ exports.StrikeBothSameDate = async (req, res) => {
     }
 
     const sortedBothDates = bothTypesDates.sort((a, b) => new Date(a) - new Date(b));
+
     let maxStreak = 0;
     let currentStreak = 1;
     let streakStart = null;
     let streakEnd = null;
     let tempStart = null;
+
     if (sortedBothDates.length > 0) {
       tempStart = sortedBothDates[0];
     }
@@ -267,6 +271,7 @@ exports.StrikeBothSameDate = async (req, res) => {
     for (let i = 1; i < sortedBothDates.length; i++) {
       const prev = moment(sortedBothDates[i - 1]);
       const curr = moment(sortedBothDates[i]);
+
       if (curr.diff(prev, 'days') === 1) {
         currentStreak++;
       } else {
@@ -280,6 +285,7 @@ exports.StrikeBothSameDate = async (req, res) => {
       }
     }
 
+    // Final check after loop
     if (currentStreak > maxStreak) {
       maxStreak = currentStreak;
       streakStart = tempStart;
@@ -287,7 +293,6 @@ exports.StrikeBothSameDate = async (req, res) => {
     }
 
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-
     const response = {
       dates: result,
       largestStreak: {
