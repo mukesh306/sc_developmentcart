@@ -145,16 +145,16 @@ exports.updateAssigned = async (req, res) => {
   }
 };
 
-
 exports.assignBonusPoint = async (req, res) => {
   try {
     const userId = req.user._id; 
-    const { bonuspoint } = req.body;
+    const bonuspoint = req.query.bonuspoint;  // body ki jagah query se le rahe hain
 
     if (bonuspoint == null) {
-      return res.status(400).json({ message: 'bonuspoint is required in body.' });
+      return res.status(400).json({ message: 'bonuspoint is required in query params.' });
     }
 
+    // baaki code same
     const markingSetting = await MarkingSetting.findOne({}).sort({ createdAt: -1 });
     if (!markingSetting) {
       return res.status(404).json({ message: 'Marking setting not found.' });
@@ -170,12 +170,11 @@ exports.assignBonusPoint = async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    // Step 3: Response me dono data bhej do
     return res.status(200).json({
       message: 'Bonus point saved successfully.',
       bonuspoint,
       user,
-      markingSetting // ye marking settings ka data
+      markingSetting
     });
   } catch (error) {
     console.error('Error in assignBonusPoint:', error);

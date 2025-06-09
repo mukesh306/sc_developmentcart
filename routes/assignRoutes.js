@@ -6,8 +6,9 @@ router.post('/assigned',auth, assignedController.createAssigned);
 
 router.get('/assigned', assignedController.getAssignedList);
 router.get('/assignedUser',auth, assignedController.getAssignedListUser);
-router.post('/assign-bonus', auth, assignedController.assignBonusPoint);
+
 router.delete('/assigned/:id', assignedController.deleteAssigned);
 router.put('/assigned/:id', assignedController.updateAssigned);
 
+router.post('/assign-bonus', auth, assignedController.assignBonusPoint);
 module.exports = router;
