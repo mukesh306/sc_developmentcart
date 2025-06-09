@@ -2,6 +2,9 @@ const Assigned = require('../models/assignlearning');
 const School = require('../models/school');
 const College = require('../models/college');
 const User = require('../models/User');
+const LearningScore = require('../models/learningScore');
+const TopicScore = require('../models/topicScore');
+
 const MarkingSetting = require('../models/markingSetting');
 
 exports.createAssigned = async (req, res) => {
