@@ -145,6 +145,7 @@ exports.updateAssigned = async (req, res) => {
   }
 };
 
+
 exports.assignBonusPoint = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -156,15 +157,52 @@ exports.assignBonusPoint = async (req, res) => {
     }
 
     let user = await User.findById(userId);
-
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
 
+    // --- Streak calculation (same as in Strikecalculation) ---
+    const scores = await LearningScore.find({ userId, strickStatus: true }).lean();
+    const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
+
+    const allDatesSet = new Set();
+    scores.forEach(score => {
+      allDatesSet.add(moment(score.scoreDate).format('YYYY-MM-DD'));
+    });
+    topicScores.forEach(score => {
+      allDatesSet.add(moment(score.updatedAt).format('YYYY-MM-DD'));
+    });
+
+    const sortedDates = Array.from(allDatesSet).sort();
+    let currentStreak = { count: 0, startDate: null, endDate: null };
+    let streakStart = null;
+    let tempStreak = [];
+
+    for (let i = 0; i < sortedDates.length; i++) {
+      const curr = moment(sortedDates[i]);
+      const prev = i > 0 ? moment(sortedDates[i - 1]) : null;
+
+      if (!prev || curr.diff(prev, 'days') === 1) {
+        if (!streakStart) streakStart = sortedDates[i];
+        tempStreak.push(sortedDates[i]);
+      } else {
+        tempStreak = [sortedDates[i]];
+        streakStart = sortedDates[i];
+      }
+    }
+
+    if (tempStreak.length > 0) {
+      currentStreak = {
+        count: tempStreak.length,
+        startDate: streakStart,
+        endDate: tempStreak[tempStreak.length - 1]
+      };
+    }
+
+    // ✅ Add bonuspoint if provided
     if (!isNaN(bonuspoint)) {
       const previousBonus = user.bonuspoint || 0;
       const updatedBonus = previousBonus + bonuspoint;
-
       user.bonuspoint = updatedBonus;
       await user.save();
     }
@@ -174,6 +212,7 @@ exports.assignBonusPoint = async (req, res) => {
         ? 'Bonus point added successfully.'
         : 'User fetched successfully.',
       bonuspoint: user.bonuspoint,
+      currentStreak,
       user,
       markingSetting
     });
@@ -182,4 +221,44 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// exports.assignBonusPoint = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const bonuspoint = Number(req.query.bonuspoint); 
+
+//     const markingSetting = await MarkingSetting.findOne({}).sort({ createdAt: -1 });
+//     if (!markingSetting) {
+//       return res.status(404).json({ message: 'Marking setting not found.' });
+//     }
+
+//     let user = await User.findById(userId);
+
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found.' });
+//     }
+
+//     if (!isNaN(bonuspoint)) {
+//       const previousBonus = user.bonuspoint || 0;
+//       const updatedBonus = previousBonus + bonuspoint;
+
+//       user.bonuspoint = updatedBonus;
+//       await user.save();
+//     }
+
+//     return res.status(200).json({
+//       message: !isNaN(bonuspoint)
+//         ? 'Bonus point added successfully.'
+//         : 'User fetched successfully.',
+//       bonuspoint: user.bonuspoint,
+//       user,
+//       markingSetting
+//     });
+//   } catch (error) {
+//     console.error('Error in assignBonusPoint:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
 
