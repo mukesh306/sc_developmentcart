@@ -50,6 +50,12 @@ exports.createOrUpdateSettings = async (req, res) => {
     if (deductions !== undefined) {
       setting.deductions = deductions;
     }
+    if (ExperiencePoint !== undefined) {
+      setting.ExperiencePoint = ExperiencePoint;
+    }
+    if (dailyExperience !== undefined) {
+      setting.dailyExperience = dailyExperience;
+    }
 
     await setting.save();
 
@@ -63,7 +69,6 @@ exports.createOrUpdateSettings = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: err.message });
   }
 };
-
 
 exports.getSettings = async (req, res) => {
   try {

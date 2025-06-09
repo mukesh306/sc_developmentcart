@@ -20,6 +20,13 @@ const MarkingSettingSchema = new mongoose.Schema({
   monthlyBonus: {
     type: Number
   },
+  ExperiencePoint: {
+    type: Number
+  },
+  dailyExperience: {
+    type: Number
+  },
+
   deductions: {
     type: Number
   },
