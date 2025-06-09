@@ -167,7 +167,7 @@ exports.assignBonusPoint = async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    // --- Get all streak dates ---
+    // --- Calculate current streak ---
     const scores = await LearningScore.find({ userId, strickStatus: true }).lean();
     const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
 
@@ -180,10 +180,9 @@ exports.assignBonusPoint = async (req, res) => {
     });
 
     const sortedDates = Array.from(allDatesSet).sort();
-    let tempStreak = [];
+    let currentStreak = { count: 0, startDate: null, endDate: null };
     let streakStart = null;
-    let weekly = null;
-    let monthly = null;
+    let tempStreak = [];
 
     for (let i = 0; i < sortedDates.length; i++) {
       const curr = moment(sortedDates[i]);
@@ -193,45 +192,20 @@ exports.assignBonusPoint = async (req, res) => {
         if (!streakStart) streakStart = sortedDates[i];
         tempStreak.push(sortedDates[i]);
       } else {
-        // Finalize previous streak
-        if (tempStreak.length >= 7 && !weekly) {
-          weekly = {
-            count: tempStreak.length,
-            startDate: streakStart,
-            endDate: tempStreak[tempStreak.length - 1]
-          };
-        }
-        if (tempStreak.length >= 30 && !monthly) {
-          monthly = {
-            count: tempStreak.length,
-            startDate: streakStart,
-            endDate: tempStreak[tempStreak.length - 1]
-          };
-        }
-
-        // Reset
-        streakStart = sortedDates[i];
         tempStreak = [sortedDates[i]];
+        streakStart = sortedDates[i];
       }
     }
 
-    // Final streak after loop
-    if (tempStreak.length >= 7 && !weekly) {
-      weekly = {
-        count: tempStreak.length,
-        startDate: streakStart,
-        endDate: tempStreak[tempStreak.length - 1]
-      };
-    }
-    if (tempStreak.length >= 30 && !monthly) {
-      monthly = {
+    if (tempStreak.length > 0) {
+      currentStreak = {
         count: tempStreak.length,
         startDate: streakStart,
         endDate: tempStreak[tempStreak.length - 1]
       };
     }
 
-    // --- Update bonus point if query param is valid ---
+    // --- Update bonus point ---
     let updatedBonus = user.bonuspoint || 0;
     if (!isNaN(bonuspoint)) {
       updatedBonus += bonuspoint;
@@ -242,8 +216,8 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(200).json({
       message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
       bonuspoint: updatedBonus,
-      weekly,
-      monthly,
+      weekly: currentStreak,
+      monthly: currentStreak,
       weeklyBonus: markingSetting.weeklyBonus || 0,
       monthlyBonus: markingSetting.monthlyBonus || 0
     });
@@ -253,7 +227,6 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 // exports.assignBonusPoint = async (req, res) => {
