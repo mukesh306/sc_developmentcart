@@ -230,7 +230,7 @@ exports.updateAssigned = async (req, res) => {
 
 
 exports.assignBonusPoint = async (req, res) => {
-  try {
+  try { 
     const userId = req.user._id;
     const bonuspoint = Number(req.query.bonuspoint); 
 

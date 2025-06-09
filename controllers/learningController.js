@@ -290,11 +290,7 @@ exports.StrikeBothSameDate = async (req, res) => {
 
     const response = {
       dates: result,
-      largestStreak: {
-        count: maxStreak,
-        startDate: streakStart || null,
-        endDate: streakEnd || null,
-      },
+      
     };
 
     if (maxStreak >= 7 && markingSetting?.weeklyBonus) {
