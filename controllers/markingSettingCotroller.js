@@ -9,9 +9,9 @@ exports.createOrUpdateSettings = async (req, res) => {
     totalnoofquestion,
     weeklyBonus,
     monthlyBonus,
-    deductions,
-    ExperiencePoint,
-    dailyExperience
+    experiencePoint,
+    dailyExperience,
+     deductions
   } = req.body;
 
   try {
@@ -49,14 +49,15 @@ exports.createOrUpdateSettings = async (req, res) => {
     if (monthlyBonus !== undefined) {
       setting.monthlyBonus = monthlyBonus;
     }
-    if (deductions !== undefined) {
-      setting.deductions = deductions;
-    }
-    if (ExperiencePoint !== undefined) {
-      setting.ExperiencePoint = ExperiencePoint;
+   
+    if (experiencePoint !== undefined) {
+      setting.experiencePoint = experiencePoint;
     }
     if (dailyExperience !== undefined) {
       setting.dailyExperience = dailyExperience;
+    }
+     if (deductions !== undefined) {
+      setting.deductions = deductions;
     }
 
     await setting.save();
