@@ -144,34 +144,34 @@ exports.updateAssigned = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
 exports.assignBonusPoint = async (req, res) => {
   try {
-    const userId = req.user._id; 
-    const bonuspoint = req.query.bonuspoint;  // body ki jagah query se le rahe hain
+    const userId = req.user._id;
+    const bonuspoint = req.query.bonuspoint; // optional query param
 
-    if (bonuspoint == null) {
-      return res.status(400).json({ message: 'bonuspoint is required in query params.' });
-    }
-
-    // baaki code same
     const markingSetting = await MarkingSetting.findOne({}).sort({ createdAt: -1 });
     if (!markingSetting) {
       return res.status(404).json({ message: 'Marking setting not found.' });
     }
 
-    const user = await User.findByIdAndUpdate(
-      userId,
-      { bonuspoint },
-      { new: true }
-    );
+    let user;
+
+    if (bonuspoint != null) {
+      user = await User.findByIdAndUpdate(
+        userId,
+        { bonuspoint },
+        { new: true }
+      );
+    } else {
+      user = await User.findById(userId);
+    }
 
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
 
     return res.status(200).json({
-      message: 'Bonus point saved successfully.',
+      message: bonuspoint ? 'Bonus point saved successfully.' : 'User fetched successfully.',
       bonuspoint,
       user,
       markingSetting
@@ -181,3 +181,4 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
