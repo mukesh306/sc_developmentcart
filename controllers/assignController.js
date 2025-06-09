@@ -148,7 +148,7 @@ exports.updateAssigned = async (req, res) => {
 exports.assignBonusPoint = async (req, res) => {
   try {
     const userId = req.user._id;
-    const bonuspoint = Number(req.query.bonuspoint); // convert string to number
+    const bonuspoint = Number(req.query.bonuspoint); 
 
     const markingSetting = await MarkingSetting.findOne({}).sort({ createdAt: -1 });
     if (!markingSetting) {
@@ -161,7 +161,6 @@ exports.assignBonusPoint = async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    // Agar bonuspoint diya gaya hai to usko add karo
     if (!isNaN(bonuspoint)) {
       const previousBonus = user.bonuspoint || 0;
       const updatedBonus = previousBonus + bonuspoint;
