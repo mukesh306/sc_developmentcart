@@ -33,6 +33,10 @@ router.post(
    router.post('/login-with-otp',userController.loginWithOTP);
     router.post('/reset-password-after-otp',userController.resetPasswordAfterOTPLogin);
 
+  router.get('/check', (req, res) => {
+  return res.status(200).json({ response: true });
+});
+
 // EmailverifytOTP
   router.post('/sendEmailverify', userController.SendEmailverifyOTP);
   router.post('/emailverifyotp', userController.EmailVerifyOtp);
