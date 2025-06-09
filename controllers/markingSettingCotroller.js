@@ -9,7 +9,9 @@ exports.createOrUpdateSettings = async (req, res) => {
     totalnoofquestion,
     weeklyBonus,
     monthlyBonus,
-    deductions
+    deductions,
+    ExperiencePoint,
+    dailyExperience
   } = req.body;
 
   try {
