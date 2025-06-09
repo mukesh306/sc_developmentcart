@@ -169,7 +169,7 @@ exports.Topicstrikes = async (req, res) => {
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { type = [], startDate, endDate } = req.body;
+    const { type = [], startDate, endDate } = req.query;
 
     const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
     const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
