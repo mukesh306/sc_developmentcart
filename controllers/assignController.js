@@ -150,23 +150,22 @@ exports.updateAssigned = async (req, res) => {
   }
 };
 
-
 exports.assignBonusPoint = async (req, res) => {
   try {
     const userId = req.user._id;
     const bonuspoint = Number(req.query.bonuspoint); 
 
-    const markingSetting = await MarkingSetting.findOne({}).sort({ createdAt: -1 });
+    const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 }).sort({ createdAt: -1 }).lean();
     if (!markingSetting) {
       return res.status(404).json({ message: 'Marking setting not found.' });
     }
 
-    let user = await User.findById(userId);
+    const user = await User.findById(userId);
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    // --- Streak calculation (same as in Strikecalculation) ---
+    // --- Calculate current streak ---
     const scores = await LearningScore.find({ userId, strickStatus: true }).lean();
     const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
 
@@ -204,29 +203,27 @@ exports.assignBonusPoint = async (req, res) => {
       };
     }
 
-    // ✅ Add bonuspoint if provided
+    // --- Update bonus point ---
+    let updatedBonus = user.bonuspoint || 0;
     if (!isNaN(bonuspoint)) {
-      const previousBonus = user.bonuspoint || 0;
-      const updatedBonus = previousBonus + bonuspoint;
+      updatedBonus += bonuspoint;
       user.bonuspoint = updatedBonus;
       await user.save();
     }
 
     return res.status(200).json({
-      message: !isNaN(bonuspoint)
-        ? 'Bonus point added successfully.'
-        : 'User fetched successfully.',
-      bonuspoint: user.bonuspoint,
+      message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
+      bonuspoint: updatedBonus,
       currentStreak,
-      user,
-      markingSetting
+      weeklyBonus: markingSetting.weeklyBonus || 0,
+      monthlyBonus: markingSetting.monthlyBonus || 0
     });
+
   } catch (error) {
     console.error('Error in assignBonusPoint:', error);
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 // exports.assignBonusPoint = async (req, res) => {
