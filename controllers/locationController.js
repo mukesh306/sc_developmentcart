@@ -161,14 +161,11 @@ exports.updateLocation = async (req, res) => {
       if (locationData.type === 'city' && parent.type !== 'state') {
         return res.status(400).json({ message: 'City must belong to a state.' });
       }
-
       locationData.parent = parentId;
     }
-
     if (name) {
       locationData.name = name;
     }
-
     await locationData.save();
 
     res.status(200).json({ message: 'Location updated successfully.', location: locationData });

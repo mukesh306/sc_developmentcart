@@ -8,7 +8,8 @@ exports.createOrUpdateSettings = async (req, res) => {
     totalquiz,
     totalnoofquestion,
     weeklyBonus,
-    monthlyBonus
+    monthlyBonus,
+    deductions
   } = req.body;
 
   try {
@@ -45,6 +46,9 @@ exports.createOrUpdateSettings = async (req, res) => {
 
     if (monthlyBonus !== undefined) {
       setting.monthlyBonus = monthlyBonus;
+    }
+    if (deductions !== undefined) {
+      setting.deductions = deductions;
     }
 
     await setting.save();

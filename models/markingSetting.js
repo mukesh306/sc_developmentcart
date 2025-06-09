@@ -19,6 +19,9 @@ const MarkingSettingSchema = new mongoose.Schema({
   monthlyBonus: {
     type: Number
   },
+  deductions: {
+    type: Number
+  },
 
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
 }, { timestamps: true });

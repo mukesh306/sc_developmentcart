@@ -1,7 +1,13 @@
+const mongoose = require('mongoose');
+const moment = require('moment');
 const Assigned = require('../models/assignlearning'); 
 const School = require('../models/school');
 const College = require('../models/college');
 const User = require('../models/User');
+const LearningScore = require('../models/learningScore');
+const TopicScore = require('../models/topicScore');
+
+const MarkingSetting = require('../models/markingSetting');
 
 exports.createAssigned = async (req, res) => {
   try {
@@ -30,7 +36,6 @@ exports.createAssigned = async (req, res) => {
   }
 };
 
-
 exports.getAssignedList = async (req, res) => {
   try {
     const assignedList = await Assigned.find()
@@ -52,7 +57,6 @@ exports.getAssignedList = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
 
 exports.getAssignedListUser = async (req, res) => {
   try {
@@ -81,8 +85,6 @@ exports.getAssignedListUser = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
-
 
 exports.deleteAssigned = async (req, res) => {
   try {
@@ -147,3 +149,210 @@ exports.updateAssigned = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+
+
+// exports.assignBonusPoint = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const bonuspoint = Number(req.query.bonuspoint); 
+
+//     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 }).sort({ createdAt: -1 }).lean();
+//     if (!markingSetting) {
+//       return res.status(404).json({ message: 'Marking setting not found.' });
+//     }
+
+//     const user = await User.findById(userId);
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found.' });
+//     }
+
+//     // --- Calculate current streak ---
+//     const scores = await LearningScore.find({ userId, strickStatus: true }).lean();
+//     const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
+
+//     const allDatesSet = new Set();
+//     scores.forEach(score => {
+//       allDatesSet.add(moment(score.scoreDate).format('YYYY-MM-DD'));
+//     });
+//     topicScores.forEach(score => {
+//       allDatesSet.add(moment(score.updatedAt).format('YYYY-MM-DD'));
+//     });
+
+//     const sortedDates = Array.from(allDatesSet).sort();
+//     let currentStreak = { count: 0, startDate: null, endDate: null };
+//     let streakStart = null;
+//     let tempStreak = [];
+
+//     for (let i = 0; i < sortedDates.length; i++) {
+//       const curr = moment(sortedDates[i]);
+//       const prev = i > 0 ? moment(sortedDates[i - 1]) : null;
+
+//       if (!prev || curr.diff(prev, 'days') === 1) {
+//         if (!streakStart) streakStart = sortedDates[i];
+//         tempStreak.push(sortedDates[i]);
+//       } else {
+//         tempStreak = [sortedDates[i]];
+//         streakStart = sortedDates[i];
+//       }
+//     }
+
+//     if (tempStreak.length > 0) {
+//       currentStreak = {
+//         count: tempStreak.length,
+//         startDate: streakStart,
+//         endDate: tempStreak[tempStreak.length - 1]
+//       };
+//     }
+
+//     // --- Update bonus point ---
+//     let updatedBonus = user.bonuspoint || 0;
+//     if (!isNaN(bonuspoint)) {
+//       updatedBonus += bonuspoint;
+//       user.bonuspoint = updatedBonus;
+//       await user.save();
+//     }
+
+//     return res.status(200).json({
+//       message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
+//       bonuspoint: updatedBonus,
+//       weekly: currentStreak,
+//       monthly: currentStreak,
+//       weeklyBonus: markingSetting.weeklyBonus || 0,
+//       monthlyBonus: markingSetting.monthlyBonus || 0
+//     });
+
+//   } catch (error) {
+//     console.error('Error in assignBonusPoint:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
+
+exports.assignBonusPoint = async (req, res) => {
+  try { 
+    const userId = req.user._id;
+    const bonuspoint = Number(req.query.bonuspoint); 
+
+    const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
+      .sort({ createdAt: -1 })
+      .lean();
+      
+    if (!markingSetting) {
+      return res.status(404).json({ message: 'Marking setting not found.' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    // --- Calculate current streak ---
+    const scores = await LearningScore.find({ userId, strickStatus: true }).lean();
+    const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
+
+    const allDatesSet = new Set();
+    scores.forEach(score => {
+      allDatesSet.add(moment(score.scoreDate).format('YYYY-MM-DD'));
+    });
+    topicScores.forEach(score => {
+      allDatesSet.add(moment(score.updatedAt).format('YYYY-MM-DD'));
+    });
+
+    const sortedDates = Array.from(allDatesSet).sort();
+    let currentStreak = { count: 0, startDate: null, endDate: null };
+    let streakStart = null;
+    let tempStreak = [];
+
+    for (let i = 0; i < sortedDates.length; i++) {
+      const curr = moment(sortedDates[i]);
+      const prev = i > 0 ? moment(sortedDates[i - 1]) : null;
+
+      if (!prev || curr.diff(prev, 'days') === 1) {
+        if (!streakStart) streakStart = sortedDates[i];
+        tempStreak.push(sortedDates[i]);
+      } else {
+        tempStreak = [sortedDates[i]];
+        streakStart = sortedDates[i];
+      }
+    }
+
+    if (tempStreak.length > 0) {
+      currentStreak = {
+        count: tempStreak.length,
+        startDate: streakStart,
+        endDate: tempStreak[tempStreak.length - 1]
+      };
+    }
+
+    // --- Update bonus point ---
+    let updatedBonus = user.bonuspoint || 0;
+    if (!isNaN(bonuspoint)) {
+      updatedBonus += bonuspoint;
+      user.bonuspoint = updatedBonus;
+      await user.save();
+    }
+
+    // --- Response ---
+    return res.status(200).json({
+      message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
+      bonuspoint: updatedBonus,
+      weekly: {
+        count: currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7,
+        startDate: currentStreak.startDate,
+        endDate: currentStreak.endDate
+      },
+      monthly: {
+        count: currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30,
+        startDate: currentStreak.startDate,
+        endDate: currentStreak.endDate
+      },
+      weeklyBonus: markingSetting.weeklyBonus || 0,
+      monthlyBonus: markingSetting.monthlyBonus || 0
+    });
+
+  } catch (error) {
+    console.error('Error in assignBonusPoint:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+
+// exports.assignBonusPoint = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const bonuspoint = Number(req.query.bonuspoint); 
+
+//     const markingSetting = await MarkingSetting.findOne({}).sort({ createdAt: -1 });
+//     if (!markingSetting) {
+//       return res.status(404).json({ message: 'Marking setting not found.' });
+//     }
+
+//     let user = await User.findById(userId);
+
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found.' });
+//     }
+
+//     if (!isNaN(bonuspoint)) {
+//       const previousBonus = user.bonuspoint || 0;
+//       const updatedBonus = previousBonus + bonuspoint;
+
+//       user.bonuspoint = updatedBonus;
+//       await user.save();
+//     }
+
+//     return res.status(200).json({
+//       message: !isNaN(bonuspoint)
+//         ? 'Bonus point added successfully.'
+//         : 'User fetched successfully.',
+//       bonuspoint: user.bonuspoint,
+//       user,
+//       markingSetting
+//     });
+//   } catch (error) {
+//     console.error('Error in assignBonusPoint:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+

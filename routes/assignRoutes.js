@@ -10,4 +10,5 @@ router.get('/assignedUser',auth, assignedController.getAssignedListUser);
 router.delete('/assigned/:id', assignedController.deleteAssigned);
 router.put('/assigned/:id', assignedController.updateAssigned);
 
+router.get('/assign-bonus', auth, assignedController.assignBonusPoint);
 module.exports = router;
