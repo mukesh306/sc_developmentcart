@@ -2,7 +2,7 @@ const Assigned = require('../models/assignlearning');
 const School = require('../models/school');
 const College = require('../models/college');
 const User = require('../models/User');
-
+const MarkingSetting = require('../models/markingSetting');
 
 exports.createAssigned = async (req, res) => {
   try {
@@ -53,10 +53,10 @@ exports.getAssignedList = async (req, res) => {
   }
 };
 
-
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
+
     const user = await User.findById(userId).lean();
     if (!user || !user.className) {
       return res.status(400).json({ message: 'User className not found.' });
@@ -65,7 +65,6 @@ exports.getAssignedListUser = async (req, res) => {
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
-      .populate('learning4')
       .lean();
 
     for (let item of assignedList) {
@@ -81,8 +80,6 @@ exports.getAssignedListUser = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
-
 
 exports.deleteAssigned = async (req, res) => {
   try {
@@ -145,5 +142,43 @@ exports.updateAssigned = async (req, res) => {
   } catch (error) {
     console.error('Update Assigned Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
+
+
+exports.assignBonusPoint = async (req, res) => {
+  try {
+    const userId = req.user._id; 
+    const { bonuspoint } = req.body;
+
+    if (bonuspoint == null) {
+      return res.status(400).json({ message: 'bonuspoint is required in body.' });
+    }
+
+    const markingSetting = await MarkingSetting.findOne({}).sort({ createdAt: -1 });
+    if (!markingSetting) {
+      return res.status(404).json({ message: 'Marking setting not found.' });
+    }
+
+    const user = await User.findByIdAndUpdate(
+      userId,
+      { bonuspoint },
+      { new: true }
+    );
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    // Step 3: Response me dono data bhej do
+    return res.status(200).json({
+      message: 'Bonus point saved successfully.',
+      bonuspoint,
+      user,
+      markingSetting // ye marking settings ka data
+    });
+  } catch (error) {
+    console.error('Error in assignBonusPoint:', error);
+    return res.status(500).json({ message: error.message });
   }
 };
