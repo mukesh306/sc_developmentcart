@@ -9,7 +9,9 @@ exports.createOrUpdateSettings = async (req, res) => {
     totalnoofquestion,
     weeklyBonus,
     monthlyBonus,
-    deductions
+    experiencePoint,
+    dailyExperience,
+     deductions
   } = req.body;
 
   try {
@@ -47,7 +49,14 @@ exports.createOrUpdateSettings = async (req, res) => {
     if (monthlyBonus !== undefined) {
       setting.monthlyBonus = monthlyBonus;
     }
-    if (deductions !== undefined) {
+   
+    if (experiencePoint !== undefined) {
+      setting.experiencePoint = experiencePoint;
+    }
+    if (dailyExperience !== undefined) {
+      setting.dailyExperience = dailyExperience;
+    }
+     if (deductions !== undefined) {
       setting.deductions = deductions;
     }
 
@@ -63,7 +72,6 @@ exports.createOrUpdateSettings = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: err.message });
   }
 };
-
 
 exports.getSettings = async (req, res) => {
   try {
