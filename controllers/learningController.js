@@ -704,14 +704,6 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
-
-
-
-
-
-
-
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -785,7 +777,6 @@ exports.StrikePath = async (req, res) => {
     let weeklyBonusToAdd = 0;
     let weeklyBonusDatesToAdd = [];
 
-    // Build result array with daily bonus and deductions
     for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
       const currentDate = m.format('YYYY-MM-DD');
 
@@ -820,39 +811,29 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Check for 2-day consecutive full strikes for weekly bonus
+    // Check for 2-day consecutive full strikes (topic + practice)
     for (let i = 1; i < result.length; i++) {
-      const prev = result[i - 1];
-      const curr = result[i];
+  const prevDay = result[i - 1];
+  const currDay = result[i];
 
-      const prevTypes = prev.data.map(d => d.type);
-      const currTypes = curr.data.map(d => d.type);
+  const prevHasPractice = prevDay.data.some(item => item.type === 'practice');
+  const prevHasTopic = prevDay.data.some(item => item.type === 'topic');
+  const currHasPractice = currDay.data.some(item => item.type === 'practice');
+  const currHasTopic = currDay.data.some(item => item.type === 'topic');
 
-      const prevHasPractice = prevTypes.includes('practice');
-      const prevHasTopic = prevTypes.includes('topic');
-      const currHasPractice = currTypes.includes('practice');
-      const currHasTopic = currTypes.includes('topic');
+  if (
+    prevHasPractice && prevHasTopic &&
+    currHasPractice && currHasTopic &&
+    !existingWeeklyBonusDates.includes(currDay.date) &&
+    weeklyBonus > 0
+  ) {
+    // Apply weekly bonus to current day
+    currDay.weeklyBonus = weeklyBonus;
+    weeklyBonusToAdd += weeklyBonus;
+    weeklyBonusDatesToAdd.push(currDay.date);
+  }
+}
 
-      const currDate = curr.date;
-
-      if (
-        prevHasPractice && prevHasTopic &&
-        currHasPractice && currHasTopic &&
-        !existingWeeklyBonusDates.includes(currDate) &&
-        weeklyBonus > 0
-      ) {
-        weeklyBonusToAdd += weeklyBonus;
-        weeklyBonusDatesToAdd.push(currDate);
-
-        const index = result.findIndex(item => item.date === currDate);
-        if (index !== -1) {
-          result[index].weeklyBonus = weeklyBonus;
-          result[index].weeklyBonusReasonDates = [prev.date, curr.date];
-        }
-      }
-    }
-
-    // Prepare update data for user
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
