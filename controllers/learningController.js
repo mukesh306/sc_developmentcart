@@ -812,7 +812,8 @@ exports.StrikePath = async (req, res) => {
     }
 
     // Check for 2-day consecutive full strikes (topic + practice)
-    for (let i = 1; i < result.length; i++) {
+   // inside your for-loop that checks for 2-day consecutive full strikes
+for (let i = 1; i < result.length; i++) {
   const prevDay = result[i - 1];
   const currDay = result[i];
 
@@ -828,11 +829,12 @@ exports.StrikePath = async (req, res) => {
     weeklyBonus > 0
   ) {
     // Apply weekly bonus to current day
-    currDay.weeklyBonus = weeklyBonus;
+    currDay.weeklyBonus = weeklyBonus; // This adds it to the response
     weeklyBonusToAdd += weeklyBonus;
     weeklyBonusDatesToAdd.push(currDay.date);
   }
 }
+
 
     const updateData = {};
     if (bonusToAdd > 0) {
