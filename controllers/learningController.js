@@ -708,6 +708,7 @@ exports.Strikecalculation = async (req, res) => {
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
+
     const scores = await LearningScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
@@ -756,9 +757,12 @@ exports.StrikePath = async (req, res) => {
     const deductions = markingSetting?.deductions || 0;
 
     const datesList = Array.from(scoreMap.keys()).sort();
+    if (datesList.length === 0) {
+      return res.status(200).json({ dates: [] });
+    }
+
     const startDate = moment(datesList[0]);
     const endDate = moment(datesList[datesList.length - 1]);
-    const allDatesSet = new Set(datesList);
 
     const result = [];
     const user = await User.findById(userId).lean();
@@ -770,11 +774,7 @@ exports.StrikePath = async (req, res) => {
     let deductionToSubtract = 0;
     let datesToDeduct = [];
 
-    for (
-      let m = moment(startDate);
-      m.diff(endDate, 'days') <= 0;
-      m.add(1, 'days')
-    ) {
+    for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
       const currentDate = m.format('YYYY-MM-DD');
 
       if (scoreMap.has(currentDate)) {
@@ -784,6 +784,7 @@ exports.StrikePath = async (req, res) => {
         const hasTopic = types.includes('topic');
 
         const item = { date: currentDate, data };
+
         if (hasPractice && hasTopic && dailyExperience > 0) {
           item.dailyExperience = dailyExperience;
           if (!existingBonusDates.includes(currentDate)) {
@@ -794,13 +795,17 @@ exports.StrikePath = async (req, res) => {
 
         result.push(item);
       } else {
-        // Missing date
         const item = { date: currentDate, data: [] };
+
+        // Always show deduction in response
+        item.deduction = deductions;
+
+        // Only apply deduction if not already done
         if (!existingDeductedDates.includes(currentDate)) {
-          item.deduction = deductions;
           deductionToSubtract += deductions;
           datesToDeduct.push(currentDate);
         }
+
         result.push(item);
       }
     }
@@ -813,6 +818,7 @@ exports.StrikePath = async (req, res) => {
     if (deductionToSubtract > 0) {
       if (!updateData.$inc) updateData.$inc = {};
       updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) - deductionToSubtract;
+
       if (!updateData.$push) updateData.$push = {};
       updateData.$push.deductedDates = { $each: datesToDeduct };
     }
