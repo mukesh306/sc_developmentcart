@@ -717,9 +717,11 @@ exports.StrikePath = async (req, res) => {
       .populate('learningId', 'name')
       .lean();
 
+    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
+
     const dateMap = new Map();
 
-    // Process practice scores - keep only earliest by updatedAt
+    // Process practice scores
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       const dataItem = {
@@ -741,7 +743,7 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
-    // Process topic scores - keep only earliest by updatedAt
+    // Process topic scores
     topicScores.forEach(score => {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
       const dataItem = {
@@ -762,19 +764,27 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
-    // Prepare result array
     const result = [];
+
     for (let [date, { practice, topic }] of dateMap.entries()) {
       const data = [];
       if (practice) data.push(practice);
       if (topic) data.push(topic);
-      result.push({ date, data });
+
+      const entry = { date, data };
+
+      // ✅ Add dailyExperience if both exist
+      if (practice && topic && markingSetting?.dailyExperience) {
+        entry.dailyExperience = markingSetting.dailyExperience;
+      }
+
+      result.push(entry);
     }
 
-    // Sort by date ascending
+    // Sort by date
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Calculate streak where both topic and practice exist on same day
+    // Streak calculation
     const bothTypesDates = Array.from(dateMap.entries())
       .filter(([_, val]) => val.practice && val.topic)
       .map(([date]) => date)
@@ -812,8 +822,6 @@ exports.StrikePath = async (req, res) => {
       streakEnd = bothTypesDates[bothTypesDates.length - 1];
     }
 
-    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-
     const response = {
       dates: result
     };
@@ -832,6 +840,7 @@ exports.StrikePath = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
