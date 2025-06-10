@@ -810,10 +810,10 @@ exports.StrikePath = async (req, res) => {
     }
 
     // Weekly bonus detection
-   for (let i = 6; i < result.length; i++) {
+   for (let i = 1; i < result.length; i++) {
   let isStreak = true;
 
-  for (let j = i - 6; j <= i; j++) {
+  for (let j = i - 1; j <= i; j++) {
     const dayData = result[j]?.data || [];
     const hasPractice = dayData.some(item => item.type === 'practice');
     const hasTopic = dayData.some(item => item.type === 'topic');
