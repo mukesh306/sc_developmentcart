@@ -704,32 +704,17 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { type = '', startDate, endDate } = req.query;
-    const typeArray = Array.isArray(type) ? type : type.split(',');
 
-    const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
-    const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
-
-    // --- PRACTICE SCORE QUERY ---
-    const scoreQuery = { userId, strickStatus: true };
-    if (start && end) {
-      scoreQuery.scoreDate = { $gte: start.toDate(), $lte: end.toDate() };
-    }
-
-    // --- TOPIC SCORE QUERY ---
-    const topicScoreQuery = { userId, strickStatus: true };
-    if (start && end) {
-      topicScoreQuery.updatedAt = { $gte: start.toDate(), $lte: end.toDate() };
-    }
-
-    const scores = await LearningScore.find(scoreQuery)
+    // Get all practice scores with strickStatus true
+    const scores = await LearningScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
       .lean();
-    const topicScores = await TopicScore.find(topicScoreQuery)
+
+    // Get all topic scores with strickStatus true
+    const topicScores = await TopicScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
       .lean();
 
@@ -765,71 +750,56 @@ exports.StrikePath = async (req, res) => {
     });
 
     const result = [];
+
     for (let date of allDatesSet) {
       const scoreItems = scoreDateMap.get(date) || [];
       const topicItems = topicDateMap.get(date) || [];
 
-      if (typeArray.includes('topic') && typeArray.includes('practice')) {
-        if (scoreItems.length > 0 && topicItems.length > 0) {
-          result.push({ date });
-        }
-      } else if (typeArray.length === 1 && typeArray.includes('practice')) {
-        if (scoreItems.length > 0) {
-          result.push({ date, data: scoreItems });
-        }
-      } else if (typeArray.length === 1 && typeArray.includes('topic')) {
-        if (topicItems.length > 0) {
-          result.push({ date, data: topicItems });
-        }
+      if (scoreItems.length > 0 && topicItems.length > 0) {
+        result.push({ date });
       }
     }
 
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    const bothTypesDates = [];
-    for (let date of allDatesSet) {
-      if (scoreDateMap.has(date) && topicDateMap.has(date)) {
-        bothTypesDates.push(date);
-      }
-    }
-
-    const sortedBothDates = bothTypesDates.sort((a, b) => new Date(a) - new Date(b));
+    // Streak calculation
+    const sortedDates = [...result.map(item => item.date)].sort();
     let maxStreak = 0;
     let currentStreak = 1;
     let streakStart = null;
     let streakEnd = null;
     let tempStart = null;
-    if (sortedBothDates.length > 0) {
-      tempStart = sortedBothDates[0];
+
+    if (sortedDates.length > 0) {
+      tempStart = sortedDates[0];
     }
 
-    for (let i = 1; i < sortedBothDates.length; i++) {
-      const prev = moment(sortedBothDates[i - 1]);
-      const curr = moment(sortedBothDates[i]);
+    for (let i = 1; i < sortedDates.length; i++) {
+      const prev = moment(sortedDates[i - 1]);
+      const curr = moment(sortedDates[i]);
       if (curr.diff(prev, 'days') === 1) {
         currentStreak++;
       } else {
         if (currentStreak > maxStreak) {
           maxStreak = currentStreak;
           streakStart = tempStart;
-          streakEnd = sortedBothDates[i - 1];
+          streakEnd = sortedDates[i - 1];
         }
         currentStreak = 1;
-        tempStart = sortedBothDates[i];
+        tempStart = sortedDates[i];
       }
     }
 
     if (currentStreak > maxStreak) {
       maxStreak = currentStreak;
       streakStart = tempStart;
-      streakEnd = sortedBothDates[sortedBothDates.length - 1];
+      streakEnd = sortedDates[sortedDates.length - 1];
     }
 
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
 
     const response = {
       dates: result,
-      
     };
 
     if (maxStreak >= 7 && markingSetting?.weeklyBonus) {
@@ -842,9 +812,7 @@ exports.StrikePath = async (req, res) => {
 
     return res.status(200).json(response);
   } catch (error) {
-    console.error('Error in StrikeBothSameDate:', error);
+    console.error('Error in StrikePath:', error);
     return res.status(500).json({ message: error.message });
   }
 };
-
-
