@@ -705,7 +705,6 @@ exports.Strikecalculation = async (req, res) => {
 
 
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -720,7 +719,7 @@ exports.StrikePath = async (req, res) => {
       .sort({ updatedAt: 1 })
       .lean();
 
-    const scoreMap = new Map(); // date => [data]
+    const scoreMap = new Map();
 
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
@@ -790,15 +789,20 @@ exports.StrikePath = async (req, res) => {
         const hasPractice = types.includes('practice');
         const hasTopic = types.includes('topic');
 
-        if (hasPractice && hasTopic && dailyExperience > 0) {
-          item.dailyExperience = dailyExperience;
-          if (!existingBonusDates.includes(currentDate)) {
+        if (hasPractice && hasTopic) {
+          if (dailyExperience > 0 && !existingBonusDates.includes(currentDate)) {
+            item.dailyExperience = dailyExperience;
             bonusToAdd += dailyExperience;
             datesToAddBonus.push(currentDate);
           }
+
+          if (!existingWeeklyBonusDates.includes(currentDate) && weeklyBonus > 0) {
+            item.weeklyBonus = weeklyBonus;
+            weeklyBonusToAdd += weeklyBonus;
+            weeklyBonusDatesToAdd.push(currentDate);
+          }
         }
       } else {
-        // No data found => apply deduction
         item.deduction = deductions;
         if (!existingDeductedDates.includes(currentDate)) {
           deductionToSubtract += deductions;
@@ -809,29 +813,6 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
-    // Weekly bonus detection
-    for (let i = 1; i < result.length; i++) {
-      const prevDay = result[i - 1];
-      const currDay = result[i];
-
-      const prevHasPractice = prevDay.data?.some(item => item.type === 'practice');
-      const prevHasTopic = prevDay.data?.some(item => item.type === 'topic');
-      const currHasPractice = currDay.data?.some(item => item.type === 'practice');
-      const currHasTopic = currDay.data?.some(item => item.type === 'topic');
-
-      if (
-        prevHasPractice && prevHasTopic &&
-        currHasPractice && currHasTopic &&
-        !existingWeeklyBonusDates.includes(currDay.date) &&
-        weeklyBonus > 0
-      ) {
-        currDay.weeklyBonus = weeklyBonus; // ✅ Include weekly bonus in response
-        weeklyBonusToAdd += weeklyBonus;
-        weeklyBonusDatesToAdd.push(currDay.date);
-      }
-    }
-
-    // Update User document
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -863,3 +844,4 @@ exports.StrikePath = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
