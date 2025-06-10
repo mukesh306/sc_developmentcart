@@ -26,11 +26,6 @@ const userSchema = new mongoose.Schema({
  bonusDates: [String],
 deductedDates: [String],
 weeklyBonusDates: [String],
-  status: {
-    type: String,
-    enum: ['no', 'yes'],
-    default: 'no'
-  },
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });

@@ -708,7 +708,6 @@ exports.Strikecalculation = async (req, res) => {
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const scores = await LearningScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
