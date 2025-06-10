@@ -715,7 +715,6 @@ exports.StrikePath = async (req, res) => {
       .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
       .lean();
-
     const topicScores = await TopicScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
       .sort({ updatedAt: 1 })
