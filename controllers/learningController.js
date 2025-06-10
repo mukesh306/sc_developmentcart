@@ -813,34 +813,35 @@ exports.StrikePath = async (req, res) => {
 
     // Check for 2-day consecutive full strikes (topic + practice)
     for (let i = 1; i < result.length; i++) {
-      const prev = result[i - 1];
-      const curr = result[i];
+  const prev = result[i - 1];
+  const curr = result[i];
 
-      const prevTypes = prev.data.map(d => d.type);
-      const currTypes = curr.data.map(d => d.type);
+  const prevTypes = prev.data.map(d => d.type);
+  const currTypes = curr.data.map(d => d.type);
 
-      const prevHasPractice = prevTypes.includes('practice');
-      const prevHasTopic = prevTypes.includes('topic');
-      const currHasPractice = currTypes.includes('practice');
-      const currHasTopic = currTypes.includes('topic');
+  const prevHasPractice = prevTypes.includes('practice');
+  const prevHasTopic = prevTypes.includes('topic');
+  const currHasPractice = currTypes.includes('practice');
+  const currHasTopic = currTypes.includes('topic');
 
-      const currDate = curr.date;
+  const currDate = curr.date;
 
-      if (
-        prevHasPractice && prevHasTopic &&
-        currHasPractice && currHasTopic &&
-        !existingWeeklyBonusDates.includes(currDate) &&
-        weeklyBonus > 0
-      ) {
-        weeklyBonusToAdd += weeklyBonus;
-        weeklyBonusDatesToAdd.push(currDate);
+  if (
+    prevHasPractice && prevHasTopic &&
+    currHasPractice && currHasTopic &&
+    !existingWeeklyBonusDates.includes(currDate) &&
+    weeklyBonus > 0
+  ) {
+    weeklyBonusToAdd += weeklyBonus;
+    weeklyBonusDatesToAdd.push(currDate);
 
-        const index = result.findIndex(item => item.date === currDate);
-        if (index !== -1) {
-          result[index].weeklyBonus = weeklyBonus;
-        }
-      }
+    const index = result.findIndex(item => item.date === currDate);
+    if (index !== -1) {
+      result[index].weeklyBonus = weeklyBonus;
+      result[index].weeklyBonusReasonDates = [prev.date, curr.date]; 
     }
+  }
+}
 
     const updateData = {};
     if (bonusToAdd > 0) {
