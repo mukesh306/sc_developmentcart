@@ -819,12 +819,12 @@ exports.StrikePath = async (req, res) => {
 
     // ✅ Weekly Bonus Logic
     const weekBonusDates = [];
-    for (let i = 0; i <= allDates.length - 7; i++) {
-      const slice = allDates.slice(i, i + 7);
+    for (let i = 0; i <= allDates.length - 2; i++) {
+      const slice = allDates.slice(i, i + 2);
 
       const isAllWeekComplete = slice.every(item => item.hasBoth);
       const weekStart = slice[0].date;
-      const weekEnd = slice[6].date;
+      const weekEnd = slice[1].date;
 
       if (isAllWeekComplete && !existingWeeklyBonuses.includes(weekEnd)) {
         bonusToAdd += weeklyBonus;
