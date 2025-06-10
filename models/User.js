@@ -24,8 +24,9 @@ const userSchema = new mongoose.Schema({
   resetPasswordOTP: { type: String },
   bonuspoint: { type: Number ,default: 0 },
  bonusDates: [String],
-deductedDates: [String],
-weeklyBonusDates: [String],
+ deductedDates: [String],
+ weeklyBonusDates: [String],
+ monthlyBonusDates: [String],
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
