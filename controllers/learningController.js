@@ -704,10 +704,10 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
+
     const scores = await LearningScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
@@ -718,7 +718,7 @@ exports.StrikePath = async (req, res) => {
       .sort({ updatedAt: 1 })
       .lean();
 
-    const scoreMap = new Map(); // date => [data]
+    const scoreMap = new Map();
 
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
@@ -754,6 +754,7 @@ exports.StrikePath = async (req, res) => {
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
     const dailyExperience = markingSetting?.dailyExperience || 0;
     const deductions = markingSetting?.deductions || 0;
+    const weeklyBonus = markingSetting?.weeklyBonus || 50;
 
     const datesList = Array.from(scoreMap.keys()).sort();
     if (datesList.length === 0) {
@@ -761,17 +762,20 @@ exports.StrikePath = async (req, res) => {
     }
 
     const startDate = moment(datesList[0]);
-    const endDate = moment(datesList[datesList.length - 1]);
-
+    const endDate = moment().endOf('day'); // Check up to today
     const result = [];
+
     const user = await User.findById(userId).lean();
     const existingBonusDates = user?.bonusDates || [];
     const existingDeductedDates = user?.deductedDates || [];
+    const existingWeeklyBonuses = user?.weeklyBonusDates || [];
 
     let bonusToAdd = 0;
     let datesToAddBonus = [];
     let deductionToSubtract = 0;
     let datesToDeduct = [];
+
+    const allDates = [];
 
     for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
       const currentDate = m.format('YYYY-MM-DD');
@@ -790,34 +794,61 @@ exports.StrikePath = async (req, res) => {
             bonusToAdd += dailyExperience;
             datesToAddBonus.push(currentDate);
           }
+
+          allDates.push({ date: currentDate, hasBoth: true });
+        } else {
+          allDates.push({ date: currentDate, hasBoth: false });
         }
 
         result.push(item);
       } else {
         const item = { date: currentDate, data: [] };
 
-        // Always show deduction in response
+        // Always show deduction
         item.deduction = deductions;
 
-        // Only apply deduction if not already done
         if (!existingDeductedDates.includes(currentDate)) {
           deductionToSubtract += deductions;
           datesToDeduct.push(currentDate);
         }
 
+        allDates.push({ date: currentDate, hasBoth: false });
         result.push(item);
       }
     }
 
+    // ✅ Weekly Bonus Logic
+    const weekBonusDates = [];
+    for (let i = 0; i <= allDates.length - 7; i++) {
+      const slice = allDates.slice(i, i + 7);
+
+      const isAllWeekComplete = slice.every(item => item.hasBoth);
+      const weekStart = slice[0].date;
+      const weekEnd = slice[6].date;
+
+      if (isAllWeekComplete && !existingWeeklyBonuses.includes(weekEnd)) {
+        bonusToAdd += weeklyBonus;
+        weekBonusDates.push(weekEnd);
+
+        // Optional: Add info in result
+        const weekRangeText = `${weekStart} to ${weekEnd}`;
+        result.push({ weeklyBonus: weeklyBonus, week: weekRangeText });
+      }
+    }
+
+    // Final user update
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
-      updateData.$push = { bonusDates: { $each: datesToAddBonus } };
+      updateData.$push = {
+        bonusDates: { $each: datesToAddBonus },
+        weeklyBonusDates: { $each: weekBonusDates }
+      };
     }
+
     if (deductionToSubtract > 0) {
       if (!updateData.$inc) updateData.$inc = {};
       updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) - deductionToSubtract;
-
       if (!updateData.$push) updateData.$push = {};
       updateData.$push.deductedDates = { $each: datesToDeduct };
     }
@@ -833,3 +864,4 @@ exports.StrikePath = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
