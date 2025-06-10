@@ -308,6 +308,8 @@ exports.Topicstrikes = async (req, res) => {
 //   }
 // };
 
+
+
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -539,8 +541,6 @@ exports.Strikecalculation = async (req, res) => {
 };
 
 
-
-
 // exports.Strikecalculation = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -702,3 +702,149 @@ exports.Strikecalculation = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
+
+
+
+exports.StrikePath = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { type = '', startDate, endDate } = req.query;
+    const typeArray = Array.isArray(type) ? type : type.split(',');
+
+    const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
+    const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
+
+    // --- PRACTICE SCORE QUERY ---
+    const scoreQuery = { userId, strickStatus: true };
+    if (start && end) {
+      scoreQuery.scoreDate = { $gte: start.toDate(), $lte: end.toDate() };
+    }
+
+    // --- TOPIC SCORE QUERY ---
+    const topicScoreQuery = { userId, strickStatus: true };
+    if (start && end) {
+      topicScoreQuery.updatedAt = { $gte: start.toDate(), $lte: end.toDate() };
+    }
+
+    const scores = await LearningScore.find(scoreQuery)
+      .populate('learningId', 'name')
+      .lean();
+    const topicScores = await TopicScore.find(topicScoreQuery)
+      .populate('learningId', 'name')
+      .lean();
+
+    const scoreDateMap = new Map();
+    const topicDateMap = new Map();
+    const allDatesSet = new Set();
+
+    scores.forEach(score => {
+      const date = moment(score.scoreDate).format('YYYY-MM-DD');
+      allDatesSet.add(date);
+      if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
+      scoreDateMap.get(date).push({
+        strickStatus: score.strickStatus,
+        score: score.score,
+        updatedAt: score.updatedAt,
+        scoreDate: score.scoreDate,
+        type: 'practice',
+        learningId: score.learningId
+      });
+    });
+
+    topicScores.forEach(score => {
+      const date = moment(score.updatedAt).format('YYYY-MM-DD');
+      allDatesSet.add(date);
+      if (!topicDateMap.has(date)) topicDateMap.set(date, []);
+      topicDateMap.get(date).push({
+        strickStatus: score.strickStatus,
+        score: score.score,
+        updatedAt: score.updatedAt,
+        type: 'topic',
+        learningId: score.learningId
+      });
+    });
+
+    const result = [];
+    for (let date of allDatesSet) {
+      const scoreItems = scoreDateMap.get(date) || [];
+      const topicItems = topicDateMap.get(date) || [];
+
+      if (typeArray.includes('topic') && typeArray.includes('practice')) {
+        if (scoreItems.length > 0 && topicItems.length > 0) {
+          result.push({ date });
+        }
+      } else if (typeArray.length === 1 && typeArray.includes('practice')) {
+        if (scoreItems.length > 0) {
+          result.push({ date, data: scoreItems });
+        }
+      } else if (typeArray.length === 1 && typeArray.includes('topic')) {
+        if (topicItems.length > 0) {
+          result.push({ date, data: topicItems });
+        }
+      }
+    }
+
+    result.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const bothTypesDates = [];
+    for (let date of allDatesSet) {
+      if (scoreDateMap.has(date) && topicDateMap.has(date)) {
+        bothTypesDates.push(date);
+      }
+    }
+
+    const sortedBothDates = bothTypesDates.sort((a, b) => new Date(a) - new Date(b));
+    let maxStreak = 0;
+    let currentStreak = 1;
+    let streakStart = null;
+    let streakEnd = null;
+    let tempStart = null;
+    if (sortedBothDates.length > 0) {
+      tempStart = sortedBothDates[0];
+    }
+
+    for (let i = 1; i < sortedBothDates.length; i++) {
+      const prev = moment(sortedBothDates[i - 1]);
+      const curr = moment(sortedBothDates[i]);
+      if (curr.diff(prev, 'days') === 1) {
+        currentStreak++;
+      } else {
+        if (currentStreak > maxStreak) {
+          maxStreak = currentStreak;
+          streakStart = tempStart;
+          streakEnd = sortedBothDates[i - 1];
+        }
+        currentStreak = 1;
+        tempStart = sortedBothDates[i];
+      }
+    }
+
+    if (currentStreak > maxStreak) {
+      maxStreak = currentStreak;
+      streakStart = tempStart;
+      streakEnd = sortedBothDates[sortedBothDates.length - 1];
+    }
+
+    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
+
+    const response = {
+      dates: result,
+      
+    };
+
+    if (maxStreak >= 7 && markingSetting?.weeklyBonus) {
+      response.weeklyBonus = markingSetting.weeklyBonus;
+    }
+
+    if (maxStreak >= 30 && markingSetting?.monthlyBonus) {
+      response.monthlyBonus = markingSetting.monthlyBonus;
+    }
+
+    return res.status(200).json(response);
+  } catch (error) {
+    console.error('Error in StrikeBothSameDate:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+
