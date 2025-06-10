@@ -719,7 +719,7 @@ exports.StrikePath = async (req, res) => {
       .sort({ updatedAt: 1 })
       .lean();
 
-    const scoreMap = new Map();
+    const scoreMap = new Map(); // date => [data]
 
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
@@ -780,7 +780,6 @@ exports.StrikePath = async (req, res) => {
 
     for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
       const currentDate = m.format('YYYY-MM-DD');
-
       const item = { date: currentDate, data: [] };
 
       if (scoreMap.has(currentDate)) {
@@ -796,7 +795,7 @@ exports.StrikePath = async (req, res) => {
             datesToAddBonus.push(currentDate);
           }
 
-          if (!existingWeeklyBonusDates.includes(currentDate) && weeklyBonus > 0) {
+          if (weeklyBonus > 0 && !existingWeeklyBonusDates.includes(currentDate)) {
             item.weeklyBonus = weeklyBonus;
             weeklyBonusToAdd += weeklyBonus;
             weeklyBonusDatesToAdd.push(currentDate);
@@ -813,6 +812,7 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
+    // Update User document
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -844,4 +844,3 @@ exports.StrikePath = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
