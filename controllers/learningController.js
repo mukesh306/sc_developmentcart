@@ -754,27 +754,26 @@ exports.StrikePath = async (req, res) => {
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
     const dailyExperience = markingSetting?.dailyExperience || 0;
     const deductions = markingSetting?.deductions || 0;
+    const weeklyBonus = markingSetting?.weeklyBonus || 0;
 
-    const datesList = Array.from(scoreMap.keys()).sort();
-    const startDate = moment(datesList[0]);
-    const endDate = moment(datesList[datesList.length - 1]);
-    const allDatesSet = new Set(datesList);
-
-    const result = [];
     const user = await User.findById(userId).lean();
     const existingBonusDates = user?.bonusDates || [];
     const existingDeductedDates = user?.deductedDates || [];
+    const existingWeeklyBonusDates = user?.weeklyBonusDates || [];
 
+    const allDates = Array.from(scoreMap.keys()).sort();
+    const startDate = moment(allDates[0]);
+    const endDate = moment(allDates[allDates.length - 1]);
+
+    const result = [];
     let bonusToAdd = 0;
-    let datesToAddBonus = [];
     let deductionToSubtract = 0;
-    let datesToDeduct = [];
+    const datesToAddBonus = [];
+    const datesToDeduct = [];
+    const weeklyStreaksAwarded = [];
 
-    for (
-      let m = moment(startDate);
-      m.diff(endDate, 'days') <= 0;
-      m.add(1, 'days')
-    ) {
+    // Build final result and calculate daily bonus/deductions
+    for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
       const currentDate = m.format('YYYY-MM-DD');
 
       if (scoreMap.has(currentDate)) {
@@ -784,17 +783,14 @@ exports.StrikePath = async (req, res) => {
         const hasTopic = types.includes('topic');
 
         const item = { date: currentDate, data };
-        if (hasPractice && hasTopic && dailyExperience > 0) {
+        if (hasPractice && hasTopic && dailyExperience > 0 && !existingBonusDates.includes(currentDate)) {
           item.dailyExperience = dailyExperience;
-          if (!existingBonusDates.includes(currentDate)) {
-            bonusToAdd += dailyExperience;
-            datesToAddBonus.push(currentDate);
-          }
+          bonusToAdd += dailyExperience;
+          datesToAddBonus.push(currentDate);
         }
 
         result.push(item);
       } else {
-        // Missing date
         const item = { date: currentDate, data: [] };
         if (!existingDeductedDates.includes(currentDate)) {
           item.deduction = deductions;
@@ -805,10 +801,33 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
+    // Check for 7-day streaks and apply weekly bonus
+    const streakDates = result
+      .filter(d => d.data.some(i => i.type === 'topic') && d.data.some(i => i.type === 'practice'))
+      .map(d => d.date);
+
+    for (let i = 0; i <= streakDates.length - 7; i++) {
+      const isStreak = streakDates
+        .slice(i, i + 7)
+        .every((d, idx) => moment(d).diff(moment(streakDates[i]), 'days') === idx);
+
+      if (isStreak) {
+        const streakKey = `${streakDates[i]}_to_${streakDates[i + 6]}`;
+        if (!existingWeeklyBonusDates.includes(streakKey)) {
+          bonusToAdd += weeklyBonus;
+          weeklyStreaksAwarded.push(streakKey);
+        }
+      }
+    }
+
+    // Final update
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
-      updateData.$push = { bonusDates: { $each: datesToAddBonus } };
+      updateData.$push = {
+        bonusDates: { $each: datesToAddBonus },
+        weeklyBonusDates: { $each: weeklyStreaksAwarded }
+      };
     }
     if (deductionToSubtract > 0) {
       if (!updateData.$inc) updateData.$inc = {};

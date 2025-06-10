@@ -23,8 +23,9 @@ const userSchema = new mongoose.Schema({
   marksheet: { type: String },
   resetPasswordOTP: { type: String },
   bonuspoint: { type: Number ,default: 0 },
-  bonusDates: [{ type: String }], 
-  deductedDates: [{ type: String }],
+ bonusDates: [String],
+deductedDates: [String],
+weeklyBonusDates: [String],
   status: {
     type: String,
     enum: ['no', 'yes'],
