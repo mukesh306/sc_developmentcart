@@ -704,6 +704,8 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
+
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -718,7 +720,7 @@ exports.StrikePath = async (req, res) => {
       .sort({ updatedAt: 1 })
       .lean();
 
-    const scoreMap = new Map();
+    const scoreMap = new Map(); // date => [data]
 
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
@@ -788,20 +790,15 @@ exports.StrikePath = async (req, res) => {
         const hasPractice = types.includes('practice');
         const hasTopic = types.includes('topic');
 
-        if (hasPractice && hasTopic) {
-          if (dailyExperience > 0 && !existingBonusDates.includes(currentDate)) {
-            item.dailyExperience = dailyExperience;
+        if (hasPractice && hasTopic && dailyExperience > 0) {
+          item.dailyExperience = dailyExperience;
+          if (!existingBonusDates.includes(currentDate)) {
             bonusToAdd += dailyExperience;
             datesToAddBonus.push(currentDate);
           }
-
-          if (!existingWeeklyBonusDates.includes(currentDate) && weeklyBonus > 0) {
-            item.weeklyBonus = weeklyBonus;
-            weeklyBonusToAdd += weeklyBonus;
-            weeklyBonusDatesToAdd.push(currentDate);
-          }
         }
       } else {
+        // No data found => apply deduction
         item.deduction = deductions;
         if (!existingDeductedDates.includes(currentDate)) {
           deductionToSubtract += deductions;
@@ -812,6 +809,36 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
+    // Weekly bonus detection
+   for (let i = 6; i < result.length; i++) {
+  let isStreak = true;
+
+  for (let j = i - 6; j <= i; j++) {
+    const dayData = result[j]?.data || [];
+    const hasPractice = dayData.some(item => item.type === 'practice');
+    const hasTopic = dayData.some(item => item.type === 'topic');
+
+    if (!(hasPractice && hasTopic)) {
+      isStreak = false;
+      break;
+    }
+  }
+
+  const bonusDate = result[i].date;
+
+  if (isStreak && !existingWeeklyBonusDates.includes(bonusDate)) {
+    result[i].weeklyBonus = weeklyBonus;
+    weeklyBonusToAdd += weeklyBonus;
+    weeklyBonusDatesToAdd.push(bonusDate);
+  }
+
+  // ✅ Always show weeklyBonus if it was already earned
+  if (existingWeeklyBonusDates.includes(bonusDate)) {
+    result[i].weeklyBonus = weeklyBonus;
+  }
+}
+
+    // Update User document
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
