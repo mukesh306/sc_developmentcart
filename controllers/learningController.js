@@ -704,7 +704,6 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -764,11 +763,12 @@ exports.StrikePath = async (req, res) => {
     const result = [];
     const user = await User.findById(userId).lean();
     const existingBonusDates = user?.bonusDates || [];
+    const existingDeductedDates = user?.deductedDates || [];
 
     let bonusToAdd = 0;
     let datesToAddBonus = [];
     let deductionToSubtract = 0;
-    const missingDates = [];
+    let datesToDeduct = [];
 
     for (
       let m = moment(startDate);
@@ -794,18 +794,17 @@ exports.StrikePath = async (req, res) => {
 
         result.push(item);
       } else {
-        // missing date
-        result.push({
-          date: currentDate,
-          data: [],
-          deduction: deductions
-        });
-        deductionToSubtract += deductions;
-        missingDates.push(currentDate);
+        // Missing date
+        const item = { date: currentDate, data: [] };
+        if (!existingDeductedDates.includes(currentDate)) {
+          item.deduction = deductions;
+          deductionToSubtract += deductions;
+          datesToDeduct.push(currentDate);
+        }
+        result.push(item);
       }
     }
 
-    // Apply bonus and deduction to user
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -814,6 +813,8 @@ exports.StrikePath = async (req, res) => {
     if (deductionToSubtract > 0) {
       if (!updateData.$inc) updateData.$inc = {};
       updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) - deductionToSubtract;
+      if (!updateData.$push) updateData.$push = {};
+      updateData.$push.deductedDates = { $each: datesToDeduct };
     }
 
     if (Object.keys(updateData).length > 0) {
