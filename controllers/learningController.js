@@ -7,7 +7,7 @@ const LearningScore = require('../models/learningScore');
 const MarkingSetting = require('../models/markingSetting');
 const Topic = require('../models/topic');
 const TopicScore = require('../models/topicScore');
-
+const User = require('../models/User');
 
 exports.createLearning = async (req, res) => {
   try {
@@ -308,6 +308,8 @@ exports.Topicstrikes = async (req, res) => {
 //   }
 // };
 
+
+
 exports.StrikeBothSameDate = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -539,8 +541,6 @@ exports.Strikecalculation = async (req, res) => {
 };
 
 
-
-
 // exports.Strikecalculation = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -702,3 +702,134 @@ exports.Strikecalculation = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
+
+
+
+exports.StrikePath = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const scores = await LearningScore.find({ userId, strickStatus: true })
+      .populate('learningId', 'name')
+      .sort({ scoreDate: 1 })
+      .lean();
+
+    const topicScores = await TopicScore.find({ userId, strickStatus: true })
+      .populate('learningId', 'name')
+      .sort({ updatedAt: 1 })
+      .lean();
+
+    const scoreMap = new Map(); // date => [data]
+
+    scores.forEach(score => {
+      const date = moment(score.scoreDate).format('YYYY-MM-DD');
+      if (!scoreMap.has(date)) scoreMap.set(date, []);
+      const exists = scoreMap.get(date).some(item => item.type === 'practice');
+      if (!exists) {
+        scoreMap.get(date).push({
+          type: 'practice',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          scoreDate: score.scoreDate,
+          learningId: score.learningId,
+          strickStatus: score.strickStatus
+        });
+      }
+    });
+
+    topicScores.forEach(score => {
+      const date = moment(score.updatedAt).format('YYYY-MM-DD');
+      if (!scoreMap.has(date)) scoreMap.set(date, []);
+      const exists = scoreMap.get(date).some(item => item.type === 'topic');
+      if (!exists) {
+        scoreMap.get(date).push({
+          type: 'topic',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          learningId: score.learningId,
+          strickStatus: score.strickStatus
+        });
+      }
+    });
+
+    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
+    const dailyExperience = markingSetting?.dailyExperience || 0;
+    const deductions = markingSetting?.deductions || 0;
+
+    const datesList = Array.from(scoreMap.keys()).sort();
+    if (datesList.length === 0) {
+      return res.status(200).json({ dates: [] });
+    }
+
+    const startDate = moment(datesList[0]);
+    const endDate = moment(datesList[datesList.length - 1]);
+
+    const result = [];
+    const user = await User.findById(userId).lean();
+    const existingBonusDates = user?.bonusDates || [];
+    const existingDeductedDates = user?.deductedDates || [];
+
+    let bonusToAdd = 0;
+    let datesToAddBonus = [];
+    let deductionToSubtract = 0;
+    let datesToDeduct = [];
+
+    for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
+      const currentDate = m.format('YYYY-MM-DD');
+
+      if (scoreMap.has(currentDate)) {
+        const data = scoreMap.get(currentDate);
+        const types = data.map(d => d.type);
+        const hasPractice = types.includes('practice');
+        const hasTopic = types.includes('topic');
+
+        const item = { date: currentDate, data };
+
+        if (hasPractice && hasTopic && dailyExperience > 0) {
+          item.dailyExperience = dailyExperience;
+          if (!existingBonusDates.includes(currentDate)) {
+            bonusToAdd += dailyExperience;
+            datesToAddBonus.push(currentDate);
+          }
+        }
+
+        result.push(item);
+      } else {
+        const item = { date: currentDate, data: [] };
+
+        // Always show deduction in response
+        item.deduction = deductions;
+
+        // Only apply deduction if not already done
+        if (!existingDeductedDates.includes(currentDate)) {
+          deductionToSubtract += deductions;
+          datesToDeduct.push(currentDate);
+        }
+
+        result.push(item);
+      }
+    }
+
+    const updateData = {};
+    if (bonusToAdd > 0) {
+      updateData.$inc = { bonuspoint: bonusToAdd };
+      updateData.$push = { bonusDates: { $each: datesToAddBonus } };
+    }
+    if (deductionToSubtract > 0) {
+      if (!updateData.$inc) updateData.$inc = {};
+      updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) - deductionToSubtract;
+
+      if (!updateData.$push) updateData.$push = {};
+      updateData.$push.deductedDates = { $each: datesToDeduct };
+    }
+
+    if (Object.keys(updateData).length > 0) {
+      await User.findByIdAndUpdate(userId, updateData);
+    }
+
+    return res.status(200).json({ dates: result });
+
+  } catch (error) {
+    console.error('StrikePath error:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};

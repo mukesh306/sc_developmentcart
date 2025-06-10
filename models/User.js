@@ -22,12 +22,10 @@ const userSchema = new mongoose.Schema({
   aadharCard: { type: String },
   marksheet: { type: String },
   resetPasswordOTP: { type: String },
-  bonuspoint: { type: Number },
-  status: {
-    type: String,
-    enum: ['no', 'yes'],
-    default: 'no'
-  },
+  bonuspoint: { type: Number ,default: 0 },
+ bonusDates: [String],
+deductedDates: [String],
+weeklyBonusDates: [String],
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
