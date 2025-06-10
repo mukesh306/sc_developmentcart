@@ -704,68 +704,87 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // Get all practice scores
     const scores = await LearningScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
       .lean();
 
-    // Get all topic scores
     const topicScores = await TopicScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
       .lean();
 
     const dateMap = new Map();
 
-    // Group practice scores by scoreDate
+    // Process practice scores - keep only earliest by updatedAt
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      if (!dateMap.has(date)) dateMap.set(date, []);
-      dateMap.get(date).push({
+      const dataItem = {
         type: 'practice',
         score: score.score,
         updatedAt: score.updatedAt,
         scoreDate: score.scoreDate,
         learningId: score.learningId,
         strickStatus: score.strickStatus
-      });
+      };
+
+      if (!dateMap.has(date)) {
+        dateMap.set(date, { practice: dataItem, topic: null });
+      } else {
+        const existing = dateMap.get(date);
+        if (!existing.practice || moment(dataItem.updatedAt).isBefore(existing.practice.updatedAt)) {
+          existing.practice = dataItem;
+        }
+      }
     });
 
-    // Group topic scores by updatedAt date
+    // Process topic scores - keep only earliest by updatedAt
     topicScores.forEach(score => {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
-      if (!dateMap.has(date)) dateMap.set(date, []);
-      dateMap.get(date).push({
+      const dataItem = {
         type: 'topic',
         score: score.score,
         updatedAt: score.updatedAt,
         learningId: score.learningId,
         strickStatus: score.strickStatus
-      });
+      };
+
+      if (!dateMap.has(date)) {
+        dateMap.set(date, { practice: null, topic: dataItem });
+      } else {
+        const existing = dateMap.get(date);
+        if (!existing.topic || moment(dataItem.updatedAt).isBefore(existing.topic.updatedAt)) {
+          existing.topic = dataItem;
+        }
+      }
     });
 
-    // Prepare sorted result array
-    const result = Array.from(dateMap.entries())
-      .map(([date, data]) => ({ date, data }))
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
+    // Prepare result array
+    const result = [];
+    for (let [date, { practice, topic }] of dateMap.entries()) {
+      const data = [];
+      if (practice) data.push(practice);
+      if (topic) data.push(topic);
+      result.push({ date, data });
+    }
 
-    // Streak calculation — only on days where both types exist
+    // Sort by date ascending
+    result.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // Calculate streak where both topic and practice exist on same day
     const bothTypesDates = Array.from(dateMap.entries())
-      .filter(([_, entries]) => {
-        const types = entries.map(item => item.type);
-        return types.includes('practice') && types.includes('topic');
-      })
+      .filter(([_, val]) => val.practice && val.topic)
       .map(([date]) => date)
       .sort();
 
     let maxStreak = 0;
     let currentStreak = 1;
+    let tempStart = null;
     let streakStart = null;
     let streakEnd = null;
-    let tempStart = null;
 
     if (bothTypesDates.length > 0) {
       tempStart = bothTypesDates[0];
@@ -813,4 +832,6 @@ exports.StrikePath = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
 
