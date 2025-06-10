@@ -708,160 +708,83 @@ exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const scores = await LearningScore.find({ userId, strickStatus: true })
-      .populate('learningId', 'name')
-      .sort({ scoreDate: 1 })
-      .lean();
+    // Get scores with streakStatus true
+    const scores = await LearningScore.find({ userId, strickStatus: true }).populate("learningId", "name");
 
-    const topicScores = await TopicScore.find({ userId, strickStatus: true })
-      .populate('learningId', 'name')
-      .sort({ updatedAt: 1 })
-      .lean();
-
-    const scoreMap = new Map(); // date => [data]
-
-    scores.forEach(score => {
-      const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      if (!scoreMap.has(date)) scoreMap.set(date, []);
-      const exists = scoreMap.get(date).some(item => item.type === 'practice');
-      if (!exists) {
-        scoreMap.get(date).push({
-          type: 'practice',
-          score: score.score,
-          updatedAt: score.updatedAt,
-          scoreDate: score.scoreDate,
-          learningId: score.learningId,
-          strickStatus: score.strickStatus
-        });
-      }
-    });
-
-    topicScores.forEach(score => {
-      const date = moment(score.updatedAt).format('YYYY-MM-DD');
-      if (!scoreMap.has(date)) scoreMap.set(date, []);
-      const exists = scoreMap.get(date).some(item => item.type === 'topic');
-      if (!exists) {
-        scoreMap.get(date).push({
-          type: 'topic',
-          score: score.score,
-          updatedAt: score.updatedAt,
-          learningId: score.learningId,
-          strickStatus: score.strickStatus
-        });
-      }
-    });
-
-    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-    const dailyExperience = markingSetting?.dailyExperience || 0;
-    const deductions = markingSetting?.deductions || 0;
-    const weeklyBonus = markingSetting?.weeklyBonus || 0;
-
-    const datesList = Array.from(scoreMap.keys()).sort();
-    if (datesList.length === 0) {
-      return res.status(200).json({ dates: [] });
+    if (!scores.length) {
+      return res.status(404).json({ message: "No streak data found." });
     }
 
-    const startDate = moment(datesList[0]);
-    const endDate = moment(datesList[datesList.length - 1]);
+    // Group scores by date
+    const grouped = {};
+    for (const score of scores) {
+      const date = moment(score.updatedAt).format("YYYY-MM-DD");
+      if (!grouped[date]) grouped[date] = [];
+      grouped[date].push(score);
+    }
 
-    const result = [];
-    const user = await User.findById(userId).lean();
-    const existingBonusDates = user?.bonusDates || [];
-    const existingDeductedDates = user?.deductedDates || [];
-    const existingWeeklyBonusDates = user?.weeklyBonusDates || [];
+    // Build sorted date list with their data
+    const allDates = Object.keys(grouped).sort();
+    const dates = [];
+    const existingDates = new Set(allDates);
+    const startDate = moment(allDates[0]);
+    const endDate = moment(allDates[allDates.length - 1]);
+    let current = moment(startDate);
 
-    let bonusToAdd = 0;
-    let datesToAddBonus = [];
-    let deductionToSubtract = 0;
-    let datesToDeduct = [];
-    let weeklyBonusToAdd = 0;
-    let weeklyBonusDatesToAdd = [];
-
-    for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
-      const currentDate = m.format('YYYY-MM-DD');
-
-      if (scoreMap.has(currentDate)) {
-        const data = scoreMap.get(currentDate);
-        const types = data.map(d => d.type);
-        const hasPractice = types.includes('practice');
-        const hasTopic = types.includes('topic');
-
-        const item = { date: currentDate, data };
-
-        if (hasPractice && hasTopic && dailyExperience > 0) {
-          item.dailyExperience = dailyExperience;
-          if (!existingBonusDates.includes(currentDate)) {
-            bonusToAdd += dailyExperience;
-            datesToAddBonus.push(currentDate);
-          }
-        }
-
-        result.push(item);
+    while (current <= endDate) {
+      const dateStr = current.format("YYYY-MM-DD");
+      if (existingDates.has(dateStr)) {
+        const data = grouped[dateStr];
+        const dailyExperience = data.length * 15;
+        dates.push({ date: dateStr, data, dailyExperience });
       } else {
-        const item = { date: currentDate, data: [] };
+        dates.push({ date: dateStr, data: [], deduction: 10 });
+      }
+      current.add(1, "days");
+    }
 
-        item.deduction = deductions;
+    // Weekly Bonus Logic
+    const user = await User.findById(userId);
+    const existingWeeklyBonusDates = user.weeklyBonusDates || [];
+    const weeklyBonus = user.weeklyBonus || 0;
 
-        if (!existingDeductedDates.includes(currentDate)) {
-          deductionToSubtract += deductions;
-          datesToDeduct.push(currentDate);
+    let weeklyBonusToAdd = 0;
+    const weeklyBonusDatesToAdd = [];
+
+    for (let i = 1; i < dates.length; i++) {
+      const prevDay = dates[i - 1];
+      const currDay = dates[i];
+
+      const prevHasPractice = prevDay.data?.some(d => d.type === "practice");
+      const prevHasTopic = prevDay.data?.some(d => d.type === "topic");
+      const currHasPractice = currDay.data?.some(d => d.type === "practice");
+      const currHasTopic = currDay.data?.some(d => d.type === "topic");
+
+      if (
+        prevHasPractice && prevHasTopic &&
+        currHasPractice && currHasTopic &&
+        weeklyBonus > 0
+      ) {
+        currDay.weeklyBonus = weeklyBonus;
+
+        if (!existingWeeklyBonusDates.includes(currDay.date)) {
+          weeklyBonusToAdd += weeklyBonus;
+          weeklyBonusDatesToAdd.push(currDay.date);
         }
-
-        result.push(item);
       }
     }
 
-    // Check for 2-day consecutive full strikes (topic + practice)
-    for (let i = 1; i < result.length; i++) {
-  const prevDay = result[i - 1];
-  const currDay = result[i];
-
-  const prevHasPractice = prevDay.data.some(item => item.type === 'practice');
-  const prevHasTopic = prevDay.data.some(item => item.type === 'topic');
-  const currHasPractice = currDay.data.some(item => item.type === 'practice');
-  const currHasTopic = currDay.data.some(item => item.type === 'topic');
-
-  if (
-    prevHasPractice && prevHasTopic &&
-    currHasPractice && currHasTopic &&
-    !existingWeeklyBonusDates.includes(currDay.date) &&
-    weeklyBonus > 0
-  ) {
-    // Apply weekly bonus to current day
-    currDay.weeklyBonus = weeklyBonus;
-    weeklyBonusToAdd += weeklyBonus;
-    weeklyBonusDatesToAdd.push(currDay.date);
-  }
-}
-
-    const updateData = {};
-    if (bonusToAdd > 0) {
-      updateData.$inc = { bonuspoint: bonusToAdd };
-      updateData.$push = { bonusDates: { $each: datesToAddBonus } };
-    }
-    if (deductionToSubtract > 0) {
-      if (!updateData.$inc) updateData.$inc = {};
-      updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) - deductionToSubtract;
-
-      if (!updateData.$push) updateData.$push = {};
-      updateData.$push.deductedDates = { $each: datesToDeduct };
-    }
+    // Update user bonus and dates
     if (weeklyBonusToAdd > 0) {
-      if (!updateData.$inc) updateData.$inc = {};
-      updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) + weeklyBonusToAdd;
-
-      if (!updateData.$push) updateData.$push = {};
-      updateData.$push.weeklyBonusDates = { $each: weeklyBonusDatesToAdd };
+      await User.findByIdAndUpdate(userId, {
+        $inc: { bonusPoints: weeklyBonusToAdd },
+        $push: { weeklyBonusDates: { $each: weeklyBonusDatesToAdd } }
+      });
     }
 
-    if (Object.keys(updateData).length > 0) {
-      await User.findByIdAndUpdate(userId, updateData);
-    }
-
-    return res.status(200).json({ dates: result });
-
+    res.status(200).json({ dates });
   } catch (error) {
-    console.error('StrikePath error:', error);
-    return res.status(500).json({ message: error.message });
+    console.error("StrikePath error:", error);
+    res.status(500).json({ message: "Server error" });
   }
 };
