@@ -704,10 +704,10 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
+
     const scores = await LearningScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
@@ -754,6 +754,7 @@ exports.StrikePath = async (req, res) => {
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
     const dailyExperience = markingSetting?.dailyExperience || 0;
     const deductions = markingSetting?.deductions || 0;
+    const weeklyBonus = markingSetting?.weeklyBonus || 0;
 
     const datesList = Array.from(scoreMap.keys()).sort();
     if (datesList.length === 0) {
@@ -767,11 +768,14 @@ exports.StrikePath = async (req, res) => {
     const user = await User.findById(userId).lean();
     const existingBonusDates = user?.bonusDates || [];
     const existingDeductedDates = user?.deductedDates || [];
+    const existingWeeklyBonusDates = user?.weeklyBonusDates || [];
 
     let bonusToAdd = 0;
     let datesToAddBonus = [];
     let deductionToSubtract = 0;
     let datesToDeduct = [];
+    let weeklyBonusToAdd = 0;
+    let weeklyBonusDatesToAdd = [];
 
     for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
       const currentDate = m.format('YYYY-MM-DD');
@@ -796,16 +800,45 @@ exports.StrikePath = async (req, res) => {
       } else {
         const item = { date: currentDate, data: [] };
 
-        // Always show deduction in response
         item.deduction = deductions;
 
-        // Only apply deduction if not already done
         if (!existingDeductedDates.includes(currentDate)) {
           deductionToSubtract += deductions;
           datesToDeduct.push(currentDate);
         }
 
         result.push(item);
+      }
+    }
+
+    // Check for 2-day consecutive full strikes (topic + practice)
+    for (let i = 1; i < result.length; i++) {
+      const prev = result[i - 1];
+      const curr = result[i];
+
+      const prevTypes = prev.data.map(d => d.type);
+      const currTypes = curr.data.map(d => d.type);
+
+      const prevHasPractice = prevTypes.includes('practice');
+      const prevHasTopic = prevTypes.includes('topic');
+      const currHasPractice = currTypes.includes('practice');
+      const currHasTopic = currTypes.includes('topic');
+
+      const currDate = curr.date;
+
+      if (
+        prevHasPractice && prevHasTopic &&
+        currHasPractice && currHasTopic &&
+        !existingWeeklyBonusDates.includes(currDate) &&
+        weeklyBonus > 0
+      ) {
+        weeklyBonusToAdd += weeklyBonus;
+        weeklyBonusDatesToAdd.push(currDate);
+
+        const index = result.findIndex(item => item.date === currDate);
+        if (index !== -1) {
+          result[index].weeklyBonus = weeklyBonus;
+        }
       }
     }
 
@@ -820,6 +853,13 @@ exports.StrikePath = async (req, res) => {
 
       if (!updateData.$push) updateData.$push = {};
       updateData.$push.deductedDates = { $each: datesToDeduct };
+    }
+    if (weeklyBonusToAdd > 0) {
+      if (!updateData.$inc) updateData.$inc = {};
+      updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) + weeklyBonusToAdd;
+
+      if (!updateData.$push) updateData.$push = {};
+      updateData.$push.weeklyBonusDates = { $each: weeklyBonusDatesToAdd };
     }
 
     if (Object.keys(updateData).length > 0) {
