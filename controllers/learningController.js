@@ -7,7 +7,7 @@ const LearningScore = require('../models/learningScore');
 const MarkingSetting = require('../models/markingSetting');
 const Topic = require('../models/topic');
 const TopicScore = require('../models/topicScore');
-
+const User = require('../models/User');
 
 exports.createLearning = async (req, res) => {
   try {
@@ -705,142 +705,106 @@ exports.Strikecalculation = async (req, res) => {
 
 
 
+
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
 
     const scores = await LearningScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
+      .sort({ scoreDate: 1 })
       .lean();
 
     const topicScores = await TopicScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
+      .sort({ updatedAt: 1 })
       .lean();
 
-    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-
-    const dateMap = new Map();
-
-    // Process practice scores
+    const scoreMap = new Map(); // date => [data]
+    
+    // Add practice scores
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      const dataItem = {
-        type: 'practice',
-        score: score.score,
-        updatedAt: score.updatedAt,
-        scoreDate: score.scoreDate,
-        learningId: score.learningId,
-        strickStatus: score.strickStatus
-      };
-
-      if (!dateMap.has(date)) {
-        dateMap.set(date, { practice: dataItem, topic: null });
-      } else {
-        const existing = dateMap.get(date);
-        if (!existing.practice || moment(dataItem.updatedAt).isBefore(existing.practice.updatedAt)) {
-          existing.practice = dataItem;
-        }
+      if (!scoreMap.has(date)) scoreMap.set(date, []);
+      const existing = scoreMap.get(date).find(item => item.type === 'practice');
+      if (!existing) {
+        scoreMap.get(date).push({
+          type: 'practice',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          scoreDate: score.scoreDate,
+          learningId: score.learningId,
+          strickStatus: score.strickStatus
+        });
       }
     });
 
-    // Process topic scores
+    // Add topic scores
     topicScores.forEach(score => {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
-      const dataItem = {
-        type: 'topic',
-        score: score.score,
-        updatedAt: score.updatedAt,
-        learningId: score.learningId,
-        strickStatus: score.strickStatus
-      };
-
-      if (!dateMap.has(date)) {
-        dateMap.set(date, { practice: null, topic: dataItem });
-      } else {
-        const existing = dateMap.get(date);
-        if (!existing.topic || moment(dataItem.updatedAt).isBefore(existing.topic.updatedAt)) {
-          existing.topic = dataItem;
-        }
+      if (!scoreMap.has(date)) scoreMap.set(date, []);
+      const existing = scoreMap.get(date).find(item => item.type === 'topic');
+      if (!existing) {
+        scoreMap.get(date).push({
+          type: 'topic',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          learningId: score.learningId,
+          strickStatus: score.strickStatus
+        });
       }
     });
+
+    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
+    const dailyExperience = markingSetting?.dailyExperience || 0;
 
     const result = [];
 
-    for (let [date, { practice, topic }] of dateMap.entries()) {
-      const data = [];
-      if (practice) data.push(practice);
-      if (topic) data.push(topic);
+    for (let [date, data] of scoreMap.entries()) {
+      const types = data.map(d => d.type);
+      const hasTopic = types.includes('topic');
+      const hasPractice = types.includes('practice');
 
-      const entry = { date, data };
-
-      // ✅ Add dailyExperience if both exist
-      if (practice && topic && markingSetting?.dailyExperience) {
-        entry.dailyExperience = markingSetting.dailyExperience;
+      const item = { date, data };
+      if (hasTopic && hasPractice && dailyExperience > 0) {
+        item.dailyExperience = dailyExperience;
       }
 
-      result.push(entry);
+      result.push(item);
     }
 
     // Sort by date
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
-    // Streak calculation
-    const bothTypesDates = Array.from(dateMap.entries())
-      .filter(([_, val]) => val.practice && val.topic)
-      .map(([date]) => date)
-      .sort();
+    // Update User Bonus Point Only Once per Date
+    const user = await User.findById(userId).lean();
+    const existingBonusDates = user?.bonusDates || [];
 
-    let maxStreak = 0;
-    let currentStreak = 1;
-    let tempStart = null;
-    let streakStart = null;
-    let streakEnd = null;
+    let totalToAdd = 0;
+    const newBonusDates = [];
 
-    if (bothTypesDates.length > 0) {
-      tempStart = bothTypesDates[0];
-    }
-
-    for (let i = 1; i < bothTypesDates.length; i++) {
-      const prev = moment(bothTypesDates[i - 1]);
-      const curr = moment(bothTypesDates[i]);
-      if (curr.diff(prev, 'days') === 1) {
-        currentStreak++;
-      } else {
-        if (currentStreak > maxStreak) {
-          maxStreak = currentStreak;
-          streakStart = tempStart;
-          streakEnd = bothTypesDates[i - 1];
-        }
-        currentStreak = 1;
-        tempStart = bothTypesDates[i];
+    for (let entry of result) {
+      if (
+        entry.dailyExperience &&
+        !existingBonusDates.includes(entry.date)
+      ) {
+        totalToAdd += entry.dailyExperience;
+        newBonusDates.push(entry.date);
       }
     }
 
-    if (currentStreak > maxStreak) {
-      maxStreak = currentStreak;
-      streakStart = tempStart;
-      streakEnd = bothTypesDates[bothTypesDates.length - 1];
+    if (totalToAdd > 0) {
+      await User.findByIdAndUpdate(userId, {
+        $inc: { bonuspoint: totalToAdd },
+        $push: { bonusDates: { $each: newBonusDates } }
+      });
     }
 
-    const response = {
-      dates: result
-    };
+    return res.status(200).json({ dates: result });
 
-    if (maxStreak >= 7 && markingSetting?.weeklyBonus) {
-      response.weeklyBonus = markingSetting.weeklyBonus;
-    }
-
-    if (maxStreak >= 30 && markingSetting?.monthlyBonus) {
-      response.monthlyBonus = markingSetting.monthlyBonus;
-    }
-
-    return res.status(200).json(response);
   } catch (error) {
     console.error('Error in StrikePath:', error);
     return res.status(500).json({ message: error.message });
   }
 };
-
-
-
-

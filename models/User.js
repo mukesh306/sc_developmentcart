@@ -22,7 +22,8 @@ const userSchema = new mongoose.Schema({
   aadharCard: { type: String },
   marksheet: { type: String },
   resetPasswordOTP: { type: String },
-  bonuspoint: { type: Number },
+  bonuspoint: { type: Number ,default: 0 },
+  bonusDates: [String],
   status: {
     type: String,
     enum: ['no', 'yes'],
