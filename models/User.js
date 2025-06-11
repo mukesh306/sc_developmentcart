@@ -27,6 +27,22 @@ const userSchema = new mongoose.Schema({
  deductedDates: [String],
  weeklyBonusDates: [String],
  monthlyBonusDates: [String],
+ userLevelData: [
+  {
+    level: Number,
+    data: [
+      {
+        date: String,
+        data: [/* original practice + topic data */],
+        dailyExperience: Number,
+        deduction: Number,
+        weeklyBonus: Number,
+        monthlyBonus: Number
+      }
+    ]
+  }
+],
+
  level: {
   type: Number,
   default: 1
