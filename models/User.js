@@ -27,6 +27,10 @@ const userSchema = new mongoose.Schema({
  deductedDates: [String],
  weeklyBonusDates: [String],
  monthlyBonusDates: [String],
+ level: {
+  type: Number,
+  default: 1
+},
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });

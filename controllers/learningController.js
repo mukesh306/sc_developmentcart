@@ -920,6 +920,35 @@ function getLevelFromPoints(points) {
 
 
 
+exports.getUserLevelData = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { level } = req.query;
+
+    if (!level) {
+      return res.status(400).json({ message: "Level is required in query." });
+    }
+
+    const user = await User.findById(userId)
+      .select('name email level bonuspoint bonusDates weeklyBonusDates monthlyBonusDates deductedDates');
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    if (user.level !== Number(level)) {
+      return res.status(404).json({ message: `No data for user at level ${level}` });
+    }
+
+    return res.status(200).json({
+      user
+    });
+
+  } catch (error) {
+    console.error("getUserLevelData error:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
 
 
 
