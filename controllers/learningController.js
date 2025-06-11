@@ -752,7 +752,7 @@ exports.StrikePath = async (req, res) => {
     });
 
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-    const dailyExperience = markingSetting?.dailyExperience || 0;
+    const baseDailyExp = markingSetting?.dailyExperience || 0;
     const deductions = markingSetting?.deductions || 0;
     const weeklyBonus = markingSetting?.weeklyBonus || 0;
     const monthlyBonus = markingSetting?.monthlyBonus || 0;
@@ -791,16 +791,16 @@ exports.StrikePath = async (req, res) => {
         const hasPractice = types.includes('practice');
         const hasTopic = types.includes('topic');
 
-        if (hasPractice && hasTopic && dailyExperience > 0) {
+        if (hasPractice && hasTopic && baseDailyExp > 0) {
           const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
           const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
           const avgScore = (practiceScore + topicScore) / 2;
-          const calculatedExperience = (dailyExperience / 100) * avgScore;
 
-          item.dailyExperience = Math.round(calculatedExperience * 100) / 100;
+          const calculatedDailyExp = Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
+          item.dailyExperience = calculatedDailyExp;
 
           if (!existingBonusDates.includes(currentDate)) {
-            bonusToAdd += item.dailyExperience;
+            bonusToAdd += calculatedDailyExp;
             datesToAddBonus.push(currentDate);
           }
         }
@@ -815,7 +815,7 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
-    // Weekly Bonus (7-day streak)
+    // Weekly Bonus
     for (let i = 6; i < result.length; i++) {
       let isStreak = true;
       for (let j = i - 6; j <= i; j++) {
@@ -841,7 +841,7 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Monthly Bonus (30-day streak)
+    // Monthly Bonus
     for (let i = 29; i < result.length; i++) {
       let isMonthlyStreak = true;
       for (let j = i - 29; j <= i; j++) {
@@ -870,7 +870,7 @@ exports.StrikePath = async (req, res) => {
     // Update User document
     const updateData = {};
     if (bonusToAdd > 0) {
-      updateData.$inc = { bonuspoint: Math.round(bonusToAdd) };
+      updateData.$inc = { bonuspoint: bonusToAdd };
       updateData.$push = { bonusDates: { $each: datesToAddBonus } };
     }
     if (deductionToSubtract > 0) {
@@ -903,6 +903,7 @@ exports.StrikePath = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
