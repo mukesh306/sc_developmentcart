@@ -707,6 +707,7 @@ exports.Strikecalculation = async (req, res) => {
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
+    const requestedLevel = parseInt(req.query.level || 0); 
 
     const scores = await LearningScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
@@ -893,7 +894,7 @@ exports.StrikePath = async (req, res) => {
       await User.findByIdAndUpdate(userId, updateData);
     }
 
-    const updatedUser = await User.findById(userId).select('bonuspoint').lean();
+    const updatedUser = await User.findById(userId).select('bonuspoint userLevelData').lean();
     const newLevel = getLevelFromPoints(updatedUser.bonuspoint);
     await User.findByIdAndUpdate(userId, { level: newLevel });
 
@@ -919,12 +920,18 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
+    let filteredResult = result;
+    if (requestedLevel && requestedLevel !== newLevel) {
+      const matched = updatedUser.userLevelData.find(l => l.level === requestedLevel);
+      filteredResult = matched?.data || [];
+    }
+
     return res.status(200).json({
       bonuspoint: updatedUser?.bonuspoint || 0,
       levelBonusPoint,
       experiencePoint,
       level: newLevel,
-      dates: result
+      dates: filteredResult
     });
 
   } catch (error) {
