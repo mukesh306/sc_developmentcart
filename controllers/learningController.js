@@ -756,6 +756,7 @@ exports.StrikePath = async (req, res) => {
     const deductions = markingSetting?.deductions || 0;
     const weeklyBonus = markingSetting?.weeklyBonus || 0;
     const monthlyBonus = markingSetting?.monthlyBonus || 0;
+    const experiencePoint = markingSetting?.experiencePoint || 0;
 
     const datesList = Array.from(scoreMap.keys()).sort();
     if (datesList.length === 0) {
@@ -921,6 +922,7 @@ exports.StrikePath = async (req, res) => {
     return res.status(200).json({
       bonuspoint: updatedUser?.bonuspoint || 0,
       levelBonusPoint,
+      experiencePoint,
       level: newLevel,
       dates: result
     });
