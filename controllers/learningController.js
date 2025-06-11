@@ -792,9 +792,15 @@ exports.StrikePath = async (req, res) => {
         const hasTopic = types.includes('topic');
 
         if (hasPractice && hasTopic && dailyExperience > 0) {
-          item.dailyExperience = dailyExperience;
+          const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
+          const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
+          const avgScore = (practiceScore + topicScore) / 2;
+          const calculatedExperience = (dailyExperience / 100) * avgScore;
+
+          item.dailyExperience = Math.round(calculatedExperience * 100) / 100;
+
           if (!existingBonusDates.includes(currentDate)) {
-            bonusToAdd += dailyExperience;
+            bonusToAdd += item.dailyExperience;
             datesToAddBonus.push(currentDate);
           }
         }
@@ -809,7 +815,7 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
-    // ✅ Weekly Bonus (7-day streak)
+    // Weekly Bonus (7-day streak)
     for (let i = 6; i < result.length; i++) {
       let isStreak = true;
       for (let j = i - 6; j <= i; j++) {
@@ -835,7 +841,7 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // ✅ Monthly Bonus (30-day streak)
+    // Monthly Bonus (30-day streak)
     for (let i = 29; i < result.length; i++) {
       let isMonthlyStreak = true;
       for (let j = i - 29; j <= i; j++) {
@@ -861,10 +867,10 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // ✅ Update User document
+    // Update User document
     const updateData = {};
     if (bonusToAdd > 0) {
-      updateData.$inc = { bonuspoint: bonusToAdd };
+      updateData.$inc = { bonuspoint: Math.round(bonusToAdd) };
       updateData.$push = { bonusDates: { $each: datesToAddBonus } };
     }
     if (deductionToSubtract > 0) {
@@ -897,6 +903,7 @@ exports.StrikePath = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.StrikePath = async (req, res) => {
