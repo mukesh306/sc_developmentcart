@@ -1,6 +1,5 @@
 
 const mongoose = require('mongoose');
-
 const userSchema = new mongoose.Schema({
   firstName: { type: String, required: true },
   middleName: { type: String },
@@ -49,6 +48,11 @@ const userSchema = new mongoose.Schema({
   type: Number,
   default: 1
 },
+ status: {
+    type: String,
+    enum: ['no', 'yes'],
+    default: 'no'
+  },
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
