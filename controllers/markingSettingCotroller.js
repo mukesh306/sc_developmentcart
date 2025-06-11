@@ -10,6 +10,7 @@ exports.createOrUpdateSettings = async (req, res) => {
     weeklyBonus,
     monthlyBonus,
     experiencePoint,
+    maxdailyexperience,
     dailyExperience,
      deductions
   } = req.body;
@@ -58,6 +59,9 @@ exports.createOrUpdateSettings = async (req, res) => {
     }
      if (deductions !== undefined) {
       setting.deductions = deductions;
+    }
+     if (maxdailyexperience !== undefined) {
+      setting.maxdailyexperience = maxdailyexperience;
     }
 
     await setting.save();

@@ -5,6 +5,10 @@ const MarkingSettingSchema = new mongoose.Schema({
     type: Number
   
   },
+  maxdailyexperience: {
+    type: Number
+  
+  },
   negativeMarking: {
     type: Number
   },
