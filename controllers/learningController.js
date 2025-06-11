@@ -52,7 +52,7 @@ exports.deleteLearning = async (req, res) => {
   }
 };
 
-exports.updateLearning = async (req, res) => {
+exports.updateLearning = async (req, res) => { 
   try {
     const learningId = req.params.id;
     const updateData = req.body;
@@ -704,6 +704,7 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -894,6 +895,11 @@ exports.StrikePath = async (req, res) => {
 
     if (Object.keys(updateData).length > 0) {
       await User.findByIdAndUpdate(userId, updateData);
+
+      // ✅ Update level based on new bonuspoint
+      const updatedUser = await User.findById(userId).select('bonuspoint').lean();
+      const newLevel = getLevelFromPoints(updatedUser.bonuspoint);
+      await User.findByIdAndUpdate(userId, { level: newLevel });
     }
 
     return res.status(200).json({ dates: result });
@@ -903,6 +909,18 @@ exports.StrikePath = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+// ✅ Helper function to calculate level
+function getLevelFromPoints(points) {
+  if (points >= 3000) return 4;
+  if (points >= 2000) return 3;
+  if (points >= 1000) return 2;
+  return 1;
+}
+
+
+
+
 
 
 
@@ -921,7 +939,7 @@ exports.StrikePath = async (req, res) => {
 //       .sort({ updatedAt: 1 })
 //       .lean();
 
-//     const scoreMap = new Map(); // date => [data]
+//     const scoreMap = new Map();
 
 //     scores.forEach(score => {
 //       const date = moment(score.scoreDate).format('YYYY-MM-DD');
@@ -955,9 +973,10 @@ exports.StrikePath = async (req, res) => {
 //     });
 
 //     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-//     const dailyExperience = markingSetting?.dailyExperience || 0;
+//     const baseDailyExp = markingSetting?.dailyExperience || 0;
 //     const deductions = markingSetting?.deductions || 0;
 //     const weeklyBonus = markingSetting?.weeklyBonus || 0;
+//     const monthlyBonus = markingSetting?.monthlyBonus || 0;
 
 //     const datesList = Array.from(scoreMap.keys()).sort();
 //     if (datesList.length === 0) {
@@ -972,6 +991,7 @@ exports.StrikePath = async (req, res) => {
 //     const existingBonusDates = user?.bonusDates || [];
 //     const existingDeductedDates = user?.deductedDates || [];
 //     const existingWeeklyBonusDates = user?.weeklyBonusDates || [];
+//     const existingMonthlyBonusDates = user?.monthlyBonusDates || [];
 
 //     let bonusToAdd = 0;
 //     let datesToAddBonus = [];
@@ -979,10 +999,11 @@ exports.StrikePath = async (req, res) => {
 //     let datesToDeduct = [];
 //     let weeklyBonusToAdd = 0;
 //     let weeklyBonusDatesToAdd = [];
+//     let monthlyBonusToAdd = 0;
+//     let monthlyBonusDatesToAdd = [];
 
 //     for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
 //       const currentDate = m.format('YYYY-MM-DD');
-
 //       const item = { date: currentDate, data: [] };
 
 //       if (scoreMap.has(currentDate)) {
@@ -991,15 +1012,20 @@ exports.StrikePath = async (req, res) => {
 //         const hasPractice = types.includes('practice');
 //         const hasTopic = types.includes('topic');
 
-//         if (hasPractice && hasTopic && dailyExperience > 0) {
-//           item.dailyExperience = dailyExperience;
+//         if (hasPractice && hasTopic && baseDailyExp > 0) {
+//           const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
+//           const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
+//           const avgScore = (practiceScore + topicScore) / 2;
+
+//           const calculatedDailyExp = Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
+//           item.dailyExperience = calculatedDailyExp;
+
 //           if (!existingBonusDates.includes(currentDate)) {
-//             bonusToAdd += dailyExperience;
+//             bonusToAdd += calculatedDailyExp;
 //             datesToAddBonus.push(currentDate);
 //           }
 //         }
 //       } else {
-//         // No data found => apply deduction
 //         item.deduction = deductions;
 //         if (!existingDeductedDates.includes(currentDate)) {
 //           deductionToSubtract += deductions;
@@ -1010,34 +1036,57 @@ exports.StrikePath = async (req, res) => {
 //       result.push(item);
 //     }
 
-//     // Weekly bonus detection
-//    for (let i = 1; i < result.length; i++) {
-//   let isStreak = true;
+//     // Weekly Bonus
+//     for (let i = 6; i < result.length; i++) {
+//       let isStreak = true;
+//       for (let j = i - 6; j <= i; j++) {
+//         const dayData = result[j]?.data || [];
+//         const hasPractice = dayData.some(item => item.type === 'practice');
+//         const hasTopic = dayData.some(item => item.type === 'topic');
+//         if (!(hasPractice && hasTopic)) {
+//           isStreak = false;
+//           break;
+//         }
+//       }
 
-//   for (let j = i - 1; j <= i; j++) {
-//     const dayData = result[j]?.data || [];
-//     const hasPractice = dayData.some(item => item.type === 'practice');
-//     const hasTopic = dayData.some(item => item.type === 'topic');
+//       const bonusDate = result[i].date;
 
-//     if (!(hasPractice && hasTopic)) {
-//       isStreak = false;
-//       break;
+//       if (isStreak && !existingWeeklyBonusDates.includes(bonusDate)) {
+//         result[i].weeklyBonus = weeklyBonus;
+//         weeklyBonusToAdd += weeklyBonus;
+//         weeklyBonusDatesToAdd.push(bonusDate);
+//       }
+
+//       if (existingWeeklyBonusDates.includes(bonusDate)) {
+//         result[i].weeklyBonus = weeklyBonus;
+//       }
 //     }
-//   }
 
-//   const bonusDate = result[i].date;
+//     // Monthly Bonus
+//     for (let i = 29; i < result.length; i++) {
+//       let isMonthlyStreak = true;
+//       for (let j = i - 29; j <= i; j++) {
+//         const dayData = result[j]?.data || [];
+//         const hasPractice = dayData.some(item => item.type === 'practice');
+//         const hasTopic = dayData.some(item => item.type === 'topic');
+//         if (!(hasPractice && hasTopic)) {
+//           isMonthlyStreak = false;
+//           break;
+//         }
+//       }
 
-//   if (isStreak && !existingWeeklyBonusDates.includes(bonusDate)) {
-//     result[i].weeklyBonus = weeklyBonus;
-//     weeklyBonusToAdd += weeklyBonus;
-//     weeklyBonusDatesToAdd.push(bonusDate);
-//   }
+//       const bonusDate = result[i].date;
 
-//   // ✅ Always show weeklyBonus if it was already earned
-//   if (existingWeeklyBonusDates.includes(bonusDate)) {
-//     result[i].weeklyBonus = weeklyBonus;
-//   }
-// }
+//       if (isMonthlyStreak && !existingMonthlyBonusDates.includes(bonusDate)) {
+//         result[i].monthlyBonus = monthlyBonus;
+//         monthlyBonusToAdd += monthlyBonus;
+//         monthlyBonusDatesToAdd.push(bonusDate);
+//       }
+
+//       if (existingMonthlyBonusDates.includes(bonusDate)) {
+//         result[i].monthlyBonus = monthlyBonus;
+//       }
+//     }
 
 //     // Update User document
 //     const updateData = {};
@@ -1046,18 +1095,22 @@ exports.StrikePath = async (req, res) => {
 //       updateData.$push = { bonusDates: { $each: datesToAddBonus } };
 //     }
 //     if (deductionToSubtract > 0) {
-//       if (!updateData.$inc) updateData.$inc = {};
+//       updateData.$inc = updateData.$inc || {};
 //       updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) - deductionToSubtract;
-
-//       if (!updateData.$push) updateData.$push = {};
+//       updateData.$push = updateData.$push || {};
 //       updateData.$push.deductedDates = { $each: datesToDeduct };
 //     }
 //     if (weeklyBonusToAdd > 0) {
-//       if (!updateData.$inc) updateData.$inc = {};
+//       updateData.$inc = updateData.$inc || {};
 //       updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) + weeklyBonusToAdd;
-
-//       if (!updateData.$push) updateData.$push = {};
+//       updateData.$push = updateData.$push || {};
 //       updateData.$push.weeklyBonusDates = { $each: weeklyBonusDatesToAdd };
+//     }
+//     if (monthlyBonusToAdd > 0) {
+//       updateData.$inc = updateData.$inc || {};
+//       updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) + monthlyBonusToAdd;
+//       updateData.$push = updateData.$push || {};
+//       updateData.$push.monthlyBonusDates = { $each: monthlyBonusDatesToAdd };
 //     }
 
 //     if (Object.keys(updateData).length > 0) {
@@ -1071,3 +1124,5 @@ exports.StrikePath = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
+
+
