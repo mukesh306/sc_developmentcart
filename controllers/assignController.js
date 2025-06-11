@@ -152,12 +152,16 @@ exports.updateAssigned = async (req, res) => {
 
 
 
+
 // exports.assignBonusPoint = async (req, res) => {
-//   try {
+//   try { 
 //     const userId = req.user._id;
 //     const bonuspoint = Number(req.query.bonuspoint); 
 
-//     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 }).sort({ createdAt: -1 }).lean();
+//     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
+//       .sort({ createdAt: -1 })
+//       .lean();
+      
 //     if (!markingSetting) {
 //       return res.status(404).json({ message: 'Marking setting not found.' });
 //     }
@@ -213,11 +217,20 @@ exports.updateAssigned = async (req, res) => {
 //       await user.save();
 //     }
 
+//     // --- Response ---
 //     return res.status(200).json({
 //       message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
 //       bonuspoint: updatedBonus,
-//       weekly: currentStreak,
-//       monthly: currentStreak,
+//       weekly: {
+//         count: currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7,
+//         startDate: currentStreak.startDate,
+//         endDate: currentStreak.endDate
+//       },
+//       monthly: {
+//         count: currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30,
+//         startDate: currentStreak.startDate,
+//         endDate: currentStreak.endDate
+//       },
 //       weeklyBonus: markingSetting.weeklyBonus || 0,
 //       monthlyBonus: markingSetting.monthlyBonus || 0
 //     });
@@ -228,16 +241,15 @@ exports.updateAssigned = async (req, res) => {
 //   }
 // };
 
-
 exports.assignBonusPoint = async (req, res) => {
-  try { 
+  try {
     const userId = req.user._id;
-    const bonuspoint = Number(req.query.bonuspoint); 
+    const bonuspoint = Number(req.query.bonuspoint);
 
     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
       .sort({ createdAt: -1 })
       .lean();
-      
+
     if (!markingSetting) {
       return res.status(404).json({ message: 'Marking setting not found.' });
     }
@@ -293,19 +305,22 @@ exports.assignBonusPoint = async (req, res) => {
       await user.save();
     }
 
-    // --- Response ---
+    // --- Prepare response with conditional endDate ---
+    const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
+    const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
+
     return res.status(200).json({
       message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
       bonuspoint: updatedBonus,
       weekly: {
-        count: currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7,
+        count: weeklyCount,
         startDate: currentStreak.startDate,
-        endDate: currentStreak.endDate
+        endDate: weeklyCount === 7 ? currentStreak.endDate : null
       },
       monthly: {
-        count: currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30,
+        count: monthlyCount,
         startDate: currentStreak.startDate,
-        endDate: currentStreak.endDate
+        endDate: monthlyCount === 30 ? currentStreak.endDate : null
       },
       weeklyBonus: markingSetting.weeklyBonus || 0,
       monthlyBonus: markingSetting.monthlyBonus || 0
@@ -316,6 +331,7 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.assignBonusPoint = async (req, res) => {
