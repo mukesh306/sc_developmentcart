@@ -33,15 +33,16 @@ const userSchema = new mongoose.Schema({
     data: [
       {
         date: String,
-        data: [/* original practice + topic data */],
+        data: Array,
         dailyExperience: Number,
-        deduction: Number,
         weeklyBonus: Number,
-        monthlyBonus: Number
+        monthlyBonus: Number,
+        deduction: Number
       }
     ]
   }
 ],
+
 
  level: {
   type: Number,

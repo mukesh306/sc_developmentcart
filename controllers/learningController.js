@@ -704,6 +704,7 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -867,7 +868,7 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Update User document
+    // Update User bonus and level
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -894,18 +895,25 @@ exports.StrikePath = async (req, res) => {
 
     if (Object.keys(updateData).length > 0) {
       await User.findByIdAndUpdate(userId, updateData);
-      const updatedUser = await User.findById(userId).select('bonuspoint').lean();
-      const newLevel = getLevelFromPoints(updatedUser.bonuspoint);
-      await User.findByIdAndUpdate(userId, { level: newLevel });
-
-      // Save result level-wise
-      await User.findByIdAndUpdate(userId, {
-        $pull: { userLevelData: { level: newLevel } }
-      });
-      await User.findByIdAndUpdate(userId, {
-        $push: { userLevelData: { level: newLevel, data: result } }
-      });
     }
+
+    // ✅ Update user level based on bonuspoint
+    const updatedUser = await User.findById(userId).select('bonuspoint').lean();
+    const newLevel = getLevelFromPoints(updatedUser.bonuspoint);
+    await User.findByIdAndUpdate(userId, { level: newLevel });
+
+    // ✅ Save userLevelData for that level
+    await User.findByIdAndUpdate(userId, {
+      $pull: { userLevelData: { level: newLevel } }
+    });
+    await User.findByIdAndUpdate(userId, {
+      $push: {
+        userLevelData: {
+          level: newLevel,
+          data: result
+        }
+      }
+    });
 
     return res.status(200).json({ dates: result });
 
@@ -915,6 +923,7 @@ exports.StrikePath = async (req, res) => {
   }
 };
 
+// ✅ Helper function to calculate level from points
 function getLevelFromPoints(points) {
   if (points >= 3000) return 4;
   if (points >= 2000) return 3;
