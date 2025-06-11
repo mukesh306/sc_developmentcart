@@ -30,6 +30,7 @@ const userSchema = new mongoose.Schema({
  userLevelData: [
   {
     level: Number,
+    levelBonusPoint: { type: Number, default: 0 },
     data: [
       {
         date: String,

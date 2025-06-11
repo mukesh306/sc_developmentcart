@@ -759,7 +759,7 @@ exports.StrikePath = async (req, res) => {
 
     const datesList = Array.from(scoreMap.keys()).sort();
     if (datesList.length === 0) {
-      return res.status(200).json({ bonuspoint: 0, dates: [] });
+      return res.status(200).json({ bonuspoint: 0, levelBonusPoint: 0, level: 1, dates: [] });
     }
 
     const startDate = moment(datesList[0]);
@@ -795,7 +795,6 @@ exports.StrikePath = async (req, res) => {
           const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
           const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
           const avgScore = (practiceScore + topicScore) / 2;
-
           const calculatedDailyExp = Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
           item.dailyExperience = calculatedDailyExp;
 
@@ -815,7 +814,6 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
-    // Weekly Bonus
     for (let i = 6; i < result.length; i++) {
       let isStreak = true;
       for (let j = i - 6; j <= i; j++) {
@@ -841,7 +839,6 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Monthly Bonus
     for (let i = 29; i < result.length; i++) {
       let isMonthlyStreak = true;
       for (let j = i - 29; j <= i; j++) {
@@ -867,7 +864,6 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Update User document
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -896,13 +892,19 @@ exports.StrikePath = async (req, res) => {
       await User.findByIdAndUpdate(userId, updateData);
     }
 
-    // ✅ Update user level
     const updatedUser = await User.findById(userId).select('bonuspoint').lean();
     const newLevel = getLevelFromPoints(updatedUser.bonuspoint);
-
     await User.findByIdAndUpdate(userId, { level: newLevel });
 
-    // ✅ Save userLevelData
+    let levelBonusPoint = 0;
+    for (const item of result) {
+      if (item.dailyExperience) levelBonusPoint += item.dailyExperience;
+      if (item.weeklyBonus) levelBonusPoint += item.weeklyBonus;
+      if (item.monthlyBonus) levelBonusPoint += item.monthlyBonus;
+      if (item.deduction) levelBonusPoint -= item.deduction;
+    }
+    levelBonusPoint = Math.round(levelBonusPoint * 100) / 100;
+
     await User.findByIdAndUpdate(userId, {
       $pull: { userLevelData: { level: newLevel } }
     });
@@ -910,14 +912,16 @@ exports.StrikePath = async (req, res) => {
       $push: {
         userLevelData: {
           level: newLevel,
+          levelBonusPoint,
           data: result
         }
       }
     });
 
-    // ✅ Return response with bonuspoint
     return res.status(200).json({
       bonuspoint: updatedUser?.bonuspoint || 0,
+      levelBonusPoint,
+      level: newLevel,
       dates: result
     });
 
@@ -927,14 +931,12 @@ exports.StrikePath = async (req, res) => {
   }
 };
 
-// ✅ Helper function
 function getLevelFromPoints(points) {
   if (points >= 3000) return 4;
   if (points >= 2000) return 3;
   if (points >= 1000) return 2;
   return 1;
 }
-
 
 
 // exports.StrikePath = async (req, res) => {
