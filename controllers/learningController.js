@@ -919,7 +919,6 @@ function getLevelFromPoints(points) {
 }
 
 
-
 exports.getUserLevelData = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -929,9 +928,7 @@ exports.getUserLevelData = async (req, res) => {
       return res.status(400).json({ message: "Level is required in query." });
     }
 
-    const user = await User.findById(userId)
-      .select('name email level bonuspoint bonusDates weeklyBonusDates monthlyBonusDates deductedDates');
-
+    const user = await User.findById(userId).lean();
     if (!user) {
       return res.status(404).json({ message: "User not found." });
     }
@@ -940,8 +937,144 @@ exports.getUserLevelData = async (req, res) => {
       return res.status(404).json({ message: `No data for user at level ${level}` });
     }
 
+    const scores = await LearningScore.find({ userId, strickStatus: true })
+      .populate('learningId', 'name')
+      .sort({ scoreDate: 1 })
+      .lean();
+
+    const topicScores = await TopicScore.find({ userId, strickStatus: true })
+      .populate('learningId', 'name')
+      .sort({ updatedAt: 1 })
+      .lean();
+
+    const scoreMap = new Map();
+
+    scores.forEach(score => {
+      const date = moment(score.scoreDate).format('YYYY-MM-DD');
+      if (!scoreMap.has(date)) scoreMap.set(date, []);
+      const exists = scoreMap.get(date).some(item => item.type === 'practice');
+      if (!exists) {
+        scoreMap.get(date).push({
+          type: 'practice',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          scoreDate: score.scoreDate,
+          learningId: score.learningId,
+          strickStatus: score.strickStatus
+        });
+      }
+    });
+
+    topicScores.forEach(score => {
+      const date = moment(score.updatedAt).format('YYYY-MM-DD');
+      if (!scoreMap.has(date)) scoreMap.set(date, []);
+      const exists = scoreMap.get(date).some(item => item.type === 'topic');
+      if (!exists) {
+        scoreMap.get(date).push({
+          type: 'topic',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          learningId: score.learningId,
+          strickStatus: score.strickStatus
+        });
+      }
+    });
+
+    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
+    const baseDailyExp = markingSetting?.dailyExperience || 0;
+    const deductions = markingSetting?.deductions || 0;
+    const weeklyBonus = markingSetting?.weeklyBonus || 0;
+    const monthlyBonus = markingSetting?.monthlyBonus || 0;
+
+    const datesList = Array.from(scoreMap.keys()).sort();
+    if (datesList.length === 0) {
+      return res.status(200).json({ dates: [] });
+    }
+
+    const startDate = moment(datesList[0]);
+    const endDate = moment(datesList[datesList.length - 1]);
+
+    const result = [];
+    const existingBonusDates = user.bonusDates || [];
+    const existingDeductedDates = user.deductedDates || [];
+    const existingWeeklyBonusDates = user.weeklyBonusDates || [];
+    const existingMonthlyBonusDates = user.monthlyBonusDates || [];
+
+    for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
+      const currentDate = m.format('YYYY-MM-DD');
+      const item = { date: currentDate, data: [] };
+
+      if (scoreMap.has(currentDate)) {
+        item.data = scoreMap.get(currentDate);
+        const types = item.data.map(d => d.type);
+        const hasPractice = types.includes('practice');
+        const hasTopic = types.includes('topic');
+
+        if (hasPractice && hasTopic && baseDailyExp > 0) {
+          const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
+          const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
+          const avgScore = (practiceScore + topicScore) / 2;
+
+          item.dailyExperience = Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
+
+          if (existingBonusDates.includes(currentDate)) {
+            item.bonusGiven = true;
+          }
+        }
+      } else {
+        item.deduction = deductions;
+        if (existingDeductedDates.includes(currentDate)) {
+          item.deducted = true;
+        }
+      }
+
+      result.push(item);
+    }
+
+    // Weekly Bonus
+    for (let i = 6; i < result.length; i++) {
+      let isStreak = true;
+      for (let j = i - 6; j <= i; j++) {
+        const dayData = result[j]?.data || [];
+        const hasPractice = dayData.some(item => item.type === 'practice');
+        const hasTopic = dayData.some(item => item.type === 'topic');
+        if (!(hasPractice && hasTopic)) {
+          isStreak = false;
+          break;
+        }
+      }
+
+      const bonusDate = result[i].date;
+
+      if (isStreak && existingWeeklyBonusDates.includes(bonusDate)) {
+        result[i].weeklyBonus = weeklyBonus;
+      }
+    }
+
+    // Monthly Bonus
+    for (let i = 29; i < result.length; i++) {
+      let isMonthlyStreak = true;
+      for (let j = i - 29; j <= i; j++) {
+        const dayData = result[j]?.data || [];
+        const hasPractice = dayData.some(item => item.type === 'practice');
+        const hasTopic = dayData.some(item => item.type === 'topic');
+        if (!(hasPractice && hasTopic)) {
+          isMonthlyStreak = false;
+          break;
+        }
+      }
+
+      const bonusDate = result[i].date;
+
+      if (isMonthlyStreak && existingMonthlyBonusDates.includes(bonusDate)) {
+        result[i].monthlyBonus = monthlyBonus;
+      }
+    }
+
     return res.status(200).json({
-      user
+      level: user.level,
+      bonuspoint: user.bonuspoint,
+      dates: result
     });
 
   } catch (error) {
@@ -949,7 +1082,6 @@ exports.getUserLevelData = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
