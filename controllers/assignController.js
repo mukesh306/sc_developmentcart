@@ -62,29 +62,77 @@ exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
 
+    // Get user data
     const user = await User.findById(userId).lean();
     if (!user || !user.className) {
       return res.status(400).json({ message: 'User className not found.' });
     }
+
+    // Fetch assigned list for user's class
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
       .lean();
 
+    // Add class info and clean empty learning fields
     for (let item of assignedList) {
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
+
+      // Remove empty or unpopulated learning fields
+      if (!item.learning || Object.keys(item.learning).length === 0) {
+        item.learning = null;
+      }
+      if (!item.learning2 || Object.keys(item.learning2).length === 0) {
+        item.learning2 = null;
+      }
+      if (!item.learning3 || Object.keys(item.learning3).length === 0) {
+        item.learning3 = null;
+      }
     }
+
+    // Return final cleaned response
     res.status(200).json({ data: assignedList });
   } catch (error) {
     console.error('Get Assigned Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+
+
+
+// exports.getAssignedListUser = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     const user = await User.findById(userId).lean();
+//     if (!user || !user.className) {
+//       return res.status(400).json({ message: 'User className not found.' });
+//     }
+//     const assignedList = await Assigned.find({ classId: user.className })
+//       .populate('learning')
+//       .populate('learning2')
+//       .populate('learning3')
+//       .lean();
+
+//     for (let item of assignedList) {
+//       let classInfo = await School.findById(item.classId).lean();
+//       if (!classInfo) {
+//         classInfo = await College.findById(item.classId).lean();
+//       }
+//       item.classInfo = classInfo || null;
+//     }
+//     res.status(200).json({ data: assignedList });
+//   } catch (error) {
+//     console.error('Get Assigned Error:', error);
+//     res.status(500).json({ message: 'Internal server error', error: error.message });
+//   }
+// };
 
 exports.deleteAssigned = async (req, res) => {
   try {
