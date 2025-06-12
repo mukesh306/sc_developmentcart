@@ -761,7 +761,7 @@ exports.StrikePath = async (req, res) => {
 
     const datesList = Array.from(scoreMap.keys()).sort();
     if (datesList.length === 0) {
-      return res.status(200).json({ bonuspoint: 0, levelBonusPoint: 0, level: 1, dates: [] });
+      return res.status(200).json({ bonuspoint: 0, levelBonusPoint: 0,experiencePoint, level: 1, dates: [] });
     }
 
     const startDate = moment(datesList[0]);
