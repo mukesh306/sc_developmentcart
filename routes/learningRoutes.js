@@ -12,5 +12,6 @@ router.get('/Topicstrikes', auth, learningController.Topicstrikes);
 router.get('/Strike', auth, learningController.StrikeBothSameDate);
 router.get('/Strikecalculation', auth, learningController.Strikecalculation);
 router.get('/StrikePath', auth, learningController.StrikePath);
+router.get('/leveldata', auth, learningController.getUserLevelData);
 
 module.exports = router;

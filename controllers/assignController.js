@@ -58,33 +58,98 @@ exports.getAssignedList = async (req, res) => {
   }
 };
 
+
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
 
+    // Get user data
     const user = await User.findById(userId).lean();
     if (!user || !user.className) {
       return res.status(400).json({ message: 'User className not found.' });
     }
+
+    // Fetch assigned list for user's class
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
+      .populate('learning4')
       .lean();
 
+    // Loop through assigned list to add class info and fetch scores
     for (let item of assignedList) {
+      // Add class info (school or college)
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
+
+      // Helper to get the first TopicScore for a learning field
+      const getScore = async (learningField) => {
+        if (item[learningField]?._id) {
+          const topicScore = await TopicScore.findOne({
+            userId: userId,
+            learningId: item[learningField]._id,
+          }).sort({ createdAt: 1 }).lean();
+
+          return topicScore?.score ?? null;
+        }
+        return null;
+      };
+
+      // Clean up empty learning fields
+      if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
+      if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
+      if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
+      if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
+
+      // Set learningXAverage from TopicScore
+      item.learningAverage = await getScore('learning');
+      item.learning2Average = await getScore('learning2');
+      item.learning3Average = await getScore('learning3');
+      item.learning4Average = await getScore('learning4');
     }
+
+    // Send final response
     res.status(200).json({ data: assignedList });
   } catch (error) {
     console.error('Get Assigned Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+
+
+
+// exports.getAssignedListUser = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     const user = await User.findById(userId).lean();
+//     if (!user || !user.className) {
+//       return res.status(400).json({ message: 'User className not found.' });
+//     }
+//     const assignedList = await Assigned.find({ classId: user.className })
+//       .populate('learning')
+//       .populate('learning2')
+//       .populate('learning3')
+//       .lean();
+
+//     for (let item of assignedList) {
+//       let classInfo = await School.findById(item.classId).lean();
+//       if (!classInfo) {
+//         classInfo = await College.findById(item.classId).lean();
+//       }
+//       item.classInfo = classInfo || null;
+//     }
+//     res.status(200).json({ data: assignedList });
+//   } catch (error) {
+//     console.error('Get Assigned Error:', error);
+//     res.status(500).json({ message: 'Internal server error', error: error.message });
+//   }
+// };
 
 exports.deleteAssigned = async (req, res) => {
   try {
@@ -152,12 +217,16 @@ exports.updateAssigned = async (req, res) => {
 
 
 
+
 // exports.assignBonusPoint = async (req, res) => {
-//   try {
+//   try { 
 //     const userId = req.user._id;
 //     const bonuspoint = Number(req.query.bonuspoint); 
 
-//     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 }).sort({ createdAt: -1 }).lean();
+//     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
+//       .sort({ createdAt: -1 })
+//       .lean();
+      
 //     if (!markingSetting) {
 //       return res.status(404).json({ message: 'Marking setting not found.' });
 //     }
@@ -213,11 +282,20 @@ exports.updateAssigned = async (req, res) => {
 //       await user.save();
 //     }
 
+//     // --- Response ---
 //     return res.status(200).json({
 //       message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
 //       bonuspoint: updatedBonus,
-//       weekly: currentStreak,
-//       monthly: currentStreak,
+//       weekly: {
+//         count: currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7,
+//         startDate: currentStreak.startDate,
+//         endDate: currentStreak.endDate
+//       },
+//       monthly: {
+//         count: currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30,
+//         startDate: currentStreak.startDate,
+//         endDate: currentStreak.endDate
+//       },
 //       weeklyBonus: markingSetting.weeklyBonus || 0,
 //       monthlyBonus: markingSetting.monthlyBonus || 0
 //     });
@@ -228,16 +306,15 @@ exports.updateAssigned = async (req, res) => {
 //   }
 // };
 
-
 exports.assignBonusPoint = async (req, res) => {
-  try { 
+  try {
     const userId = req.user._id;
-    const bonuspoint = Number(req.query.bonuspoint); 
+    const bonuspoint = Number(req.query.bonuspoint);
 
     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
       .sort({ createdAt: -1 })
       .lean();
-      
+
     if (!markingSetting) {
       return res.status(404).json({ message: 'Marking setting not found.' });
     }
@@ -293,19 +370,22 @@ exports.assignBonusPoint = async (req, res) => {
       await user.save();
     }
 
-    // --- Response ---
+    // --- Prepare response with conditional endDate ---
+    const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
+    const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
+
     return res.status(200).json({
       message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
       bonuspoint: updatedBonus,
       weekly: {
-        count: currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7,
+        count: weeklyCount,
         startDate: currentStreak.startDate,
-        endDate: currentStreak.endDate
+        endDate: weeklyCount === 7 ? currentStreak.endDate : null
       },
       monthly: {
-        count: currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30,
+        count: monthlyCount,
         startDate: currentStreak.startDate,
-        endDate: currentStreak.endDate
+        endDate: monthlyCount === 30 ? currentStreak.endDate : null
       },
       weeklyBonus: markingSetting.weeklyBonus || 0,
       monthlyBonus: markingSetting.monthlyBonus || 0
@@ -316,6 +396,7 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.assignBonusPoint = async (req, res) => {

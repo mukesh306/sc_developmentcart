@@ -509,7 +509,7 @@ exports.getTopicById = async (req, res) => {
     topicObj.isdescription = latestDescription?.isdescription || false;
 
     // 🔥 Add filtered topicScore data directly (flattened)
-    topicObj.score = topicScoreData?.score || 0;
+    topicObj.score = topicScoreData?.score || null;
     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
     topicObj.correctAnswers = topicScoreData?.correctAnswers || 0;

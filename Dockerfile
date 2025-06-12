@@ -1,23 +1,13 @@
-FROM node:22.14.0-slim AS base
-
-WORKDIR /app
-
-# Copy dependency files first for layer caching
+FROM node:18 AS build
+WORKDIR /usr/src/app
 COPY package*.json ./
-
-# Install only production dependencies
-RUN npm ci --omit=dev
-
-# Copy only necessary files
-COPY config/ ./config/
-COPY controllers/ ./controllers/
-COPY middleware/ ./middleware/
-COPY models/ ./models/
-COPY routes/ ./routes/
-COPY server.js ./
-
-# Expose app port
-EXPOSE 5000
-
+RUN npm install
+COPY . .
+FROM node:18-alpine
+WORKDIR /usr/src/app
+COPY --from=build /usr/src/app/node_modules ./node_modules
+COPY --from=build /usr/src/app/package*.json ./
+COPY --from=build /usr/src/app .
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+USER appuser
 CMD ["node", "server.js"]
-

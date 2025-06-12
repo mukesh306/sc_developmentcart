@@ -1,6 +1,5 @@
 
 const mongoose = require('mongoose');
-
 const userSchema = new mongoose.Schema({
   firstName: { type: String, required: true },
   middleName: { type: String },
@@ -24,8 +23,36 @@ const userSchema = new mongoose.Schema({
   resetPasswordOTP: { type: String },
   bonuspoint: { type: Number ,default: 0 },
  bonusDates: [String],
-deductedDates: [String],
-weeklyBonusDates: [String],
+ deductedDates: [String],
+ weeklyBonusDates: [String],
+ monthlyBonusDates: [String],
+ userLevelData: [
+  {
+    level: Number,
+    levelBonusPoint: { type: Number, default: 0 },
+    data: [
+      {
+        date: String,
+        data: Array,
+        dailyExperience: Number,
+        weeklyBonus: Number,
+        monthlyBonus: Number,
+        deduction: Number
+      }
+    ]
+  }
+],
+
+
+ level: {
+  type: Number,
+  default: 1
+},
+ status: {
+    type: String,
+    enum: ['no', 'yes'],
+    default: 'no'
+  },
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });

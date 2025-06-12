@@ -56,11 +56,8 @@ exports.signup = async (req, res) => {
       return res.status(409).json({ message: 'User with this email or mobile already exists.' });
     }
 
-    
-
     const hashedPassword = await bcrypt.hash(password, 10);
 
-   
     const newUser = new User({
       firstName,
       middleName,
