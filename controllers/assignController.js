@@ -57,7 +57,6 @@ exports.getAssignedList = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -76,26 +75,21 @@ exports.getAssignedListUser = async (req, res) => {
       .populate('learning4')
       .lean();
 
+    // Loop through assigned list to add class info and fetch scores
     for (let item of assignedList) {
-      // Add class info
+      // Add class info (school or college)
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
 
-      // Remove empty learnings
-      if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
-      if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
-      if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
-      if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
-
-      // Get score from TopicScore (oldest) for each learning
+      // Helper to get the first TopicScore for a learning field
       const getScore = async (learningField) => {
         if (item[learningField]?._id) {
           const topicScore = await TopicScore.findOne({
-            userId: mongoose.Types.ObjectId(userId),
-            learningId: mongoose.Types.ObjectId(item[learningField]._id),
+            userId: userId,
+            learningId: item[learningField]._id,
           }).sort({ createdAt: 1 }).lean();
 
           return topicScore?.score ?? null;
@@ -103,13 +97,20 @@ exports.getAssignedListUser = async (req, res) => {
         return null;
       };
 
-      // Assign the earliest score as learningXAverage
+      // Clean up empty learning fields
+      if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
+      if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
+      if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
+      if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
+
+      // Set learningXAverage from TopicScore
       item.learningAverage = await getScore('learning');
       item.learning2Average = await getScore('learning2');
       item.learning3Average = await getScore('learning3');
       item.learning4Average = await getScore('learning4');
     }
 
+    // Send final response
     res.status(200).json({ data: assignedList });
   } catch (error) {
     console.error('Get Assigned Error:', error);
