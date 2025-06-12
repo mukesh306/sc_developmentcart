@@ -192,15 +192,76 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 };
 
 
+// exports.getAssignedListUserpractice = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     const user = await User.findById(userId).lean();
+//     if (!user || !user.className) {
+//       return res.status(400).json({ message: 'User className not found.' });
+//     }
+
+//     const assignedList = await Assigned.find({ classId: user.className })
+//       .populate('learning')
+//       .populate('learning2')
+//       .populate('learning3')
+//       .populate('learning4')
+//       .lean();
+
+//     for (let item of assignedList) {
+//       // Add classInfo (from School or College)
+//       let classInfo = await School.findById(item.classId).lean();
+//       if (!classInfo) {
+//         classInfo = await College.findById(item.classId).lean();
+//       }
+//       item.classInfo = classInfo || null;
+
+//       // Fetch first score for learning
+//       if (item.learning?._id) {
+//         const scoreRecord = await LearningScore.findOne({
+//           userId,
+//           learningId: item.learning._id
+//         }).sort({ createdAt: 1 }).lean();
+//         item.learning.firstScore = scoreRecord?.score || null;
+//       }
+
+//       // Fetch first score for learning2
+//       if (item.learning2?._id) {
+//         const scoreRecord2 = await LearningScore.findOne({
+//           userId,
+//           learningId: item.learning2._id
+//         }).sort({ createdAt: 1 }).lean();
+//         item.learning2.firstScore = scoreRecord2?.score || null;
+//       }
+
+//       // Fetch first score for learning3
+//       if (item.learning3?._id) {
+//         const scoreRecord3 = await LearningScore.findOne({
+//           userId,
+//           learningId: item.learning3._id
+//         }).sort({ createdAt: 1 }).lean();
+//         item.learning3.firstScore = scoreRecord3?.score || null;
+//       }
+//     }
+
+//     res.status(200).json({ data: assignedList });
+//   } catch (error) {
+//     console.error('Get Assigned Error:', error);
+//     res.status(500).json({ message: 'Internal server error', error: error.message });
+//   }
+// };
+
 exports.getAssignedListUserpractice = async (req, res) => {
   try {
     const userId = req.user._id;
 
+    // Fetch user info
     const user = await User.findById(userId).lean();
     if (!user || !user.className) {
       return res.status(400).json({ message: 'User className not found.' });
     }
 
+    // Get assigned data
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
@@ -209,46 +270,37 @@ exports.getAssignedListUserpractice = async (req, res) => {
       .lean();
 
     for (let item of assignedList) {
-      // Add classInfo (from School or College)
+      // Add class info (school/college)
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
 
-      // Fetch first score for learning
-      if (item.learning?._id) {
-        const scoreRecord = await LearningScore.findOne({
-          userId,
-          learningId: item.learning._id
-        }).sort({ createdAt: 1 }).lean();
-        item.learning.firstScore = scoreRecord?.score || null;
-      }
+      // Helper to fetch first score from LearningScore
+      const getFirstScore = async (field) => {
+        if (item[field]?._id) {
+          const scoreRecord = await LearningScore.findOne({
+            userId,
+            learningId: item[field]._id
+          }).sort({ createdAt: 1 }).lean();
 
-      // Fetch first score for learning2
-      if (item.learning2?._id) {
-        const scoreRecord2 = await LearningScore.findOne({
-          userId,
-          learningId: item.learning2._id
-        }).sort({ createdAt: 1 }).lean();
-        item.learning2.firstScore = scoreRecord2?.score || null;
-      }
+          item[field].firstScore = scoreRecord?.score || null;
+        }
+      };
 
-      // Fetch first score for learning3
-      if (item.learning3?._id) {
-        const scoreRecord3 = await LearningScore.findOne({
-          userId,
-          learningId: item.learning3._id
-        }).sort({ createdAt: 1 }).lean();
-        item.learning3.firstScore = scoreRecord3?.score || null;
-      }
+      // Apply to all fields
+      await getFirstScore('learning');
+      await getFirstScore('learning2');
+      await getFirstScore('learning3');
+      await getFirstScore('learning4');
     }
 
+    // Send response
     res.status(200).json({ data: assignedList });
   } catch (error) {
     console.error('Get Assigned Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
 
