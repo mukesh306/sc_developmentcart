@@ -647,23 +647,20 @@ exports.Strikecalculation = async (req, res) => {
 
 // dynamic leavel
 
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
     const requestedLevel = parseInt(req.query.level || 0);
-
     const scores = await LearningScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
       .lean();
-
     const topicScores = await TopicScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
       .sort({ updatedAt: 1 })
       .lean();
-
     const scoreMap = new Map();
-
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
@@ -892,6 +889,7 @@ const getLevelFromPoints = async (points) => {
 };
 
 
+
 exports.getUserLevelData = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1044,16 +1042,16 @@ exports.getGenrelIq = async (req, res) => {
 // exports.Dashboard = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
+
+//     // --- Scores for Streak Calculation ---
 //     const learningScores = await LearningScore.find({ userId, strickStatus: true }).lean();
 //     const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
 
 //     const practiceDates = new Set(learningScores.map(s => moment(s.scoreDate).format('YYYY-MM-DD')));
 //     const topicDates = new Set(topicScores.map(s => moment(s.updatedAt).format('YYYY-MM-DD')));
-
-//     // ✅ Keep only dates that are present in both practice and topic
 //     const commonDates = [...practiceDates].filter(date => topicDates.has(date)).sort();
 
-//     // --- Calculate currentStreak ---
+//     // --- currentStreak Calculation ---
 //     let currentStreak = { count: 0, startDate: null, endDate: null };
 //     let streakStart = null;
 //     let tempStreak = [];
@@ -1079,15 +1077,61 @@ exports.getGenrelIq = async (req, res) => {
 //       };
 //     }
 
-//     return res.status(200).json({ currentStreak });
+//     // --- Bonus Data ---
+//     const user = await User.findById(userId).lean();
+//     const bonuspoint = user?.bonuspoint || 0;
+
+//     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
+//       .sort({ createdAt: -1 })
+//       .lean();
+
+//     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
+//     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
+
+//     // --- General IQ + Learning ---
+//     const learnings = await Learning.find().populate('createdBy', 'email').lean();
+//     const learningWithIQ = await Promise.all(
+//       learnings.map(async (learning) => {
+//         const iqRecord = await GenralIQ.findOne({ userId, learningId: learning._id }).lean();
+//         return {
+//           ...learning,
+//           overallAverage: iqRecord?.overallAverage || 0
+//         };
+//       })
+//     );
+//     learningWithIQ.sort((a, b) => b.overallAverage - a.overallAverage);
+
+//     // --- Quotes with Status: Published ---
+//     const quotes = await Quotes.find({ Status: 'Published' }).lean();
+
+//     // --- Final Response ---
+//     return res.status(200).json({
+//       currentStreak,
+//       bonus: {
+//         bonuspoint,
+//         weekly: {
+//           count: weeklyCount,
+//           startDate: currentStreak.startDate,
+//           endDate: weeklyCount === 7 ? currentStreak.endDate : null
+//         },
+//         monthly: {
+//           count: monthlyCount,
+//           startDate: currentStreak.startDate,
+//           endDate: monthlyCount === 30 ? currentStreak.endDate : null
+//         },
+//         weeklyBonus: markingSetting?.weeklyBonus || 0,
+//         monthlyBonus: markingSetting?.monthlyBonus || 0
+//       },
+//       generalIq: learningWithIQ,
+//       learning: learnings,
+//       quotes
+//     });
 
 //   } catch (error) {
-//     console.error('Error in Strikecalculation:', error);
+//     console.error('Error in Dashboard:', error);
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
-
-
 
 exports.Dashboard = async (req, res) => {
   try {
@@ -1130,13 +1174,16 @@ exports.Dashboard = async (req, res) => {
     // --- Bonus Data ---
     const user = await User.findById(userId).lean();
     const bonuspoint = user?.bonuspoint || 0;
+    const level = user?.level || 1;
 
-    const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
-      .sort({ createdAt: -1 })
-      .lean();
+    const markingSetting = await MarkingSetting.findOne({}, { dailyExperience: 1, weeklyBonus: 1, monthlyBonus: 1, experiencePoint: 1 }).sort({ createdAt: -1 }).lean();
 
     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
+
+    // --- Level Bonus Point ---
+    const levelData = user?.userLevelData?.find((item) => item.level === level);
+    const levelBonusPoint = levelData?.levelBonusPoint || 0;
 
     // --- General IQ + Learning ---
     const learnings = await Learning.find().populate('createdBy', 'email').lean();
@@ -1172,14 +1219,16 @@ exports.Dashboard = async (req, res) => {
         weeklyBonus: markingSetting?.weeklyBonus || 0,
         monthlyBonus: markingSetting?.monthlyBonus || 0
       },
+      levelBonusPoint,
+      experiencePoint: markingSetting?.experiencePoint || 0,
+      level,
       generalIq: learningWithIQ,
       learning: learnings,
       quotes
     });
 
   } catch (error) {
-    console.error('Error in Dashboard:', error);
+    console.error('Dashboard Error:', error);
     return res.status(500).json({ message: error.message });
   }
 };
-
