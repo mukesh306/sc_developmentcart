@@ -1136,7 +1136,7 @@ exports.Dashboard = async (req, res) => {
     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
 
     // --- General IQ ---
-    const learnings = await Learning.find().populate('createdBy', 'email').lean();
+    const learnings = await Learning.find().lean();
     const learningWithIQ = await Promise.all(
       learnings.map(async (learning) => {
         const iqRecord = await GenralIQ.findOne({ userId, learningId: learning._id }).lean();
