@@ -8,6 +8,8 @@ const MarkingSetting = require('../models/markingSetting');
 const Topic = require('../models/topic'); 
 const TopicScore = require('../models/topicScore');
 const User = require('../models/User');
+const GenralIQ = require("../models/genraliq");
+
 
 exports.createLearning = async (req, res) => {
   try {
@@ -914,7 +916,6 @@ exports.getUserLevelData = async (req, res) => {
   }
 };
 
-
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -964,6 +965,7 @@ exports.genraliqAverage = async (req, res) => {
     const results = [];
     let totalAvg = 0;
     let count = 0;
+    let learningIdToSave = null;
 
     for (const [date, records] of scoreMap.entries()) {
       const hasPractice = records.some(r => r.type === 'practice');
@@ -973,6 +975,8 @@ exports.genraliqAverage = async (req, res) => {
         const practiceScore = records.find(r => r.type === 'practice')?.score || 0;
         const topicScore = records.find(r => r.type === 'topic')?.score || 0;
         const avg = (practiceScore + topicScore) / 2;
+
+        learningIdToSave = records[0]?.learningId?._id || records[0]?.learningId;
 
         results.push({
           date,
@@ -986,6 +990,15 @@ exports.genraliqAverage = async (req, res) => {
     }
 
     const overallAverage = count > 0 ? Math.round((totalAvg / count) * 100) / 100 : 0;
+
+    // ✅ Save to GenralIQ only if learningId is provided and valid
+    if (learningIdToSave) {
+      await GenralIQ.findOneAndUpdate(
+        { userId, learningId: learningIdToSave },
+        { overallAverage },
+        { upsert: true, new: true }
+      );
+    }
 
     return res.status(200).json({
       count,
