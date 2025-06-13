@@ -915,10 +915,10 @@ exports.getUserLevelData = async (req, res) => {
 };
 
 
-
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
+    const learningIdFilter = req.query.learningId;
 
     const learningScores = await LearningScore.find({ userId, strickStatus: true })
       .populate('learningId', 'name')
@@ -934,6 +934,8 @@ exports.genraliqAverage = async (req, res) => {
 
     // Add practice scores
     learningScores.forEach(score => {
+      if (learningIdFilter && score.learningId?._id?.toString() !== learningIdFilter) return;
+
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
       scoreMap.get(date).push({
@@ -947,6 +949,8 @@ exports.genraliqAverage = async (req, res) => {
 
     // Add topic scores
     topicScores.forEach(score => {
+      if (learningIdFilter && score.learningId?._id?.toString() !== learningIdFilter) return;
+
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
       scoreMap.get(date).push({
@@ -965,7 +969,6 @@ exports.genraliqAverage = async (req, res) => {
       const hasPractice = records.some(r => r.type === 'practice');
       const hasTopic = records.some(r => r.type === 'topic');
 
-      // ✅ Include only if both practice and topic are present
       if (hasPractice && hasTopic) {
         const practiceScore = records.find(r => r.type === 'practice')?.score || 0;
         const topicScore = records.find(r => r.type === 'topic')?.score || 0;
@@ -991,7 +994,7 @@ exports.genraliqAverage = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error in getBaseScoreAverageWithType:", error);
+    console.error("Error in genraliqAverage:", error);
     return res.status(500).json({ message: error.message });
   }
 };
