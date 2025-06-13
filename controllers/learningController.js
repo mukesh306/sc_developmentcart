@@ -9,7 +9,7 @@ const Topic = require('../models/topic');
 const TopicScore = require('../models/topicScore');
 const User = require('../models/User');
 const GenralIQ = require("../models/genraliq");
-
+const Quotes = require('../models/quotes');
 
 exports.createLearning = async (req, res) => {
   try {
@@ -1087,11 +1087,13 @@ exports.getGenrelIq = async (req, res) => {
 //   }
 // };
 
+
+
 exports.Dashboard = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // --- Fetch Scores for streak ---
+    // --- Scores for Streak Calculation ---
     const learningScores = await LearningScore.find({ userId, strickStatus: true }).lean();
     const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
 
@@ -1099,7 +1101,7 @@ exports.Dashboard = async (req, res) => {
     const topicDates = new Set(topicScores.map(s => moment(s.updatedAt).format('YYYY-MM-DD')));
     const commonDates = [...practiceDates].filter(date => topicDates.has(date)).sort();
 
-    // --- Calculate currentStreak ---
+    // --- currentStreak Calculation ---
     let currentStreak = { count: 0, startDate: null, endDate: null };
     let streakStart = null;
     let tempStreak = [];
@@ -1125,7 +1127,7 @@ exports.Dashboard = async (req, res) => {
       };
     }
 
-    // --- Bonus Logic ---
+    // --- Bonus Data ---
     const user = await User.findById(userId).lean();
     const bonuspoint = user?.bonuspoint || 0;
 
@@ -1136,8 +1138,8 @@ exports.Dashboard = async (req, res) => {
     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
 
-    // --- General IQ ---
-    const learnings = await Learning.find().lean();
+    // --- General IQ + Learning ---
+    const learnings = await Learning.find().populate('createdBy', 'email').lean();
     const learningWithIQ = await Promise.all(
       learnings.map(async (learning) => {
         const iqRecord = await GenralIQ.findOne({ userId, learningId: learning._id }).lean();
@@ -1149,14 +1151,12 @@ exports.Dashboard = async (req, res) => {
     );
     learningWithIQ.sort((a, b) => b.overallAverage - a.overallAverage);
 
-    // --- Learning (without IQ) ---
-    const allLearning = learnings; // Already fetched above
+    // --- Quotes with Status: Published ---
+    const quotes = await Quotes.find({ Status: 'Published' }).lean();
 
     // --- Final Response ---
     return res.status(200).json({
       currentStreak,
-      generalIq: learningWithIQ,
-      learning: allLearning,
       bonus: {
         bonuspoint,
         weekly: {
@@ -1171,7 +1171,10 @@ exports.Dashboard = async (req, res) => {
         },
         weeklyBonus: markingSetting?.weeklyBonus || 0,
         monthlyBonus: markingSetting?.monthlyBonus || 0
-      }
+      },
+      generalIq: learningWithIQ,
+      learning: learnings,
+      quotes
     });
 
   } catch (error) {
