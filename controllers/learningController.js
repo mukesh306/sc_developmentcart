@@ -1011,3 +1011,31 @@ exports.genraliqAverage = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+exports.getGenrelIq = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const learnings = await Learning.find().populate('createdBy', 'email').lean();
+
+    const learningWithIQ = await Promise.all(
+      learnings.map(async (learning) => {
+        const iqRecord = await GenralIQ.findOne({ userId, learningId: learning._id }).lean();
+        return {
+          ...learning,
+          overallAverage: iqRecord?.overallAverage || 0
+        };
+      })
+    );
+
+    res.status(200).json({
+      message: 'Learning fetched successfully.',
+      data: learningWithIQ
+    });
+  } catch (error) {
+    res.status(500).json({
+      message: 'Error fetching Learning.',
+      error: error.message
+    });
+  }
+};
