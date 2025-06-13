@@ -1090,13 +1090,12 @@ exports.Dashboard = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // --- Fetch Scores ---
+    // --- Fetch Scores for streak ---
     const learningScores = await LearningScore.find({ userId, strickStatus: true }).lean();
     const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
 
     const practiceDates = new Set(learningScores.map(s => moment(s.scoreDate).format('YYYY-MM-DD')));
     const topicDates = new Set(topicScores.map(s => moment(s.updatedAt).format('YYYY-MM-DD')));
-
     const commonDates = [...practiceDates].filter(date => topicDates.has(date)).sort();
 
     // --- Calculate currentStreak ---
@@ -1125,11 +1124,18 @@ exports.Dashboard = async (req, res) => {
       };
     }
 
-    // --- Weekly & Monthly Streak Count ---
+    // --- Bonus Logic ---
+    const user = await User.findById(userId).lean();
+    const bonuspoint = user?.bonuspoint || 0;
+
+    const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
+      .sort({ createdAt: -1 })
+      .lean();
+
     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
 
-    // --- Fetch General IQ ---
+    // --- General IQ ---
     const learnings = await Learning.find().populate('createdBy', 'email').lean();
     const learningWithIQ = await Promise.all(
       learnings.map(async (learning) => {
@@ -1142,18 +1148,14 @@ exports.Dashboard = async (req, res) => {
     );
     learningWithIQ.sort((a, b) => b.overallAverage - a.overallAverage);
 
-    // --- Fetch User & Bonus Settings ---
-    const user = await User.findById(userId).lean();
-    const bonuspoint = user?.bonuspoint || 0;
+    // --- Learning (without IQ) ---
+    const allLearning = learnings; // Already fetched above
 
-    const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
-      .sort({ createdAt: -1 })
-      .lean();
-
-    // --- Final Dashboard Response ---
+    // --- Final Response ---
     return res.status(200).json({
       currentStreak,
       generalIq: learningWithIQ,
+      learning: allLearning,
       bonus: {
         bonuspoint,
         weekly: {
