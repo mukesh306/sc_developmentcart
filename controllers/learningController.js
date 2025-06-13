@@ -1090,14 +1090,13 @@ exports.Dashboard = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // --- Fetch Scores for Streak ---
+    // --- Fetch Scores ---
     const learningScores = await LearningScore.find({ userId, strickStatus: true }).lean();
     const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
 
     const practiceDates = new Set(learningScores.map(s => moment(s.scoreDate).format('YYYY-MM-DD')));
     const topicDates = new Set(topicScores.map(s => moment(s.updatedAt).format('YYYY-MM-DD')));
 
-    // ✅ Only keep common dates (practice + topic)
     const commonDates = [...practiceDates].filter(date => topicDates.has(date)).sort();
 
     // --- Calculate currentStreak ---
@@ -1126,9 +1125,12 @@ exports.Dashboard = async (req, res) => {
       };
     }
 
-    // --- Fetch Learnings with GeneralIQ Scores ---
-    const learnings = await Learning.find().populate('createdBy', 'email').lean();
+    // --- Weekly & Monthly Streak Count ---
+    const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
+    const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
 
+    // --- Fetch General IQ ---
+    const learnings = await Learning.find().populate('createdBy', 'email').lean();
     const learningWithIQ = await Promise.all(
       learnings.map(async (learning) => {
         const iqRecord = await GenralIQ.findOne({ userId, learningId: learning._id }).lean();
@@ -1138,14 +1140,35 @@ exports.Dashboard = async (req, res) => {
         };
       })
     );
-
-    // ✅ Sort by overallAverage for dashboard
     learningWithIQ.sort((a, b) => b.overallAverage - a.overallAverage);
+
+    // --- Fetch User & Bonus Settings ---
+    const user = await User.findById(userId).lean();
+    const bonuspoint = user?.bonuspoint || 0;
+
+    const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
+      .sort({ createdAt: -1 })
+      .lean();
 
     // --- Final Dashboard Response ---
     return res.status(200).json({
       currentStreak,
-      generalIq: learningWithIQ
+      generalIq: learningWithIQ,
+      bonus: {
+        bonuspoint,
+        weekly: {
+          count: weeklyCount,
+          startDate: currentStreak.startDate,
+          endDate: weeklyCount === 7 ? currentStreak.endDate : null
+        },
+        monthly: {
+          count: monthlyCount,
+          startDate: currentStreak.startDate,
+          endDate: monthlyCount === 30 ? currentStreak.endDate : null
+        },
+        weeklyBonus: markingSetting?.weeklyBonus || 0,
+        monthlyBonus: markingSetting?.monthlyBonus || 0
+      }
     });
 
   } catch (error) {
@@ -1153,3 +1176,4 @@ exports.Dashboard = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
