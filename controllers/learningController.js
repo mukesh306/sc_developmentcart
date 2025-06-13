@@ -915,3 +915,60 @@ exports.getUserLevelData = async (req, res) => {
 };
 
 
+
+exports.genraliqAverage = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // 1. Fetch learning scores
+    const learningScores = await LearningScore.find({ userId, strickStatus: true })
+      .sort({ scoreDate: 1 })
+      .lean();
+
+    // 2. Fetch topic scores
+    const topicScores = await TopicScore.find({ userId, strickStatus: true })
+      .sort({ updatedAt: 1 })
+      .lean();
+
+    // 3. Map scores by date
+    const scoreMap = new Map();
+
+    learningScores.forEach(score => {
+      const date = moment(score.scoreDate).format('YYYY-MM-DD');
+      if (!scoreMap.has(date)) scoreMap.set(date, {});
+      scoreMap.get(date).practice = score.score;
+    });
+
+    topicScores.forEach(score => {
+      const date = moment(score.updatedAt).format('YYYY-MM-DD');
+      if (!scoreMap.has(date)) scoreMap.set(date, {});
+      scoreMap.get(date).topic = score.score;
+    });
+
+    const results = [];
+    let totalAvg = 0;
+    let count = 0;
+
+    // 4. Calculate average per day if both practice and topic exist
+    for (const [date, types] of scoreMap.entries()) {
+      if (types.practice != null && types.topic != null) {
+        const avg = (types.practice + types.topic) / 2;
+        totalAvg += avg;
+        count += 1;
+        results.push({ date, practice: types.practice, topic: types.topic, average: Math.round(avg * 100) / 100 });
+      }
+    }
+
+    const overallAverage = count > 0 ? Math.round((totalAvg / count) * 100) / 100 : 0;
+
+    return res.status(200).json({
+      count,
+      overallAverage,
+      scores: results
+    });
+
+  } catch (error) {
+    console.error("Error in getBaseScoreAverage:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
