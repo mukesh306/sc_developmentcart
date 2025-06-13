@@ -915,22 +915,24 @@ exports.getUserLevelData = async (req, res) => {
 };
 
 
+
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // 1. Fetch scores
     const learningScores = await LearningScore.find({ userId, strickStatus: true })
+      .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
       .lean();
 
     const topicScores = await TopicScore.find({ userId, strickStatus: true })
+      .populate('learningId', 'name')
       .sort({ updatedAt: 1 })
       .lean();
 
-    // 2. Map scores by date
     const scoreMap = new Map();
 
+    // Add practice scores
     learningScores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
@@ -938,17 +940,20 @@ exports.genraliqAverage = async (req, res) => {
         type: 'practice',
         score: score.score,
         updatedAt: score.updatedAt,
-        scoreDate: score.scoreDate
+        scoreDate: score.scoreDate,
+        learningId: score.learningId
       });
     });
 
+    // Add topic scores
     topicScores.forEach(score => {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
       scoreMap.get(date).push({
         type: 'topic',
         score: score.score,
-        updatedAt: score.updatedAt
+        updatedAt: score.updatedAt,
+        learningId: score.learningId
       });
     });
 
@@ -956,24 +961,25 @@ exports.genraliqAverage = async (req, res) => {
     let totalAvg = 0;
     let count = 0;
 
-    // 3. Prepare final result with type and average
     for (const [date, records] of scoreMap.entries()) {
-      const dayData = {
-        date,
-        data: records
-      };
+      const hasPractice = records.some(r => r.type === 'practice');
+      const hasTopic = records.some(r => r.type === 'topic');
 
-      const practice = records.find(r => r.type === 'practice')?.score;
-      const topic = records.find(r => r.type === 'topic')?.score;
+      // ✅ Include only if both practice and topic are present
+      if (hasPractice && hasTopic) {
+        const practiceScore = records.find(r => r.type === 'practice')?.score || 0;
+        const topicScore = records.find(r => r.type === 'topic')?.score || 0;
+        const avg = (practiceScore + topicScore) / 2;
 
-      if (practice != null && topic != null) {
-        const avg = (practice + topic) / 2;
-        dayData.average = Math.round(avg * 100) / 100;
+        results.push({
+          date,
+          data: records,
+          average: Math.round(avg * 100) / 100
+        });
+
         totalAvg += avg;
         count += 1;
       }
-
-      results.push(dayData);
     }
 
     const overallAverage = count > 0 ? Math.round((totalAvg / count) * 100) / 100 : 0;
