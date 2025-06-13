@@ -1040,16 +1040,64 @@ exports.getGenrelIq = async (req, res) => {
 };
 
 
+// exports.Dashboard = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const learningScores = await LearningScore.find({ userId, strickStatus: true }).lean();
+//     const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
+
+//     const practiceDates = new Set(learningScores.map(s => moment(s.scoreDate).format('YYYY-MM-DD')));
+//     const topicDates = new Set(topicScores.map(s => moment(s.updatedAt).format('YYYY-MM-DD')));
+
+//     // ✅ Keep only dates that are present in both practice and topic
+//     const commonDates = [...practiceDates].filter(date => topicDates.has(date)).sort();
+
+//     // --- Calculate currentStreak ---
+//     let currentStreak = { count: 0, startDate: null, endDate: null };
+//     let streakStart = null;
+//     let tempStreak = [];
+
+//     for (let i = 0; i < commonDates.length; i++) {
+//       const curr = moment(commonDates[i]);
+//       const prev = i > 0 ? moment(commonDates[i - 1]) : null;
+
+//       if (!prev || curr.diff(prev, 'days') === 1) {
+//         if (!streakStart) streakStart = commonDates[i];
+//         tempStreak.push(commonDates[i]);
+//       } else {
+//         tempStreak = [commonDates[i]];
+//         streakStart = commonDates[i];
+//       }
+//     }
+
+//     if (tempStreak.length > 0) {
+//       currentStreak = {
+//         count: tempStreak.length,
+//         startDate: streakStart,
+//         endDate: tempStreak[tempStreak.length - 1]
+//       };
+//     }
+
+//     return res.status(200).json({ currentStreak });
+
+//   } catch (error) {
+//     console.error('Error in Strikecalculation:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.Dashboard = async (req, res) => {
   try {
     const userId = req.user._id;
+
+    // --- Fetch Scores for Streak ---
     const learningScores = await LearningScore.find({ userId, strickStatus: true }).lean();
     const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
 
     const practiceDates = new Set(learningScores.map(s => moment(s.scoreDate).format('YYYY-MM-DD')));
     const topicDates = new Set(topicScores.map(s => moment(s.updatedAt).format('YYYY-MM-DD')));
 
-    // ✅ Keep only dates that are present in both practice and topic
+    // ✅ Only keep common dates (practice + topic)
     const commonDates = [...practiceDates].filter(date => topicDates.has(date)).sort();
 
     // --- Calculate currentStreak ---
@@ -1078,10 +1126,30 @@ exports.Dashboard = async (req, res) => {
       };
     }
 
-    return res.status(200).json({ currentStreak });
+    // --- Fetch Learnings with GeneralIQ Scores ---
+    const learnings = await Learning.find().populate('createdBy', 'email').lean();
+
+    const learningWithIQ = await Promise.all(
+      learnings.map(async (learning) => {
+        const iqRecord = await GenralIQ.findOne({ userId, learningId: learning._id }).lean();
+        return {
+          ...learning,
+          overallAverage: iqRecord?.overallAverage || 0
+        };
+      })
+    );
+
+    // ✅ Sort by overallAverage for dashboard
+    learningWithIQ.sort((a, b) => b.overallAverage - a.overallAverage);
+
+    // --- Final Dashboard Response ---
+    return res.status(200).json({
+      currentStreak,
+      generalIq: learningWithIQ
+    });
 
   } catch (error) {
-    console.error('Error in Strikecalculation:', error);
+    console.error('Error in Dashboard:', error);
     return res.status(500).json({ message: error.message });
   }
 };
