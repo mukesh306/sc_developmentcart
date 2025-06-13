@@ -1204,26 +1204,26 @@ exports.Dashboard = async (req, res) => {
     // --- Final Response ---
     return res.status(200).json({
       currentStreak,
-      bonus: {
-        bonuspoint,
-        weekly: {
-          count: weeklyCount,
-          startDate: currentStreak.startDate,
-          endDate: weeklyCount === 7 ? currentStreak.endDate : null
-        },
-        monthly: {
-          count: monthlyCount,
-          startDate: currentStreak.startDate,
-          endDate: monthlyCount === 30 ? currentStreak.endDate : null
-        },
-        weeklyBonus: markingSetting?.weeklyBonus || 0,
-        monthlyBonus: markingSetting?.monthlyBonus || 0
-      },
-      levelBonusPoint,
-      experiencePoint: markingSetting?.experiencePoint || 0,
-      level,
-      generalIq: learningWithIQ,
-      learning: learnings,
+      // bonus: {
+      //   bonuspoint,
+      //   weekly: {
+      //     count: weeklyCount,
+      //     startDate: currentStreak.startDate,
+      //     endDate: weeklyCount === 7 ? currentStreak.endDate : null
+      //   },
+      //   monthly: {
+      //     count: monthlyCount,
+      //     startDate: currentStreak.startDate,
+      //     endDate: monthlyCount === 30 ? currentStreak.endDate : null
+      //   },
+      //   weeklyBonus: markingSetting?.weeklyBonus || 0,
+      //   monthlyBonus: markingSetting?.monthlyBonus || 0
+      // },
+      // levelBonusPoint,
+      // experiencePoint: markingSetting?.experiencePoint || 0,
+      // level,
+      // generalIq: learningWithIQ,
+      // learning: learnings,
       quotes
     });
 
