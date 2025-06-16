@@ -1170,6 +1170,8 @@ exports.getGenrelIq = async (req, res) => {
 //   }
 // };
 
+
+
 exports.Dashboard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1208,7 +1210,7 @@ exports.Dashboard = async (req, res) => {
       };
     }
 
-    // --- Bonus and User Info ---
+    // --- User Info & Marking Settings ---
     const user = await User.findById(userId).lean();
     const bonuspoint = user?.bonuspoint || 0;
     const level = user?.level || 1;
@@ -1217,18 +1219,17 @@ exports.Dashboard = async (req, res) => {
       dailyExperience: 1,
       weeklyBonus: 1,
       monthlyBonus: 1,
-      experiencePoint: 1
+      experiencePoint: 1,
+      totalquiz: 1
     }).sort({ createdAt: -1 }).lean();
 
     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
-
     const levelData = user?.userLevelData?.find((item) => item.level === level);
     const levelBonusPoint = levelData?.levelBonusPoint || 0;
 
-    // --- Assigned Learnings + Class Info ---
+    // --- Assigned Learnings with IQ ---
     let assignedLearnings = [];
-    let tempLearnings = [];
     let classInfo = null;
 
     if (user?.className) {
@@ -1240,62 +1241,53 @@ exports.Dashboard = async (req, res) => {
         .lean();
 
       for (let item of assignedLearnings) {
-        if (item.learning) tempLearnings.push(item.learning);
-        if (item.learning2) tempLearnings.push(item.learning2);
-        if (item.learning3) tempLearnings.push(item.learning3);
-        if (item.learning4) tempLearnings.push(item.learning4);
+        const getIQScore = async (learningField) => {
+          if (item[learningField]?._id) {
+            const iqRecord = await GenralIQ.findOne({
+              userId,
+              learningId: item[learningField]._id,
+            }).lean();
+            return iqRecord?.overallAverage ?? null;
+          }
+          return null;
+        };
+
+        if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
+        if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
+        if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
+        if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
+
+        item.learningAverage = await getIQScore('learning');
+        item.learning2Average = await getIQScore('learning2');
+        item.learning3Average = await getIQScore('learning3');
+        item.learning4Average = await getIQScore('learning4');
       }
 
-      const uniqueLearningsMap = new Map();
-      for (const learning of tempLearnings) {
-        if (learning && learning._id) {
-          uniqueLearningsMap.set(learning._id.toString(), learning);
-        }
-      }
-
-      tempLearnings = Array.from(uniqueLearningsMap.values());
-
-      // Fetch class info
+      // Class info from School or College
       classInfo = await School.findById(user.className).lean();
       if (!classInfo) {
         classInfo = await College.findById(user.className).lean();
       }
     }
 
-    // --- Practice: assigned learnings + totalQuiz from MarkingSetting ---
-    const latestMarkingSetting = await MarkingSetting.findOne({}).sort({ createdAt: -1 }).lean();
-    const totalQuiz = latestMarkingSetting?.totalquiz || 0;
+    // --- Practice Learnings + Quiz Count ---
+    const totalQuiz = markingSetting?.totalquiz || 0;
 
-    const practice = tempLearnings.map((learning) => ({
-      ...learning,
-      totalQuiz
-    }));
+    const practice = [];
+    const seen = new Set();
 
-    // --- General IQ for assigned learnings only ---
-    let generalIq = [];
-
-    if (user?.className) {
-      const iqPromises = [];
-
-      for (let item of assignedLearnings) {
-        const fields = ['learning', 'learning2', 'learning3', 'learning4'];
-
-        for (let field of fields) {
-          const learningItem = item[field];
-          if (learningItem && learningItem._id) {
-            iqPromises.push(
-              GenralIQ.findOne({ userId, learningId: learningItem._id }).lean()
-                .then(iq => ({
-                  ...learningItem,
-                  overallAverage: iq?.overallAverage ?? 0
-                }))
-            );
-          }
+    for (let item of assignedLearnings) {
+      const fields = ['learning', 'learning2', 'learning3', 'learning4'];
+      for (let field of fields) {
+        const lrn = item[field];
+        if (lrn && lrn._id && !seen.has(lrn._id.toString())) {
+          seen.add(lrn._id.toString());
+          practice.push({
+            ...lrn,
+            totalQuiz
+          });
         }
       }
-
-      generalIq = await Promise.all(iqPromises);
-      generalIq.sort((a, b) => b.overallAverage - a.overallAverage);
     }
 
     // --- Quotes with Status: Published ---
@@ -1322,8 +1314,7 @@ exports.Dashboard = async (req, res) => {
       levelBonusPoint,
       experiencePoint: markingSetting?.experiencePoint || 0,
       level,
-      generalIq,
-      // Removed: learning
+      generalIq: assignedLearnings, // each item contains learning1–4 + their IQ
       assignedLearnings,
       practice,
       totalQuiz,
