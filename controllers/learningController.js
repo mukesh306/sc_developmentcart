@@ -1313,10 +1313,10 @@ const practice = tempLearnings.map((learning) => ({
       experiencePoint: markingSetting?.experiencePoint || 0,
       level,
       generalIq: learningWithIQ,
-      learning: learnings,
+      // learning: learnings,
       assignedLearnings,
       practice,
-      totalQuiz,     // Added outside the array
+      totalQuiz,     
       classInfo,
       quotes
     });
