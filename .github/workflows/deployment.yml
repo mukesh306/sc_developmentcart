@@ -24,7 +24,7 @@ jobs:
             ls -la  # Check if the files exist
             git config --global --add safe.directory /home/ubuntu/code/SC_Backend
             cd /home/ubuntu/code/SC_Backend/
-            git stash
+            git reset --hard HEAD
             git pull origin UAT
             export DOCKER_BUILDKIT=1
             export COMPOSE_DOCKER_CLI_BUILD=1
