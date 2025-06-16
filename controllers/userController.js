@@ -112,10 +112,10 @@ exports.Userlogin = async (req, res) => {
     res.status(500).json({ message: 'Server error during login.' });
   }
 };
-
 exports.completeProfile = async (req, res) => {
   try {
     const userId = req.user.id;
+
     let {
       countryId,
       stateId,
@@ -152,11 +152,13 @@ exports.completeProfile = async (req, res) => {
       updatedFields.marksheet = req.files.marksheet[0].path;
     }
 
+    // Update user
     let user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
       .populate('countryId')
       .populate('stateId')
       .populate('cityId');
 
+    // Fetch class details
     let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(className)) {
       classDetails =
@@ -167,10 +169,10 @@ exports.completeProfile = async (req, res) => {
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-      user.aadharCard = `${baseUrl}/${user.aadharCard}`;
+      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
     }
     if (user.marksheet && fs.existsSync(user.marksheet)) {
-      user.marksheet = `${baseUrl}/${user.marksheet}`;
+      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }
 
     const formattedUser = {
@@ -187,6 +189,7 @@ exports.completeProfile = async (req, res) => {
       message: 'Profile updated. Redirecting to home page.',
       user: formattedUser
     });
+
   } catch (error) {
     console.error('Complete Profile Error:', error);
     res.status(500).json({ message: error.message });
