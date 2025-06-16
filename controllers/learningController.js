@@ -1170,7 +1170,6 @@ exports.getGenrelIq = async (req, res) => {
 //   }
 // };
 
-
 exports.Dashboard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1227,20 +1226,7 @@ exports.Dashboard = async (req, res) => {
     const levelData = user?.userLevelData?.find((item) => item.level === level);
     const levelBonusPoint = levelData?.levelBonusPoint || 0;
 
-    // --- General IQ + Learning ---
-    const learnings = await Learning.find().populate('createdBy', 'email').lean();
-    const learningWithIQ = await Promise.all(
-      learnings.map(async (learning) => {
-        const iqRecord = await GenralIQ.findOne({ userId, learningId: learning._id }).lean();
-        return {
-          ...learning,
-          overallAverage: iqRecord?.overallAverage || 0
-        };
-      })
-    );
-    learningWithIQ.sort((a, b) => b.overallAverage - a.overallAverage);
-
-    // --- Assigned Learnings by classId ---
+    // --- Assigned Learnings + Class Info ---
     let assignedLearnings = [];
     let tempLearnings = [];
     let classInfo = null;
@@ -1269,24 +1255,48 @@ exports.Dashboard = async (req, res) => {
 
       tempLearnings = Array.from(uniqueLearningsMap.values());
 
-      // Fetch class info from school or college
+      // Fetch class info
       classInfo = await School.findById(user.className).lean();
       if (!classInfo) {
         classInfo = await College.findById(user.className).lean();
       }
     }
 
-    // --- Practice: assigned learnings + single totalQuiz from MarkingSetting ---
-   const latestMarkingSetting = await MarkingSetting.findOne({})
-  .sort({ createdAt: -1 })
-  .lean();
+    // --- Practice: assigned learnings + totalQuiz from MarkingSetting ---
+    const latestMarkingSetting = await MarkingSetting.findOne({}).sort({ createdAt: -1 }).lean();
+    const totalQuiz = latestMarkingSetting?.totalquiz || 0;
 
-const totalQuiz = latestMarkingSetting?.totalquiz || 0;
+    const practice = tempLearnings.map((learning) => ({
+      ...learning,
+      totalQuiz
+    }));
 
-const practice = tempLearnings.map((learning) => ({
-  ...learning,
-  totalQuiz
-}));
+    // --- General IQ for assigned learnings only ---
+    let generalIq = [];
+
+    if (user?.className) {
+      const iqPromises = [];
+
+      for (let item of assignedLearnings) {
+        const fields = ['learning', 'learning2', 'learning3', 'learning4'];
+
+        for (let field of fields) {
+          const learningItem = item[field];
+          if (learningItem && learningItem._id) {
+            iqPromises.push(
+              GenralIQ.findOne({ userId, learningId: learningItem._id }).lean()
+                .then(iq => ({
+                  ...learningItem,
+                  overallAverage: iq?.overallAverage ?? 0
+                }))
+            );
+          }
+        }
+      }
+
+      generalIq = await Promise.all(iqPromises);
+      generalIq.sort((a, b) => b.overallAverage - a.overallAverage);
+    }
 
     // --- Quotes with Status: Published ---
     const quotes = await Quotes.find({ Status: 'Published' }).lean();
@@ -1312,11 +1322,11 @@ const practice = tempLearnings.map((learning) => ({
       levelBonusPoint,
       experiencePoint: markingSetting?.experiencePoint || 0,
       level,
-      generalIq: learningWithIQ,
-      // learning: learnings,
+      generalIq,
+      // Removed: learning
       assignedLearnings,
       practice,
-      totalQuiz,     
+      totalQuiz,
       classInfo,
       quotes
     });
