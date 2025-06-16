@@ -13,5 +13,8 @@ router.get('/Strike', auth, learningController.StrikeBothSameDate);
 router.get('/Strikecalculation', auth, learningController.Strikecalculation);
 router.get('/StrikePath', auth, learningController.StrikePath);
 router.get('/leveldata', auth, learningController.getUserLevelData);
+router.get('/genraliqAverage', auth, learningController.genraliqAverage);
+router.get('/genrelIq', auth, learningController.getGenrelIq);
+router.get('/dashboard', auth, learningController.Dashboard);
 
 module.exports = router;

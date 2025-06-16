@@ -10,6 +10,7 @@ exports.createQuote = async (req, res) => {
     res.status(500).json({ message: 'Error creating quote.', error: error.message });
   }
 };
+
 exports.getQuotes = async (req, res) => {
   try {
     const statusFilter = req.query.Status ? { Status: req.query.Status } : {};
@@ -17,6 +18,16 @@ exports.getQuotes = async (req, res) => {
     res.status(200).json({ message: 'Quotes fetched successfully.', data: quotes });
   } catch (error) {
     res.status(500).json({ message: 'Error fetching quotes.', error: error.message });
+  }
+};
+
+
+exports.getPublishedQuotes = async (req, res) => {
+  try {
+    const quotes = await Quotes.find({ Status: 'Published' }).populate('createdBy', 'email');
+    res.status(200).json({ message: 'Published quotes fetched successfully.', data: quotes });
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching published quotes.', error: error.message });
   }
 };
 
@@ -39,11 +50,7 @@ exports.updateQuote = async (req, res) => {
 exports.StatusUpdateQuote = async (req, res) => {
   try {
     const quoteId = req.params.id;
-
-   
     const Status = "Published";
-
-   
     const existingPublicQuote = await Quotes.findOne({
       Status: "Published",
       _id: { $ne: quoteId },
