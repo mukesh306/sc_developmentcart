@@ -1170,7 +1170,6 @@ exports.getGenrelIq = async (req, res) => {
 //   }
 // };
 
-
 exports.Dashboard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1209,17 +1208,12 @@ exports.Dashboard = async (req, res) => {
       };
     }
 
-    // --- Bonus, Level, and Experience Data ---
+    // --- Bonus and User Info ---
     const user = await User.findById(userId).lean();
     const bonuspoint = user?.bonuspoint || 0;
     const level = user?.level || 1;
 
-    const markingSetting = await MarkingSetting.findOne({}, {
-      dailyExperience: 1,
-      weeklyBonus: 1,
-      monthlyBonus: 1,
-      experiencePoint: 1
-    }).sort({ createdAt: -1 }).lean();
+    const markingSetting = await MarkingSetting.findOne({}, { dailyExperience: 1, weeklyBonus: 1, monthlyBonus: 1, experiencePoint: 1 }).sort({ createdAt: -1 }).lean();
 
     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
@@ -1240,39 +1234,52 @@ exports.Dashboard = async (req, res) => {
     );
     learningWithIQ.sort((a, b) => b.overallAverage - a.overallAverage);
 
-    // --- Assigned Learnings (Name + ID) ---
+    // --- Assigned Learnings by classId ---
     let assignedLearnings = [];
+    let tempLearnings = [];
     let classInfo = null;
 
     if (user?.className) {
-      const assignedList = await Assigned.find({ classId: user.className })
-        .populate('learning', 'name')
-        .populate('learning2', 'name')
-        .populate('learning3', 'name')
-        .populate('learning4', 'name')
+      assignedLearnings = await Assigned.find({ classId: user.className })
+        .populate('learning')
+        .populate('learning2')
+        .populate('learning3')
+        .populate('learning4')
         .lean();
 
-      const tempLearnings = [];
-      for (const item of assignedList) {
+      for (let item of assignedLearnings) {
         if (item.learning) tempLearnings.push(item.learning);
         if (item.learning2) tempLearnings.push(item.learning2);
         if (item.learning3) tempLearnings.push(item.learning3);
         if (item.learning4) tempLearnings.push(item.learning4);
       }
 
-      // Remove duplicates by _id
-      const learningMap = new Map();
-      for (const l of tempLearnings) {
-        if (l && l._id) learningMap.set(l._id.toString(), l);
+      const uniqueLearningsMap = new Map();
+      for (const learning of tempLearnings) {
+        if (learning && learning._id) {
+          uniqueLearningsMap.set(learning._id.toString(), learning);
+        }
       }
-      assignedLearnings = Array.from(learningMap.values());
 
-      // Fetch school/college info
+      tempLearnings = Array.from(uniqueLearningsMap.values());
+
+      // Fetch class info from school or college
       classInfo = await School.findById(user.className).lean();
       if (!classInfo) {
         classInfo = await College.findById(user.className).lean();
       }
     }
+
+    // --- Practice: learning assigned + totalQuiz from Marking ---
+    const practice = await Promise.all(
+      tempLearnings.map(async (learning) => {
+        const MarkingSetting = await MarkingSetting.findOne({ userId, learningId: learning._id }).lean();
+        return {
+          ...learning,
+          totalQuiz: MarkingSetting?.totalQuiz || 0
+        };
+      })
+    );
 
     // --- Quotes with Status: Published ---
     const quotes = await Quotes.find({ Status: 'Published' }).lean();
@@ -1301,6 +1308,7 @@ exports.Dashboard = async (req, res) => {
       generalIq: learningWithIQ,
       learning: learnings,
       assignedLearnings,
+      practice,  // Includes totalQuiz now
       classInfo,
       quotes
     });
