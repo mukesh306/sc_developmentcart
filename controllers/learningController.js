@@ -1213,12 +1213,17 @@ exports.Dashboard = async (req, res) => {
     const bonuspoint = user?.bonuspoint || 0;
     const level = user?.level || 1;
 
-    const markingSetting = await MarkingSetting.findOne({}, { dailyExperience: 1, weeklyBonus: 1, monthlyBonus: 1, experiencePoint: 1 }).sort({ createdAt: -1 }).lean();
+    const markingSetting = await MarkingSetting.findOne({}, {
+      dailyExperience: 1,
+      weeklyBonus: 1,
+      monthlyBonus: 1,
+      experiencePoint: 1
+    }).sort({ createdAt: -1 }).lean();
 
     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
 
-    const levelData = user?.userLevelData?.find((item) => item.level === level);
+    const levelData = user?.userLevelData?.find(item => item.level === level);
     const levelBonusPoint = levelData?.levelBonusPoint || 0;
 
     // --- General IQ + Learning ---
@@ -1273,10 +1278,10 @@ exports.Dashboard = async (req, res) => {
     // --- Practice: learning assigned + totalQuiz from Marking ---
     const practice = await Promise.all(
       tempLearnings.map(async (learning) => {
-        const MarkingSetting = await MarkingSetting.findOne({ userId, learningId: learning._id }).lean();
+        const markingRecord = await MarkingSetting.findOne({ userId, learningId: learning._id }).lean();
         return {
           ...learning,
-          totalQuiz: MarkingSetting?.totalQuiz || 0
+          totalQuiz: markingRecord?.totalQuiz || 0
         };
       })
     );
@@ -1308,7 +1313,7 @@ exports.Dashboard = async (req, res) => {
       generalIq: learningWithIQ,
       learning: learnings,
       assignedLearnings,
-      practice,  // Includes totalQuiz now
+      practice, // includes totalQuiz from MarkingSetting
       classInfo,
       quotes
     });
