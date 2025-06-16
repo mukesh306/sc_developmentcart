@@ -113,11 +113,9 @@ exports.Userlogin = async (req, res) => {
   }
 };
 
-
 exports.completeProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-
     let {
       countryId,
       stateId,
@@ -142,13 +140,11 @@ exports.completeProfile = async (req, res) => {
       collegeName,
     };
 
-   
     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
     if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
 
-  
     if (req.files?.aadharCard?.[0]) {
       updatedFields.aadharCard = req.files.aadharCard[0].path;
     }
@@ -168,10 +164,15 @@ exports.completeProfile = async (req, res) => {
         (await College.findById(className)) ||
         (await Institute.findById(className));
     }
- const baseUrl = `${req.protocol}://${req.get('host')}`;
-    if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
-    if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
- 
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+      user.aadharCard = `${baseUrl}/${user.aadharCard}`;
+    }
+    if (user.marksheet && fs.existsSync(user.marksheet)) {
+      user.marksheet = `${baseUrl}/${user.marksheet}`;
+    }
+
     const formattedUser = {
       ...user._doc,
       country: user.countryId?.name || '',
@@ -181,6 +182,7 @@ exports.completeProfile = async (req, res) => {
       institutionType: studentType || '',
       classOrYear: classDetails?.name || '',
     };
+
     res.status(200).json({
       message: 'Profile updated. Redirecting to home page.',
       user: formattedUser
@@ -190,7 +192,6 @@ exports.completeProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
