@@ -1277,7 +1277,7 @@ exports.Dashboard = async (req, res) => {
 
     // --- Practice: assigned learnings + single totalQuiz from MarkingSetting ---
     const userMarkingSetting = await MarkingSetting.findOne({ userId }).lean();
-    const totalQuiz = userMarkingSetting?.totalQuiz || 0;
+    const totalQuiz = userMarkingSetting?.totalquiz || 0;
 
     const practice = tempLearnings.map((learning) => ({
       ...learning,
