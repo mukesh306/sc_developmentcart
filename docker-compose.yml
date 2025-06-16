@@ -12,7 +12,7 @@ services:
     env_file:
       - .env
     volumes:
-      - ./uploads:/app/uploads
+      - ./uploads:/usr/src/app/uploads
     networks:
       - backend_net
 
