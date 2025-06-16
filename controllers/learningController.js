@@ -1011,6 +1011,35 @@ exports.genraliqAverage = async (req, res) => {
   }
 };
 
+
+// exports.getGenrelIq = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     const learnings = await Learning.find().populate('createdBy', 'email').lean();
+//     const learningWithIQ = await Promise.all(
+//       learnings.map(async (learning) => {
+//         const iqRecord = await GenralIQ.findOne({ userId, learningId: learning._id }).lean();
+//         return {
+//           ...learning,
+//           overallAverage: iqRecord?.overallAverage || 0
+//         };
+//       })
+//     );
+
+//     res.status(200).json({
+//       message: 'Learning fetched successfully.',
+//       data: learningWithIQ
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       message: 'Error fetching Learning.',
+//       error: error.message
+//     });
+//   }
+// };
+
+
 exports.getGenrelIq = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1019,8 +1048,6 @@ exports.getGenrelIq = async (req, res) => {
     if (!user || !user.className) {
       return res.status(400).json({ message: 'User className not found.' });
     }
-
-    // Fetch assigned learnings only
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
@@ -1028,45 +1055,42 @@ exports.getGenrelIq = async (req, res) => {
       .populate('learning4')
       .lean();
 
-    // Create a flat array of all assigned learnings
-    const assignedLearnings = [];
     for (let item of assignedList) {
-      if (item.learning) assignedLearnings.push(item.learning);
-      if (item.learning2) assignedLearnings.push(item.learning2);
-      if (item.learning3) assignedLearnings.push(item.learning3);
-      if (item.learning4) assignedLearnings.push(item.learning4);
-    }
-
-    // Remove duplicates by _id
-    const uniqueLearningsMap = new Map();
-    for (const learning of assignedLearnings) {
-      if (learning && learning._id) {
-        uniqueLearningsMap.set(learning._id.toString(), learning);
+      let classInfo = await School.findById(item.classId).lean();
+      if (!classInfo) {
+        classInfo = await College.findById(item.classId).lean();
       }
+      item.classInfo = classInfo || null;
+      const getScore = async (learningField) => {
+        if (item[learningField]?._id) {
+          const topicScore = await TopicScore.findOne({
+            userId: userId,
+            learningId: item[learningField]._id,
+          }).sort({ createdAt: 1 }).lean();
+
+          return topicScore?.score ?? null;
+        }
+        return null;
+      };
+      if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
+      if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
+      if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
+      if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
+
+      item.learningAverage = await getScore('learning');
+      item.learning2Average = await getScore('learning2');
+      item.learning3Average = await getScore('learning3');
+      item.learning4Average = await getScore('learning4');
     }
 
-    const uniqueLearnings = Array.from(uniqueLearningsMap.values());
-
-    // Attach IQ score
-    const learningWithIQ = await Promise.all(
-      uniqueLearnings.map(async (learning) => {
-        const iqRecord = await GenralIQ.findOne({ userId, learningId: learning._id }).lean();
-        return {
-          ...learning,
-          overallAverage: iqRecord?.overallAverage || 0,
-        };
-      })
-    );
-
-    res.status(200).json({
-      message: 'Assigned Learnings with IQ fetched successfully.',
-      data: learningWithIQ,
-    });
+    res.status(200).json({ data: assignedList });
   } catch (error) {
-    console.error('Get GenrelIQ Error:', error);
+    console.error('Get Assigned Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+
 
 
 // exports.Dashboard = async (req, res) => {
