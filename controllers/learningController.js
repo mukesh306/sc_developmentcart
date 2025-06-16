@@ -1223,7 +1223,7 @@ exports.Dashboard = async (req, res) => {
     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
 
-    const levelData = user?.userLevelData?.find(item => item.level === level);
+    const levelData = user?.userLevelData?.find((item) => item.level === level);
     const levelBonusPoint = levelData?.levelBonusPoint || 0;
 
     // --- General IQ + Learning ---
@@ -1275,16 +1275,14 @@ exports.Dashboard = async (req, res) => {
       }
     }
 
-    // --- Practice: learning assigned + totalQuiz from Marking ---
-    const practice = await Promise.all(
-      tempLearnings.map(async (learning) => {
-        const markingRecord = await MarkingSetting.findOne({ userId, learningId: learning._id }).lean();
-        return {
-          ...learning,
-          totalQuiz: markingRecord?.totalQuiz || 0
-        };
-      })
-    );
+    // --- Practice: assigned learnings + single totalQuiz from MarkingSetting ---
+    const userMarkingSetting = await MarkingSetting.findOne({ userId }).lean();
+    const totalQuiz = userMarkingSetting?.totalQuiz || 0;
+
+    const practice = tempLearnings.map((learning) => ({
+      ...learning,
+      totalQuiz
+    }));
 
     // --- Quotes with Status: Published ---
     const quotes = await Quotes.find({ Status: 'Published' }).lean();
@@ -1313,7 +1311,8 @@ exports.Dashboard = async (req, res) => {
       generalIq: learningWithIQ,
       learning: learnings,
       assignedLearnings,
-      practice, // includes totalQuiz from MarkingSetting
+      practice,
+      totalQuiz,     // Added outside the array
       classInfo,
       quotes
     });
