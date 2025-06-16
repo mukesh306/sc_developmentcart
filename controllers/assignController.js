@@ -9,6 +9,7 @@ const TopicScore = require('../models/topicScore');
 
 const MarkingSetting = require('../models/markingSetting');
 
+
 exports.createAssigned = async (req, res) => {
   try {
     const {classId, learning,learning2,learning3,learning4} = req.body;
@@ -206,7 +207,6 @@ exports.updateAssigned = async (req, res) => {
 
 
 
-
 // exports.assignBonusPoint = async (req, res) => {
 //   try { 
 //     const userId = req.user._id;
@@ -294,7 +294,6 @@ exports.updateAssigned = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
-
 
 exports.assignBonusPoint = async (req, res) => {
   try {
