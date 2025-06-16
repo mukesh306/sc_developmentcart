@@ -1276,13 +1276,16 @@ exports.Dashboard = async (req, res) => {
     }
 
     // --- Practice: assigned learnings + single totalQuiz from MarkingSetting ---
-    const userMarkingSetting = await MarkingSetting.findOne({ userId }).lean();
-    const totalQuiz = userMarkingSetting?.totalquiz || 0;
+   const latestMarkingSetting = await MarkingSetting.findOne({})
+  .sort({ createdAt: -1 })
+  .lean();
 
-    const practice = tempLearnings.map((learning) => ({
-      ...learning,
-      totalQuiz
-    }));
+const totalQuiz = latestMarkingSetting?.totalquiz || 0;
+
+const practice = tempLearnings.map((learning) => ({
+  ...learning,
+  totalQuiz
+}));
 
     // --- Quotes with Status: Published ---
     const quotes = await Quotes.find({ Status: 'Published' }).lean();
