@@ -10,6 +10,8 @@ const TopicScore = require('../models/topicScore');
 const User = require('../models/User');
 const GenralIQ = require("../models/genraliq");
 const Quotes = require('../models/quotes');
+const School = require('../models/school');
+const College = require('../models/college');
 
 exports.createLearning = async (req, res) => {
   try {
