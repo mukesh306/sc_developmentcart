@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 const Learning = require('../models/learning');
 const Assigned = require('../models/assignlearning'); 
 const LearningScore = require('../models/learningScore');
-const MarkingSetting = require('../models/markingSetting');
+
 const Topic = require('../models/topic'); 
 const TopicScore = require('../models/topicScore');
 const User = require('../models/User');
@@ -12,7 +12,7 @@ const GenralIQ = require("../models/genraliq");
 const Quotes = require('../models/quotes');
 const School = require('../models/school');
 const College = require('../models/college');
-
+const MarkingSetting = require('../models/markingSetting');
 exports.createLearning = async (req, res) => {
   try {
     const { name} = req.body;
