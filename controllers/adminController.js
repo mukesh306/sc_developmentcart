@@ -36,7 +36,6 @@ exports.registerAdmin = async (req, res) => {
 };
 
 
-
 exports.loginAdmin = async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -62,7 +61,7 @@ exports.loginAdmin = async (req, res) => {
 
 exports.getAllAdmins = async (req, res) => {
   try {
-    const admins = await Admin.find()
+    const admins = await Admin1.find()
       .populate('createdBy', 'email') 
       .sort({ createdAt: -1 });
     res.status(200).json({

@@ -63,6 +63,8 @@ exports.getSchools = async (req, res) => {
       res.status(500).json({ message: 'Server error while fetching colleges' });
     }
   };
+
+
   exports.updateInstitution = async (req, res) => {
     try {
       const { id } = req.params;
@@ -133,7 +135,6 @@ exports.getSchools = async (req, res) => {
     }
   };
   
-
   exports.deleteCollege = async (req, res) => {
     try {
       const { id } = req.params;
@@ -147,5 +148,47 @@ exports.getSchools = async (req, res) => {
     } catch (error) {
       console.error('Error deleting College:', error);
       res.status(500).json({ message: 'Server error while deleting College' });
+    }
+  };
+
+
+
+
+  
+  exports.addAdminInstitution = async (req, res) => {
+    try {
+      const { name, price, type } = req.body;
+  
+      if (!name || price === undefined || !type) {
+        return res.status(400).json({ message: 'Name, price, and type are required.' });
+      }
+  
+      if (typeof price !== 'number' || price < 0) {
+        return res.status(400).json({ message: 'Price must be a positive number.' });
+      }
+  
+      if (!['college', 'school'].includes(type.toLowerCase())) {
+        return res.status(400).json({ message: 'Invalid type. Type must be either "college" or "school".' });
+      }
+   
+      const Model = type.toLowerCase() === 'college' ? College : School;
+  
+      const existing = await Model.findOne({ name: name.trim() });
+      if (existing) {
+        return res.status(400).json({ message: `${type.charAt(0).toUpperCase() + type.slice(1)} already exists.` });
+      }
+  
+      const newInstitution = new Model({
+        name: name.trim(),
+        price,
+        createdBy: req.user._id,
+      });
+      await newInstitution.save();
+  
+      res.status(201).json({ message: `${type.charAt(0).toUpperCase() + type.slice(1)} added successfully.`, data: newInstitution });
+  
+    } catch (error) {
+      console.error('Error adding institution:', error);
+      res.status(500).json({ message: 'Server error while adding institution.' });
     }
   };
