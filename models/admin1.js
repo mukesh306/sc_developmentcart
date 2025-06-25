@@ -29,6 +29,12 @@ const AdminSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  otp: {
+    type: String
+  },
+  otpExpires: {
+    type: Date
+  },
    createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Admin', 
