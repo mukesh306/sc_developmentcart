@@ -198,6 +198,7 @@ exports.completeProfile = async (req, res) => {
   }
 };
 
+
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -509,12 +510,98 @@ exports.updateUser = async (req, res) => {
 };
 
 
+// exports.updateProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+   
+//     const existingUser = await User.findById(userId);
+
+//     if (!existingUser) {
+//       return res.status(404).json({ message: 'User not found' });
+//     }
+
+//     if (existingUser.status === 'yes') {
+//       return res.status(403).json({ message: 'You are not eligible to update.' });
+//     }
+//     let {
+//       countryId,
+//       stateId,
+//       cityId,
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//       className
+//     } = req.body;
+
+//     if (pincode && !/^\d+$/.test(pincode)) {
+//       return res.status(400).json({ message: 'Invalid Pincode' });
+//     }
+
+  
+//     const updatedFields = {
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//       // status: 'no' 
+//     };
+
+//     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
+//     if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
+//     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
+//     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
+
+//     if (req.files?.aadharCard?.[0]) {
+//       updatedFields.aadharCard = req.files.aadharCard[0].path;
+//     }
+//     if (req.files?.marksheet?.[0]) {
+//       updatedFields.marksheet = req.files.marksheet[0].path;
+//     }
+
+    
+//     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
+//       .populate('countryId')
+//       .populate('stateId')
+//       .populate('cityId');
+
+    
+//     let classDetails = null;
+//     if (mongoose.Types.ObjectId.isValid(className)) {
+//       classDetails =
+//         (await School.findById(className)) ||
+//         (await College.findById(className)) ;
+//         // (await Institute.findById(className));
+//     }
+//     const formattedUser = {
+//       ...user._doc,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: schoolName || collegeName || instituteName || '',
+//       institutionType: studentType || '',
+//       classOrYear: classDetails?.name || '',
+//     };
+
+//     res.status(200).json({
+//       message: 'Profile updated. Redirecting to home page.',
+//       user: formattedUser
+//     });
+
+//   } catch (error) {
+//     console.error('Complete Profile Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-   
-    const existingUser = await User.findById(userId);
 
+    const existingUser = await User.findById(userId);
     if (!existingUser) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -522,6 +609,7 @@ exports.updateProfile = async (req, res) => {
     if (existingUser.status === 'yes') {
       return res.status(403).json({ message: 'You are not eligible to update.' });
     }
+
     let {
       countryId,
       stateId,
@@ -538,14 +626,12 @@ exports.updateProfile = async (req, res) => {
       return res.status(400).json({ message: 'Invalid Pincode' });
     }
 
-  
     const updatedFields = {
       pincode,
       studentType,
       schoolName,
       instituteName,
       collegeName,
-      // status: 'no' 
     };
 
     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
@@ -556,24 +642,31 @@ exports.updateProfile = async (req, res) => {
     if (req.files?.aadharCard?.[0]) {
       updatedFields.aadharCard = req.files.aadharCard[0].path;
     }
+
     if (req.files?.marksheet?.[0]) {
       updatedFields.marksheet = req.files.marksheet[0].path;
     }
 
-    
     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
-      .populate('countryId')
-      .populate('stateId')
-      .populate('cityId');
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name');
 
-    
-    let classDetails = null;
+    // === Fetch classOrYear name from AdminSchool or AdminCollege using className ===
+    let classDetails = '';
     if (mongoose.Types.ObjectId.isValid(className)) {
-      classDetails =
-        (await School.findById(className)) ||
-        (await College.findById(className)) ||
-        (await Institute.findById(className));
+      const adminSchool = await AdminSchool.findById(className).populate('className', 'name');
+      const adminCollege = await AdminCollege.findById(className).populate('className', 'name');
+      const entry = adminSchool || adminCollege;
+      if (entry?.className?.name) {
+        classDetails = entry.className.name;
+      }
     }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
+    if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
+
     const formattedUser = {
       ...user._doc,
       country: user.countryId?.name || '',
@@ -581,7 +674,7 @@ exports.updateProfile = async (req, res) => {
       city: user.cityId?.name || '',
       institutionName: schoolName || collegeName || instituteName || '',
       institutionType: studentType || '',
-      classOrYear: classDetails?.name || '',
+      classOrYear: classDetails || '',
     };
 
     res.status(200).json({
@@ -594,6 +687,8 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
 
 exports.updateProfileStatus = async (req, res) => {

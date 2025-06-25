@@ -231,12 +231,12 @@ exports.createInstitutionPrice = async (req, res) => {
 exports.getAdminSchool = async (req, res) => {
   try {
     const rawData = await AdminSchool.find()
-      .populate('className', 'name')
+      .populate('className', 'name') 
       .populate('createdBy', 'name email');
 
-    // Transform the data
     const data = rawData.map(item => ({
       _id: item._id,
+      classNameId: item.className?._id || null,
       name: item.className?.name || '',
       price: item.price,
       createdBy: item.createdBy,
@@ -258,9 +258,9 @@ exports.getAdminCollege = async (req, res) => {
       .populate('className', 'name')
       .populate('createdBy', 'name email');
 
-    // Transform the response
     const data = rawData.map(item => ({
       _id: item._id,
+      classNameId: item.className?._id || null,
       name: item.className?.name || '',
       price: item.price,
       createdBy: item.createdBy,
@@ -287,7 +287,6 @@ exports.getAdminCollege = async (req, res) => {
 //     res.status(500).json({ message: 'Server error.', error: err.message });
 //   }
 // };
-
 exports.institutionPrices = async (req, res) => {
   try {
     const adminSchools = await AdminSchool.find()
@@ -298,9 +297,10 @@ exports.institutionPrices = async (req, res) => {
       .populate('className', 'name')
       .populate('createdBy', 'name email');
 
-    // Transform each separately
+    // Format School entries
     const formattedSchools = adminSchools.map(item => ({
       _id: item._id,
+      classNameId: item.className?._id || null,
       name: item.className?.name || '',
       price: item.price,
       createdBy: item.createdBy,
@@ -309,8 +309,10 @@ exports.institutionPrices = async (req, res) => {
       type: 'school'
     }));
 
+    // Format College entries
     const formattedColleges = adminColleges.map(item => ({
       _id: item._id,
+      classNameId: item.className?._id || null,
       name: item.className?.name || '',
       price: item.price,
       createdBy: item.createdBy,
@@ -319,6 +321,7 @@ exports.institutionPrices = async (req, res) => {
       type: 'college'
     }));
 
+    // Merge both
     const institutes = [...formattedSchools, ...formattedColleges];
 
     res.status(200).json({ message: 'Institution prices fetched successfully.', institutes });
@@ -327,6 +330,7 @@ exports.institutionPrices = async (req, res) => {
     res.status(500).json({ message: 'Server error while fetching data' });
   }
 };
+
 
 
 // exports.institutionPrices = async (req, res) => {
