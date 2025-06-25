@@ -165,8 +165,8 @@ exports.completeProfile = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(className)) {
       classDetails =
         (await School.findById(className)) ||
-        (await College.findById(className)) ||
-        (await Institute.findById(className));
+        (await College.findById(className)) ;
+        // (await Institute.findById(className));
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
