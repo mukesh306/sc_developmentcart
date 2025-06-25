@@ -1,7 +1,7 @@
 const mongoose = require('mongoose');
 
 const AdminSchool = new mongoose.Schema({
-  schoolId: {
+  className: {
     type: mongoose.Schema.Types.ObjectId,
      ref: 'School',
     required: true

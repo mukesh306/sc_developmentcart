@@ -163,11 +163,11 @@ exports.getSchools = async (req, res) => {
 
 exports.createInstitutionPrice = async (req, res) => {
   try {
-    const { schoolId, price, type } = req.body;
+    const { className, price, type } = req.body;
 
     // === Validation ===
-    if (!schoolId || price === undefined || !type) {
-      return res.status(400).json({ message: 'schoolId, price, and type are required.' });
+    if (!className || price === undefined || !type) {
+      return res.status(400).json({ message: 'className, price, and type are required.' });
     }
 
     if (typeof price !== 'number' || price < 0) {
@@ -183,19 +183,19 @@ exports.createInstitutionPrice = async (req, res) => {
     const RefModel = institutionType === 'college' ? College : School;
 
     // === Check if referenced school/college exists ===
-    const institutionExists = await RefModel.findById(schoolId);
+    const institutionExists = await RefModel.findById(className);
     if (!institutionExists) {
       return res.status(404).json({ message: `${type} not found.` });
     }
 
-    // === Prevent duplicate entry for the same schoolId ===
-    const existing = await Model.findOne({ schoolId });
+    // === Prevent duplicate entry for the same className ===
+    const existing = await Model.findOne({ className });
     if (existing) {
       return res.status(400).json({ message: `Entry for this ${type} already exists.` });
     }
 
     const newInstitution = new Model({
-      schoolId,
+      className,
       price,
       createdBy: req.user._id,
     });
@@ -218,7 +218,7 @@ exports.createInstitutionPrice = async (req, res) => {
   exports.getAdminSchool = async (req, res) => {
   try {
     const data = await AdminSchool.find()
-      .populate('schoolId', 'name') 
+      .populate('className', 'name') 
       .populate('createdBy', 'name email'); 
 
     res.status(200).json({ message: 'AdminSchool prices fetched successfully.', data });
@@ -232,7 +232,7 @@ exports.createInstitutionPrice = async (req, res) => {
   exports.getAdminCollege = async (req, res) => {
   try {
     const data = await AdminCollege.find()
-      .populate('schoolId', 'name') 
+      .populate('className', 'name') 
       .populate('createdBy', 'name email'); 
 
     res.status(200).json({ message: 'AdminCollege prices fetched successfully.', data });
@@ -245,11 +245,11 @@ exports.createInstitutionPrice = async (req, res) => {
 exports.institutionPrices = async (req, res) => {
   try {
     const adminSchools = await AdminSchool.find()
-      .populate('schoolId', 'name')
+      .populate('className', 'name')
       .populate('createdBy', 'name email');
 
     const adminColleges = await AdminCollege.find()
-      .populate('schoolId', 'name')
+      .populate('className', 'name')
       .populate('createdBy', 'name email');
 
     // Combine both arrays
@@ -267,7 +267,7 @@ exports.institutionPrices = async (req, res) => {
  exports.updateInstitution = async (req, res) => {
   try {
     const { id } = req.params;
-    const { schoolId, price, type } = req.body;
+    const { className, price, type } = req.body;
     if (!type) {
       return res.status(400).json({ message: 'Type is required.' });
     }
@@ -289,18 +289,18 @@ exports.institutionPrices = async (req, res) => {
       return res.status(404).json({ message: 'Institution price entry not found.' });
     }
 
-    if (schoolId) {
-      const validInstitute = await RefModel.findById(schoolId);
+    if (className) {
+      const validInstitute = await RefModel.findById(className);
       if (!validInstitute) {
         return res.status(404).json({ message: `${type} not found.` });
       }
 
-      const duplicate = await Model.findOne({ schoolId, _id: { $ne: id } });
+      const duplicate = await Model.findOne({ className, _id: { $ne: id } });
       if (duplicate) {
         return res.status(400).json({ message: `Another entry for this ${type} already exists.` });
       }
 
-      existingEntry.schoolId = schoolId;
+      existingEntry.className = className;
     }
 
     if (price !== undefined) {
