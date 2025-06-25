@@ -1,7 +1,10 @@
 
 const School = require('../models/school');
 const College = require('../models/college');
-const SimpleInstitution = require('../models/adminInstitution');
+const SimpleInstitution = require('../models/adminschool');
+  
+const AdminSchool = require('../models/adminschool');
+const AdminCollege = require('../models/admincollege');
 
 
 
@@ -156,99 +159,163 @@ exports.getSchools = async (req, res) => {
 
 
 
-  exports.createInstitutionPrice = async (req, res) => {
-  try {
-    const { instuteId, price } = req.body;
 
-    if (!instuteId || price == null) {
-      return res.status(400).json({ message: 'Institute ID and price are required.' });
+
+exports.createInstitutionPrice = async (req, res) => {
+  try {
+    const { schoolId, price, type } = req.body;
+
+    // === Validation ===
+    if (!schoolId || price === undefined || !type) {
+      return res.status(400).json({ message: 'schoolId, price, and type are required.' });
     }
 
-    const newEntry = new SimpleInstitution({
-      instuteId,
+    if (typeof price !== 'number' || price < 0) {
+      return res.status(400).json({ message: 'Price must be a positive number.' });
+    }
+
+    const institutionType = type.toLowerCase();
+    if (!['college', 'school'].includes(institutionType)) {
+      return res.status(400).json({ message: 'Invalid type. Type must be either "college" or "school".' });
+    }
+
+    const Model = institutionType === 'college' ? AdminCollege : AdminSchool;
+    const RefModel = institutionType === 'college' ? College : School;
+
+    // === Check if referenced school/college exists ===
+    const institutionExists = await RefModel.findById(schoolId);
+    if (!institutionExists) {
+      return res.status(404).json({ message: `${type} not found.` });
+    }
+
+    // === Prevent duplicate entry for the same schoolId ===
+    const existing = await Model.findOne({ schoolId });
+    if (existing) {
+      return res.status(400).json({ message: `Entry for this ${type} already exists.` });
+    }
+
+    const newInstitution = new Model({
+      schoolId,
       price,
-      createdBy: req.user._id
+      createdBy: req.user._id,
     });
 
-    await newEntry.save();
+    await newInstitution.save();
 
-    res.status(201).json({ message: 'Data saved successfully.', data: newEntry });
-  } catch (err) {
-    console.error('Error saving:', err);
-    res.status(500).json({ message: 'Server error.', error: err.message });
+    res.status(201).json({
+      message: `${type.charAt(0).toUpperCase() + type.slice(1)} price added successfully.`,
+      data: newInstitution
+    });
+
+  } catch (error) {
+    console.error('Error adding institution:', error);
+    res.status(500).json({ message: 'Server error while adding institution.', error: error.message });
   }
 };
 
 
-exports.getAllInstitution = async (req, res) => {
+
+  exports.getAdminSchool = async (req, res) => {
   try {
-    const entries = await SimpleInstitution.find().populate('createdBy', 'email role');
+    const data = await AdminSchool.find()
+      .populate('schoolId', 'name') 
+      .populate('createdBy', 'name email'); 
 
-    const populatedData = await Promise.all(
-      entries.map(async (entry) => {
-        let instuteDetails = await School.findById(entry.instuteId).lean();
-        if (!instuteDetails) {
-          instuteDetails = await College.findById(entry.instuteId).lean();
-        }
-
-        return {
-          ...entry.toObject(),
-          instuteDetails: instuteDetails || null // add the full data
-        };
-      })
-    );
-
-    res.status(200).json({
-      message: 'Data fetched successfully.',
-      data: populatedData
-    });
+    res.status(200).json({ message: 'AdminSchool prices fetched successfully.', data });
   } catch (err) {
-    console.error('Error populating instuteId:', err);
+    console.error('Error fetching:', err);
     res.status(500).json({ message: 'Server error.', error: err.message });
   }
 };
 
 
+  exports.getAdminCollege = async (req, res) => {
+  try {
+    const data = await AdminCollege.find()
+      .populate('schoolId', 'name') 
+      .populate('createdBy', 'name email'); 
+
+    res.status(200).json({ message: 'AdminCollege prices fetched successfully.', data });
+  } catch (err) {
+    console.error('Error fetching:', err);
+    res.status(500).json({ message: 'Server error.', error: err.message });
+  }
+};
+
+exports.institutionPrices = async (req, res) => {
+  try {
+    const adminSchools = await AdminSchool.find()
+      .populate('schoolId', 'name')
+      .populate('createdBy', 'name email');
+
+    const adminColleges = await AdminCollege.find()
+      .populate('schoolId', 'name')
+      .populate('createdBy', 'name email');
+
+    // Combine both arrays
+    const institutes = [...adminSchools, ...adminColleges];
+
+    res.status(200).json({ institutes });
+  } catch (error) {
+    console.error('Error fetching admin schools and colleges:', error);
+    res.status(500).json({ message: 'Server error while fetching data' });
+  }
+};
 
 
-exports.updateInstitution = async (req, res) => {
+
+ exports.updateInstitution = async (req, res) => {
   try {
     const { id } = req.params;
-    const { instuteId, price } = req.body;
-
-    if (!id) {
-      return res.status(400).json({ message: 'Entry ID is required in URL.' });
+    const { schoolId, price, type } = req.body;
+    if (!type) {
+      return res.status(400).json({ message: 'Type is required.' });
     }
 
-    if (!instuteId && price == null) {
-      return res.status(400).json({ message: 'At least one of instuteId or price is required to update.' });
+    const institutionType = type.toLowerCase();
+    if (!['college', 'school'].includes(institutionType)) {
+      return res.status(400).json({ message: 'Invalid type. Must be "college" or "school".' });
     }
 
-    const updateFields = {};
-    if (instuteId) updateFields.instuteId = instuteId;
-    if (price != null) {
-      if (typeof price !== 'number' || price < 0) {
-        return res.status(400).json({ message: 'Price must be a positive number.' });
-      }
-      updateFields.price = price;
+    if (price !== undefined && (typeof price !== 'number' || price < 0)) {
+      return res.status(400).json({ message: 'Price must be a positive number.' });
     }
 
-    const updatedEntry = await SimpleInstitution.findByIdAndUpdate(
-      id,
-      { $set: updateFields },
-      { new: true }
-    ).populate('createdBy', 'email role');
+    const Model = institutionType === 'college' ? AdminCollege : AdminSchool;
+    const RefModel = institutionType === 'college' ? College : School;
 
-    if (!updatedEntry) {
+    const existingEntry = await Model.findById(id);
+    if (!existingEntry) {
       return res.status(404).json({ message: 'Institution price entry not found.' });
     }
 
+    if (schoolId) {
+      const validInstitute = await RefModel.findById(schoolId);
+      if (!validInstitute) {
+        return res.status(404).json({ message: `${type} not found.` });
+      }
+
+      const duplicate = await Model.findOne({ schoolId, _id: { $ne: id } });
+      if (duplicate) {
+        return res.status(400).json({ message: `Another entry for this ${type} already exists.` });
+      }
+
+      existingEntry.schoolId = schoolId;
+    }
+
+    if (price !== undefined) {
+      existingEntry.price = price;
+    }
+
+    await existingEntry.save();
+
     res.status(200).json({
-      message: 'Institution data updated successfully.',
-      data: updatedEntry
+      message: `${type.charAt(0).toUpperCase() + type.slice(1)} price updated successfully.`,
+      data: existingEntry
     });
-  } catch (err) {
-    console.error('Update error:', err);
-    res.status(500).json({ message: 'Server error.', error: err.message });
+
+  } catch (error) {
+    console.error('Error updating institution price:', error);
+    res.status(500).json({ message: 'Server error while updating institution.', error: error.message });
   }
 };

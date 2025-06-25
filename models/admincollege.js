@@ -1,8 +1,9 @@
 const mongoose = require('mongoose');
 
-const SimpleInstitutionSchema = new mongoose.Schema({
-  instuteId: {
+const AdminCollege = new mongoose.Schema({
+  schoolId: {
     type: mongoose.Schema.Types.ObjectId,
+     ref: 'College',
     required: true
   },
   price: {
@@ -20,4 +21,4 @@ const SimpleInstitutionSchema = new mongoose.Schema({
   }
 });
 
-module.exports = mongoose.model('AdminInstitution', SimpleInstitutionSchema);
+module.exports = mongoose.model('Admincollege', AdminCollege);
