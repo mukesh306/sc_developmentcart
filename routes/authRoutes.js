@@ -13,4 +13,6 @@ router.post('/verify-otp', authController.verifyOtp);
 router.post('/admincreate', auth,adminController.registerAdmin);
 router.post('/adminlogin', adminController.loginAdmin);
 router.get('/getAllAdmins', adminController.getAllAdmins);
+router.delete('/deleteAdmins/:id', adminController.deleteAdmin);
+
 module.exports = router;

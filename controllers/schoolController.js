@@ -157,10 +157,6 @@ exports.getSchools = async (req, res) => {
   };
 
 
-
-
-
-
 exports.createInstitutionPrice = async (req, res) => {
   try {
     const { className, price, type } = req.body;
@@ -214,20 +210,6 @@ exports.createInstitutionPrice = async (req, res) => {
 };
 
 
-
-//   exports.getAdminSchool = async (req, res) => {
-//   try {
-//     const data = await AdminSchool.find()
-//       .populate('className', 'name') 
-//       .populate('createdBy', 'name email'); 
-
-//     res.status(200).json({ message: 'AdminSchool prices fetched successfully.', data });
-//   } catch (err) {
-//     console.error('Error fetching:', err);
-//     res.status(500).json({ message: 'Server error.', error: err.message });
-//   }
-// };
-
 exports.getAdminSchool = async (req, res) => {
   try {
     const rawData = await AdminSchool.find()
@@ -275,18 +257,7 @@ exports.getAdminCollege = async (req, res) => {
   }
 };
 
-//   exports.getAdminCollege = async (req, res) => {
-//   try {
-//     const data = await AdminCollege.find()
-//       .populate('className', 'name') 
-//       .populate('createdBy', 'name email'); 
 
-//     res.status(200).json({ message: 'AdminCollege prices fetched successfully.', data });
-//   } catch (err) {
-//     console.error('Error fetching:', err);
-//     res.status(500).json({ message: 'Server error.', error: err.message });
-//   }
-// };
 exports.institutionPrices = async (req, res) => {
   try {
     const adminSchools = await AdminSchool.find()
@@ -332,28 +303,40 @@ exports.institutionPrices = async (req, res) => {
 };
 
 
+exports.deleteAdminSchool = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-// exports.institutionPrices = async (req, res) => {
-//   try {
-//     const adminSchools = await AdminSchool.find()
-//       .populate('className', 'name')
-//       .populate('createdBy', 'name email');
+    const deleted = await AdminSchool.findByIdAndDelete(id);
 
-//     const adminColleges = await AdminCollege.find()
-//       .populate('className', 'name')
-//       .populate('createdBy', 'name email');
+    if (!deleted) {
+      return res.status(404).json({ message: 'AdminSchool entry not found.' });
+    }
 
-//     // Combine both arrays
-//     const institutes = [...adminSchools, ...adminColleges];
-
-//     res.status(200).json({ institutes });
-//   } catch (error) {
-//     console.error('Error fetching admin schools and colleges:', error);
-//     res.status(500).json({ message: 'Server error while fetching data' });
-//   }
-// };
+    res.status(200).json({ message: 'AdminSchool entry deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting AdminSchool:', error);
+    res.status(500).json({ message: 'Server error.', error: error.message });
+  }
+};
 
 
+exports.deleteAdminCollege = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const deleted = await AdminCollege.findByIdAndDelete(id);
+
+    if (!deleted) {
+      return res.status(404).json({ message: 'AdminCollege entry not found.' });
+    }
+
+    res.status(200).json({ message: 'AdminCollege entry deleted successfully.' });
+  } catch (error) {
+    console.error('Error deleting AdminCollege:', error);
+    res.status(500).json({ message: 'Server error.', error: error.message });
+  }
+};
 
  exports.updateInstitution = async (req, res) => {
   try {

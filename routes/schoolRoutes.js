@@ -18,5 +18,7 @@ router.post('/adminInstitution', auth, schoolController.createInstitutionPrice);
 router.get('/getAdminSchool', schoolController.getAdminSchool);
 router.get('/getAdminCollege', schoolController.getAdminCollege);
 router.get('/institutionPrices', schoolController.institutionPrices);
+router.delete('/deleteAdminSchool/:id', schoolController.deleteAdminSchool);
+router.delete('/deleteAdminCollege/:id', schoolController.deleteAdminCollege);
 router.put('/adminInstitution/:id',auth,schoolController.updateInstitution);
 module.exports = router;
