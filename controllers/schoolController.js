@@ -215,11 +215,34 @@ exports.createInstitutionPrice = async (req, res) => {
 
 
 
-  exports.getAdminSchool = async (req, res) => {
+//   exports.getAdminSchool = async (req, res) => {
+//   try {
+//     const data = await AdminSchool.find()
+//       .populate('className', 'name') 
+//       .populate('createdBy', 'name email'); 
+
+//     res.status(200).json({ message: 'AdminSchool prices fetched successfully.', data });
+//   } catch (err) {
+//     console.error('Error fetching:', err);
+//     res.status(500).json({ message: 'Server error.', error: err.message });
+//   }
+// };
+
+exports.getAdminSchool = async (req, res) => {
   try {
-    const data = await AdminSchool.find()
-      .populate('className', 'name') 
-      .populate('createdBy', 'name email'); 
+    const rawData = await AdminSchool.find()
+      .populate('className', 'name')
+      .populate('createdBy', 'name email');
+
+    // Transform the data
+    const data = rawData.map(item => ({
+      _id: item._id,
+      name: item.className?.name || '',
+      price: item.price,
+      createdBy: item.createdBy,
+      createdAt: item.createdAt,
+      __v: item.__v
+    }));
 
     res.status(200).json({ message: 'AdminSchool prices fetched successfully.', data });
   } catch (err) {
@@ -229,11 +252,21 @@ exports.createInstitutionPrice = async (req, res) => {
 };
 
 
-  exports.getAdminCollege = async (req, res) => {
+exports.getAdminCollege = async (req, res) => {
   try {
-    const data = await AdminCollege.find()
-      .populate('className', 'name') 
-      .populate('createdBy', 'name email'); 
+    const rawData = await AdminCollege.find()
+      .populate('className', 'name')
+      .populate('createdBy', 'name email');
+
+    // Transform the response
+    const data = rawData.map(item => ({
+      _id: item._id,
+      name: item.className?.name || '',
+      price: item.price,
+      createdBy: item.createdBy,
+      createdAt: item.createdAt,
+      __v: item.__v
+    }));
 
     res.status(200).json({ message: 'AdminCollege prices fetched successfully.', data });
   } catch (err) {
@@ -241,6 +274,19 @@ exports.createInstitutionPrice = async (req, res) => {
     res.status(500).json({ message: 'Server error.', error: err.message });
   }
 };
+
+//   exports.getAdminCollege = async (req, res) => {
+//   try {
+//     const data = await AdminCollege.find()
+//       .populate('className', 'name') 
+//       .populate('createdBy', 'name email'); 
+
+//     res.status(200).json({ message: 'AdminCollege prices fetched successfully.', data });
+//   } catch (err) {
+//     console.error('Error fetching:', err);
+//     res.status(500).json({ message: 'Server error.', error: err.message });
+//   }
+// };
 
 exports.institutionPrices = async (req, res) => {
   try {
@@ -252,15 +298,56 @@ exports.institutionPrices = async (req, res) => {
       .populate('className', 'name')
       .populate('createdBy', 'name email');
 
-    // Combine both arrays
-    const institutes = [...adminSchools, ...adminColleges];
+    // Transform each separately
+    const formattedSchools = adminSchools.map(item => ({
+      _id: item._id,
+      name: item.className?.name || '',
+      price: item.price,
+      createdBy: item.createdBy,
+      createdAt: item.createdAt,
+      __v: item.__v,
+      type: 'school'
+    }));
 
-    res.status(200).json({ institutes });
+    const formattedColleges = adminColleges.map(item => ({
+      _id: item._id,
+      name: item.className?.name || '',
+      price: item.price,
+      createdBy: item.createdBy,
+      createdAt: item.createdAt,
+      __v: item.__v,
+      type: 'college'
+    }));
+
+    const institutes = [...formattedSchools, ...formattedColleges];
+
+    res.status(200).json({ message: 'Institution prices fetched successfully.', institutes });
   } catch (error) {
     console.error('Error fetching admin schools and colleges:', error);
     res.status(500).json({ message: 'Server error while fetching data' });
   }
 };
+
+
+// exports.institutionPrices = async (req, res) => {
+//   try {
+//     const adminSchools = await AdminSchool.find()
+//       .populate('className', 'name')
+//       .populate('createdBy', 'name email');
+
+//     const adminColleges = await AdminCollege.find()
+//       .populate('className', 'name')
+//       .populate('createdBy', 'name email');
+
+//     // Combine both arrays
+//     const institutes = [...adminSchools, ...adminColleges];
+
+//     res.status(200).json({ institutes });
+//   } catch (error) {
+//     console.error('Error fetching admin schools and colleges:', error);
+//     res.status(500).json({ message: 'Server error while fetching data' });
+//   }
+// };
 
 
 

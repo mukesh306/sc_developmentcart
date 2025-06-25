@@ -4,7 +4,8 @@ const jwt = require('jsonwebtoken');
 const College = require('../models/college');
 const School = require('../models/school');
 const mongoose = require('mongoose');
-
+const AdminSchool = require('../models/adminschool');
+const AdminCollege = require('../models/admincollege');
 const nodemailer = require('nodemailer');
 
 
@@ -112,6 +113,7 @@ exports.Userlogin = async (req, res) => {
     res.status(500).json({ message: 'Server error during login.' });
   }
 };
+
 exports.completeProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -195,10 +197,12 @@ exports.completeProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
+    // === Fetch User with Country/State/City populated ===
     const user = await User.findById(userId)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
@@ -209,19 +213,26 @@ exports.getUserProfile = async (req, res) => {
     }
 
     const classId = user.className;
-    let classDetails = null;
+    let classDetails = '';
 
+    // === Fetch classOrYear name from AdminSchool or AdminCollege using classId ===
     if (mongoose.Types.ObjectId.isValid(classId)) {
-      classDetails =
-        (await School.findById(classId)) ||
-        (await College.findById(classId)) ||
-        (await Institute.findById(classId));
+      const adminSchool = await AdminSchool.findById(classId).populate('className', 'name');
+      const adminCollege = await AdminCollege.findById(classId).populate('className', 'name');
+
+      const entry = adminSchool || adminCollege;
+
+      if (entry && entry.className && typeof entry.className === 'object') {
+        classDetails = entry.className.name;
+      }
     }
 
+    // === Add base URL to Aadhar & Marksheet if available ===
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
 
+    // === Construct formatted user object ===
     const formattedUser = {
       ...user._doc,
       country: user.countryId?.name || '',
@@ -229,7 +240,7 @@ exports.getUserProfile = async (req, res) => {
       city: user.cityId?.name || '',
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
-      classOrYear: classDetails?.name || '',
+      classOrYear: classDetails || '',
     };
 
     res.status(200).json({
@@ -241,6 +252,53 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+// exports.getUserProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     const user = await User.findById(userId)
+//       .populate('countryId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('cityId', 'name');
+
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found.' });
+//     }
+
+//     const classId = user.className;
+//     let classDetails = null;
+
+//     if (mongoose.Types.ObjectId.isValid(classId)) {
+//       classDetails =
+//         (await School.findById(classId)) ||
+//         (await College.findById(classId)) ||
+//         (await Institute.findById(classId));
+//     }
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+//     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
+//     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
+
+//     const formattedUser = {
+//       ...user._doc,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+//       institutionType: user.studentType || '',
+//       classOrYear: classDetails?.name || '',
+//     };
+
+//     res.status(200).json({
+//       message: 'User profile fetched successfully.',
+//       user: formattedUser
+//     });
+//   } catch (error) {
+//     console.error('Get User Profile Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 
