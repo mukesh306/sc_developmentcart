@@ -940,8 +940,6 @@ exports.calculateQuizScore = async (req, res) => {
 //   }
 // };
 
-
-
 exports.updateTopicWithQuiz = async (req, res) => {
   try {
     const topicId = req.params.id;
@@ -972,7 +970,7 @@ exports.updateTopicWithQuiz = async (req, res) => {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
-    // === Update topic fields ===
+    // Update topic
     if (classId) topicToUpdate.classId = classId;
     if (learningId) topicToUpdate.learningId = learningId;
     if (topic) topicToUpdate.topic = topic;
@@ -984,7 +982,7 @@ exports.updateTopicWithQuiz = async (req, res) => {
 
     await topicToUpdate.save();
 
-    // === Handle quizQuestions input ===
+    // === Parse quizQuestions ===
     let quizQuestions = [];
 
     if (req.body.quizQuestions) {
@@ -995,37 +993,61 @@ exports.updateTopicWithQuiz = async (req, res) => {
       }
     }
 
-    if (Array.isArray(quizQuestions) && quizQuestions.length > 0) {
-      // === Fetch existing quizzes for this topic ===
-      const existingQuizzes = await Quiz.find({ topicId }).lean();
+    // === Fetch existing quizzes for topic ===
+    const existingQuizzes = await Quiz.find({ topicId }).lean();
+    const questionToQuizMap = new Map();
 
-      const existingQuestionsSet = new Set(
-        existingQuizzes.map(q => q.question.trim().toLowerCase())
-      );
+    existingQuizzes.forEach(q => {
+      questionToQuizMap.set(q.question.trim().toLowerCase(), q);
+    });
 
-      // === Filter only new questions ===
-      const newQuizData = quizQuestions.filter(q =>
-        !existingQuestionsSet.has(q.question.trim().toLowerCase())
-      ).map(q => ({
-        topicId,
-        question: q.question,
-        option1: q.option1,
-        option2: q.option2,
-        option3: q.option3,
-        option4: q.option4,
-        answer: q.answer
-      }));
+    // === Track questions to keep
+    const questionsToKeep = new Set();
 
-      // === Insert only new quizzes ===
-      if (newQuizData.length > 0) {
-        await Quiz.insertMany(newQuizData);
+    for (const q of quizQuestions) {
+      const questionKey = q.question.trim().toLowerCase();
+      questionsToKeep.add(questionKey);
+
+      const existingQuiz = questionToQuizMap.get(questionKey);
+
+      if (existingQuiz) {
+        // Update existing quiz
+        await Quiz.findByIdAndUpdate(existingQuiz._id, {
+          option1: q.option1,
+          option2: q.option2,
+          option3: q.option3,
+          option4: q.option4,
+          answer: q.answer
+        });
+      } else {
+        // Insert new quiz
+        await Quiz.create({
+          topicId,
+          question: q.question,
+          option1: q.option1,
+          option2: q.option2,
+          option3: q.option3,
+          option4: q.option4,
+          answer: q.answer
+        });
       }
     }
 
+    // === Delete old quizzes not present in request ===
+    const toDelete = existingQuizzes.filter(
+      q => !questionsToKeep.has(q.question.trim().toLowerCase())
+    );
+
+    if (toDelete.length > 0) {
+      const idsToDelete = toDelete.map(q => q._id);
+      await Quiz.deleteMany({ _id: { $in: idsToDelete } });
+    }
+
     res.status(200).json({
-      message: 'Topic updated and new quizzes added (if any).',
+      message: 'Topic updated and quizzes synced successfully.',
       topicId: topicToUpdate._id
     });
+
   } catch (error) {
     console.error('Error updating topic and quizzes:', error);
     res.status(500).json({ message: error.message });
