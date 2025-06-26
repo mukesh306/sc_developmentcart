@@ -887,17 +887,72 @@ exports.calculateQuizScore = async (req, res) => {
 
 
 
+// exports.updateTopicWithQuiz = async (req, res) => {
+//   try {
+//     const topicId = req.params.id;
+//     const {
+//       classId,
+//       learningId,
+//       topic,
+//       testTime,
+//       videoTime,
+//       description,
+//       userId 
+//     } = req.body;
+
+//     const image = req.files?.image?.[0]?.path || null;
+//     const videoFile = req.files?.video?.[0]?.path || null;
+//     const videoLink = req.body.video || null;
+
+//     if (videoFile && videoLink) {
+//       return res.status(400).json({
+//         message: 'Please provide either a video file or a video link, not both.'
+//       });
+//     }
+
+//     const video = videoFile || videoLink || null;
+
+//     const topicToUpdate = await Topic.findById(topicId);
+//     if (!topicToUpdate) {
+//       return res.status(404).json({ message: "Topic not found." });
+//     }
+
+//     // Update fields only if provided
+//     if (classId) topicToUpdate.classId = classId;
+//     if (learningId) topicToUpdate.learningId = learningId;
+//     if (topic) topicToUpdate.topic = topic;
+//     if (testTime) topicToUpdate.testTime = testTime;
+//     if (videoTime) topicToUpdate.videoTime = videoTime;
+//     if (description) topicToUpdate.description = description;
+//     if (image) topicToUpdate.image = image;
+//     if (video) topicToUpdate.video = video;
+//     if (userId) topicToUpdate.updatedBy = userId;
+
+//     await topicToUpdate.save();
+
+//     res.status(200).json({
+//       message: "Topic updated successfully.",
+//       topicId: topicToUpdate._id
+//     });
+//   } catch (error) {
+//     console.error("Error updating topic:", error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
+
 exports.updateTopicWithQuiz = async (req, res) => {
   try {
     const topicId = req.params.id;
+
     const {
       classId,
       learningId,
       topic,
       testTime,
       videoTime,
-      description,
-      userId 
+      description
     } = req.body;
 
     const image = req.files?.image?.[0]?.path || null;
@@ -914,10 +969,10 @@ exports.updateTopicWithQuiz = async (req, res) => {
 
     const topicToUpdate = await Topic.findById(topicId);
     if (!topicToUpdate) {
-      return res.status(404).json({ message: "Topic not found." });
+      return res.status(404).json({ message: 'Topic not found.' });
     }
 
-    // Update fields only if provided
+    // === Update topic fields ===
     if (classId) topicToUpdate.classId = classId;
     if (learningId) topicToUpdate.learningId = learningId;
     if (topic) topicToUpdate.topic = topic;
@@ -926,19 +981,57 @@ exports.updateTopicWithQuiz = async (req, res) => {
     if (description) topicToUpdate.description = description;
     if (image) topicToUpdate.image = image;
     if (video) topicToUpdate.video = video;
-    if (userId) topicToUpdate.updatedBy = userId;
 
     await topicToUpdate.save();
 
+    // === Handle quizQuestions input ===
+    let quizQuestions = [];
+
+    if (req.body.quizQuestions) {
+      try {
+        quizQuestions = JSON.parse(req.body.quizQuestions);
+      } catch (err) {
+        return res.status(400).json({ message: 'Invalid quizQuestions format. Must be a valid JSON array.' });
+      }
+    }
+
+    if (Array.isArray(quizQuestions) && quizQuestions.length > 0) {
+      // === Fetch existing quizzes for this topic ===
+      const existingQuizzes = await Quiz.find({ topicId }).lean();
+
+      const existingQuestionsSet = new Set(
+        existingQuizzes.map(q => q.question.trim().toLowerCase())
+      );
+
+      // === Filter only new questions ===
+      const newQuizData = quizQuestions.filter(q =>
+        !existingQuestionsSet.has(q.question.trim().toLowerCase())
+      ).map(q => ({
+        topicId,
+        question: q.question,
+        option1: q.option1,
+        option2: q.option2,
+        option3: q.option3,
+        option4: q.option4,
+        answer: q.answer
+      }));
+
+      // === Insert only new quizzes ===
+      if (newQuizData.length > 0) {
+        await Quiz.insertMany(newQuizData);
+      }
+    }
+
     res.status(200).json({
-      message: "Topic updated successfully.",
+      message: 'Topic updated and new quizzes added (if any).',
       topicId: topicToUpdate._id
     });
   } catch (error) {
-    console.error("Error updating topic:", error);
+    console.error('Error updating topic and quizzes:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.deleteTopicWithQuiz = async (req, res) => {
   try {
