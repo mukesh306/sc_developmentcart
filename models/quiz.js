@@ -8,7 +8,7 @@ const QuizSchema = new mongoose.Schema({
    option3:{ type: String, required: true },
    option4:{ type: String, required: true },
    answer:{ type: String },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin' },
     createdAt: {
         type: Date,
         default: Date.now

@@ -887,17 +887,70 @@ exports.calculateQuizScore = async (req, res) => {
 
 
 
+// exports.updateTopicWithQuiz = async (req, res) => {
+//   try {
+//     const topicId = req.params.id;
+//     const {
+//       classId,
+//       learningId,
+//       topic,
+//       testTime,
+//       videoTime,
+//       description,
+//       userId 
+//     } = req.body;
+
+//     const image = req.files?.image?.[0]?.path || null;
+//     const videoFile = req.files?.video?.[0]?.path || null;
+//     const videoLink = req.body.video || null;
+
+//     if (videoFile && videoLink) {
+//       return res.status(400).json({
+//         message: 'Please provide either a video file or a video link, not both.'
+//       });
+//     }
+
+//     const video = videoFile || videoLink || null;
+
+//     const topicToUpdate = await Topic.findById(topicId);
+//     if (!topicToUpdate) {
+//       return res.status(404).json({ message: "Topic not found." });
+//     }
+
+//     // Update fields only if provided
+//     if (classId) topicToUpdate.classId = classId;
+//     if (learningId) topicToUpdate.learningId = learningId;
+//     if (topic) topicToUpdate.topic = topic;
+//     if (testTime) topicToUpdate.testTime = testTime;
+//     if (videoTime) topicToUpdate.videoTime = videoTime;
+//     if (description) topicToUpdate.description = description;
+//     if (image) topicToUpdate.image = image;
+//     if (video) topicToUpdate.video = video;
+//     if (userId) topicToUpdate.updatedBy = userId;
+
+//     await topicToUpdate.save();
+
+//     res.status(200).json({
+//       message: "Topic updated successfully.",
+//       topicId: topicToUpdate._id
+//     });
+//   } catch (error) {
+//     console.error("Error updating topic:", error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.updateTopicWithQuiz = async (req, res) => {
   try {
     const topicId = req.params.id;
+
     const {
       classId,
       learningId,
       topic,
       testTime,
       videoTime,
-      description,
-      userId 
+      description
     } = req.body;
 
     const image = req.files?.image?.[0]?.path || null;
@@ -914,10 +967,10 @@ exports.updateTopicWithQuiz = async (req, res) => {
 
     const topicToUpdate = await Topic.findById(topicId);
     if (!topicToUpdate) {
-      return res.status(404).json({ message: "Topic not found." });
+      return res.status(404).json({ message: 'Topic not found.' });
     }
 
-    // Update fields only if provided
+    // Update topic
     if (classId) topicToUpdate.classId = classId;
     if (learningId) topicToUpdate.learningId = learningId;
     if (topic) topicToUpdate.topic = topic;
@@ -926,19 +979,81 @@ exports.updateTopicWithQuiz = async (req, res) => {
     if (description) topicToUpdate.description = description;
     if (image) topicToUpdate.image = image;
     if (video) topicToUpdate.video = video;
-    if (userId) topicToUpdate.updatedBy = userId;
 
     await topicToUpdate.save();
 
+    // === Parse quizQuestions ===
+    let quizQuestions = [];
+
+    if (req.body.quizQuestions) {
+      try {
+        quizQuestions = JSON.parse(req.body.quizQuestions);
+      } catch (err) {
+        return res.status(400).json({ message: 'Invalid quizQuestions format. Must be a valid JSON array.' });
+      }
+    }
+
+    // === Fetch existing quizzes for topic ===
+    const existingQuizzes = await Quiz.find({ topicId }).lean();
+    const questionToQuizMap = new Map();
+
+    existingQuizzes.forEach(q => {
+      questionToQuizMap.set(q.question.trim().toLowerCase(), q);
+    });
+
+    // === Track questions to keep
+    const questionsToKeep = new Set();
+
+    for (const q of quizQuestions) {
+      const questionKey = q.question.trim().toLowerCase();
+      questionsToKeep.add(questionKey);
+
+      const existingQuiz = questionToQuizMap.get(questionKey);
+
+      if (existingQuiz) {
+        // Update existing quiz
+        await Quiz.findByIdAndUpdate(existingQuiz._id, {
+          option1: q.option1,
+          option2: q.option2,
+          option3: q.option3,
+          option4: q.option4,
+          answer: q.answer
+        });
+      } else {
+        // Insert new quiz
+        await Quiz.create({
+          topicId,
+          question: q.question,
+          option1: q.option1,
+          option2: q.option2,
+          option3: q.option3,
+          option4: q.option4,
+          answer: q.answer
+        });
+      }
+    }
+
+    // === Delete old quizzes not present in request ===
+    const toDelete = existingQuizzes.filter(
+      q => !questionsToKeep.has(q.question.trim().toLowerCase())
+    );
+
+    if (toDelete.length > 0) {
+      const idsToDelete = toDelete.map(q => q._id);
+      await Quiz.deleteMany({ _id: { $in: idsToDelete } });
+    }
+
     res.status(200).json({
-      message: "Topic updated successfully.",
+      message: 'Topic updated and quizzes synced successfully.',
       topicId: topicToUpdate._id
     });
+
   } catch (error) {
-    console.error("Error updating topic:", error);
+    console.error('Error updating topic and quizzes:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.deleteTopicWithQuiz = async (req, res) => {
   try {

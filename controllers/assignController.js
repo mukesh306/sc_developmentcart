@@ -37,6 +37,7 @@ exports.createAssigned = async (req, res) => {
   }
 };
 
+
 exports.getAssignedList = async (req, res) => {
   try {
     const assignedList = await Assigned.find()
@@ -59,11 +60,9 @@ exports.getAssignedList = async (req, res) => {
   }
 };
 
-
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const user = await User.findById(userId).lean();
     if (!user || !user.className) {
       return res.status(400).json({ message: 'User className not found.' });
@@ -426,3 +425,33 @@ exports.assignBonusPoint = async (req, res) => {
 //   }
 // };
 
+
+ exports.getAssignedwithClass = async (req, res) => {
+  try {
+    const { classId } = req.params;
+
+    if (!classId) {
+      return res.status(400).json({ message: 'classId is required.' });
+    }
+
+    const assignedList = await Assigned.find({ classId })
+      .populate('learning')
+      .populate('learning2')
+      .populate('learning3')
+      .populate('learning4')
+      .lean();
+
+    for (let item of assignedList) {
+      let classInfo = await School.findById(item.classId).lean();
+      if (!classInfo) {
+        classInfo = await College.findById(item.classId).lean();
+      }
+      item.classInfo = classInfo || null;
+    }
+
+    res.status(200).json({ data: assignedList });
+  } catch (error) {
+    console.error('Get Assigned Error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};

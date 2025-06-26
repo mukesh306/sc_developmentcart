@@ -100,6 +100,7 @@ exports.login = async (req, res) => {
     res.status(500).send('Server error');
   }
 };
+
 exports.verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
