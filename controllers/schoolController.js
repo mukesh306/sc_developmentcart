@@ -338,7 +338,7 @@ exports.deleteAdminCollege = async (req, res) => {
   }
 };
 
- exports.updateInstitution = async (req, res) => {
+ exports.updateInstitutionAdmin = async (req, res) => {
   try {
     const { id } = req.params;
     const { className, price, type } = req.body;
