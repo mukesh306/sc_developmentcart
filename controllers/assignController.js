@@ -60,11 +60,9 @@ exports.getAssignedList = async (req, res) => {
   }
 };
 
-
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const user = await User.findById(userId).lean();
     if (!user || !user.className) {
       return res.status(400).json({ message: 'User className not found.' });
