@@ -129,10 +129,8 @@ exports.getCollege = async (req, res) => {
  exports.institute = async (req, res) => {
   try {
     const { price } = req.query;
-
     const schoolFilter = {};
     const collegeFilter = {};
-
     if (price) {
       schoolFilter.price = { $ne: null };
       collegeFilter.price = { $ne: null };
@@ -140,9 +138,7 @@ exports.getCollege = async (req, res) => {
 
     const schools = await School.find(schoolFilter);
     const colleges = await College.find(collegeFilter);
-
     const institutes = [...schools, ...colleges];
-
     res.status(200).json({ institutes });
   } catch (error) {
     console.error('Error fetching schools and colleges:', error);
@@ -154,11 +150,9 @@ exports.getCollege = async (req, res) => {
     try {
       const { id } = req.params;
       const deletedCollege = await College.findByIdAndDelete(id);
-  
       if (!deletedCollege) {
         return res.status(404).json({ message: 'College not found' });
-      }
-  
+      } 
       res.status(200).json({ message: 'College deleted successfully' });
     } catch (error) {
       console.error('Error deleting College:', error);
