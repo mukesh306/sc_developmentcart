@@ -50,7 +50,7 @@ exports.getSchools = async (req, res) => {
     if (price) {
       filter.price = { $ne: null }; 
     }
-      const schools = await School.find();
+      const schools = await School.find(filter); 
       res.status(200).json(schools);
     } catch (error) {
       console.error('Error fetching schools:', error);
