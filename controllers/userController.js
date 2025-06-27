@@ -263,7 +263,6 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -277,7 +276,7 @@ exports.getUserProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    const classId = user.className;
+    let classId = user.className;
     let classDetails = null;
 
     if (mongoose.Types.ObjectId.isValid(classId)) {
@@ -291,15 +290,24 @@ exports.getUserProfile = async (req, res) => {
     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
 
+    // ✅ Agar price null hai to classId ko bhi null kar dena hai
+    if (!classDetails || classDetails.price == null) {
+      classId = null;
+    }
+
     const formattedUser = {
       ...user._doc,
+      className: classId, // either real ID or null
       country: user.countryId?.name || '',
       state: user.stateId?.name || '',
       city: user.cityId?.name || '',
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
-      classOrYear: classDetails?.name || '',
     };
+
+    if (classDetails && classDetails.price != null) {
+      formattedUser.classOrYear = classDetails.name;
+    }
 
     res.status(200).json({
       message: 'User profile fetched successfully.',
@@ -310,6 +318,57 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+
+
+// exports.getUserProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     const user = await User.findById(userId)
+//       .populate('countryId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('cityId', 'name');
+
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found.' });
+//     }
+
+//     const classId = user.className;
+//     let classDetails = null;
+
+//     if (mongoose.Types.ObjectId.isValid(classId)) {
+//       classDetails =
+//         (await School.findById(classId)) ||
+//         (await College.findById(classId)) ||
+//         (await Institute.findById(classId));
+//     }
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+//     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
+//     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
+
+//     const formattedUser = {
+//       ...user._doc,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+//       institutionType: user.studentType || '',
+//       classOrYear: classDetails?.name || '',
+//     };
+
+//     res.status(200).json({
+//       message: 'User profile fetched successfully.',
+//       user: formattedUser
+//     });
+//   } catch (error) {
+//     console.error('Get User Profile Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.sendResetOTP = async (req, res) => {

@@ -81,7 +81,6 @@ exports.getAllAdmins = async (req, res) => {
 exports.deleteAdmin = async (req, res) => {
   try {
     const { id } = req.params;
-
     const deleted = await Admin1.findByIdAndDelete(id);
 
     if (!deleted) {
@@ -183,4 +182,4 @@ exports.verifyOtp = async (req, res) => {
     console.error('OTP Verification Error:', err.message);
     res.status(500).send('Server error');
   }
-};
+}; 

@@ -22,5 +22,8 @@ router.delete('/deleteAdminSchool/:id', schoolController.deleteAdminSchool);
 router.delete('/deleteAdminCollege/:id', schoolController.deleteAdminCollege);
 router.put('/adminInstitution/:id',auth,schoolController.updateInstitutionAdmin);
 router.put('/set-price/:id',auth,schoolController.setInstitutionPrice);
+router.delete('/schoolprice/:id/price',auth,schoolController.deleteSchoolPrice);
+router.delete('/collegeprice/:id/price',auth,schoolController.deleteCollegePrice);
+
 
 module.exports = router;

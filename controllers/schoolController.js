@@ -7,7 +7,6 @@ const AdminSchool = require('../models/adminschool');
 const AdminCollege = require('../models/admincollege');
 
 
-
   exports.addInstitution = async (req, res) => {
     try {
       const { name, price, type } = req.body;
@@ -74,12 +73,10 @@ exports.getCollege = async (req, res) => {
   }
 };
 
-
   exports.updateInstitution = async (req, res) => {
     try {
       const { id } = req.params;
       const { name, price, type } = req.body;
-  
       if (!id || !type) {
         return res.status(400).json({ message: 'ID and type are required.' });
       }
@@ -87,7 +84,6 @@ exports.getCollege = async (req, res) => {
       if (!['college', 'school'].includes(type.toLowerCase())) {
         return res.status(400).json({ message: 'Invalid type. Type must be either "college" or "school".' });
       }
-  
       const Model = type.toLowerCase() === 'college' ? College : School;
       const institution = await Model.findById(id);
       if (!institution) {
@@ -154,7 +150,6 @@ exports.getCollege = async (req, res) => {
   }
 };
 
-  
   exports.deleteCollege = async (req, res) => {
     try {
       const { id } = req.params;
@@ -414,6 +409,7 @@ exports.setInstitutionPrice = async (req, res) => {
   try {
     const { id } = req.params;
     const { price, type } = req.body;
+    const updatedBy = req.user?._id; 
 
     if (!id || !type) {
       return res.status(400).json({ message: 'ID and type are required.' });
@@ -429,11 +425,13 @@ exports.setInstitutionPrice = async (req, res) => {
 
     const Model = type.toLowerCase() === 'college' ? College : School;
     const institution = await Model.findById(id);
+
     if (!institution) {
       return res.status(404).json({ message: `${type} not found.` });
     }
 
     institution.price = price;
+    institution.updatedBy = updatedBy; 
     await institution.save();
 
     res.status(200).json({
@@ -444,5 +442,96 @@ exports.setInstitutionPrice = async (req, res) => {
   } catch (error) {
     console.error('Error setting price:', error);
     res.status(500).json({ message: 'Server error while setting price.' });
+  }
+};
+
+
+
+// exports.setInstitutionPrice = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { price, type } = req.body;
+
+//     if (!id || !type) {
+//       return res.status(400).json({ message: 'ID and type are required.' });
+//     }
+
+//     if (typeof price !== 'number' || price < 0) {
+//       return res.status(400).json({ message: 'Price must be a positive number.' });
+//     }
+
+//     if (!['college', 'school'].includes(type.toLowerCase())) {
+//       return res.status(400).json({ message: 'Invalid type. Must be either "college" or "school".' });
+//     }
+
+//     const Model = type.toLowerCase() === 'college' ? College : School;
+//     const institution = await Model.findById(id);
+//     if (!institution) {
+//       return res.status(404).json({ message: `${type} not found.` });
+//     }
+
+//     institution.price = price;
+//     await institution.save();
+
+//     res.status(200).json({
+//       message: `Price set successfully for ${type}.`,
+//       data: institution
+//     });
+
+//   } catch (error) {
+//     console.error('Error setting price:', error);
+//     res.status(500).json({ message: 'Server error while setting price.' });
+//   }
+// };
+
+
+exports.deleteSchoolPrice = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admin can delete price.' });
+    }
+    const school = await School.findById(id);
+    if (!school) {
+      return res.status(404).json({ message: 'School not found.' });
+    }
+    school.price = null;
+    school.updatedBy = req.user._id; 
+    await school.save();
+
+    res.status(200).json({ message: 'Price removed from school successfully.', data: school });
+
+  } catch (error) {
+    console.error('Error removing school price:', error);
+    res.status(500).json({ message: 'Server error while removing price.' });
+  }
+};
+
+
+
+exports.deleteCollegePrice = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admin can delete price.' });
+    }
+
+    const college = await College.findById(id);
+
+    if (!college) {
+      return res.status(404).json({ message: 'College not found.' });
+    }
+
+    college.price = null;
+    college.updatedBy = req.user._id; 
+    await college.save();
+
+    res.status(200).json({ message: 'Price removed from college successfully.', data: college });
+
+  } catch (error) {
+    console.error('Error removing college price:', error);
+    res.status(500).json({ message: 'Server error while removing price.' });
   }
 };
