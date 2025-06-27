@@ -203,11 +203,11 @@ exports.completeProfile = async (req, res) => {
 //   try {
 //     const userId = req.user.id;
 
-//     // === Fetch User with Country/State/City populated ===
 //     const user = await User.findById(userId)
 //       .populate('countryId', 'name')
 //       .populate('stateId', 'name')
-//       .populate('cityId', 'name');
+//       .populate('cityId', 'name')
+//       .lean(); // Add `.lean()` to simplify processing
 
 //     if (!user) {
 //       return res.status(404).json({ message: 'User not found.' });
@@ -215,27 +215,29 @@ exports.completeProfile = async (req, res) => {
 
 //     const classId = user.className;
 //     let classDetails = '';
+//     let validClassName = classId;
 
-//     // === Fetch classOrYear name from AdminSchool or AdminCollege using classId ===
 //     if (mongoose.Types.ObjectId.isValid(classId)) {
-//       const adminSchool = await AdminSchool.findById(classId).populate('className', 'name');
-//       const adminCollege = await AdminCollege.findById(classId).populate('className', 'name');
-
+//       const adminSchool = await AdminSchool.findById(classId).populate('className', 'name').lean();
+//       const adminCollege = await AdminCollege.findById(classId).populate('className', 'name').lean();
 //       const entry = adminSchool || adminCollege;
 
 //       if (entry && entry.className && typeof entry.className === 'object') {
 //         classDetails = entry.className.name;
+//         validClassName = entry.className._id;
+//       } else {
+//         // className reference is invalid (e.g., deleted), so ignore it
+//         validClassName = null;
 //       }
 //     }
 
-//     // === Add base URL to Aadhar & Marksheet if available ===
+//     // Add base URL to Aadhar & Marksheet if available
 //     const baseUrl = `${req.protocol}://${req.get('host')}`;
 //     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
 //     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
 
-//     // === Construct formatted user object ===
 //     const formattedUser = {
-//       ...user._doc,
+//       ...user,
 //       country: user.countryId?.name || '',
 //       state: user.stateId?.name || '',
 //       city: user.cityId?.name || '',
@@ -244,9 +246,14 @@ exports.completeProfile = async (req, res) => {
 //       classOrYear: classDetails || '',
 //     };
 
+//     // Clean up invalid className from response
+//     if (!validClassName) {
+//       formattedUser.className = null;
+//     }
+
 //     res.status(200).json({
 //       message: 'User profile fetched successfully.',
-//       user: formattedUser
+//       user: formattedUser,
 //     });
 //   } catch (error) {
 //     console.error('Get User Profile Error:', error);
@@ -258,63 +265,63 @@ exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const user = await User.findById(userId)
+    let user = await User.findById(userId)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
-      .populate('cityId', 'name')
-      .lean(); // Add `.lean()` to simplify processing
+      .populate('cityId', 'name');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    const classId = user.className;
-    let classDetails = '';
-    let validClassName = classId;
+    let classId = user.className;
+    let classDetails = null;
 
     if (mongoose.Types.ObjectId.isValid(classId)) {
-      const adminSchool = await AdminSchool.findById(classId).populate('className', 'name').lean();
-      const adminCollege = await AdminCollege.findById(classId).populate('className', 'name').lean();
-      const entry = adminSchool || adminCollege;
-
-      if (entry && entry.className && typeof entry.className === 'object') {
-        classDetails = entry.className.name;
-        validClassName = entry.className._id;
-      } else {
-        // className reference is invalid (e.g., deleted), so ignore it
-        validClassName = null;
-      }
+      classDetails =
+        (await School.findById(classId)) ||
+        (await College.findById(classId));
+        // (await Institute.findById(classId));
     }
 
-    // Add base URL to Aadhar & Marksheet if available
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
 
+    // ❗ If price is null, remove className from both response and DB
+    if (!classDetails || classDetails.price == null) {
+      classId = null;
+
+      // update in DB as well
+      await User.findByIdAndUpdate(userId, { className: null });
+      user.className = null; // update current object for response
+    }
+
     const formattedUser = {
-      ...user,
+      ...user._doc,
+      className: classId,
       country: user.countryId?.name || '',
       state: user.stateId?.name || '',
       city: user.cityId?.name || '',
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
-      classOrYear: classDetails || '',
     };
 
-    // Clean up invalid className from response
-    if (!validClassName) {
-      formattedUser.className = null;
+    if (classDetails && classDetails.price != null) {
+      formattedUser.classOrYear = classDetails.name;
     }
 
     res.status(200).json({
       message: 'User profile fetched successfully.',
-      user: formattedUser,
+      user: formattedUser
     });
   } catch (error) {
     console.error('Get User Profile Error:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
 
 
@@ -365,8 +372,6 @@ exports.getUserProfile = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
-
-
 
 
 exports.sendResetOTP = async (req, res) => {
@@ -575,98 +580,12 @@ exports.updateUser = async (req, res) => {
 };
 
 
-// exports.updateProfile = async (req, res) => {
-//   try {
-//     const userId = req.user.id;
-   
-//     const existingUser = await User.findById(userId);
-
-//     if (!existingUser) {
-//       return res.status(404).json({ message: 'User not found' });
-//     }
-
-//     if (existingUser.status === 'yes') {
-//       return res.status(403).json({ message: 'You are not eligible to update.' });
-//     }
-//     let {
-//       countryId,
-//       stateId,
-//       cityId,
-//       pincode,
-//       studentType,
-//       schoolName,
-//       instituteName,
-//       collegeName,
-//       className
-//     } = req.body;
-
-//     if (pincode && !/^\d+$/.test(pincode)) {
-//       return res.status(400).json({ message: 'Invalid Pincode' });
-//     }
-
-  
-//     const updatedFields = {
-//       pincode,
-//       studentType,
-//       schoolName,
-//       instituteName,
-//       collegeName,
-//       // status: 'no' 
-//     };
-
-//     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
-//     if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
-//     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
-//     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
-
-//     if (req.files?.aadharCard?.[0]) {
-//       updatedFields.aadharCard = req.files.aadharCard[0].path;
-//     }
-//     if (req.files?.marksheet?.[0]) {
-//       updatedFields.marksheet = req.files.marksheet[0].path;
-//     }
-
-    
-//     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
-//       .populate('countryId')
-//       .populate('stateId')
-//       .populate('cityId');
-
-    
-//     let classDetails = null;
-//     if (mongoose.Types.ObjectId.isValid(className)) {
-//       classDetails =
-//         (await School.findById(className)) ||
-//         (await College.findById(className)) ;
-//         // (await Institute.findById(className));
-//     }
-//     const formattedUser = {
-//       ...user._doc,
-//       country: user.countryId?.name || '',
-//       state: user.stateId?.name || '',
-//       city: user.cityId?.name || '',
-//       institutionName: schoolName || collegeName || instituteName || '',
-//       institutionType: studentType || '',
-//       classOrYear: classDetails?.name || '',
-//     };
-
-//     res.status(200).json({
-//       message: 'Profile updated. Redirecting to home page.',
-//       user: formattedUser
-//     });
-
-//   } catch (error) {
-//     console.error('Complete Profile Error:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-
+   
     const existingUser = await User.findById(userId);
+
     if (!existingUser) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -674,7 +593,6 @@ exports.updateProfile = async (req, res) => {
     if (existingUser.status === 'yes') {
       return res.status(403).json({ message: 'You are not eligible to update.' });
     }
-
     let {
       countryId,
       stateId,
@@ -697,6 +615,7 @@ exports.updateProfile = async (req, res) => {
       schoolName,
       instituteName,
       collegeName,
+      // status: 'no' 
     };
 
     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
@@ -707,31 +626,22 @@ exports.updateProfile = async (req, res) => {
     if (req.files?.aadharCard?.[0]) {
       updatedFields.aadharCard = req.files.aadharCard[0].path;
     }
-
     if (req.files?.marksheet?.[0]) {
       updatedFields.marksheet = req.files.marksheet[0].path;
     }
 
     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
-      .populate('countryId', 'name')
-      .populate('stateId', 'name')
-      .populate('cityId', 'name');
+      .populate('countryId')
+      .populate('stateId')
+      .populate('cityId');
 
-    // === Fetch classOrYear name from AdminSchool or AdminCollege using className ===
-    let classDetails = '';
+    let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(className)) {
-      const adminSchool = await AdminSchool.findById(className).populate('className', 'name');
-      const adminCollege = await AdminCollege.findById(className).populate('className', 'name');
-      const entry = adminSchool || adminCollege;
-      if (entry?.className?.name) {
-        classDetails = entry.className.name;
-      }
+      classDetails =
+        (await School.findById(className)) ||
+        (await College.findById(className)) ;
+        // (await Institute.findById(className));
     }
-
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
-    if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
-
     const formattedUser = {
       ...user._doc,
       country: user.countryId?.name || '',
@@ -739,7 +649,7 @@ exports.updateProfile = async (req, res) => {
       city: user.cityId?.name || '',
       institutionName: schoolName || collegeName || instituteName || '',
       institutionType: studentType || '',
-      classOrYear: classDetails || '',
+      classOrYear: classDetails?.name || '',
     };
 
     res.status(200).json({
@@ -752,6 +662,98 @@ exports.updateProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+// exports.updateProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     const existingUser = await User.findById(userId);
+//     if (!existingUser) {
+//       return res.status(404).json({ message: 'User not found' });
+//     }
+
+//     if (existingUser.status === 'yes') {
+//       return res.status(403).json({ message: 'You are not eligible to update.' });
+//     }
+
+//     let {
+//       countryId,
+//       stateId,
+//       cityId,
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//       className
+//     } = req.body;
+
+//     if (pincode && !/^\d+$/.test(pincode)) {
+//       return res.status(400).json({ message: 'Invalid Pincode' });
+//     }
+
+//     const updatedFields = {
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//     };
+
+//     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
+//     if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
+//     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
+//     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
+
+//     if (req.files?.aadharCard?.[0]) {
+//       updatedFields.aadharCard = req.files.aadharCard[0].path;
+//     }
+
+//     if (req.files?.marksheet?.[0]) {
+//       updatedFields.marksheet = req.files.marksheet[0].path;
+//     }
+
+//     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
+//       .populate('countryId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('cityId', 'name');
+
+//     // === Fetch classOrYear name from AdminSchool or AdminCollege using className ===
+//     let classDetails = '';
+//     if (mongoose.Types.ObjectId.isValid(className)) {
+//       const adminSchool = await AdminSchool.findById(className).populate('className', 'name');
+//       const adminCollege = await AdminCollege.findById(className).populate('className', 'name');
+//       const entry = adminSchool || adminCollege;
+//       if (entry?.className?.name) {
+//         classDetails = entry.className.name;
+//       }
+//     }
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+//     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
+//     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
+
+//     const formattedUser = {
+//       ...user._doc,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: schoolName || collegeName || instituteName || '',
+//       institutionType: studentType || '',
+//       classOrYear: classDetails || '',
+//     };
+
+//     res.status(200).json({
+//       message: 'Profile updated. Redirecting to home page.',
+//       user: formattedUser
+//     });
+
+//   } catch (error) {
+//     console.error('Complete Profile Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 
