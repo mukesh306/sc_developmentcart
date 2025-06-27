@@ -12,12 +12,8 @@ const AdminCollege = require('../models/admincollege');
     try {
       const { name, price, type } = req.body;
   
-      if (!name || price === undefined || !type) {
-        return res.status(400).json({ message: 'Name, price, and type are required.' });
-      }
-  
-      if (typeof price !== 'number' || price < 0) {
-        return res.status(400).json({ message: 'Price must be a positive number.' });
+      if (!name ||  !type) {
+        return res.status(400).json({ message: 'Name, and type are required.' });
       }
   
       if (!['college', 'school'].includes(type.toLowerCase())) {
@@ -50,6 +46,11 @@ const AdminCollege = require('../models/admincollege');
 
 exports.getSchools = async (req, res) => {
     try {
+    const { price } = req.query; 
+    const filter = {};
+    if (price) {
+      filter.price = { $ne: null }; 
+    }
       const schools = await School.find();
       res.status(200).json(schools);
     } catch (error) {
@@ -58,16 +59,20 @@ exports.getSchools = async (req, res) => {
     }
   };
   
-
-  exports.getCollege = async (req, res) => {
-    try {
-      const colleges = await College.find();
-      res.status(200).json(colleges);
-    } catch (error) {
-      console.error('Error fetching colleges:', error);
-      res.status(500).json({ message: 'Server error while fetching colleges' });
+exports.getCollege = async (req, res) => {
+  try {
+    const { price } = req.query; 
+    const filter = {};
+    if (price) {
+      filter.price = { $ne: null }; 
     }
-  };
+    const colleges = await College.find(filter);
+    res.status(200).json(colleges);
+  } catch (error) {
+    console.error('Error fetching colleges:', error);
+    res.status(500).json({ message: 'Server error while fetching colleges' });
+  }
+};
 
 
   exports.updateInstitution = async (req, res) => {
@@ -84,7 +89,6 @@ exports.getSchools = async (req, res) => {
       }
   
       const Model = type.toLowerCase() === 'college' ? College : School;
-  
       const institution = await Model.findById(id);
       if (!institution) {
         return res.status(404).json({ message: `${type.charAt(0).toUpperCase() + type.slice(1)} not found.` });
@@ -126,19 +130,30 @@ exports.getSchools = async (req, res) => {
     }
   };
 
-  exports.institute = async (req, res) => {
-    try {
-      const schools = await School.find();
-      const colleges = await College.find();
-  
-      const institutes = [...schools, ...colleges];
-  
-      res.status(200).json({ institutes });
-    } catch (error) {
-      console.error('Error fetching schools and colleges:', error);
-      res.status(500).json({ message: 'Server error while fetching data' });
+ exports.institute = async (req, res) => {
+  try {
+    const { price } = req.query;
+
+    const schoolFilter = {};
+    const collegeFilter = {};
+
+    if (price) {
+      schoolFilter.price = { $ne: null };
+      collegeFilter.price = { $ne: null };
     }
-  };
+
+    const schools = await School.find(schoolFilter);
+    const colleges = await College.find(collegeFilter);
+
+    const institutes = [...schools, ...colleges];
+
+    res.status(200).json({ institutes });
+  } catch (error) {
+    console.error('Error fetching schools and colleges:', error);
+    res.status(500).json({ message: 'Server error while fetching data' });
+  }
+};
+
   
   exports.deleteCollege = async (req, res) => {
     try {
