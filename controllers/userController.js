@@ -261,11 +261,11 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const user = await User.findById(userId)
+
+    let user = await User.findById(userId)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
       .populate('cityId', 'name');
@@ -273,13 +273,14 @@ exports.getUserProfile = async (req, res) => {
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
+
     let classId = user.className;
     let classDetails = null;
 
     if (mongoose.Types.ObjectId.isValid(classId)) {
       classDetails =
         (await School.findById(classId)) ||
-        (await College.findById(classId)) ;
+        (await College.findById(classId));
         // (await Institute.findById(classId));
     }
 
@@ -287,13 +288,18 @@ exports.getUserProfile = async (req, res) => {
     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
 
+    // ❗ If price is null, remove className from both response and DB
     if (!classDetails || classDetails.price == null) {
       classId = null;
+
+      // update in DB as well
+      await User.findByIdAndUpdate(userId, { className: null });
+      user.className = null; // update current object for response
     }
 
     const formattedUser = {
       ...user._doc,
-      className: classId, 
+      className: classId,
       country: user.countryId?.name || '',
       state: user.stateId?.name || '',
       city: user.cityId?.name || '',
@@ -314,6 +320,7 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
