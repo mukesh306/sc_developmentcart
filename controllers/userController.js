@@ -278,8 +278,8 @@ exports.getUserProfile = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(classId)) {
       classDetails =
         (await School.findById(classId)) ||
-        (await College.findById(classId)) ||
-        (await Institute.findById(classId));
+        (await College.findById(classId)) ;
+        // (await Institute.findById(classId));
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
