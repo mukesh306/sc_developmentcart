@@ -1219,8 +1219,9 @@ exports.Dashboard = async (req, res) => {
       dailyExperience: 1,
       weeklyBonus: 1,
       monthlyBonus: 1,
-      experiencePoint: 1,
-      totalquiz: 1
+      experiencePoint: 1, 
+      totalquiz: 1,
+      totalnoofquestion: 1
     }).sort({ createdAt: -1 }).lean();
 
     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
@@ -1313,6 +1314,8 @@ exports.Dashboard = async (req, res) => {
       },
       levelBonusPoint,
       experiencePoint: markingSetting?.experiencePoint || 0,
+      totalNoOfQuestion: markingSetting?.totalnoofquestion || 0,
+      totalQuiz: markingSetting?.totalquiz || 0,
       level,
       generalIq: assignedLearnings, // each item contains learning1–4 + their IQ
       assignedLearnings,

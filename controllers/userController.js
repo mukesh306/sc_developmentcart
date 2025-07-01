@@ -300,10 +300,8 @@ exports.getUserProfile = async (req, res) => {
       } else if (classDetails instanceof College) {
         institutionUpdatedBy = classDetails.updatedBy;
       }
-
       if (institutionUpdatedBy) {
         await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
-        // Re-fetch user to include populated updatedBy
         user = await User.findById(userId)
           .populate('countryId', 'name')
           .populate('stateId', 'name')
@@ -319,7 +317,7 @@ exports.getUserProfile = async (req, res) => {
       city: user.cityId?.name || '',
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
-      updatedBy: user.updatedBy || null // 👈 Include populated admin data
+      updatedBy: user.updatedBy || null 
     };
 
     if (classDetails && classDetails.price != null) {

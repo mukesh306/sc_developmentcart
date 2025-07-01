@@ -435,6 +435,10 @@ exports.TopicWithLeaning = async (req, res) => {
 //   }
 // };
 
+
+
+
+
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -536,7 +540,6 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
-
 
 
 

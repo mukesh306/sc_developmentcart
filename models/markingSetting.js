@@ -12,12 +12,15 @@ const MarkingSettingSchema = new mongoose.Schema({
   negativeMarking: {
     type: Number
   },
+  
   totalquiz: {
     type: Number
   },
+
   totalnoofquestion: {
     type: Number
   },
+
   weeklyBonus: {
     type: Number
   },
