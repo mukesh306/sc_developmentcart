@@ -99,36 +99,83 @@ exports.updateLearning = async (req, res) => {
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
-    // Step 1: Get scores sorted by earliest scoreDate and group by date
+
     const rawScores = await TopicScore.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-      { $sort: { scoreDate: 1 } }, // earliest firstg
+      { $sort: { scoreDate: 1 } }, 
       {
         $group: {
           _id: {
             $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
           },
-          doc: { $first: "$$ROOT" } // get first score per day
+          doc: { $first: "$$ROOT" }
         }
       },
-      {
-        $replaceRoot: { newRoot: "$doc" }
-      },
-      { $sort: { scoreDate: -1 } } // optional: latest dates on top
+      { $replaceRoot: { newRoot: "$doc" } },
+      { $sort: { scoreDate: 1 } } 
     ]);
-    // Step 2: Populate topicId and learningId manually
+
     const populatedScores = await TopicScore.populate(rawScores, [
       { path: 'topicId', select: 'topic' },
       { path: 'learningId', select: 'name' }
     ]);
 
-    // Step 3: Return response
-    res.status(200).json({ scores: populatedScores });
+    
+    const todayStr = moment().format('YYYY-MM-DD');
+    const todayScores = [];
+    const otherScores = [];
+
+    for (const score of populatedScores) {
+      const scoreDateStr = moment(score.scoreDate).format('YYYY-MM-DD');
+      if (scoreDateStr === todayStr) {
+        todayScores.push(score);
+      } else {
+        otherScores.push(score);
+      }
+    }
+
+    
+    const finalScores = [...todayScores, ...otherScores];
+
+    res.status(200).json({ scores: finalScores });
+
   } catch (error) {
     console.error('Error in scoreCard:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// exports.scoreCard = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const rawScores = await TopicScore.aggregate([
+//       { $match: { userId: new mongoose.Types.ObjectId(userId) } },
+//       { $sort: { scoreDate: 1 } }, 
+//       {
+//         $group: {
+//           _id: {
+//             $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+//           },
+//           doc: { $first: "$$ROOT" } 
+//         }
+//       },
+//       {
+//         $replaceRoot: { newRoot: "$doc" }
+//       },
+//       { $sort: { scoreDate: -1 } } 
+//     ]);   
+//     const populatedScores = await TopicScore.populate(rawScores, [
+//       { path: 'topicId', select: 'topic' },
+//       { path: 'learningId', select: 'name' }
+//     ]);
+//     res.status(200).json({ scores: populatedScores });
+//   } catch (error) {
+//     console.error('Error in scoreCard:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.Practicestrike = async (req, res) => {
