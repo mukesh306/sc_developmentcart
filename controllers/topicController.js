@@ -188,7 +188,6 @@ exports.getAllTopicNames = async (req, res) => {
 };
 
 
-
 // exports.TopicWithLeaning = async (req, res) => {
 //   try {
 //     const { id } = req.params;
@@ -376,7 +375,6 @@ exports.TopicWithLeaning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // exports.getTopicById = async (req, res) => {
 //   try {

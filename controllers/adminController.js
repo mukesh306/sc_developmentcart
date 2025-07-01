@@ -12,31 +12,48 @@ exports.registerAdmin = async (req, res) => {
     }
 
     const { email, password, session, startDate, endDate } = req.body;
-    const existing = await Admin1.findOne({ email });
+
+   
+    const existing = await Admin1.findOne({
+      email,
+      $or: [
+        { session },
+        {
+          $and: [
+            { startDate: { $lte: new Date(endDate) } },
+            { endDate: { $gte: new Date(startDate) } }
+          ]
+        }
+      ]
+    });
+
     if (existing) {
-      return res.status(409).json({ message: 'Admin already exists.' });
+      return res.status(409).json({
+        message: 'Admin already exists with this session or overlapping dates.',
+      });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
     const newAdmin = new Admin1({
       email,
       password: hashedPassword,
       session,
       startDate,
       endDate,
-      createdBy: req.user._id 
+      createdBy: req.user._id,
     });
 
     await newAdmin.save();
 
-    res.status(201).json({ message: 'Admin created successfully.', admin: newAdmin });
+    res.status(201).json({
+      message: 'Admin created successfully.',
+      admin: newAdmin,
+    });
   } catch (error) {
+    console.error('Register error:', error);
     res.status(500).json({ message: 'Server error.', error: error.message });
   }
 };
-
-
 
 exports.getAllAdmins = async (req, res) => {
   try {
@@ -54,7 +71,6 @@ exports.getAllAdmins = async (req, res) => {
     });
   }
 };
-
 
 
 exports.deleteAdmin = async (req, res) => {
