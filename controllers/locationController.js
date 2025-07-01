@@ -13,12 +13,10 @@ exports.createLocation = async (req, res) => {
       return res.status(400).json({ message: 'Invalid location type.' });
     }
 
-   
     if ((type === 'state' || type === 'city') && !parentId) {
       return res.status(400).json({ message: 'Parent ID is required for state and city.' });
     }
 
- 
     if (parentId) {
       const parent = await location.findById(parentId);
       if (!parent) {
@@ -33,8 +31,7 @@ exports.createLocation = async (req, res) => {
         return res.status(400).json({ message: 'City must belong to a state.' });
       }
     }
-
-    
+  
     const existing = await location.findOne({
       name: name.trim(),
       type,

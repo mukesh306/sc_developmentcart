@@ -6,8 +6,8 @@ const School = require('../models/school');
 const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 const Admin1 = require('../models/admin1'); 
-
-
+const fs = require('fs');
+const path = require('path');
 exports.signup = async (req, res) => {
   try {
     const {
@@ -605,10 +605,93 @@ exports.updateUser = async (req, res) => {
 };
 
 
+// exports.updateProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+   
+//     const existingUser = await User.findById(userId);
+
+//     if (!existingUser) {
+//       return res.status(404).json({ message: 'User not found' });
+//     }
+
+//     if (existingUser.status === 'yes') {
+//       return res.status(403).json({ message: 'You are not eligible to update.' });
+//     }
+//     let {
+//       countryId,
+//       stateId,
+//       cityId,
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//       className
+//     } = req.body;
+
+//     if (pincode && !/^\d+$/.test(pincode)) {
+//       return res.status(400).json({ message: 'Invalid Pincode' });
+//     }
+
+//     const updatedFields = {
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//       // status: 'no' 
+//     };
+
+//     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
+//     if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
+//     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
+//     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
+
+//     if (req.files?.aadharCard?.[0]) {
+//       updatedFields.aadharCard = req.files.aadharCard[0].path;
+//     }
+//     if (req.files?.marksheet?.[0]) {
+//       updatedFields.marksheet = req.files.marksheet[0].path;
+//     }
+
+//     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
+//       .populate('countryId')
+//       .populate('stateId')
+//       .populate('cityId');
+
+//     let classDetails = null;
+//     if (mongoose.Types.ObjectId.isValid(className)) {
+//       classDetails =
+//         (await School.findById(className)) ||
+//         (await College.findById(className)) ;
+//         // (await Institute.findById(className));
+//     }
+//     const formattedUser = {
+//       ...user._doc,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: schoolName || collegeName || instituteName || '',
+//       institutionType: studentType || '',
+//       classOrYear: classDetails?.name || '',
+//     };
+
+//     res.status(200).json({
+//       message: 'Profile updated. Redirecting to home page.',
+//       user: formattedUser
+//     });
+
+//   } catch (error) {
+//     console.error('Complete Profile Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-   
+
     const existingUser = await User.findById(userId);
 
     if (!existingUser) {
@@ -618,6 +701,7 @@ exports.updateProfile = async (req, res) => {
     if (existingUser.status === 'yes') {
       return res.status(403).json({ message: 'You are not eligible to update.' });
     }
+
     let {
       countryId,
       stateId,
@@ -639,8 +723,7 @@ exports.updateProfile = async (req, res) => {
       studentType,
       schoolName,
       instituteName,
-      collegeName,
-      // status: 'no' 
+      collegeName
     };
 
     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
@@ -651,22 +734,35 @@ exports.updateProfile = async (req, res) => {
     if (req.files?.aadharCard?.[0]) {
       updatedFields.aadharCard = req.files.aadharCard[0].path;
     }
+
     if (req.files?.marksheet?.[0]) {
       updatedFields.marksheet = req.files.marksheet[0].path;
     }
 
+    // === Fetch class updatedBy and add to user update ===
+    let classDetails = null;
+    if (mongoose.Types.ObjectId.isValid(className)) {
+      classDetails = await School.findById(className) || await College.findById(className);
+      if (classDetails?.updatedBy) {
+        updatedFields.updatedBy = classDetails.updatedBy;
+      }
+    }
+
+    // === Update user ===
     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
       .populate('countryId')
       .populate('stateId')
-      .populate('cityId');
+      .populate('cityId')
+      .populate('updatedBy', 'email session startDate endDate'); 
 
-    let classDetails = null;
-    if (mongoose.Types.ObjectId.isValid(className)) {
-      classDetails =
-        (await School.findById(className)) ||
-        (await College.findById(className)) ;
-        // (await Institute.findById(className));
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
     }
+    if (user.marksheet && fs.existsSync(user.marksheet)) {
+      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+    }
+
     const formattedUser = {
       ...user._doc,
       country: user.countryId?.name || '',
@@ -675,15 +771,16 @@ exports.updateProfile = async (req, res) => {
       institutionName: schoolName || collegeName || instituteName || '',
       institutionType: studentType || '',
       classOrYear: classDetails?.name || '',
+      updatedBy: user.updatedBy || null
     };
 
-    res.status(200).json({
+    return res.status(200).json({
       message: 'Profile updated. Redirecting to home page.',
       user: formattedUser
     });
 
   } catch (error) {
-    console.error('Complete Profile Error:', error);
+    console.error('Update Profile Error:', error);
     res.status(500).json({ message: error.message });
   }
 };
