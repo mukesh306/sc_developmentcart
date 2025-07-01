@@ -102,7 +102,7 @@ exports.scoreCard = async (req, res) => {
     // Step 1: Get scores sorted by earliest scoreDate and group by date
     const rawScores = await TopicScore.aggregate([
       { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-      { $sort: { scoreDate: 1 } }, // earliest first
+      { $sort: { scoreDate: 1 } }, // earliest firstg
       {
         $group: {
           _id: {
