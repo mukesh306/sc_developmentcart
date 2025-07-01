@@ -188,7 +188,6 @@ exports.getAllTopicNames = async (req, res) => {
 };
 
 
-
 // exports.TopicWithLeaning = async (req, res) => {
 //   try {
 //     const { id } = req.params;
@@ -377,7 +376,6 @@ exports.TopicWithLeaning = async (req, res) => {
   }
 };
 
-
 // exports.getTopicById = async (req, res) => {
 //   try {
 //     const { id } = req.params;
@@ -436,6 +434,10 @@ exports.TopicWithLeaning = async (req, res) => {
 //     });
 //   }
 // };
+
+
+
+
 
 exports.getTopicById = async (req, res) => {
   try {
@@ -538,7 +540,6 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
-
 
 
 

@@ -45,8 +45,6 @@ exports.updateQuote = async (req, res) => {
   }
 };
 
-
-
 exports.StatusUpdateQuote = async (req, res) => {
   try {
     const quoteId = req.params.id;
