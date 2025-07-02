@@ -1135,7 +1135,6 @@ exports.deleteTopicWithQuiz = async (req, res) => {
   }
 };
 
-
 exports.getAllQuizzesByLearningId = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1152,7 +1151,6 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
     } else if (user.className) {
       query.classId = new mongoose.Types.ObjectId(user.className);
     }
-
 
     const learningData = await Learning.findById(id).select('name').lean();
     if (!learningData) {
@@ -1171,16 +1169,17 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
       return res.status(404).json({ message: 'No marking settings found.' });
     }
 
-    const { totalquiz, totalnoofquestion } = markingSetting;
+    const { totalquiz: timeBasedOnQuestions, totalnoofquestion: quizLimit } = markingSetting;
+
     const allQuizzes = await Quiz.find({ topicId: { $in: topicIds } }).lean();
     const shuffledQuizzes = allQuizzes.sort(() => 0.5 - Math.random());
-    const selectedQuizzes = shuffledQuizzes.slice(0, totalquiz || allQuizzes.length);
+    const selectedQuizzes = shuffledQuizzes.slice(0, quizLimit || allQuizzes.length);
 
     res.status(200).json({
       message: 'Quizzes fetched successfully.',
       learningName: learningData.name,
       totalQuestions: selectedQuizzes.length,
-      timeLimitInSeconds: totalnoofquestion * 60,
+      timeLimitInSeconds: timeBasedOnQuestions * 60,
       quizzes: selectedQuizzes
     });
   } catch (error) {
@@ -1188,6 +1187,7 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
@@ -1268,8 +1268,6 @@ exports.PracticescoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
 
 
 exports.StrictScore = async (req, res) => {
