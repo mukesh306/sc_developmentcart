@@ -285,29 +285,20 @@ exports.getUserProfile = async (req, res) => {
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-    // ✅ Only prepend baseUrl if path is relative (starts with uploads/)
-    if (user.aadharCard && user.aadharCard.startsWith('uploads/')) {
-      user.aadharCard = `${baseUrl}/${user.aadharCard}`;
+    // ✅ Convert to public URLs just like completeProfile
+    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+    }
+    if (user.marksheet && fs.existsSync(user.marksheet)) {
+      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }
 
-    if (user.marksheet && user.marksheet.startsWith('uploads/')) {
-      user.marksheet = `${baseUrl}/${user.marksheet}`;
-    }
-
-    // Handle invalid class (no price)
     if (!classDetails || classDetails.price == null) {
       classId = null;
       await User.findByIdAndUpdate(userId, { className: null });
       user.className = null;
     } else {
-      let institutionUpdatedBy = null;
-
-      if (classDetails instanceof School) {
-        institutionUpdatedBy = classDetails.updatedBy;
-      } else if (classDetails instanceof College) {
-        institutionUpdatedBy = classDetails.updatedBy;
-      }
-
+      let institutionUpdatedBy = classDetails?.updatedBy || null;
       if (institutionUpdatedBy) {
         await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
         user = await User.findById(userId)
@@ -315,6 +306,14 @@ exports.getUserProfile = async (req, res) => {
           .populate('stateId', 'name')
           .populate('cityId', 'name')
           .populate('updatedBy', 'email session startDate endDate');
+
+        // Reapply image URL formatting after re-fetch
+        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+        }
+        if (user.marksheet && fs.existsSync(user.marksheet)) {
+          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+        }
       }
     }
 
@@ -337,12 +336,12 @@ exports.getUserProfile = async (req, res) => {
       message: 'User profile fetched successfully.',
       user: formattedUser
     });
-
   } catch (error) {
     console.error('Get User Profile Error:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
