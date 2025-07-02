@@ -260,7 +260,6 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -285,9 +284,17 @@ exports.getUserProfile = async (req, res) => {
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
-    if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
 
+    // ✅ Only prepend baseUrl if path is relative (starts with uploads/)
+    if (user.aadharCard && user.aadharCard.startsWith('uploads/')) {
+      user.aadharCard = `${baseUrl}/${user.aadharCard}`;
+    }
+
+    if (user.marksheet && user.marksheet.startsWith('uploads/')) {
+      user.marksheet = `${baseUrl}/${user.marksheet}`;
+    }
+
+    // Handle invalid class (no price)
     if (!classDetails || classDetails.price == null) {
       classId = null;
       await User.findByIdAndUpdate(userId, { className: null });
@@ -300,15 +307,17 @@ exports.getUserProfile = async (req, res) => {
       } else if (classDetails instanceof College) {
         institutionUpdatedBy = classDetails.updatedBy;
       }
+
       if (institutionUpdatedBy) {
         await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
         user = await User.findById(userId)
           .populate('countryId', 'name')
           .populate('stateId', 'name')
           .populate('cityId', 'name')
-           .populate('updatedBy', 'email session startDate endDate');
+          .populate('updatedBy', 'email session startDate endDate');
       }
     }
+
     const formattedUser = {
       ...user._doc,
       className: classId,
@@ -317,7 +326,7 @@ exports.getUserProfile = async (req, res) => {
       city: user.cityId?.name || '',
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
-      updatedBy: user.updatedBy || null 
+      updatedBy: user.updatedBy || null
     };
 
     if (classDetails && classDetails.price != null) {
@@ -328,6 +337,7 @@ exports.getUserProfile = async (req, res) => {
       message: 'User profile fetched successfully.',
       user: formattedUser
     });
+
   } catch (error) {
     console.error('Get User Profile Error:', error);
     res.status(500).json({ message: error.message });
