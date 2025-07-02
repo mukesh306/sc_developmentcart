@@ -174,3 +174,63 @@ exports.verifyOtp = async (req, res) => {
     res.status(500).send('Server error');
   }
 }; 
+
+
+
+exports.updateAdmin = async (req, res) => {
+  try {
+    if (req.user.role !== 'superadmin') {
+      return res.status(403).json({ message: 'Only superadmin can update admins.' });
+    }
+
+    const { id } = req.params;
+    const { email, password, session, startDate, endDate } = req.body;
+
+    const existingAdmin = await Admin1.findById(id);
+    if (!existingAdmin) {
+      return res.status(404).json({ message: 'Admin not found.' });
+    }
+
+    // Check for duplicate session or overlapping dates (excluding self)
+    const duplicate = await Admin1.findOne({
+      _id: { $ne: id },
+      email,
+      $or: [
+        { session },
+        {
+          $and: [
+            { startDate: { $lte: new Date(endDate) } },
+            { endDate: { $gte: new Date(startDate) } }
+          ]
+        }
+      ]
+    });
+
+    if (duplicate) {
+      return res.status(409).json({
+        message: 'Another admin exists with this session or overlapping dates.',
+      });
+    }
+
+    // Update fields
+    existingAdmin.email = email;
+    existingAdmin.session = session;
+    existingAdmin.startDate = startDate;
+    existingAdmin.endDate = endDate;
+
+    if (password) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      existingAdmin.password = hashedPassword;
+    }
+
+    await existingAdmin.save();
+
+    res.status(200).json({
+      message: 'Admin updated successfully.',
+      admin: existingAdmin,
+    });
+  } catch (error) {
+    console.error('Update error:', error);
+    res.status(500).json({ message: 'Server error.', error: error.message });
+  }
+};
