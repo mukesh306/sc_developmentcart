@@ -385,7 +385,7 @@ exports.getUserProfile = async (req, res) => {
   const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY');
   const currentDate = moment();
 
-  if (endDate.isAfter(currentDate, 'day')) {
+  if (endDate.isBefore(currentDate, 'day')) {
     await User.findByIdAndUpdate(userId, { status: 'no' });
     user.status = 'no';
   }
