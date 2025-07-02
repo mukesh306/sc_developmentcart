@@ -8,6 +8,7 @@ const nodemailer = require('nodemailer');
 const Admin1 = require('../models/admin1'); 
 const fs = require('fs');
 const path = require('path');
+const moment = require('moment');
 exports.signup = async (req, res) => {
   try {
     const {
@@ -261,79 +262,6 @@ exports.completeProfile = async (req, res) => {
 // };
 
 
-exports.getUserProfile = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    let user = await User.findById(userId)
-      .populate('countryId', 'name')
-      .populate('stateId', 'name')
-      .populate('cityId', 'name')
-      .populate('updatedBy', 'email session startDate endDate');
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
-    }
-
-    let classId = user.className;
-    let classDetails = null;
-
-    if (mongoose.Types.ObjectId.isValid(classId)) {
-      classDetails =
-        (await School.findById(classId)) ||
-        (await College.findById(classId));
-    }
-
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
-    if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
-
-    if (!classDetails || classDetails.price == null) {
-      classId = null;
-      await User.findByIdAndUpdate(userId, { className: null });
-      user.className = null;
-    } else {
-      let institutionUpdatedBy = null;
-
-      if (classDetails instanceof School) {
-        institutionUpdatedBy = classDetails.updatedBy;
-      } else if (classDetails instanceof College) {
-        institutionUpdatedBy = classDetails.updatedBy;
-      }
-      if (institutionUpdatedBy) {
-        await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
-        user = await User.findById(userId)
-          .populate('countryId', 'name')
-          .populate('stateId', 'name')
-          .populate('cityId', 'name')
-           .populate('updatedBy', 'email session startDate endDate');
-      }
-    }
-    const formattedUser = {
-      ...user._doc,
-      className: classId,
-      country: user.countryId?.name || '',
-      state: user.stateId?.name || '',
-      city: user.cityId?.name || '',
-      institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-      institutionType: user.studentType || '',
-      updatedBy: user.updatedBy || null 
-    };
-
-    if (classDetails && classDetails.price != null) {
-      formattedUser.classOrYear = classDetails.name;
-    }
-
-    res.status(200).json({
-      message: 'User profile fetched successfully.',
-      user: formattedUser
-    });
-  } catch (error) {
-    console.error('Get User Profile Error:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
-
 
 
 
@@ -396,6 +324,181 @@ exports.getUserProfile = async (req, res) => {
 //   }
 // };
 
+
+exports.getUserProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    let user = await User.findById(userId)
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
+      .populate('updatedBy', 'email session startDate endDate');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    let classId = user.className;
+    let classDetails = null;
+
+    if (mongoose.Types.ObjectId.isValid(classId)) {
+      classDetails =
+        (await School.findById(classId)) ||
+        (await College.findById(classId));
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+    }
+    if (user.marksheet && fs.existsSync(user.marksheet)) {
+      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+    }
+
+    if (!classDetails || classDetails.price == null) {
+      classId = null;
+      await User.findByIdAndUpdate(userId, { className: null });
+      user.className = null;
+    } else {
+      let institutionUpdatedBy = classDetails?.updatedBy || null;
+      if (institutionUpdatedBy) {
+        await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+        user = await User.findById(userId)
+          .populate('countryId', 'name')
+          .populate('stateId', 'name')
+          .populate('cityId', 'name')
+          .populate('updatedBy', 'email session startDate endDate');
+
+        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+        }
+        if (user.marksheet && fs.existsSync(user.marksheet)) {
+          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+        }
+      }
+    }
+
+    // ✅ Set status = "no" if endDate is greater than current date
+   if (user.updatedBy?.endDate) {
+  const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY');
+  const currentDate = moment();
+
+  if (endDate.isAfter(currentDate, 'day')) {
+    await User.findByIdAndUpdate(userId, { status: 'no' });
+    user.status = 'no';
+  }
+}
+
+    const formattedUser = {
+      ...user._doc,
+      className: classId,
+      country: user.countryId?.name || '',
+      state: user.stateId?.name || '',
+      city: user.cityId?.name || '',
+      institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+      institutionType: user.studentType || '',
+      updatedBy: user.updatedBy || null
+    };
+
+    if (classDetails && classDetails.price != null) {
+      formattedUser.classOrYear = classDetails.name;
+    }
+
+    res.status(200).json({
+      message: 'User profile fetched successfully.',
+      user: formattedUser
+    });
+
+  } catch (error) {
+    console.error('Get User Profile Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// second last
+
+// exports.getUserProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     let user = await User.findById(userId)
+//       .populate('countryId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('cityId', 'name')
+//       .populate('updatedBy', 'email session startDate endDate');
+
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found.' });
+//     }
+
+//     let classId = user.className;
+//     let classDetails = null;
+
+//     if (mongoose.Types.ObjectId.isValid(classId)) {
+//       classDetails =
+//         (await School.findById(classId)) ||
+//         (await College.findById(classId));
+//     }
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+   
+//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//     }
+//     if (user.marksheet && fs.existsSync(user.marksheet)) {
+//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//     }
+
+//     if (!classDetails || classDetails.price == null) {
+//       classId = null;
+//       await User.findByIdAndUpdate(userId, { className: null });
+//       user.className = null;
+//     } else {
+//       let institutionUpdatedBy = classDetails?.updatedBy || null;
+//       if (institutionUpdatedBy) {
+//         await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+//         user = await User.findById(userId)
+//           .populate('countryId', 'name')
+//           .populate('stateId', 'name')
+//           .populate('cityId', 'name')
+//           .populate('updatedBy', 'email session startDate endDate');
+
+//         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//         }
+//         if (user.marksheet && fs.existsSync(user.marksheet)) {
+//           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//         }
+//       }
+//     }
+
+//     const formattedUser = {
+//       ...user._doc,
+//       className: classId,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+//       institutionType: user.studentType || '',
+//       updatedBy: user.updatedBy || null
+//     };
+
+//     if (classDetails && classDetails.price != null) {
+//       formattedUser.classOrYear = classDetails.name;
+//     }
+
+//     res.status(200).json({
+//       message: 'User profile fetched successfully.',
+//       user: formattedUser
+//     });
+//   } catch (error) {
+//     console.error('Get User Profile Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.sendResetOTP = async (req, res) => {
