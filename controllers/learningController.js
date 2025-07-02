@@ -241,11 +241,9 @@ exports.StrikeBothSameDate = async (req, res) => {
 
     const scores = await LearningScore.find(scoreQuery).lean();
     const topicScores = await TopicScore.find(topicScoreQuery).lean();
-
     const scoreDateMap = new Map();
     const topicDateMap = new Map();
     const allDatesSet = new Set();
-
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       allDatesSet.add(date);
