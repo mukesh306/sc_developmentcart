@@ -261,9 +261,111 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
+exports.getUserProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
 
+    let user = await User.findById(userId)
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
+      .populate('updatedBy', 'email session startDate endDate');
 
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
 
+    let classId = user.className;
+    let classDetails = null;
+
+    if (mongoose.Types.ObjectId.isValid(classId)) {
+      classDetails = await School.findById(classId) || await College.findById(classId);
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+    }
+    if (user.marksheet && fs.existsSync(user.marksheet)) {
+      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+    }
+
+    if (!classDetails || classDetails.price == null) {
+      classId = null;
+      await User.findByIdAndUpdate(userId, { className: null });
+      user.className = null;
+    } else {
+      const institutionUpdatedBy = classDetails?.updatedBy || null;
+      if (institutionUpdatedBy) {
+        await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+
+        // Refetch updated user
+        user = await User.findById(userId)
+          .populate('countryId', 'name')
+          .populate('stateId', 'name')
+          .populate('cityId', 'name')
+          .populate('updatedBy', 'email session startDate endDate');
+
+        // Re-resolve image URLs after refetch
+        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+        }
+        if (user.marksheet && fs.existsSync(user.marksheet)) {
+          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+        }
+      }
+    }
+
+    // ✅ Session Expiry Logic
+    if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
+      const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY', true).startOf('day');
+      const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY', true).endOf('day');
+      const currentDate = moment();
+
+      console.log("▶️ Start Date:", startDate.format());
+      console.log("▶️ End Date  :", endDate.format());
+      console.log("▶️ Current Date:", currentDate.format());
+
+      if (!startDate.isValid() || !endDate.isValid()) {
+        console.warn("⚠️ Invalid date format. Must be DD-MM-YYYY.");
+      } else if (currentDate.isAfter(endDate)) {
+        if (user.status !== 'no') {
+          await User.findByIdAndUpdate(userId, { status: 'no' });
+          user.status = 'no';
+          console.log("⛔ Session expired. User status updated to 'no'.");
+        }
+      } else {
+        console.log("✅ Session active. No change in status.");
+      }
+    }
+
+    const formattedUser = {
+      ...user._doc,
+      status: user.status,
+      className: classId,
+      country: user.countryId?.name || '',
+      state: user.stateId?.name || '',
+      city: user.cityId?.name || '',
+      institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+      institutionType: user.studentType || '',
+      updatedBy: user.updatedBy || null
+    };
+
+    if (classDetails && classDetails.price != null) {
+      formattedUser.classOrYear = classDetails.name;
+    }
+
+    res.status(200).json({
+      message: 'User profile fetched successfully.',
+      user: formattedUser
+    });
+
+  } catch (error) {
+    console.error('Get User Profile Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
 // exports.getUserProfile = async (req, res) => {
 //   try {
@@ -325,103 +427,6 @@ exports.completeProfile = async (req, res) => {
 // };
 
 
-exports.getUserProfile = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    let user = await User.findById(userId)
-      .populate('countryId', 'name')
-      .populate('stateId', 'name')
-      .populate('cityId', 'name')
-      .populate('updatedBy', 'email session startDate endDate');
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
-    }
-
-    let classId = user.className;
-    let classDetails = null;
-
-    if (mongoose.Types.ObjectId.isValid(classId)) {
-      classDetails =
-        (await School.findById(classId)) ||
-        (await College.findById(classId));
-    }
-
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-    }
-    if (user.marksheet && fs.existsSync(user.marksheet)) {
-      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-    }
-
-    if (!classDetails || classDetails.price == null) {
-      classId = null;
-      await User.findByIdAndUpdate(userId, { className: null });
-      user.className = null;
-    } else {
-      let institutionUpdatedBy = classDetails?.updatedBy || null;
-      if (institutionUpdatedBy) {
-        await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
-
-        // Refetch user with updatedBy populated again
-        user = await User.findById(userId)
-          .populate('countryId', 'name')
-          .populate('stateId', 'name')
-          .populate('cityId', 'name')
-          .populate('updatedBy', 'email session startDate endDate');
-
-        // Update file URLs again if needed
-        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-        }
-        if (user.marksheet && fs.existsSync(user.marksheet)) {
-          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-        }
-      }
-    }
-
-    // ✅ Check for endDate expiry and update status to 'no'
-    if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
-      const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY').startOf('day');
-      const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY').endOf('day');
-      const currentDate = moment();
-      if (currentDate.isAfter(endDate)) {
-        if (user.status !== 'no') {
-          await User.findByIdAndUpdate(userId, { status: 'no' });
-          user.status = 'no';
-        }
-      }
-    }
-
-    const formattedUser = {
-      ...user._doc,
-      status: user.status,
-      className: classId,
-      country: user.countryId?.name || '',
-      state: user.stateId?.name || '',
-      city: user.cityId?.name || '',
-      institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-      institutionType: user.studentType || '',
-      updatedBy: user.updatedBy || null
-    };
-
-    if (classDetails && classDetails.price != null) {
-      formattedUser.classOrYear = classDetails.name;
-    }
-
-    res.status(200).json({
-      message: 'User profile fetched successfully.',
-      user: formattedUser
-    });
-
-  } catch (error) {
-    console.error('Get User Profile Error:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
 
 // second last
 
