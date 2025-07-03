@@ -783,6 +783,7 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //   }
 // };
 
+
 exports.calculateQuizScore = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -849,7 +850,6 @@ exports.calculateQuizScore = async (req, res) => {
         userId,
         topicId,
         learningId: topic.learningId,
-        session: userSession, // ✅ Save user's session
         score: roundedScorePercent,
         totalQuestions,
         answeredQuestions,
@@ -861,7 +861,8 @@ exports.calculateQuizScore = async (req, res) => {
         negativeMarking,
         scorePercent: roundedScorePercent,
         scoreDate: new Date(),
-        strickStatus: true
+        strickStatus: true,
+         session: userSession
       });
     }
 
