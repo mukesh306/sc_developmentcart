@@ -261,9 +261,109 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
+exports.getUserProfile = async (req, res) => {
+  try {
+    const userId = req.user.id;
 
+    let user = await User.findById(userId)
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
+      .populate('updatedBy', 'email session startDate endDate');
 
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
 
+    let classId = user.className;
+    let classDetails = null;
+
+    if (mongoose.Types.ObjectId.isValid(classId)) {
+      classDetails = await School.findById(classId) || await College.findById(classId);
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+    }
+    if (user.marksheet && fs.existsSync(user.marksheet)) {
+      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+    }
+
+    if (!classDetails || classDetails.price == null) {
+      classId = null;
+      await User.findByIdAndUpdate(userId, { className: null });
+      user.className = null;
+    } else {
+      const institutionUpdatedBy = classDetails?.updatedBy || null;
+      if (institutionUpdatedBy) {
+        await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+
+        // Refetch updated user
+        user = await User.findById(userId)
+          .populate('countryId', 'name')
+          .populate('stateId', 'name')
+          .populate('cityId', 'name')
+          .populate('updatedBy', 'email session startDate endDate');
+
+        // Re-resolve image URLs after refetch
+        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+        }
+        if (user.marksheet && fs.existsSync(user.marksheet)) {
+          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+        }
+      }
+    }
+
+    // ✅ Session Expiry Logic
+    if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
+      const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY', true).startOf('day');
+      const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY', true).endOf('day');
+      const currentDate = moment();
+
+     
+
+      if (!startDate.isValid() || !endDate.isValid()) {
+        console.warn("⚠️ Invalid date format. Must be DD-MM-YYYY.");
+      } else if (currentDate.isAfter(endDate)) {
+        if (user.status !== 'no') {
+          await User.findByIdAndUpdate(userId, { status: 'no' });
+          user.status = 'no';
+          console.log("⛔ Session expired. User status updated to 'no'.");
+        }
+      } else {
+        console.log("✅ Session active. No change in status.");
+      }
+    }
+
+    const formattedUser = {
+      ...user._doc,
+      status: user.status,
+      className: classId,
+      country: user.countryId?.name || '',
+      state: user.stateId?.name || '',
+      city: user.cityId?.name || '',
+      institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+      institutionType: user.studentType || '',
+      updatedBy: user.updatedBy || null
+    };
+
+    if (classDetails && classDetails.price != null) {
+      formattedUser.classOrYear = classDetails.name;
+    }
+
+    res.status(200).json({
+      message: 'User profile fetched successfully.',
+      user: formattedUser
+    });
+
+  } catch (error) {
+    console.error('Get User Profile Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
 // exports.getUserProfile = async (req, res) => {
 //   try {
@@ -325,97 +425,6 @@ exports.completeProfile = async (req, res) => {
 // };
 
 
-exports.getUserProfile = async (req, res) => {
-  try {
-    const userId = req.user.id;
-
-    let user = await User.findById(userId)
-      .populate('countryId', 'name')
-      .populate('stateId', 'name')
-      .populate('cityId', 'name')
-      .populate('updatedBy', 'email session startDate endDate');
-
-    if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
-    }
-
-    let classId = user.className;
-    let classDetails = null;
-
-    if (mongoose.Types.ObjectId.isValid(classId)) {
-      classDetails =
-        (await School.findById(classId)) ||
-        (await College.findById(classId));
-    }
-
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-    }
-    if (user.marksheet && fs.existsSync(user.marksheet)) {
-      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-    }
-
-    if (!classDetails || classDetails.price == null) {
-      classId = null;
-      await User.findByIdAndUpdate(userId, { className: null });
-      user.className = null;
-    } else {
-      let institutionUpdatedBy = classDetails?.updatedBy || null;
-      if (institutionUpdatedBy) {
-        await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
-        user = await User.findById(userId)
-          .populate('countryId', 'name')
-          .populate('stateId', 'name')
-          .populate('cityId', 'name')
-          .populate('updatedBy', 'email session startDate endDate');
-
-        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-        }
-        if (user.marksheet && fs.existsSync(user.marksheet)) {
-          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-        }
-      }
-    }
-
-    // ✅ Set status = "no" if endDate is greater than current date
-   if (user.updatedBy?.endDate) {
-  const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY');
-  const currentDate = moment();
-
-  if (endDate.isAfter(currentDate, 'day')) {
-    await User.findByIdAndUpdate(userId, { status: 'no' });
-    user.status = 'no';
-  }
-}
-
-    const formattedUser = {
-      ...user._doc,
-      className: classId,
-      country: user.countryId?.name || '',
-      state: user.stateId?.name || '',
-      city: user.cityId?.name || '',
-      institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-      institutionType: user.studentType || '',
-      updatedBy: user.updatedBy || null
-    };
-
-    if (classDetails && classDetails.price != null) {
-      formattedUser.classOrYear = classDetails.name;
-    }
-
-    res.status(200).json({
-      message: 'User profile fetched successfully.',
-      user: formattedUser
-    });
-
-  } catch (error) {
-    console.error('Get User Profile Error:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
 
 // second last
 
@@ -791,12 +800,12 @@ exports.updateUser = async (req, res) => {
 //   }
 // };
 
+
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
     const existingUser = await User.findById(userId);
-
     if (!existingUser) {
       return res.status(404).json({ message: 'User not found' });
     }
@@ -842,12 +851,18 @@ exports.updateProfile = async (req, res) => {
       updatedFields.marksheet = req.files.marksheet[0].path;
     }
 
-    // === Fetch class updatedBy and add to user update ===
+    // === Fetch class updatedBy and admin session ===
     let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(className)) {
       classDetails = await School.findById(className) || await College.findById(className);
       if (classDetails?.updatedBy) {
         updatedFields.updatedBy = classDetails.updatedBy;
+
+        // ✅ Also fetch session from admin and assign to user
+        const admin = await Admin1.findById(classDetails.updatedBy);
+        if (admin?.session) {
+          updatedFields.session = admin.session;
+        }
       }
     }
 
@@ -856,7 +871,7 @@ exports.updateProfile = async (req, res) => {
       .populate('countryId')
       .populate('stateId')
       .populate('cityId')
-      .populate('updatedBy', 'email session startDate endDate'); 
+      .populate('updatedBy', 'email session startDate endDate');
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
@@ -874,6 +889,7 @@ exports.updateProfile = async (req, res) => {
       institutionName: schoolName || collegeName || instituteName || '',
       institutionType: studentType || '',
       classOrYear: classDetails?.name || '',
+      session: user.session || '',
       updatedBy: user.updatedBy || null
     };
 
@@ -894,6 +910,7 @@ exports.updateProfile = async (req, res) => {
 //     const userId = req.user.id;
 
 //     const existingUser = await User.findById(userId);
+
 //     if (!existingUser) {
 //       return res.status(404).json({ message: 'User not found' });
 //     }
@@ -923,7 +940,7 @@ exports.updateProfile = async (req, res) => {
 //       studentType,
 //       schoolName,
 //       instituteName,
-//       collegeName,
+//       collegeName
 //     };
 
 //     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
@@ -939,25 +956,29 @@ exports.updateProfile = async (req, res) => {
 //       updatedFields.marksheet = req.files.marksheet[0].path;
 //     }
 
-//     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
-//       .populate('countryId', 'name')
-//       .populate('stateId', 'name')
-//       .populate('cityId', 'name');
-
-//     // === Fetch classOrYear name from AdminSchool or AdminCollege using className ===
-//     let classDetails = '';
+//     // === Fetch class updatedBy and add to user update ===
+//     let classDetails = null;
 //     if (mongoose.Types.ObjectId.isValid(className)) {
-//       const adminSchool = await AdminSchool.findById(className).populate('className', 'name');
-//       const adminCollege = await AdminCollege.findById(className).populate('className', 'name');
-//       const entry = adminSchool || adminCollege;
-//       if (entry?.className?.name) {
-//         classDetails = entry.className.name;
+//       classDetails = await School.findById(className) || await College.findById(className);
+//       if (classDetails?.updatedBy) {
+//         updatedFields.updatedBy = classDetails.updatedBy;
 //       }
 //     }
 
+//     // === Update user ===
+//     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
+//       .populate('countryId')
+//       .populate('stateId')
+//       .populate('cityId')
+//       .populate('updatedBy', 'email session startDate endDate'); 
+
 //     const baseUrl = `${req.protocol}://${req.get('host')}`;
-//     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
-//     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
+//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//     }
+//     if (user.marksheet && fs.existsSync(user.marksheet)) {
+//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//     }
 
 //     const formattedUser = {
 //       ...user._doc,
@@ -966,19 +987,21 @@ exports.updateProfile = async (req, res) => {
 //       city: user.cityId?.name || '',
 //       institutionName: schoolName || collegeName || instituteName || '',
 //       institutionType: studentType || '',
-//       classOrYear: classDetails || '',
+//       classOrYear: classDetails?.name || '',
+//       updatedBy: user.updatedBy || null
 //     };
 
-//     res.status(200).json({
+//     return res.status(200).json({
 //       message: 'Profile updated. Redirecting to home page.',
 //       user: formattedUser
 //     });
 
 //   } catch (error) {
-//     console.error('Complete Profile Error:', error);
+//     console.error('Update Profile Error:', error);
 //     res.status(500).json({ message: error.message });
 //   }
 // };
+
 
 
 
