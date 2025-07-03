@@ -797,6 +797,10 @@ exports.calculateQuizScore = async (req, res) => {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
+    // ✅ Fetch user's session
+    const user = await User.findById(userId).lean();
+    const userSession = user?.session || null;
+
     const allQuizzes = await Quiz.find({ topicId }).lean();
     const totalQuestions = allQuizzes.length;
     if (totalQuestions === 0) {
@@ -840,15 +844,12 @@ exports.calculateQuizScore = async (req, res) => {
 
     const existingScore = await TopicScore.findOne({ userId, topicId });
 
-    // ✅ Get session from user's updatedBy.admin
-    const user = await User.findById(userId).populate('updatedBy', 'session').lean();
-    const session = user?.updatedBy?.session || null;
-
     if (!existingScore) {
       await TopicScore.create({
         userId,
         topicId,
         learningId: topic.learningId,
+        session: userSession, // ✅ Save user's session
         score: roundedScorePercent,
         totalQuestions,
         answeredQuestions,
@@ -860,8 +861,7 @@ exports.calculateQuizScore = async (req, res) => {
         negativeMarking,
         scorePercent: roundedScorePercent,
         scoreDate: new Date(),
-        strickStatus: true,
-        session // ✅ Save session
+        strickStatus: true
       });
     }
 
