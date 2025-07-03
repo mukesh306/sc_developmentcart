@@ -18,6 +18,7 @@ const userSchema = new mongoose.Schema({
   studentType: { type: String, enum: ['school', 'college', 'institute'] }, 
   instituteName: { type: String },
   className: { type: mongoose.Schema.Types.ObjectId, ref: 'Adminschool' },
+  session: { type: String },
   aadharCard: { type: String },
   marksheet: { type: String },
   resetPasswordOTP: { type: String },
