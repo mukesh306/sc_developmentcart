@@ -260,7 +260,6 @@ exports.completeProfile = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -307,7 +306,7 @@ exports.getUserProfile = async (req, res) => {
           .populate('cityId', 'name')
           .populate('updatedBy', 'email session startDate endDate');
 
-        // Re-resolve image URLs after refetch
+        // Re-resolve image URLs again
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
         }
@@ -317,13 +316,20 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Session Expiry Logic
+    // ✅ Auto update session if changed from updatedBy
+    if (user.updatedBy?.session) {
+      if (!user.session || user.session !== user.updatedBy.session) {
+        await User.findByIdAndUpdate(userId, { session: user.updatedBy.session });
+        user.session = user.updatedBy.session;
+        console.log(`🟢 User session updated to "${user.session}"`);
+      }
+    }
+
+    // ✅ Session expiry logic
     if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
       const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY', true).startOf('day');
       const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY', true).endOf('day');
       const currentDate = moment();
-
-     
 
       if (!startDate.isValid() || !endDate.isValid()) {
         console.warn("⚠️ Invalid date format. Must be DD-MM-YYYY.");
