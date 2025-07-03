@@ -324,6 +324,7 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
+
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -379,12 +380,11 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Check date range and update status only if currentDate is after endDate
+    
     if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
       const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY').startOf('day');
       const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY').endOf('day');
       const currentDate = moment();
-
       if (currentDate.isAfter(endDate)) {
         await User.findByIdAndUpdate(userId, { status: 'no' });
         user.status = 'no';
