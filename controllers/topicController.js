@@ -13,7 +13,7 @@ const Learning = require('../models/learning');
 const LearningScore = require('../models/learningScore');
 const TopicScore = require('../models/topicScore');
 const DescriptionVideo = require('../models/descriptionvideo'); 
-
+const User = require('../models/User');
 
 exports.createTopicWithQuiz = async (req, res) => {
   try {
@@ -797,6 +797,10 @@ exports.calculateQuizScore = async (req, res) => {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
+    // ✅ Fetch user's session
+    const user = await User.findById(userId).lean();
+    const userSession = user?.session || null;
+
     const allQuizzes = await Quiz.find({ topicId }).lean();
     const totalQuestions = allQuizzes.length;
     if (totalQuestions === 0) {
@@ -844,7 +848,8 @@ exports.calculateQuizScore = async (req, res) => {
       await TopicScore.create({
         userId,
         topicId,
-        learningId: topic.learningId, // ✅ save learningId
+        learningId: topic.learningId,
+        session: userSession, // ✅ Save user's session
         score: roundedScorePercent,
         totalQuestions,
         answeredQuestions,
@@ -884,6 +889,7 @@ exports.calculateQuizScore = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
