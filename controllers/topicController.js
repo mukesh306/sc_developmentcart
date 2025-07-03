@@ -13,7 +13,7 @@ const Learning = require('../models/learning');
 const LearningScore = require('../models/learningScore');
 const TopicScore = require('../models/topicScore');
 const DescriptionVideo = require('../models/descriptionvideo'); 
-
+const User = require('../models/User');
 
 exports.createTopicWithQuiz = async (req, res) => {
   try {
