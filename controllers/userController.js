@@ -365,12 +365,15 @@ exports.getUserProfile = async (req, res) => {
       let institutionUpdatedBy = classDetails?.updatedBy || null;
       if (institutionUpdatedBy) {
         await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+
+        // Refetch user with updatedBy populated again
         user = await User.findById(userId)
           .populate('countryId', 'name')
           .populate('stateId', 'name')
           .populate('cityId', 'name')
           .populate('updatedBy', 'email session startDate endDate');
 
+        // Update file URLs again if needed
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
         }
@@ -380,19 +383,22 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    
+    // ✅ Check for endDate expiry and update status to 'no'
     if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
       const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY').startOf('day');
       const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY').endOf('day');
       const currentDate = moment();
       if (currentDate.isAfter(endDate)) {
-        await User.findByIdAndUpdate(userId, { status: 'no' });
-        user.status = 'no';
+        if (user.status !== 'no') {
+          await User.findByIdAndUpdate(userId, { status: 'no' });
+          user.status = 'no';
+        }
       }
     }
 
     const formattedUser = {
       ...user._doc,
+      status: user.status,
       className: classId,
       country: user.countryId?.name || '',
       state: user.stateId?.name || '',
