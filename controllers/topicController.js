@@ -840,11 +840,15 @@ exports.calculateQuizScore = async (req, res) => {
 
     const existingScore = await TopicScore.findOne({ userId, topicId });
 
+    // ✅ Get session from user's updatedBy.admin
+    const user = await User.findById(userId).populate('updatedBy', 'session').lean();
+    const session = user?.updatedBy?.session || null;
+
     if (!existingScore) {
       await TopicScore.create({
         userId,
         topicId,
-        learningId: topic.learningId, // ✅ save learningId
+        learningId: topic.learningId,
         score: roundedScorePercent,
         totalQuestions,
         answeredQuestions,
@@ -856,7 +860,8 @@ exports.calculateQuizScore = async (req, res) => {
         negativeMarking,
         scorePercent: roundedScorePercent,
         scoreDate: new Date(),
-        strickStatus: true
+        strickStatus: true,
+        session // ✅ Save session
       });
     }
 
@@ -884,6 +889,7 @@ exports.calculateQuizScore = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
