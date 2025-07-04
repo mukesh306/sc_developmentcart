@@ -17,6 +17,7 @@ const GenralIQSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+    session:{String},
   },
   { timestamps: true }
 );
