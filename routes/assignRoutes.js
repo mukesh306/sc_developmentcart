@@ -4,11 +4,12 @@ const assignedController = require('../controllers/assignController');
 const auth = require('../middleware/auth');
 const checkUserSession = require('../middleware/checkUserSession');
 
-
 router.post('/assigned',auth, assignedController.createAssigned);
 
 router.get('/assigned', assignedController.getAssignedList);
-router.get('/assignedUser',auth,checkUserSession, assignedController.getAssignedListUser);
+
+router.get('/assignedUser',auth, assignedController.getAssignedListUser);
+
 // router.get('/sessionCheck', auth, checkUserSession, (req, res) => {
 //   res.send("✅ Valid session");
 // });

@@ -69,6 +69,128 @@ exports.PracticeTest = async (req, res) => {
 };
 
 
+// exports.calculateQuizScoreByLearning = async (req, res) => {
+//   try { 
+//     const userId = req.user._id;
+//     const { learningId, topicTotalMarks, negativeMarking: inputNegativeMarking } = req.body;
+
+//     if (!learningId) {
+//       return res.status(400).json({ message: 'learningId is required.' });
+//     }
+
+//     const topics = await Topic.find({ learningId }).lean();
+//     if (!topics.length) {
+//       return res.status(404).json({ message: 'No topics found for this learning.' });
+//     }
+
+//     const topicIds = topics.map(t => t._id.toString());
+
+//     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
+//     const negativeMarking = (typeof inputNegativeMarking === 'number')
+//       ? inputNegativeMarking
+//       : (markingSetting?.negativeMarking || 0);
+
+//     const now = new Date();
+//     const startOfDay = new Date(now.setHours(0, 0, 0, 0));
+//     const endOfDay = new Date(now.setHours(23, 59, 59, 999));
+
+//     const answers = await PracticesQuizAnswer.find({
+//       userId,
+//       learningId,
+//       topicId: { $in: topicIds },
+//       createdAt: { $gte: startOfDay, $lte: endOfDay }
+//     });
+
+//     if (!answers.length) {
+//       return res.status(400).json({ message: 'No answers submitted today for this learning.' });
+//     }
+
+//     const answeredQuestionIds = answers.map(ans => ans.questionId.toString());
+//     const answeredQuizzes = await Quiz.find({ _id: { $in: answeredQuestionIds } }).lean();
+
+//     const totalQuestions = answers.length;
+//     const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
+//       ? topicTotalMarks / totalQuestions
+//       : (markingSetting?.maxMarkPerQuestion || 1);
+
+//     const totalMarks = maxMarkPerQuestion * totalQuestions;
+
+//     let correctCount = 0;
+//     let incorrectCount = 0;
+//     let skippedCount = 0;
+
+//     for (const answer of answers) {
+//       const quiz = answeredQuizzes.find(q => q._id.toString() === answer.questionId.toString());
+//       if (!quiz) continue;
+
+//       if (answer.selectedAnswer === null || answer.selectedAnswer === undefined) {
+//         skippedCount++;
+//       } else if (answer.selectedAnswer === quiz.answer) {
+//         correctCount++;
+//       } else {
+//         incorrectCount++;
+//       }
+//     }
+
+//     const answeredQuestions = correctCount + incorrectCount;
+//     const skippedQuestions = skippedCount;
+
+//     const positiveMarks = correctCount * maxMarkPerQuestion;
+//     const negativeMarks = incorrectCount * negativeMarking;
+
+//     let marksObtained = positiveMarks - negativeMarks;
+//     if (marksObtained < 0) marksObtained = 0;
+
+//     const roundedMarks = parseFloat(marksObtained.toFixed(2));
+//     const scorePercent = (roundedMarks / totalMarks) * 100;
+//     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
+
+//     const existingScore = await LearningScore.findOne({
+//       userId,
+//       learningId,
+//       scoreDate: { $gte: startOfDay, $lte: endOfDay }
+//     });
+
+//     const scoreData = {
+//       userId,
+//       learningId,
+//       score: roundedScorePercent,
+//       totalQuestions,
+//       answeredQuestions,
+//       correctAnswers: correctCount,
+//       incorrectAnswers: incorrectCount,
+//       skippedQuestions,
+//       marksObtained: roundedMarks,
+//       totalMarks,
+//       maxMarkPerQuestion,
+//       negativeMarking,
+//       scorePercent: roundedScorePercent,
+//       scoreDate: startOfDay
+//     };
+
+//     if (!existingScore) {
+//       const newScore = new LearningScore({ ...scoreData, strickStatus: true });
+//       await newScore.save();
+
+//       return res.status(200).json({
+//         message: 'Score calculated and saved for today.',
+//         ...scoreData,
+//         strickStatus: true,
+//         saved: true
+//       });
+//     } else {
+//       return res.status(200).json({
+//         message: 'Score already submitted today. New score calculated but not saved.',
+//         ...scoreData,
+//         saved: false
+//       });
+//     }
+//   } catch (error) {
+//     console.error('Error in calculateQuizScoreByLearning:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.calculateQuizScoreByLearning = async (req, res) => {
   try { 
     const userId = req.user._id;
@@ -104,6 +226,9 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     if (!answers.length) {
       return res.status(400).json({ message: 'No answers submitted today for this learning.' });
     }
+
+    const user = await User.findById(userId).lean();
+    const userSession = user?.session || null;
 
     const answeredQuestionIds = answers.map(ans => ans.questionId.toString());
     const answeredQuizzes = await Quiz.find({ _id: { $in: answeredQuestionIds } }).lean();
@@ -148,6 +273,7 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     const existingScore = await LearningScore.findOne({
       userId,
       learningId,
+      session: userSession, // 🆕 Also check session
       scoreDate: { $gte: startOfDay, $lte: endOfDay }
     });
 
@@ -165,7 +291,8 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
       maxMarkPerQuestion,
       negativeMarking,
       scorePercent: roundedScorePercent,
-      scoreDate: startOfDay
+      scoreDate: startOfDay,
+      session: userSession // 🆕 Store session
     };
 
     if (!existingScore) {
@@ -195,58 +322,45 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 // exports.getAssignedListUserpractice = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
-
 //     const user = await User.findById(userId).lean();
 //     if (!user || !user.className) {
 //       return res.status(400).json({ message: 'User className not found.' });
 //     }
-
 //     const assignedList = await Assigned.find({ classId: user.className })
 //       .populate('learning')
 //       .populate('learning2')
 //       .populate('learning3')
 //       .populate('learning4')
 //       .lean();
-
 //     for (let item of assignedList) {
-//       // Add classInfo (from School or College)
 //       let classInfo = await School.findById(item.classId).lean();
 //       if (!classInfo) {
 //         classInfo = await College.findById(item.classId).lean();
 //       }
 //       item.classInfo = classInfo || null;
+//       const getScore = async (learningField) => {
+//         if (item[learningField]?._id) {
+//           const learningScore = await LearningScore.findOne({
+//             userId: userId,
+//             learningId: item[learningField]._id,
+//           }).sort({ createdAt: 1 }).lean();
 
-//       // Fetch first score for learning
-//       if (item.learning?._id) {
-//         const scoreRecord = await LearningScore.findOne({
-//           userId,
-//           learningId: item.learning._id
-//         }).sort({ createdAt: 1 }).lean();
-//         item.learning.firstScore = scoreRecord?.score || null;
-//       }
-
-//       // Fetch first score for learning2
-//       if (item.learning2?._id) {
-//         const scoreRecord2 = await LearningScore.findOne({
-//           userId,
-//           learningId: item.learning2._id
-//         }).sort({ createdAt: 1 }).lean();
-//         item.learning2.firstScore = scoreRecord2?.score || null;
-//       }
-
-//       // Fetch first score for learning3
-//       if (item.learning3?._id) {
-//         const scoreRecord3 = await LearningScore.findOne({
-//           userId,
-//           learningId: item.learning3._id
-//         }).sort({ createdAt: 1 }).lean();
-//         item.learning3.firstScore = scoreRecord3?.score || null;
-//       }
+//           return learningScore?.score ?? null;
+//         }
+//         return null;
+//       };
+//       if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
+//       if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
+//       if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
+//       if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
+//       item.learningAverage = await getScore('learning');
+//       item.learning2Average = await getScore('learning2');
+//       item.learning3Average = await getScore('learning3');
+//       item.learning4Average = await getScore('learning4');
 //     }
-
 //     res.status(200).json({ data: assignedList });
 //   } catch (error) {
-//     console.error('Get Assigned Error:', error);
+//     console.error('Get Assigned Practice Error:', error);
 //     res.status(500).json({ message: 'Internal server error', error: error.message });
 //   }
 // };
@@ -255,14 +369,12 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 exports.getAssignedListUserpractice = async (req, res) => {
   try {
     const userId = req.user._id;
-
-    // Get user data
+    
     const user = await User.findById(userId).lean();
-    if (!user || !user.className) {
-      return res.status(400).json({ message: 'User className not found.' });
+    if (!user || !user.className || !user.session) {
+      return res.status(400).json({ message: 'User className or session not found.' });
     }
 
-    // Fetch assigned list for user's class
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
@@ -270,47 +382,46 @@ exports.getAssignedListUserpractice = async (req, res) => {
       .populate('learning4')
       .lean();
 
-    // Loop through assigned list to add class info and fetch scores
     for (let item of assignedList) {
-      // Add class info (school or college)
+      // Populate class info from School or College
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
 
-      // Helper to get the first LearningScore for a learning field
       const getScore = async (learningField) => {
-        if (item[learningField]?._id) {
+        const learning = item[learningField];
+        if (learning && learning._id) {
           const learningScore = await LearningScore.findOne({
-            userId: userId,
-            learningId: item[learningField]._id,
+            userId,
+            learningId: learning._id,
+            session: user.session   // ✅ Filter by user session
           }).sort({ createdAt: 1 }).lean();
 
-          return learningScore?.score ?? null;
+          return learningScore?.score ?? 0; // Return 0 if no score
         }
-        return null;
+        return 0;
       };
 
-      // Clean up empty learning fields
-      if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
-      if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
-      if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
-      if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
+      // Clean empty learning fields
+      ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
+        if (!item[field] || Object.keys(item[field]).length === 0) {
+          item[field] = null;
+        }
+      });
 
-      // Set learningXAverage from LearningScore
+      // Attach scores by learning and session
       item.learningAverage = await getScore('learning');
       item.learning2Average = await getScore('learning2');
       item.learning3Average = await getScore('learning3');
       item.learning4Average = await getScore('learning4');
     }
 
-    // Send final response
     res.status(200).json({ data: assignedList });
   } catch (error) {
     console.error('Get Assigned Practice Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
 
