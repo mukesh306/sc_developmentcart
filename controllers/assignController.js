@@ -61,17 +61,14 @@ exports.getAssignedList = async (req, res) => {
   }
 };
 
+
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
-
-    // Fetch user and validate className and session
     const user = await User.findById(userId).lean();
     if (!user || !user.className || !user.session) {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
-
-    // Fetch all assigned learnings based on classId
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
@@ -87,20 +84,19 @@ exports.getAssignedListUser = async (req, res) => {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
-
-      // Helper to fetch score for each learning and user's session
+ 
       const getScore = async (learningField) => {
         const learning = item[learningField];
         if (learning && learning._id) {
           const scoreDoc = await TopicScore.findOne({
             userId,
             learningId: learning._id,
-            session: user.session // ✅ Filter by user session
+            session: user.session 
           }).lean();
 
-          return scoreDoc?.score ?? null;
+          return scoreDoc?.score ?? 0;
         }
-        return null;
+        return 0;
       };
 
       // Clean empty learning fields
