@@ -306,20 +306,10 @@ exports.updateAssigned = async (req, res) => {
 //   }
 // };
 
-
 exports.assignBonusPoint = async (req, res) => {
   try {
     const userId = req.user._id;
     const bonuspoint = Number(req.query.bonuspoint);
-
-    const user = await User.findById(userId).lean();
-    if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
-    }
-
-    if (!user.session) {
-      return res.status(400).json({ message: 'User session not found.' });
-    }
 
     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
       .sort({ createdAt: -1 })
@@ -329,9 +319,16 @@ exports.assignBonusPoint = async (req, res) => {
       return res.status(404).json({ message: 'Marking setting not found.' });
     }
 
-    // --- Get scores for the current session ---
-    const scores = await LearningScore.find({ userId, session: user.session, strickStatus: true }).lean();
-    const topicScores = await TopicScore.find({ userId, session: user.session, strickStatus: true }).lean();
+    const user = await User.findById(userId).lean();
+    if (!user || !user.session) {
+      return res.status(404).json({ message: 'User or session not found.' });
+    }
+
+    const session = user.session;
+
+    // --- Calculate current streak using session ---
+    const scores = await LearningScore.find({ userId, session, strickStatus: true }).lean();
+    const topicScores = await TopicScore.find({ userId, session, strickStatus: true }).lean();
 
     const allDatesSet = new Set();
     scores.forEach(score => {
@@ -368,18 +365,19 @@ exports.assignBonusPoint = async (req, res) => {
     }
 
     // --- Update bonus point ---
-    const updated = await User.findByIdAndUpdate(
-      userId,
-      { $inc: !isNaN(bonuspoint) ? { bonuspoint } : {} },
-      { new: true }
-    );
+    let updatedBonus = user.bonuspoint || 0;
+    if (!isNaN(bonuspoint)) {
+      updatedBonus += bonuspoint;
+      await User.findByIdAndUpdate(userId, { bonuspoint: updatedBonus });
+    }
 
+    // --- Prepare response with conditional endDate ---
     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
 
     return res.status(200).json({
       message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
-      bonuspoint: updated.bonuspoint,
+      bonuspoint: updatedBonus,
       weekly: {
         count: weeklyCount,
         startDate: currentStreak.startDate,
@@ -399,6 +397,7 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
  exports.getAssignedwithClass = async (req, res) => {
