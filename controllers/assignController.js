@@ -216,14 +216,14 @@ exports.updateAssigned = async (req, res) => {
 
 
 // exports.assignBonusPoint = async (req, res) => {
-//   try { 
+//   try {
 //     const userId = req.user._id;
-//     const bonuspoint = Number(req.query.bonuspoint); 
+//     const bonuspoint = Number(req.query.bonuspoint);
 
 //     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
 //       .sort({ createdAt: -1 })
 //       .lean();
-      
+
 //     if (!markingSetting) {
 //       return res.status(404).json({ message: 'Marking setting not found.' });
 //     }
@@ -279,19 +279,22 @@ exports.updateAssigned = async (req, res) => {
 //       await user.save();
 //     }
 
-//     // --- Response ---
+//     // --- Prepare response with conditional endDate ---
+//     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
+//     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
+
 //     return res.status(200).json({
 //       message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
 //       bonuspoint: updatedBonus,
 //       weekly: {
-//         count: currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7,
+//         count: weeklyCount,
 //         startDate: currentStreak.startDate,
-//         endDate: currentStreak.endDate
+//         endDate: weeklyCount === 7 ? currentStreak.endDate : null
 //       },
 //       monthly: {
-//         count: currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30,
+//         count: monthlyCount,
 //         startDate: currentStreak.startDate,
-//         endDate: currentStreak.endDate
+//         endDate: monthlyCount === 30 ? currentStreak.endDate : null
 //       },
 //       weeklyBonus: markingSetting.weeklyBonus || 0,
 //       monthlyBonus: markingSetting.monthlyBonus || 0
@@ -303,10 +306,20 @@ exports.updateAssigned = async (req, res) => {
 //   }
 // };
 
+
 exports.assignBonusPoint = async (req, res) => {
   try {
     const userId = req.user._id;
     const bonuspoint = Number(req.query.bonuspoint);
+
+    const user = await User.findById(userId).lean();
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    if (!user.session) {
+      return res.status(400).json({ message: 'User session not found.' });
+    }
 
     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
       .sort({ createdAt: -1 })
@@ -316,14 +329,9 @@ exports.assignBonusPoint = async (req, res) => {
       return res.status(404).json({ message: 'Marking setting not found.' });
     }
 
-    const user = await User.findById(userId);
-    if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
-    }
-
-    // --- Calculate current streak ---
-    const scores = await LearningScore.find({ userId, strickStatus: true }).lean();
-    const topicScores = await TopicScore.find({ userId, strickStatus: true }).lean();
+    // --- Get scores for the current session ---
+    const scores = await LearningScore.find({ userId, session: user.session, strickStatus: true }).lean();
+    const topicScores = await TopicScore.find({ userId, session: user.session, strickStatus: true }).lean();
 
     const allDatesSet = new Set();
     scores.forEach(score => {
@@ -360,20 +368,18 @@ exports.assignBonusPoint = async (req, res) => {
     }
 
     // --- Update bonus point ---
-    let updatedBonus = user.bonuspoint || 0;
-    if (!isNaN(bonuspoint)) {
-      updatedBonus += bonuspoint;
-      user.bonuspoint = updatedBonus;
-      await user.save();
-    }
+    const updated = await User.findByIdAndUpdate(
+      userId,
+      { $inc: !isNaN(bonuspoint) ? { bonuspoint } : {} },
+      { new: true }
+    );
 
-    // --- Prepare response with conditional endDate ---
     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
 
     return res.status(200).json({
       message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
-      bonuspoint: updatedBonus,
+      bonuspoint: updated.bonuspoint,
       weekly: {
         count: weeklyCount,
         startDate: currentStreak.startDate,
@@ -393,46 +399,6 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
-
-// exports.assignBonusPoint = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const bonuspoint = Number(req.query.bonuspoint); 
-
-//     const markingSetting = await MarkingSetting.findOne({}).sort({ createdAt: -1 });
-//     if (!markingSetting) {
-//       return res.status(404).json({ message: 'Marking setting not found.' });
-//     }
-
-//     let user = await User.findById(userId);
-
-//     if (!user) {
-//       return res.status(404).json({ message: 'User not found.' });
-//     }
-
-//     if (!isNaN(bonuspoint)) {
-//       const previousBonus = user.bonuspoint || 0;
-//       const updatedBonus = previousBonus + bonuspoint;
-
-//       user.bonuspoint = updatedBonus;
-//       await user.save();
-//     }
-
-//     return res.status(200).json({
-//       message: !isNaN(bonuspoint)
-//         ? 'Bonus point added successfully.'
-//         : 'User fetched successfully.',
-//       bonuspoint: user.bonuspoint,
-//       user,
-//       markingSetting
-//     });
-//   } catch (error) {
-//     console.error('Error in assignBonusPoint:', error);
-//     return res.status(500).json({ message: error.message });
-//   }
-// };
 
 
  exports.getAssignedwithClass = async (req, res) => {
