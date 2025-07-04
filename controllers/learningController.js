@@ -100,9 +100,22 @@ exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
+    // 🔍 Fetch user session
+    const user = await User.findById(userId).lean();
+    const userSession = user?.session;
+
+    if (!userSession) {
+      return res.status(400).json({ message: 'User session not found.' });
+    }
+
     const rawScores = await TopicScore.aggregate([
-      { $match: { userId: new mongoose.Types.ObjectId(userId) } },
-      { $sort: { scoreDate: 1 } }, 
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          session: userSession // ✅ Filter by session
+        }
+      },
+      { $sort: { scoreDate: 1 } },
       {
         $group: {
           _id: {
@@ -112,7 +125,7 @@ exports.scoreCard = async (req, res) => {
         }
       },
       { $replaceRoot: { newRoot: "$doc" } },
-      { $sort: { scoreDate: 1 } } 
+      { $sort: { scoreDate: 1 } }
     ]);
 
     const populatedScores = await TopicScore.populate(rawScores, [
@@ -120,7 +133,6 @@ exports.scoreCard = async (req, res) => {
       { path: 'learningId', select: 'name' }
     ]);
 
-    
     const todayStr = moment().format('YYYY-MM-DD');
     const todayScores = [];
     const otherScores = [];
@@ -134,7 +146,6 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
-    
     const finalScores = [...todayScores, ...otherScores];
 
     res.status(200).json({ scores: finalScores });
@@ -147,9 +158,11 @@ exports.scoreCard = async (req, res) => {
 
 
 
+
 // exports.scoreCard = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
+
 //     const rawScores = await TopicScore.aggregate([
 //       { $match: { userId: new mongoose.Types.ObjectId(userId) } },
 //       { $sort: { scoreDate: 1 } }, 
@@ -158,24 +171,44 @@ exports.scoreCard = async (req, res) => {
 //           _id: {
 //             $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
 //           },
-//           doc: { $first: "$$ROOT" } 
+//           doc: { $first: "$$ROOT" }
 //         }
 //       },
-//       {
-//         $replaceRoot: { newRoot: "$doc" }
-//       },
-//       { $sort: { scoreDate: -1 } } 
-//     ]);   
+//       { $replaceRoot: { newRoot: "$doc" } },
+//       { $sort: { scoreDate: 1 } } 
+//     ]);
+
 //     const populatedScores = await TopicScore.populate(rawScores, [
 //       { path: 'topicId', select: 'topic' },
 //       { path: 'learningId', select: 'name' }
 //     ]);
-//     res.status(200).json({ scores: populatedScores });
+
+    
+//     const todayStr = moment().format('YYYY-MM-DD');
+//     const todayScores = [];
+//     const otherScores = [];
+
+//     for (const score of populatedScores) {
+//       const scoreDateStr = moment(score.scoreDate).format('YYYY-MM-DD');
+//       if (scoreDateStr === todayStr) {
+//         todayScores.push(score);
+//       } else {
+//         otherScores.push(score);
+//       }
+//     }
+
+    
+//     const finalScores = [...todayScores, ...otherScores];
+
+//     res.status(200).json({ scores: finalScores });
+
 //   } catch (error) {
 //     console.error('Error in scoreCard:', error);
 //     res.status(500).json({ message: error.message });
 //   }
 // };
+
+
 
 
 exports.Practicestrike = async (req, res) => {
