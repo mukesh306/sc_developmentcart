@@ -1225,57 +1225,64 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 };
 
 
-
-
-
-// exports.PracticeTest = async (req, res) => {
+// exports.PracticescoreCard = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
-//     const { topicId, questionId, selectedAnswer, learningId } = req.body;
 
-//     if (!topicId || !questionId || !learningId) {
-//       return res.status(400).json({ message: 'topicId, questionId, and learningId are required.' });
-//     }
-
-//     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
-//     if (!quiz) {
-//       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
-//     }
-
-//     const answerToSave = selectedAnswer ? selectedAnswer : null;
-//     await PracticesQuizAnswer.findOneAndUpdate(
-//       { userId, topicId, questionId },
+//     const rawScores = await LearningScore.aggregate([
 //       {
-//         selectedAnswer: answerToSave,
-//         learningId,
-//         isSkipped: !selectedAnswer 
+//         $match: { userId: new mongoose.Types.ObjectId(userId) }
 //       },
-//       { upsert: true, new: true }
-//     );
+//       {
+//         $sort: { scoreDate: 1 } // earliest first
+//       },
+//       {
+//         $group: {
+//           _id: {
+//             $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+//           },
+//           doc: { $first: "$$ROOT" }
+//         }
+//       },
+//       {
+//         $replaceRoot: { newRoot: "$doc" }
+//       },
+//       {
+//         $sort: { scoreDate: -1 } // latest date on top (optional)
+//       }
+//     ]);
 
-//     const message = selectedAnswer ? 'Answer saved successfully.' : 'Question skipped and recorded.';
-//     return res.status(200).json({ message });
+//     // Populate learningId manually to match your previous response format
+//     const populatedScores = await LearningScore.populate(rawScores, {
+//       path: 'learningId',
+//       select: 'name'
+//     });
 
+//     res.status(200).json({ scores: populatedScores });
 //   } catch (error) {
-//     console.error('Error in PracticeTest:', error);
-//     return res.status(500).json({ message: error.message });
+//     console.error('Error in PracticescoreCard:', error);
+//     res.status(500).json({ message: error.message });
 //   }
 // };
-
-
-
 
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
+    // 🧠 Get user's current session
+    const user = await User.findById(userId).lean();
+    if (!user?.session) {
+      return res.status(400).json({ message: 'User session not found.' });
+    }
+
     const rawScores = await LearningScore.aggregate([
       {
-        $match: { userId: new mongoose.Types.ObjectId(userId) }
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          session: user.session  // ✅ Only match scores from current session
+        }
       },
-      {
-        $sort: { scoreDate: 1 } // earliest first
-      },
+      { $sort: { scoreDate: 1 } },
       {
         $group: {
           _id: {
@@ -1284,21 +1291,17 @@ exports.PracticescoreCard = async (req, res) => {
           doc: { $first: "$$ROOT" }
         }
       },
-      {
-        $replaceRoot: { newRoot: "$doc" }
-      },
-      {
-        $sort: { scoreDate: -1 } // latest date on top (optional)
-      }
+      { $replaceRoot: { newRoot: "$doc" } },
+      { $sort: { scoreDate: -1 } }
     ]);
 
-    // Populate learningId manually to match your previous response format
     const populatedScores = await LearningScore.populate(rawScores, {
       path: 'learningId',
       select: 'name'
     });
 
     res.status(200).json({ scores: populatedScores });
+
   } catch (error) {
     console.error('Error in PracticescoreCard:', error);
     res.status(500).json({ message: error.message });
