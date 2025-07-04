@@ -14,6 +14,7 @@ const LearningScoreSchema = new mongoose.Schema({
   negativeMarking: { type: Number },
   scorePercent: { type: Number },
  strickStatus: { type: Boolean, default: false },
+ session: { type: String },
   createdAt: {
         type: Date,
         default: Date.now
