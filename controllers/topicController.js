@@ -689,6 +689,7 @@ exports.updateTestTimeInSeconds = async (req, res) => {
   }
 };
 
+
 exports.calculateQuizScore = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -810,9 +811,6 @@ exports.calculateQuizScore = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
-
 
 
 // exports.calculateQuizScore = async (req, res) => {

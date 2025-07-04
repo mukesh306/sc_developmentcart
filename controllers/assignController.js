@@ -61,42 +61,56 @@ exports.getAssignedList = async (req, res) => {
   }
 };
 
-
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
+
+    // Fetch user and validate className and session
     const user = await User.findById(userId).lean();
-    if (!user || !user.className) {
-      return res.status(400).json({ message: 'User className not found.' });
+    if (!user || !user.className || !user.session) {
+      return res.status(400).json({ message: 'User className or session not found.' });
     }
+
+    // Fetch all assigned learnings based on classId
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
       .populate('learning4')
       .lean();
+
+    // Process each assigned item
     for (let item of assignedList) {
+      // Populate class info (School or College)
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
-      const getScore = async (learningField) => {
-        if (item[learningField]?._id) {
-          const topicScore = await TopicScore.findOne({
-            userId: userId,
-            learningId: item[learningField]._id,
-          }).sort({ createdAt: 1 }).lean();
 
-          return topicScore?.score ?? null;
+      // Helper to fetch score for each learning and user's session
+      const getScore = async (learningField) => {
+        const learning = item[learningField];
+        if (learning && learning._id) {
+          const scoreDoc = await TopicScore.findOne({
+            userId,
+            learningId: learning._id,
+            session: user.session // ✅ Filter by user session
+          }).lean();
+
+          return scoreDoc?.score ?? null;
         }
         return null;
       };
-      if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
-      if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
-      if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
-      if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
 
+      // Clean empty learning fields
+      ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
+        if (!item[field] || Object.keys(item[field]).length === 0) {
+          item[field] = null;
+        }
+      });
+
+      // Attach score averages per learningId and session
       item.learningAverage = await getScore('learning');
       item.learning2Average = await getScore('learning2');
       item.learning3Average = await getScore('learning3');
