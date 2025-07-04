@@ -60,7 +60,6 @@ exports.updateLearning = async (req, res) => {
   try {
     const learningId = req.params.id;
     const updateData = req.body;
-
     const isAssigned = await Assigned.findOne({
       $or: [
         { learning: learningId },

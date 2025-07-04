@@ -255,31 +255,22 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 exports.getAssignedListUserpractice = async (req, res) => {
   try {
     const userId = req.user._id;
-
-    // Get user data
     const user = await User.findById(userId).lean();
     if (!user || !user.className) {
       return res.status(400).json({ message: 'User className not found.' });
     }
-
-    // Fetch assigned list for user's class
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
       .populate('learning4')
       .lean();
-
-    // Loop through assigned list to add class info and fetch scores
     for (let item of assignedList) {
-      // Add class info (school or college)
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
-
-      // Helper to get the first LearningScore for a learning field
       const getScore = async (learningField) => {
         if (item[learningField]?._id) {
           const learningScore = await LearningScore.findOne({
@@ -291,21 +282,15 @@ exports.getAssignedListUserpractice = async (req, res) => {
         }
         return null;
       };
-
-      // Clean up empty learning fields
       if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
       if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
       if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
       if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
-
-      // Set learningXAverage from LearningScore
       item.learningAverage = await getScore('learning');
       item.learning2Average = await getScore('learning2');
       item.learning3Average = await getScore('learning3');
       item.learning4Average = await getScore('learning4');
     }
-
-    // Send final response
     res.status(200).json({ data: assignedList });
   } catch (error) {
     console.error('Get Assigned Practice Error:', error);
