@@ -7,6 +7,7 @@ const User = require('../models/User');
 const LearningScore = require('../models/learningScore');
 const TopicScore = require('../models/topicScore');
 
+
 const MarkingSetting = require('../models/markingSetting');
 
 
@@ -74,7 +75,6 @@ exports.getAssignedListUser = async (req, res) => {
       .populate('learning3')
       .populate('learning4')
       .lean();
-
     for (let item of assignedList) {
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
