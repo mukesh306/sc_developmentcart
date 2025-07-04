@@ -979,17 +979,128 @@ exports.getUserLevelData = async (req, res) => {
   }
 };
 
+
+// exports.genraliqAverage = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const learningIdFilter = req.query.learningId;
+//     const learningScores = await LearningScore.find({ userId, strickStatus: true })
+//       .populate('learningId', 'name')
+//       .sort({ scoreDate: 1 })
+//       .lean();
+
+//     const topicScores = await TopicScore.find({ userId, strickStatus: true })
+//       .populate('learningId', 'name')
+//       .sort({ updatedAt: 1 })
+//       .lean();
+
+//     const scoreMap = new Map();
+
+//     // Add practice scores
+//     learningScores.forEach(score => {
+//       if (learningIdFilter && score.learningId?._id?.toString() !== learningIdFilter) return;
+
+//       const date = moment(score.scoreDate).format('YYYY-MM-DD');
+//       if (!scoreMap.has(date)) scoreMap.set(date, []);
+//       scoreMap.get(date).push({
+//         type: 'practice',
+//         score: score.score,
+//         updatedAt: score.updatedAt,
+//         scoreDate: score.scoreDate,
+//         learningId: score.learningId
+//       });
+//     });
+
+//     // Add topic scores
+//     topicScores.forEach(score => {
+//       if (learningIdFilter && score.learningId?._id?.toString() !== learningIdFilter) return;
+
+//       const date = moment(score.updatedAt).format('YYYY-MM-DD');
+//       if (!scoreMap.has(date)) scoreMap.set(date, []);
+//       scoreMap.get(date).push({
+//         type: 'topic',
+//         score: score.score,
+//         updatedAt: score.updatedAt,
+//         learningId: score.learningId
+//       });
+//     });
+
+//     const results = [];
+//     let totalAvg = 0;
+//     let count = 0;
+//     let learningIdToSave = null;
+
+//     for (const [date, records] of scoreMap.entries()) {
+//       const hasPractice = records.some(r => r.type === 'practice');
+//       const hasTopic = records.some(r => r.type === 'topic');
+
+//       if (hasPractice && hasTopic) {
+//         const practiceScore = records.find(r => r.type === 'practice')?.score || 0;
+//         const topicScore = records.find(r => r.type === 'topic')?.score || 0;
+//         const avg = (practiceScore + topicScore) / 2;
+
+//         learningIdToSave = records[0]?.learningId?._id || records[0]?.learningId;
+
+//         results.push({
+//           date,
+//           data: records,
+//           average: Math.round(avg * 100) / 100
+//         });
+
+//         totalAvg += avg;
+//         count += 1;
+//       }
+//     }
+
+//     const overallAverage = count > 0 ? Math.round((totalAvg / count) * 100) / 100 : 0;
+
+//     // ✅ Save to GenralIQ only if learningId is provided and valid
+//     if (learningIdToSave) {
+//       await GenralIQ.findOneAndUpdate(
+//         { userId, learningId: learningIdToSave },
+//         { overallAverage },
+//         { upsert: true, new: true }
+//       );
+//     }
+
+//     return res.status(200).json({
+//       count,
+//       overallAverage,
+//       results
+//     });
+
+//   } catch (error) {
+//     console.error("Error in genraliqAverage:", error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
+
+    // Fetch user to get session
+    const user = await User.findById(userId).lean();
+    if (!user || !user.session) {
+      return res.status(400).json({ message: 'User session not found.' });
+    }
+
     const learningIdFilter = req.query.learningId;
 
-    const learningScores = await LearningScore.find({ userId, strickStatus: true })
+    const learningScores = await LearningScore.find({
+      userId,
+      session: user.session, // ✅ Filter by session
+      strickStatus: true
+    })
       .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
       .lean();
 
-    const topicScores = await TopicScore.find({ userId, strickStatus: true })
+    const topicScores = await TopicScore.find({
+      userId,
+      session: user.session, // ✅ Filter by session
+      strickStatus: true
+    })
       .populate('learningId', 'name')
       .sort({ updatedAt: 1 })
       .lean();
@@ -1054,10 +1165,10 @@ exports.genraliqAverage = async (req, res) => {
 
     const overallAverage = count > 0 ? Math.round((totalAvg / count) * 100) / 100 : 0;
 
-    // ✅ Save to GenralIQ only if learningId is provided and valid
+    // ✅ Save with session
     if (learningIdToSave) {
       await GenralIQ.findOneAndUpdate(
-        { userId, learningId: learningIdToSave },
+        { userId, learningId: learningIdToSave, session: user.session }, // ✅ Include session
         { overallAverage },
         { upsert: true, new: true }
       );
@@ -1076,14 +1187,13 @@ exports.genraliqAverage = async (req, res) => {
 };
 
 
-
 exports.getGenrelIq = async (req, res) => {
   try {
     const userId = req.user._id;
 
     const user = await User.findById(userId).lean();
-    if (!user || !user.className) {
-      return res.status(400).json({ message: 'User className not found.' });
+    if (!user || !user.className || !user.session) {
+      return res.status(400).json({ message: 'User className or session not found.' });
     }
 
     const assignedList = await Assigned.find({ classId: user.className })
@@ -1101,17 +1211,18 @@ exports.getGenrelIq = async (req, res) => {
       }
       item.classInfo = classInfo || null;
 
-      // Get IQ score from GenralIQ collection
+      // Get IQ score from GenralIQ collection with session filter
       const getIQScore = async (learningField) => {
         if (item[learningField]?._id) {
           const iqRecord = await GenralIQ.findOne({
             userId,
+            session: user.session, // ✅ filter by user's session
             learningId: item[learningField]._id,
           }).lean();
 
-          return iqRecord?.overallAverage ?? null;
+          return iqRecord?.overallAverage ?? 0; // return 0 if no record found
         }
-        return null;
+        return 0;
       };
 
       // Handle empty/null learning references
@@ -1120,7 +1231,7 @@ exports.getGenrelIq = async (req, res) => {
       if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
       if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
 
-      // Attach GenralIQ scores
+      // Attach GenralIQ scores (or 0 if not found)
       item.learningAverage = await getIQScore('learning');
       item.learning2Average = await getIQScore('learning2');
       item.learning3Average = await getIQScore('learning3');
@@ -1133,7 +1244,6 @@ exports.getGenrelIq = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
 
 
 
