@@ -13,7 +13,7 @@ const ExperienceleavelSchema = new mongoose.Schema(
       type: Number,
      
     },
-    session:{String},
+    session:{type:String},
   },
   { timestamps: true }
 );
