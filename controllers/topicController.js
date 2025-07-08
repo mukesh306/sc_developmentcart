@@ -188,6 +188,7 @@ exports.getAllTopicNames = async (req, res) => {
 };
 
 
+
 // exports.TopicWithLeaning = async (req, res) => {
 //   try {
 //     const { id } = req.params;
@@ -216,23 +217,62 @@ exports.getAllTopicNames = async (req, res) => {
 
 //     const allTopics = await Topic.find(query)
 //       .sort({ createdAt: 1 })
-//       .select('topic score createdAt isdescription isvideo')
+//       .select('topic createdAt')
 //       .lean();
 
 //     if (!allTopics || allTopics.length === 0) {
 //       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
 //     }
 
-//     const validScores = allTopics
-//       .map(topic => parseFloat(topic.score))
-//       .filter(score => !isNaN(score));
+//     const userDescriptionVideos = await DescriptionVideo.find({
+//       userId: user._id,
+//       learningId: id
+//     }).select('topicId isvideo isdescription').lean();
 
-//     const averageScore =
-//       validScores.length > 0
-//         ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-//         : null;
+//     const descriptionMap = {};
+//     userDescriptionVideos.forEach(entry => {
+//       descriptionMap[entry.topicId.toString()] = {
+//         isvideo: entry.isvideo,
+//         isdescription: entry.isdescription
+//       };
+//     });
 
-//     const assignedRecord = await Assigned.findOne({ classId: query.classId });
+//     const topicScores = await TopicScore.find({
+//       userId: user._id,
+//       learningId: id
+//     }).select('topicId score').lean();
+
+//     const scoreMap = {};
+//     topicScores.forEach(entry => {
+//       scoreMap[entry.topicId.toString()] = entry.score;
+//     });
+
+   
+//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
+//       const topicIdStr = topic._id.toString();
+//       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
+//       const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : null;
+
+//       return {
+//         _id: topic._id,
+//         topic: topic.topic,
+//         createdAt: topic.createdAt,
+//         isvideo: extra.isvideo,
+//         isdescription: extra.isdescription,
+//         score: topicScoreValue
+//       };
+//     });
+
+//     const validScores = unlockedTopics
+//       .map(t => t.score)
+//       .filter(score => score !== null && score !== undefined)
+//       .map(score => Number(score));
+
+//     const averageScore = validScores.length > 0
+//       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
+//       : null;
+
+//     const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
 //     if (assignedRecord) {
 //       if (assignedRecord.learning?.toString() === id) {
 //         assignedRecord.learningAverage = averageScore;
@@ -246,16 +286,8 @@ exports.getAllTopicNames = async (req, res) => {
 //       await assignedRecord.save();
 //     }
 
-//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
-//       if (topic.score === null || topic.score === undefined) {
-//         const { score, ...rest } = topic;
-//         return rest;
-//       }
-//       return topic;
-//     });
-
 //     res.status(200).json({
-//       learningName: learningData.name, 
+//       learningName: learningData.name,
 //       averageScore,
 //       topics: unlockedTopics
 //     });
@@ -265,7 +297,6 @@ exports.getAllTopicNames = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
-
 
 exports.TopicWithLeaning = async (req, res) => {
   try {
@@ -277,6 +308,11 @@ exports.TopicWithLeaning = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
     }
 
+    if (!user.session) {
+      return res.status(400).json({ message: 'User session not found.' });
+    }
+
+    const session = user.session;
     const registrationDate = moment(user.createdAt).startOf('day');
     const today = moment().startOf('day');
     const daysPassed = today.diff(registrationDate, 'days') + 1;
@@ -304,7 +340,8 @@ exports.TopicWithLeaning = async (req, res) => {
 
     const userDescriptionVideos = await DescriptionVideo.find({
       userId: user._id,
-      learningId: id
+      learningId: id,
+      session
     }).select('topicId isvideo isdescription').lean();
 
     const descriptionMap = {};
@@ -315,9 +352,11 @@ exports.TopicWithLeaning = async (req, res) => {
       };
     });
 
+    // ✅ Fetch only session-matching TopicScore entries
     const topicScores = await TopicScore.find({
       userId: user._id,
-      learningId: id
+      learningId: id,
+      session
     }).select('topicId score').lean();
 
     const scoreMap = {};
@@ -325,7 +364,6 @@ exports.TopicWithLeaning = async (req, res) => {
       scoreMap[entry.topicId.toString()] = entry.score;
     });
 
-   
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
       const topicIdStr = topic._id.toString();
       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
@@ -343,12 +381,11 @@ exports.TopicWithLeaning = async (req, res) => {
 
     const validScores = unlockedTopics
       .map(t => t.score)
-      .filter(score => score !== null && score !== undefined)
-      .map(score => Number(score));
+      .filter(score => typeof score === 'number' && score >= 0);
 
     const averageScore = validScores.length > 0
       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-      : null;
+      : 0;
 
     const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
     if (assignedRecord) {
@@ -376,68 +413,120 @@ exports.TopicWithLeaning = async (req, res) => {
   }
 };
 
-// exports.getTopicById = async (req, res) => {
+// exports.TopicWithLeaning = async (req, res) => {
 //   try {
 //     const { id } = req.params;
-//     const { isvideo, isdescription } = req.query;
+//     const { classId: queryClassId } = req.query;
+//     const user = req.user;
 
-//     let topic = await Topic.findById(id)
-//       .populate('learningId')
-//       .populate('createdBy', 'email');
-
-//     if (!topic) {
-//       return res.status(404).json({ message: 'Topic not found.' });
+//     if (!user || user.status !== 'yes') {
+//       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
 //     }
 
-//     let updated = false;
-//     if (isvideo !== undefined) {
-//       topic.isvideo = isvideo === 'true' ? 'true' : 'false';
-//       updated = true;
+//     if (!user.session) {
+//       return res.status(400).json({ message: 'Session not found for user.' });
 //     }
 
-//     if (isdescription !== undefined) {
-//       topic.isdescription = isdescription === 'true' ? 'true' : 'false';
-//       updated = true;
+//     const registrationDate = moment(user.createdAt).startOf('day');
+//     const today = moment().startOf('day');
+//     const daysPassed = today.diff(registrationDate, 'days') + 1;
+
+//     const query = { learningId: new mongoose.Types.ObjectId(id) };
+//     if (queryClassId) {
+//       query.classId = new mongoose.Types.ObjectId(queryClassId);
+//     } else if (user.className) {
+//       query.classId = new mongoose.Types.ObjectId(user.className);
 //     }
 
-//     if (!topic.testTimeInSeconds || topic.testTimeInSeconds === 0) {
-//       if (topic.testTime && topic.testTime > 0) {
-//         topic.testTimeInSeconds = topic.testTime * 60;
-//         updated = true;
+//     const learningData = await Learning.findById(id).select('name').lean();
+//     if (!learningData) {
+//       return res.status(404).json({ message: 'Learning not found.' });
+//     }
+
+//     const allTopics = await Topic.find(query)
+//       .sort({ createdAt: 1 })
+//       .select('topic createdAt')
+//       .lean();
+
+//     if (!allTopics || allTopics.length === 0) {
+//       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
+//     }
+
+//     const userDescriptionVideos = await DescriptionVideo.find({
+//       userId: user._id,
+//       learningId: id
+//     }).select('topicId isvideo isdescription').lean();
+
+//     const descriptionMap = {};
+//     userDescriptionVideos.forEach(entry => {
+//       descriptionMap[entry.topicId.toString()] = {
+//         isvideo: entry.isvideo,
+//         isdescription: entry.isdescription
+//       };
+//     });
+
+//     // ✅ Filter TopicScores based on user.session
+//     const topicScores = await TopicScore.find({
+//       userId: user._id,
+//       learningId: id,
+//       session: user.session
+//     }).select('topicId score').lean();
+
+//     const scoreMap = {};
+//     topicScores.forEach(entry => {
+//       scoreMap[entry.topicId.toString()] = entry.score;
+//     });
+
+//     // ✅ Limit to daysPassed and attach scores or 0 if no match
+//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
+//       const topicIdStr = topic._id.toString();
+//       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
+//       const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : 0;
+
+//       return {
+//         _id: topic._id,
+//         topic: topic.topic,
+//         createdAt: topic.createdAt,
+//         isvideo: extra.isvideo,
+//         isdescription: extra.isdescription,
+//         score: topicScoreValue
+//       };
+//     });
+
+//     const validScores = unlockedTopics
+//       .map(t => t.score)
+//       .filter(score => score !== null && score !== undefined)
+//       .map(score => Number(score));
+
+//     const averageScore = validScores.length > 0
+//       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
+//       : 0;
+
+//     const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
+//     if (assignedRecord) {
+//       if (assignedRecord.learning?.toString() === id) {
+//         assignedRecord.learningAverage = averageScore;
+//       } else if (assignedRecord.learning2?.toString() === id) {
+//         assignedRecord.learning2Average = averageScore;
+//       } else if (assignedRecord.learning3?.toString() === id) {
+//         assignedRecord.learning3Average = averageScore;
+//       } else if (assignedRecord.learning4?.toString() === id) {
+//         assignedRecord.learning4Average = averageScore;
 //       }
+//       await assignedRecord.save();
 //     }
 
-//     if (updated) {
-//       await topic.save();
-//     }
-
-//     const topicObj = topic.toObject();
-
-//     topicObj.testTimeInSeconds = topic.testTimeInSeconds || 0;
-//     let classInfo = await School.findById(topic.classId).lean();
-//     if (!classInfo) {
-//       classInfo = await College.findById(topic.classId).lean();
-//     }
-//     topicObj.classInfo = classInfo || null;
-
-//     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
-//     topicObj.quizzes = quizzes || [];
 //     res.status(200).json({
-//       message: 'Topic fetched successfully.',
-//       data: topicObj
+//       learningName: learningData.name,
+//       averageScore,
+//       topics: unlockedTopics
 //     });
+
 //   } catch (error) {
-//     console.error('Error fetching topic by ID:', error);
-//     res.status(500).json({
-//       message: 'Error fetching topic.',
-//       error: error.message
-//     });
+//     console.error('Error fetching topics with learningId:', error);
+//     res.status(500).json({ message: error.message });
 //   }
 // };
-
-
-
-
 
 exports.getTopicById = async (req, res) => {
   try {
@@ -455,13 +544,14 @@ exports.getTopicById = async (req, res) => {
 
     const learningId = topic.learningId?._id || null;
 
-    // Find or update DescriptionVideo
+    // Find or create DescriptionVideo
     let existingRecord = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
       learningId
     });
 
+    // ✅ If no record exists and isdescription is true, create with session
     if (!existingRecord && isdescription === 'true') {
       existingRecord = await DescriptionVideo.create({
         userId,
@@ -469,10 +559,12 @@ exports.getTopicById = async (req, res) => {
         learningId,
         isvideo: false,
         isdescription: true,
+        session: req.user.session,  // ✅ Save session here
         scoreDate: new Date()
       });
     }
 
+    // ✅ If record exists and isvideo becomes true, update only that
     if (existingRecord && isvideo === 'true' && !existingRecord.isvideo) {
       existingRecord.isvideo = true;
       await existingRecord.save();
@@ -484,7 +576,7 @@ exports.getTopicById = async (req, res) => {
       learningId
     }).sort({ createdAt: -1 }).select('isvideo isdescription');
 
-    // ✅ Fetch topicScore with only required fields
+    // ✅ Get topic score
     const topicScoreData = await TopicScore.findOne({
       userId,
       topicId: topic._id
@@ -495,22 +587,22 @@ exports.getTopicById = async (req, res) => {
     const topicObj = topic.toObject();
     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
 
-    // Add class info
+    // Class info
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
     topicObj.classInfo = classInfo || null;
 
-    // Add quizzes
+    // Quizzes
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
-    // Add video/description flags
+    // Description flags
     topicObj.isvideo = latestDescription?.isvideo || false;
     topicObj.isdescription = latestDescription?.isdescription || false;
 
-    // 🔥 Add filtered topicScore data directly (flattened)
+    // Score flattening
     topicObj.score = topicScoreData?.score || null;
     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
@@ -526,7 +618,6 @@ exports.getTopicById = async (req, res) => {
     topicObj.createdAt = topicScoreData?.createdAt || null;
     topicObj.updatedAt = topicScoreData?.updatedAt || null;
 
-    // Send response
     res.status(200).json({
       message: 'Topic fetched successfully.',
       data: topicObj
@@ -540,6 +631,110 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
+
+
+
+// exports.getTopicById = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { isvideo, isdescription } = req.query;
+//     const userId = req.user._id;
+
+//     const topic = await Topic.findById(id)
+//       .populate('learningId')
+//       .populate('createdBy', 'email');
+
+//     if (!topic) {
+//       return res.status(404).json({ message: 'Topic not found.' });
+//     }
+
+//     const learningId = topic.learningId?._id || null;
+
+//     // Find or update DescriptionVideo
+//     let existingRecord = await DescriptionVideo.findOne({
+//       userId,
+//       topicId: topic._id,
+//       learningId
+//     });
+
+//     if (!existingRecord && isdescription === 'true') {
+//       existingRecord = await DescriptionVideo.create({
+//         userId,
+//         topicId: topic._id,
+//         learningId,
+//         isvideo: false,
+//         isdescription: true,
+//         scoreDate: new Date()
+//       });
+//     }
+
+//     if (existingRecord && isvideo === 'true' && !existingRecord.isvideo) {
+//       existingRecord.isvideo = true;
+//       await existingRecord.save();
+//     }
+
+//     const latestDescription = await DescriptionVideo.findOne({
+//       userId,
+//       topicId: topic._id,
+//       learningId
+//     }).sort({ createdAt: -1 }).select('isvideo isdescription');
+
+//     // ✅ Fetch topicScore with only required fields
+//     const topicScoreData = await TopicScore.findOne({
+//       userId,
+//       topicId: topic._id
+//     }).select(
+//       'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
+//     ).lean();
+
+//     const topicObj = topic.toObject();
+//     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
+
+//     // Add class info
+//     let classInfo = await School.findById(topic.classId).lean();
+//     if (!classInfo) {
+//       classInfo = await College.findById(topic.classId).lean();
+//     }
+//     topicObj.classInfo = classInfo || null;
+
+//     // Add quizzes
+//     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
+//     topicObj.quizzes = quizzes || [];
+
+//     // Add video/description flags
+//     topicObj.isvideo = latestDescription?.isvideo || false;
+//     topicObj.isdescription = latestDescription?.isdescription || false;
+
+//     // 🔥 Add filtered topicScore data directly (flattened)
+//     topicObj.score = topicScoreData?.score || null;
+//     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
+//     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
+//     topicObj.correctAnswers = topicScoreData?.correctAnswers || 0;
+//     topicObj.incorrectAnswers = topicScoreData?.incorrectAnswers || 0;
+//     topicObj.skippedQuestions = topicScoreData?.skippedQuestions || 0;
+//     topicObj.marksObtained = topicScoreData?.marksObtained || 0;
+//     topicObj.totalMarks = topicScoreData?.totalMarks || 0;
+//     topicObj.negativeMarking = topicScoreData?.negativeMarking || 0;
+//     topicObj.scorePercent = topicScoreData?.scorePercent || 0;
+//     topicObj.strickStatus = topicScoreData?.strickStatus || false;
+//     topicObj.scoreDate = topicScoreData?.scoreDate || null;
+//     topicObj.createdAt = topicScoreData?.createdAt || null;
+//     topicObj.updatedAt = topicScoreData?.updatedAt || null;
+
+//     // Send response
+//     res.status(200).json({
+//       message: 'Topic fetched successfully.',
+//       data: topicObj
+//     });
+
+//   } catch (error) {
+//     console.error('Error fetching topic by ID:', error);
+//     res.status(500).json({
+//       message: 'Error fetching topic.',
+//       error: error.message
+//     });
+//   }
+// };
 
 
 
@@ -1264,6 +1459,7 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
+
 
 exports.PracticescoreCard = async (req, res) => {
   try {
