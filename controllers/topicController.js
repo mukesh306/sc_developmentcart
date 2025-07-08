@@ -864,22 +864,24 @@ exports.submitQuizAnswer = async (req, res) => {
       return res.status(400).json({ message: 'topicId and questionId are required.' });
     }
 
-    // ✅ Check if quiz exists
+    // Get the quiz question
     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
     }
 
-    // ✅ Get user's session
+    // ✅ Fetch user's session
     const user = await User.findById(userId).select('session').lean();
     const session = user?.session || null;
+
+    console.log('Saving with session:', session); // ✅ Debug log
 
     if (selectedAnswer) {
       await UserQuizAnswer.findOneAndUpdate(
         { userId, topicId, questionId },
         {
           selectedAnswer,
-          session // ✅ Save session
+          session // ✅ Ensure session is passed here
         },
         { upsert: true, new: true }
       );
@@ -894,6 +896,7 @@ exports.submitQuizAnswer = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.updateTestTimeInSeconds = async (req, res) => {
   try {
