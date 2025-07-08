@@ -188,6 +188,7 @@ exports.getAllTopicNames = async (req, res) => {
 };
 
 
+
 // exports.TopicWithLeaning = async (req, res) => {
 //   try {
 //     const { id } = req.params;
@@ -216,23 +217,62 @@ exports.getAllTopicNames = async (req, res) => {
 
 //     const allTopics = await Topic.find(query)
 //       .sort({ createdAt: 1 })
-//       .select('topic score createdAt isdescription isvideo')
+//       .select('topic createdAt')
 //       .lean();
 
 //     if (!allTopics || allTopics.length === 0) {
 //       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
 //     }
 
-//     const validScores = allTopics
-//       .map(topic => parseFloat(topic.score))
-//       .filter(score => !isNaN(score));
+//     const userDescriptionVideos = await DescriptionVideo.find({
+//       userId: user._id,
+//       learningId: id
+//     }).select('topicId isvideo isdescription').lean();
 
-//     const averageScore =
-//       validScores.length > 0
-//         ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-//         : null;
+//     const descriptionMap = {};
+//     userDescriptionVideos.forEach(entry => {
+//       descriptionMap[entry.topicId.toString()] = {
+//         isvideo: entry.isvideo,
+//         isdescription: entry.isdescription
+//       };
+//     });
 
-//     const assignedRecord = await Assigned.findOne({ classId: query.classId });
+//     const topicScores = await TopicScore.find({
+//       userId: user._id,
+//       learningId: id
+//     }).select('topicId score').lean();
+
+//     const scoreMap = {};
+//     topicScores.forEach(entry => {
+//       scoreMap[entry.topicId.toString()] = entry.score;
+//     });
+
+   
+//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
+//       const topicIdStr = topic._id.toString();
+//       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
+//       const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : null;
+
+//       return {
+//         _id: topic._id,
+//         topic: topic.topic,
+//         createdAt: topic.createdAt,
+//         isvideo: extra.isvideo,
+//         isdescription: extra.isdescription,
+//         score: topicScoreValue
+//       };
+//     });
+
+//     const validScores = unlockedTopics
+//       .map(t => t.score)
+//       .filter(score => score !== null && score !== undefined)
+//       .map(score => Number(score));
+
+//     const averageScore = validScores.length > 0
+//       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
+//       : null;
+
+//     const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
 //     if (assignedRecord) {
 //       if (assignedRecord.learning?.toString() === id) {
 //         assignedRecord.learningAverage = averageScore;
@@ -246,16 +286,8 @@ exports.getAllTopicNames = async (req, res) => {
 //       await assignedRecord.save();
 //     }
 
-//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
-//       if (topic.score === null || topic.score === undefined) {
-//         const { score, ...rest } = topic;
-//         return rest;
-//       }
-//       return topic;
-//     });
-
 //     res.status(200).json({
-//       learningName: learningData.name, 
+//       learningName: learningData.name,
 //       averageScore,
 //       topics: unlockedTopics
 //     });
@@ -275,6 +307,10 @@ exports.TopicWithLeaning = async (req, res) => {
 
     if (!user || user.status !== 'yes') {
       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
+    }
+
+    if (!user.session) {
+      return res.status(400).json({ message: 'Session not found for user.' });
     }
 
     const registrationDate = moment(user.createdAt).startOf('day');
@@ -315,9 +351,11 @@ exports.TopicWithLeaning = async (req, res) => {
       };
     });
 
+    // ✅ Filter TopicScores based on user.session
     const topicScores = await TopicScore.find({
       userId: user._id,
-      learningId: id
+      learningId: id,
+      session: user.session
     }).select('topicId score').lean();
 
     const scoreMap = {};
@@ -325,11 +363,11 @@ exports.TopicWithLeaning = async (req, res) => {
       scoreMap[entry.topicId.toString()] = entry.score;
     });
 
-   
+    // ✅ Limit to daysPassed and attach scores or 0 if no match
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
       const topicIdStr = topic._id.toString();
       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
-      const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : null;
+      const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : 0;
 
       return {
         _id: topic._id,
@@ -348,7 +386,7 @@ exports.TopicWithLeaning = async (req, res) => {
 
     const averageScore = validScores.length > 0
       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-      : null;
+      : 0;
 
     const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
     if (assignedRecord) {
@@ -375,6 +413,7 @@ exports.TopicWithLeaning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // exports.getTopicById = async (req, res) => {
 //   try {
