@@ -383,25 +383,26 @@ exports.assignBonusPoint = async (req, res) => {
     }
 
     // --- Prepare response
-    const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
-    const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
+   const weeklyCount = currentStreak.count >= 7 ? 7 : currentStreak.count;
+const monthlyCount = currentStreak.count >= 30 ? 30 : currentStreak.count;
 
-    return res.status(200).json({
-      message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
-      bonuspoint: updatedBonus,
-      weekly: {
-        count: weeklyCount,
-        startDate: currentStreak.startDate,
-        endDate: weeklyCount === 7 ? currentStreak.endDate : null
-      },
-      monthly: {
-        count: monthlyCount,
-        startDate: currentStreak.startDate,
-        endDate: monthlyCount === 30 ? currentStreak.endDate : null
-      },
-      weeklyBonus: markingSetting.weeklyBonus || 0,
-      monthlyBonus: markingSetting.monthlyBonus || 0
-    });
+return res.status(200).json({
+  message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
+  bonuspoint: updatedBonus,
+  weekly: {
+    count: weeklyCount,
+    startDate: weeklyCount === 7 ? currentStreak.startDate : null,
+    endDate: weeklyCount === 7 ? currentStreak.endDate : null
+  },
+  monthly: {
+    count: monthlyCount,
+    startDate: monthlyCount === 30 ? currentStreak.startDate : null,
+    endDate: monthlyCount === 30 ? currentStreak.endDate : null
+  },
+  weeklyBonus: markingSetting.weeklyBonus || 0,
+  monthlyBonus: markingSetting.monthlyBonus || 0
+});
+
 
   } catch (error) {
     console.error('Error in assignBonusPoint:', error);
