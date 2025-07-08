@@ -855,6 +855,8 @@ exports.saveQuizAnswer = async (req, res) => {
 //   }
 // };
 
+
+
 exports.submitQuizAnswer = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -881,7 +883,7 @@ exports.submitQuizAnswer = async (req, res) => {
         { userId, topicId, questionId },
         {
           selectedAnswer,
-          session // ✅ Ensure session is passed here
+          session 
         },
         { upsert: true, new: true }
       );

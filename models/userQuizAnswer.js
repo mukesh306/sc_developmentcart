@@ -5,8 +5,8 @@ const userQuizAnswerSchema = new mongoose.Schema({
   topicId: { type: mongoose.Schema.Types.ObjectId, ref: 'Topic', required: true },
   questionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
   selectedAnswer: { type: String, required: true },
-  session: { type: String},
   strickStatus: { type: Boolean, default: false },
+   session: { type: String },
 }, { timestamps: true });
 
 module.exports = mongoose.model('UserQuizAnswer', userQuizAnswerSchema);
