@@ -13,6 +13,9 @@ const Quotes = require('../models/quotes');
 const School = require('../models/school');
 const College = require('../models/college');
 const MarkingSetting = require('../models/markingSetting');
+
+const Experienceleavel = require('../models/expirenceLeavel'); 
+
 exports.createLearning = async (req, res) => {
   try {
     const { name} = req.body;
@@ -873,7 +876,6 @@ exports.Strikecalculation = async (req, res) => {
 
 
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -884,24 +886,19 @@ exports.StrikePath = async (req, res) => {
       return res.status(400).json({ message: 'User session not found.' });
     }
 
-    // ✅ Filter only scores from user's session
+    const session = user.session;
+
     const scores = await LearningScore.find({
       userId,
-      session: user.session,
+      session,
       strickStatus: true
-    })
-      .populate('learningId', 'name')
-      .sort({ scoreDate: 1 })
-      .lean();
+    }).populate('learningId', 'name').sort({ scoreDate: 1 }).lean();
 
     const topicScores = await TopicScore.find({
       userId,
-      session: user.session,
+      session,
       strickStatus: true
-    })
-      .populate('learningId', 'name')
-      .sort({ updatedAt: 1 })
-      .lean();
+    }).populate('learningId', 'name').sort({ updatedAt: 1 }).lean();
 
     const scoreMap = new Map();
 
@@ -956,7 +953,6 @@ exports.StrikePath = async (req, res) => {
 
     const startDate = moment(datesList[0]);
     const endDate = moment(datesList[datesList.length - 1]);
-
     const result = [];
 
     const existingBonusDates = user?.bonusDates || [];
@@ -974,9 +970,8 @@ exports.StrikePath = async (req, res) => {
 
       if (scoreMap.has(currentDate)) {
         item.data = scoreMap.get(currentDate);
-        const types = item.data.map(d => d.type);
-        const hasPractice = types.includes('practice');
-        const hasTopic = types.includes('topic');
+        const hasPractice = item.data.some(d => d.type === 'practice');
+        const hasTopic = item.data.some(d => d.type === 'topic');
 
         if (hasPractice && hasTopic && baseDailyExp > 0) {
           const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
@@ -1001,7 +996,6 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
-    // Weekly bonus
     for (let i = 6; i < result.length; i++) {
       const streak = result.slice(i - 6, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -1020,7 +1014,6 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Monthly bonus
     for (let i = 29; i < result.length; i++) {
       const streak = result.slice(i - 29, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -1039,7 +1032,6 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Update user bonus
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -1073,16 +1065,26 @@ exports.StrikePath = async (req, res) => {
 
     await User.findByIdAndUpdate(userId, { level: newLevel });
     await User.findByIdAndUpdate(userId, { $pull: { userLevelData: { level: newLevel } } });
+
+    const levelBonusPoint = result.reduce((acc, item) =>
+      acc + (item.dailyExperience || 0) + (item.weeklyBonus || 0) + (item.monthlyBonus || 0) - (item.deduction || 0), 0
+    );
+
     await User.findByIdAndUpdate(userId, {
       $push: {
         userLevelData: {
           level: newLevel,
-          levelBonusPoint: result.reduce((acc, item) =>
-            acc + (item.dailyExperience || 0) + (item.weeklyBonus || 0) + (item.monthlyBonus || 0) - (item.deduction || 0), 0
-          ),
+          levelBonusPoint,
           data: result
         }
       }
+    });
+
+    // ✅ Save levelBonusPoint to Experienceleavel DB
+    await Experienceleavel.create({
+      userId,
+      levelBonusPoint,
+      session
     });
 
     const matched = requestedLevel && requestedLevel !== newLevel
@@ -1091,9 +1093,7 @@ exports.StrikePath = async (req, res) => {
 
     return res.status(200).json({
       bonuspoint: updatedUser?.bonuspoint || 0,
-      levelBonusPoint: result.reduce((acc, item) =>
-        acc + (item.dailyExperience || 0) + (item.weeklyBonus || 0) + (item.monthlyBonus || 0) - (item.deduction || 0), 0
-      ),
+      levelBonusPoint,
       experiencePoint,
       level: newLevel,
       dates: matched
@@ -1105,14 +1105,6 @@ exports.StrikePath = async (req, res) => {
   }
 };
 
-const getLevelFromPoints = async (points) => {
-  const setting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-  const experiencePoint = setting?.experiencePoint || 1000;
-
-  if (points < experiencePoint) return 1;
-  const level = Math.floor(points / experiencePoint) + 1;
-  return level;
-};
 
 
 exports.getUserLevelData = async (req, res) => {
