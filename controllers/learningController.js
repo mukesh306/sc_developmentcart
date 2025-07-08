@@ -874,7 +874,6 @@ exports.Strikecalculation = async (req, res) => {
 //   }
 // };
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -995,7 +994,7 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
-    // Weekly bonus
+    // Weekly Bonus
     for (let i = 6; i < result.length; i++) {
       const streak = result.slice(i - 6, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -1014,7 +1013,7 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Monthly bonus
+    // Monthly Bonus
     for (let i = 29; i < result.length; i++) {
       const streak = result.slice(i - 29, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -1033,7 +1032,7 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Update user bonuses
+    // Update User
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -1082,12 +1081,16 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
-    // ✅ Save levelBonusPoint in Experienceleavel model
-    await Experienceleavel.create({
-      userId,
-      levelBonusPoint,
-      session: updatedUser.session
-    });
+    // ✅ Save to Experienceleavel only if not already exists for same session + level
+    const exists = await Experienceleavel.findOne({ userId, session, level: newLevel });
+    if (!exists) {
+      await Experienceleavel.create({
+        userId,
+        session,
+        level: newLevel,
+        levelBonusPoint
+      });
+    }
 
     const matched = requestedLevel && requestedLevel !== newLevel
       ? updatedUser.userLevelData.find(l => l.level === requestedLevel)?.data || []
@@ -1107,14 +1110,12 @@ exports.StrikePath = async (req, res) => {
   }
 };
 
-// Helper Function
+// Helper
 const getLevelFromPoints = async (points) => {
   const setting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
   const experiencePoint = setting?.experiencePoint || 1000;
-
   if (points < experiencePoint) return 1;
-  const level = Math.floor(points / experiencePoint) + 1;
-  return level;
+  return Math.floor(points / experiencePoint) + 1;
 };
 
 
