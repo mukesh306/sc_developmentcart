@@ -875,7 +875,6 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -888,17 +887,15 @@ exports.StrikePath = async (req, res) => {
 
     const session = user.session;
 
-    const scores = await LearningScore.find({
-      userId,
-      session,
-      strickStatus: true
-    }).populate('learningId', 'name').sort({ scoreDate: 1 }).lean();
+    const scores = await LearningScore.find({ userId, session, strickStatus: true })
+      .populate('learningId', 'name')
+      .sort({ scoreDate: 1 })
+      .lean();
 
-    const topicScores = await TopicScore.find({
-      userId,
-      session,
-      strickStatus: true
-    }).populate('learningId', 'name').sort({ updatedAt: 1 }).lean();
+    const topicScores = await TopicScore.find({ userId, session, strickStatus: true })
+      .populate('learningId', 'name')
+      .sort({ updatedAt: 1 })
+      .lean();
 
     const scoreMap = new Map();
 
@@ -953,6 +950,7 @@ exports.StrikePath = async (req, res) => {
 
     const startDate = moment(datesList[0]);
     const endDate = moment(datesList[datesList.length - 1]);
+
     const result = [];
 
     const existingBonusDates = user?.bonusDates || [];
@@ -970,8 +968,9 @@ exports.StrikePath = async (req, res) => {
 
       if (scoreMap.has(currentDate)) {
         item.data = scoreMap.get(currentDate);
-        const hasPractice = item.data.some(d => d.type === 'practice');
-        const hasTopic = item.data.some(d => d.type === 'topic');
+        const types = item.data.map(d => d.type);
+        const hasPractice = types.includes('practice');
+        const hasTopic = types.includes('topic');
 
         if (hasPractice && hasTopic && baseDailyExp > 0) {
           const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
@@ -996,6 +995,7 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
+    // Weekly bonus
     for (let i = 6; i < result.length; i++) {
       const streak = result.slice(i - 6, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -1014,6 +1014,7 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
+    // Monthly bonus
     for (let i = 29; i < result.length; i++) {
       const streak = result.slice(i - 29, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -1032,6 +1033,7 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
+    // Update user bonuses
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -1060,7 +1062,7 @@ exports.StrikePath = async (req, res) => {
       await User.findByIdAndUpdate(userId, updateData);
     }
 
-    const updatedUser = await User.findById(userId).select('bonuspoint userLevelData').lean();
+    const updatedUser = await User.findById(userId).select('bonuspoint userLevelData session').lean();
     const newLevel = await getLevelFromPoints(updatedUser.bonuspoint);
 
     await User.findByIdAndUpdate(userId, { level: newLevel });
@@ -1080,11 +1082,11 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
-    // ✅ Save levelBonusPoint to Experienceleavel DB
+    // ✅ Save levelBonusPoint in Experienceleavel model
     await Experienceleavel.create({
       userId,
       levelBonusPoint,
-      session
+      session: updatedUser.session
     });
 
     const matched = requestedLevel && requestedLevel !== newLevel
@@ -1103,6 +1105,16 @@ exports.StrikePath = async (req, res) => {
     console.error('StrikePath error:', error);
     return res.status(500).json({ message: error.message });
   }
+};
+
+// Helper Function
+const getLevelFromPoints = async (points) => {
+  const setting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
+  const experiencePoint = setting?.experiencePoint || 1000;
+
+  if (points < experiencePoint) return 1;
+  const level = Math.floor(points / experiencePoint) + 1;
+  return level;
 };
 
 
