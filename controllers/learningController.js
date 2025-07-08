@@ -1467,9 +1467,7 @@ exports.Dashboard = async (req, res) => {
 
     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
-    // const levelData = user?.userLevelData?.find((item) => item.level === level);
-    const levelData = user?.userLevelData?.find((item) => item.level === level && item.session === session);
-
+    const levelData = user?.userLevelData?.find((item) => item.level === level);
     const levelBonusPoint = levelData?.levelBonusPoint || 0;
 
     // --- Assigned Learnings with IQ ---
@@ -1576,8 +1574,8 @@ exports.Dashboard = async (req, res) => {
 };
 
 
-// exports.Dashboard = async (req, res) => {
 
+// exports.Dashboard = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
 
@@ -1735,7 +1733,3 @@ exports.Dashboard = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
-
-
-
-
