@@ -528,6 +528,7 @@ exports.TopicWithLeaning = async (req, res) => {
 //   }
 // };
 
+
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -826,21 +827,60 @@ exports.saveQuizAnswer = async (req, res) => {
 };
 
 
+// exports.submitQuizAnswer = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { topicId, questionId, selectedAnswer } = req.body;
+//     if (!topicId || !questionId) {
+//       return res.status(400).json({ message: 'topicId and questionId are required.' });
+//     }
+//     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
+//     if (!quiz) {
+//       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
+//     }
+//     if (selectedAnswer) {
+//       await UserQuizAnswer.findOneAndUpdate(
+//         { userId, topicId, questionId },
+//         { selectedAnswer },
+//         { upsert: true, new: true }
+//       );
+//       return res.status(200).json({ message: 'Answer saved successfully.' });
+//     } else {
+//       await UserQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
+//       return res.status(200).json({ message: 'Question skipped (no answer saved).' });
+//     }
+//   } catch (error) {
+//     console.error('Error in saveQuizAnswer:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.submitQuizAnswer = async (req, res) => {
   try {
     const userId = req.user._id;
     const { topicId, questionId, selectedAnswer } = req.body;
+
     if (!topicId || !questionId) {
       return res.status(400).json({ message: 'topicId and questionId are required.' });
     }
+
+    // ✅ Check if quiz exists
     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
     }
+
+    // ✅ Get user's session
+    const user = await User.findById(userId).select('session').lean();
+    const session = user?.session || null;
+
     if (selectedAnswer) {
       await UserQuizAnswer.findOneAndUpdate(
         { userId, topicId, questionId },
-        { selectedAnswer },
+        {
+          selectedAnswer,
+          session // ✅ Save session
+        },
         { upsert: true, new: true }
       );
       return res.status(200).json({ message: 'Answer saved successfully.' });
@@ -848,13 +888,12 @@ exports.submitQuizAnswer = async (req, res) => {
       await UserQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
       return res.status(200).json({ message: 'Question skipped (no answer saved).' });
     }
+
   } catch (error) {
     console.error('Error in saveQuizAnswer:', error);
     res.status(500).json({ message: error.message });
   }
 };
-
-
 
 exports.updateTestTimeInSeconds = async (req, res) => {
   try {
@@ -900,11 +939,11 @@ exports.calculateQuizScore = async (req, res) => {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
-    // 🧠 Get user & session
+    
     const user = await User.findById(userId).lean();
     const userSession = user?.session || null;
 
-    // 🧠 Get all questions
+   
     const allQuizzes = await Quiz.find({ topicId }).lean();
     const totalQuestions = allQuizzes.length;
 
@@ -912,7 +951,7 @@ exports.calculateQuizScore = async (req, res) => {
       return res.status(400).json({ message: 'No questions found for this topic.' });
     }
 
-    // 🧠 Get marking settings
+    
     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
 
     const maxMarkPerQuestion =
@@ -927,7 +966,7 @@ exports.calculateQuizScore = async (req, res) => {
 
     const totalMarks = maxMarkPerQuestion * totalQuestions;
 
-    // 🧠 Get answers
+    
     const answers = await UserQuizAnswer.find({ userId, topicId });
 
     let correctCount = 0;
@@ -952,8 +991,6 @@ exports.calculateQuizScore = async (req, res) => {
     const roundedMarks = parseFloat(marksObtained.toFixed(2));
     const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
-
-    // 🔍 Check for existing score for same topic + same session + same user
     const existingScore = await TopicScore.findOne({
       userId,
       topicId,
