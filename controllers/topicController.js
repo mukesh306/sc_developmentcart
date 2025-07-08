@@ -338,7 +338,6 @@ exports.TopicWithLeaning = async (req, res) => {
       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
     }
 
-    // ✅ Fetch only session-matching DescriptionVideo entries
     const userDescriptionVideos = await DescriptionVideo.find({
       userId: user._id,
       learningId: id,
@@ -368,7 +367,7 @@ exports.TopicWithLeaning = async (req, res) => {
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
       const topicIdStr = topic._id.toString();
       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
-      const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : 0;
+      const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : null;
 
       return {
         _id: topic._id,
