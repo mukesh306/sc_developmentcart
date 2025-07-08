@@ -830,17 +830,30 @@ exports.submitQuizAnswer = async (req, res) => {
   try {
     const userId = req.user._id;
     const { topicId, questionId, selectedAnswer } = req.body;
+
     if (!topicId || !questionId) {
       return res.status(400).json({ message: 'topicId and questionId are required.' });
     }
+
+    // Get the quiz question
     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
     }
+
+    // ✅ Fetch user's session
+    const user = await User.findById(userId).select('session').lean();
+    const session = user?.session || null;
+
+    console.log('Saving with session:', session); // ✅ Debug log
+
     if (selectedAnswer) {
       await UserQuizAnswer.findOneAndUpdate(
         { userId, topicId, questionId },
-        { selectedAnswer },
+        {
+          selectedAnswer,
+          session 
+        },
         { upsert: true, new: true }
       );
       return res.status(200).json({ message: 'Answer saved successfully.' });
@@ -848,11 +861,40 @@ exports.submitQuizAnswer = async (req, res) => {
       await UserQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
       return res.status(200).json({ message: 'Question skipped (no answer saved).' });
     }
+
   } catch (error) {
     console.error('Error in saveQuizAnswer:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
+// exports.submitQuizAnswer = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { topicId, questionId, selectedAnswer } = req.body;
+//     if (!topicId || !questionId) {
+//       return res.status(400).json({ message: 'topicId and questionId are required.' });
+//     }
+//     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
+//     if (!quiz) {
+//       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
+//     }
+//     if (selectedAnswer) {
+//       await UserQuizAnswer.findOneAndUpdate(
+//         { userId, topicId, questionId },
+//         { selectedAnswer },
+//         { upsert: true, new: true }
+//       );
+//       return res.status(200).json({ message: 'Answer saved successfully.' });
+//     } else {
+//       await UserQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
+//       return res.status(200).json({ message: 'Question skipped (no answer saved).' });
+//     }
+//   } catch (error) {
+//     console.error('Error in saveQuizAnswer:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 

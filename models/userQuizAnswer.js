@@ -6,6 +6,7 @@ const userQuizAnswerSchema = new mongoose.Schema({
   questionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
   selectedAnswer: { type: String, required: true },
   strickStatus: { type: Boolean, default: false },
+  session:{type:String},
 }, { timestamps: true });
 
 module.exports = mongoose.model('UserQuizAnswer', userQuizAnswerSchema);
