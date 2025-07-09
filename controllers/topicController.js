@@ -530,7 +530,6 @@ exports.TopicWithLeaning = async (req, res) => {
 //   }
 // };
 
-
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -548,105 +547,95 @@ exports.getTopicById = async (req, res) => {
 
     const learningId = topic.learningId?._id || null;
 
-    // Check existing description record
-    let existingRecord = await DescriptionVideo.findOne({
+    // 🔍 Find DescriptionVideo for current session
+    let currentSessionRecord = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
-      learningId
+      learningId,
+      session: userSession,
     });
 
-    // Create if isdescription=true and record doesn't exist
-    if (!existingRecord && isdescription === 'true') {
-      existingRecord = await DescriptionVideo.create({
+    // 🆕 If not found and isdescription=true, create new record
+    if (!currentSessionRecord && isdescription === 'true') {
+      currentSessionRecord = await DescriptionVideo.create({
         userId,
         topicId: topic._id,
         learningId,
         isvideo: false,
         isdescription: true,
         session: userSession,
-        scoreDate: new Date()
+        scoreDate: new Date(),
       });
     }
 
-    // Update isvideo if requested and not already true
+    // ✅ Update isvideo = true only if session matches
     if (
-      existingRecord &&
+      currentSessionRecord &&
       isvideo === 'true' &&
-      !existingRecord.isvideo &&
-      existingRecord.session === userSession
+      !currentSessionRecord.isvideo
     ) {
-      existingRecord.isvideo = true;
-      await existingRecord.save();
+      currentSessionRecord.isvideo = true;
+      await currentSessionRecord.save();
     }
 
-    // Get latest description only for this session
-    const latestDescription = await DescriptionVideo.findOne({
-      userId,
-      topicId: topic._id,
-      learningId,
-      session: userSession
-    })
-      .sort({ createdAt: -1 })
-      .select('isvideo isdescription');
-
-    // Get TopicScore only for matching session
+    // ✅ Score for current session only
     const topicScoreData = await TopicScore.findOne({
       userId,
       topicId: topic._id,
-      session: userSession
-    })
-      .select(
-        'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
-      )
-      .lean();
+      session: userSession,
+    }).select(
+      'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
+    ).lean();
 
     const topicObj = topic.toObject();
     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
 
-    // Get class info
+    // Class info (school or college)
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
     topicObj.classInfo = classInfo || null;
 
-    // Get quizzes
+    // Quizzes
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
-    // Set description flags
-    topicObj.isvideo = latestDescription?.isvideo === true;
-    topicObj.isdescription = latestDescription?.isdescription === true;
+    // ✅ Set flags from session-specific record
+    topicObj.isvideo = currentSessionRecord?.isvideo === true;
+    topicObj.isdescription = currentSessionRecord?.isdescription === true;
 
-    // Score fields
-    topicObj.score = topicScoreData ? topicScoreData.score : null;
-    topicObj.scorePercent = topicScoreData ? topicScoreData.scorePercent : null;
-    topicObj.totalQuestions = topicScoreData ? topicScoreData.totalQuestions : null;
-    topicObj.answeredQuestions = topicScoreData ? topicScoreData.answeredQuestions : null;
-    topicObj.correctAnswers = topicScoreData ? topicScoreData.correctAnswers : null;
-    topicObj.incorrectAnswers = topicScoreData ? topicScoreData.incorrectAnswers : null;
-    topicObj.skippedQuestions = topicScoreData ? topicScoreData.skippedQuestions : null;
-    topicObj.marksObtained = topicScoreData ? topicScoreData.marksObtained : null;
-    topicObj.totalMarks = topicScoreData ? topicScoreData.totalMarks : null;
-    topicObj.negativeMarking = topicScoreData ? topicScoreData.negativeMarking : null;
-    topicObj.strickStatus = topicScoreData ? topicScoreData.strickStatus : null;
-    topicObj.scoreDate = topicScoreData ? topicScoreData.scoreDate : null;
-    topicObj.createdAt = topicScoreData ? topicScoreData.createdAt : null;
-    topicObj.updatedAt = topicScoreData ? topicScoreData.updatedAt : null;
+    // ✅ Set score fields only if session matches
+    topicObj.score = topicScoreData?.score || null;
+    topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
+    topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
+    topicObj.correctAnswers = topicScoreData?.correctAnswers || 0;
+    topicObj.incorrectAnswers = topicScoreData?.incorrectAnswers || 0;
+    topicObj.skippedQuestions = topicScoreData?.skippedQuestions || 0;
+    topicObj.marksObtained = topicScoreData?.marksObtained || 0;
+    topicObj.totalMarks = topicScoreData?.totalMarks || 0;
+    topicObj.negativeMarking = topicScoreData?.negativeMarking || 0;
+    topicObj.scorePercent = topicScoreData?.scorePercent || 0;
+    topicObj.strickStatus = topicScoreData?.strickStatus || false;
+    topicObj.scoreDate = topicScoreData?.scoreDate || null;
+    topicObj.createdAt = topicScoreData?.createdAt || null;
+    topicObj.updatedAt = topicScoreData?.updatedAt || null;
 
     res.status(200).json({
       message: 'Topic fetched successfully.',
-      data: topicObj
+      data: topicObj,
     });
 
   } catch (error) {
     console.error('Error fetching topic by ID:', error);
     res.status(500).json({
       message: 'Error fetching topic.',
-      error: error.message
+      error: error.message,
     });
   }
 };
+
+
 
 
 
@@ -1505,7 +1494,6 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
   }
 };
 
-
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1520,7 +1508,7 @@ exports.PracticescoreCard = async (req, res) => {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          session: user.session
+          session: user.session  // ✅ Only match scores from current session
         }
       },
       { $sort: { scoreDate: 1 } },
@@ -1533,7 +1521,7 @@ exports.PracticescoreCard = async (req, res) => {
         }
       },
       { $replaceRoot: { newRoot: "$doc" } },
-      { $sort: { scoreDate: 1 } } // sorted earliest → latest
+      { $sort: { scoreDate: -1 } }
     ]);
 
     const populatedScores = await LearningScore.populate(rawScores, {
@@ -1541,48 +1529,13 @@ exports.PracticescoreCard = async (req, res) => {
       select: 'name'
     });
 
-    // === Fill missing dates logic ===
-    const today = moment().startOf('day');
-    let maxDate = today.clone();
-
-    const scoreMap = new Map();
-    for (const score of populatedScores) {
-      const dateStr = moment(score.scoreDate).format('YYYY-MM-DD');
-      scoreMap.set(dateStr, {
-        ...score.toObject?.() || score,
-        date: dateStr,
-        isToday: dateStr === today.format('YYYY-MM-DD')
-      });
-
-      const current = moment(score.scoreDate);
-      if (current.isAfter(maxDate)) maxDate = current;
-    }
-
-    const fullResult = [];
-    for (let m = today.clone(); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
-      const dateStr = m.format('YYYY-MM-DD');
-      if (scoreMap.has(dateStr)) {
-        fullResult.push(scoreMap.get(dateStr));
-      } else {
-        fullResult.push({
-          date: dateStr,
-          score: null,
-          isToday: dateStr === today.format('YYYY-MM-DD')
-        });
-      }
-    }
-
-    // Reverse so newest is first
-    fullResult.reverse();
-
-    return res.status(200).json({ scores: fullResult });
+    res.status(200).json({ scores: populatedScores });
 
   } catch (error) {
     console.error('Error in PracticescoreCard:', error);
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // exports.PracticescoreCard = async (req, res) => {
 //   try {
