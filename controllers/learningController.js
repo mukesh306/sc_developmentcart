@@ -97,6 +97,68 @@ exports.updateLearning = async (req, res) => {
   }
 };
 
+// second last
+
+// exports.scoreCard = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     // 🔍 Fetch user session
+//     const user = await User.findById(userId).lean();
+//     const userSession = user?.session;
+
+//     if (!userSession) {
+//       return res.status(400).json({ message: 'User session not found.' });
+//     }
+
+//     const rawScores = await TopicScore.aggregate([
+//       {
+//         $match: {
+//           userId: new mongoose.Types.ObjectId(userId),
+//           session: userSession // ✅ Filter by session
+//         }
+//       },
+//       { $sort: { scoreDate: 1 } },
+//       {
+//         $group: {
+//           _id: {
+//             $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+//           },
+//           doc: { $first: "$$ROOT" }
+//         }
+//       },
+//       { $replaceRoot: { newRoot: "$doc" } },
+//       { $sort: { scoreDate: 1 } }
+//     ]);
+
+//     const populatedScores = await TopicScore.populate(rawScores, [
+//       { path: 'topicId', select: 'topic' },
+//       { path: 'learningId', select: 'name' }
+//     ]);
+
+//     const todayStr = moment().format('YYYY-MM-DD');
+//     const todayScores = [];
+//     const otherScores = [];
+
+//     for (const score of populatedScores) {
+//       const scoreDateStr = moment(score.scoreDate).format('YYYY-MM-DD');
+//       if (scoreDateStr === todayStr) {
+//         todayScores.push(score);
+//       } else {
+//         otherScores.push(score);
+//       }
+//     }
+
+//     const finalScores = [...todayScores, ...otherScores];
+
+//     res.status(200).json({ scores: finalScores });
+
+//   } catch (error) {
+//     console.error('Error in scoreCard:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 
 exports.scoreCard = async (req, res) => {
   try {
@@ -114,7 +176,7 @@ exports.scoreCard = async (req, res) => {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          session: userSession // ✅ Filter by session
+          session: userSession
         }
       },
       { $sort: { scoreDate: 1 } },
@@ -135,29 +197,46 @@ exports.scoreCard = async (req, res) => {
       { path: 'learningId', select: 'name' }
     ]);
 
-    const todayStr = moment().format('YYYY-MM-DD');
-    const todayScores = [];
-    const otherScores = [];
+    const scoreMap = new Map();
+    let minDate = moment().startOf('day'); // today
+    let maxDate = minDate.clone(); // default to today
 
     for (const score of populatedScores) {
-      const scoreDateStr = moment(score.scoreDate).format('YYYY-MM-DD');
-      if (scoreDateStr === todayStr) {
-        todayScores.push(score);
+      const dateStr = moment(score.scoreDate).format('YYYY-MM-DD');
+      scoreMap.set(dateStr, {
+        ...score.toObject?.() || score,
+        date: dateStr,
+        isToday: dateStr === moment().format('YYYY-MM-DD')
+      });
+
+      const current = moment(score.scoreDate);
+      if (current.isAfter(maxDate)) maxDate = current;
+    }
+
+    const fullResult = [];
+    for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
+      const dateStr = m.format('YYYY-MM-DD');
+      if (scoreMap.has(dateStr)) {
+        fullResult.push(scoreMap.get(dateStr));
       } else {
-        otherScores.push(score);
+        fullResult.push({
+          date: dateStr,
+          score: null,
+          isToday: dateStr === moment().format('YYYY-MM-DD')
+        });
       }
     }
 
-    const finalScores = [...todayScores, ...otherScores];
+    // Reverse the list so latest appears first
+    fullResult.reverse();
 
-    res.status(200).json({ scores: finalScores });
+    res.status(200).json({ scores: fullResult });
 
   } catch (error) {
     console.error('Error in scoreCard:', error);
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 

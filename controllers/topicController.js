@@ -650,8 +650,6 @@ exports.getTopicById = async (req, res) => {
 
 
 
-
-
 // exports.getTopicById = async (req, res) => {
 //   try {
 //     const { id } = req.params;
@@ -1508,47 +1506,6 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 };
 
 
-// exports.PracticescoreCard = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-
-//     const rawScores = await LearningScore.aggregate([
-//       {
-//         $match: { userId: new mongoose.Types.ObjectId(userId) }
-//       },
-//       {
-//         $sort: { scoreDate: 1 } // earliest first
-//       },
-//       {
-//         $group: {
-//           _id: {
-//             $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
-//           },
-//           doc: { $first: "$$ROOT" }
-//         }
-//       },
-//       {
-//         $replaceRoot: { newRoot: "$doc" }
-//       },
-//       {
-//         $sort: { scoreDate: -1 } // latest date on top (optional)
-//       }
-//     ]);
-
-//     // Populate learningId manually to match your previous response format
-//     const populatedScores = await LearningScore.populate(rawScores, {
-//       path: 'learningId',
-//       select: 'name'
-//     });
-
-//     res.status(200).json({ scores: populatedScores });
-//   } catch (error) {
-//     console.error('Error in PracticescoreCard:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1563,7 +1520,7 @@ exports.PracticescoreCard = async (req, res) => {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          session: user.session  // ✅ Only match scores from current session
+          session: user.session
         }
       },
       { $sort: { scoreDate: 1 } },
@@ -1576,7 +1533,7 @@ exports.PracticescoreCard = async (req, res) => {
         }
       },
       { $replaceRoot: { newRoot: "$doc" } },
-      { $sort: { scoreDate: -1 } }
+      { $sort: { scoreDate: 1 } } // sorted earliest → latest
     ]);
 
     const populatedScores = await LearningScore.populate(rawScores, {
@@ -1584,13 +1541,91 @@ exports.PracticescoreCard = async (req, res) => {
       select: 'name'
     });
 
-    res.status(200).json({ scores: populatedScores });
+    // === Fill missing dates logic ===
+    const today = moment().startOf('day');
+    let maxDate = today.clone();
+
+    const scoreMap = new Map();
+    for (const score of populatedScores) {
+      const dateStr = moment(score.scoreDate).format('YYYY-MM-DD');
+      scoreMap.set(dateStr, {
+        ...score.toObject?.() || score,
+        date: dateStr,
+        isToday: dateStr === today.format('YYYY-MM-DD')
+      });
+
+      const current = moment(score.scoreDate);
+      if (current.isAfter(maxDate)) maxDate = current;
+    }
+
+    const fullResult = [];
+    for (let m = today.clone(); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
+      const dateStr = m.format('YYYY-MM-DD');
+      if (scoreMap.has(dateStr)) {
+        fullResult.push(scoreMap.get(dateStr));
+      } else {
+        fullResult.push({
+          date: dateStr,
+          score: null,
+          isToday: dateStr === today.format('YYYY-MM-DD')
+        });
+      }
+    }
+
+    // Reverse so newest is first
+    fullResult.reverse();
+
+    return res.status(200).json({ scores: fullResult });
 
   } catch (error) {
     console.error('Error in PracticescoreCard:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
+
+// exports.PracticescoreCard = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     // 🧠 Get user's current session
+//     const user = await User.findById(userId).lean();
+//     if (!user?.session) {
+//       return res.status(400).json({ message: 'User session not found.' });
+//     }
+
+//     const rawScores = await LearningScore.aggregate([
+//       {
+//         $match: {
+//           userId: new mongoose.Types.ObjectId(userId),
+//           session: user.session  // ✅ Only match scores from current session
+//         }
+//       },
+//       { $sort: { scoreDate: 1 } },
+//       {
+//         $group: {
+//           _id: {
+//             $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+//           },
+//           doc: { $first: "$$ROOT" }
+//         }
+//       },
+//       { $replaceRoot: { newRoot: "$doc" } },
+//       { $sort: { scoreDate: -1 } }
+//     ]);
+
+//     const populatedScores = await LearningScore.populate(rawScores, {
+//       path: 'learningId',
+//       select: 'name'
+//     });
+
+//     res.status(200).json({ scores: populatedScores });
+
+//   } catch (error) {
+//     console.error('Error in PracticescoreCard:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.StrictScore = async (req, res) => {
