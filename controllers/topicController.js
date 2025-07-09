@@ -298,6 +298,8 @@ exports.getAllTopicNames = async (req, res) => {
 //   }
 // };
 
+
+
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
@@ -533,6 +535,7 @@ exports.getTopicById = async (req, res) => {
     const { id } = req.params;
     const { isvideo, isdescription } = req.query;
     const userId = req.user._id;
+    const userSession = req.user.session;
 
     const topic = await Topic.findById(id)
       .populate('learningId')
@@ -544,14 +547,14 @@ exports.getTopicById = async (req, res) => {
 
     const learningId = topic.learningId?._id || null;
 
-    // Find or create DescriptionVideo
+    // ✅ Check if a DescriptionVideo already exists with matching session
     let existingRecord = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
       learningId
     });
 
-    // ✅ If no record exists and isdescription is true, create with session
+    // ✅ If no record exists and isdescription=true, create with session
     if (!existingRecord && isdescription === 'true') {
       existingRecord = await DescriptionVideo.create({
         userId,
@@ -559,27 +562,37 @@ exports.getTopicById = async (req, res) => {
         learningId,
         isvideo: false,
         isdescription: true,
-        session: req.user.session,  // ✅ Save session here
+        session: userSession,
         scoreDate: new Date()
       });
     }
 
-    // ✅ If record exists and isvideo becomes true, update only that
-    if (existingRecord && isvideo === 'true' && !existingRecord.isvideo) {
+    // ✅ Update isvideo if true and session matches
+    if (
+      existingRecord &&
+      isvideo === 'true' &&
+      !existingRecord.isvideo &&
+      existingRecord.session === userSession
+    ) {
       existingRecord.isvideo = true;
       await existingRecord.save();
     }
 
+    // ✅ Get latest description record that matches session
     const latestDescription = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
-      learningId
-    }).sort({ createdAt: -1 }).select('isvideo isdescription');
+      learningId,
+      session: userSession // ✅ Only if session matches
+    })
+      .sort({ createdAt: -1 })
+      .select('isvideo isdescription');
 
-    // ✅ Get topic score
+    // ✅ Get topic score only if session matches
     const topicScoreData = await TopicScore.findOne({
       userId,
-      topicId: topic._id
+      topicId: topic._id,
+      session: userSession // ✅ session match required
     }).select(
       'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
     ).lean();
@@ -598,11 +611,11 @@ exports.getTopicById = async (req, res) => {
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
-    // Description flags
-    topicObj.isvideo = latestDescription?.isvideo || false;
-    topicObj.isdescription = latestDescription?.isdescription || false;
+    // ✅ Set based on session match
+    topicObj.isvideo = latestDescription?.isvideo === true;
+    topicObj.isdescription = latestDescription?.isdescription === true;
 
-    // Score flattening
+    // ✅ Only show score data if session matches
     topicObj.score = topicScoreData?.score || null;
     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
@@ -631,6 +644,7 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
+
 
 
 
