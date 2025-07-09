@@ -99,6 +99,8 @@ exports.updateLearning = async (req, res) => {
 
 // second last
 
+
+
 // exports.scoreCard = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -198,21 +200,28 @@ exports.scoreCard = async (req, res) => {
     ]);
 
     const scoreMap = new Map();
-    let minDate = moment().startOf('day'); // today
-    let maxDate = minDate.clone(); // default to today
+    let minDate = null;
+    let maxDate = moment().startOf('day'); // restrict max date to today
+    const todayStr = moment().format('YYYY-MM-DD');
 
     for (const score of populatedScores) {
-      const dateStr = moment(score.scoreDate).format('YYYY-MM-DD');
+      const scoreDate = moment(score.scoreDate).startOf('day');
+      const dateStr = scoreDate.format('YYYY-MM-DD');
+
       scoreMap.set(dateStr, {
         ...score.toObject?.() || score,
         date: dateStr,
-        isToday: dateStr === moment().format('YYYY-MM-DD')
+        isToday: dateStr === todayStr
       });
 
-      const current = moment(score.scoreDate);
-      if (current.isAfter(maxDate)) maxDate = current;
+      if (!minDate || scoreDate.isBefore(minDate)) minDate = scoreDate;
+      if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
     }
 
+    // If no scores at all, set minDate as today
+    if (!minDate) minDate = moment().startOf('day');
+
+    // Fill all dates between minDate and maxDate
     const fullResult = [];
     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
       const dateStr = m.format('YYYY-MM-DD');
@@ -222,12 +231,12 @@ exports.scoreCard = async (req, res) => {
         fullResult.push({
           date: dateStr,
           score: null,
-          isToday: dateStr === moment().format('YYYY-MM-DD')
+          isToday: dateStr === todayStr
         });
       }
     }
 
-    // Reverse the list so latest appears first
+    // Reverse the result to show latest first
     fullResult.reverse();
 
     res.status(200).json({ scores: fullResult });
@@ -237,6 +246,7 @@ exports.scoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
