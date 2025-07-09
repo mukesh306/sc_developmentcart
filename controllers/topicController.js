@@ -547,52 +547,42 @@ exports.getTopicById = async (req, res) => {
 
     const learningId = topic.learningId?._id || null;
 
-    // ✅ Check if a DescriptionVideo already exists with matching session
-    let existingRecord = await DescriptionVideo.findOne({
+    // 🔍 Find DescriptionVideo for current session
+    let currentSessionRecord = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
-      learningId
+      learningId,
+      session: userSession,
     });
 
-    // ✅ If no record exists and isdescription=true, create with session
-    if (!existingRecord && isdescription === 'true') {
-      existingRecord = await DescriptionVideo.create({
+    // 🆕 If not found and isdescription=true, create new record
+    if (!currentSessionRecord && isdescription === 'true') {
+      currentSessionRecord = await DescriptionVideo.create({
         userId,
         topicId: topic._id,
         learningId,
         isvideo: false,
         isdescription: true,
         session: userSession,
-        scoreDate: new Date()
+        scoreDate: new Date(),
       });
     }
 
-    // ✅ Update isvideo if true and session matches
+    // ✅ Update isvideo = true only if session matches
     if (
-      existingRecord &&
+      currentSessionRecord &&
       isvideo === 'true' &&
-      !existingRecord.isvideo &&
-      existingRecord.session === userSession
+      !currentSessionRecord.isvideo
     ) {
-      existingRecord.isvideo = true;
-      await existingRecord.save();
+      currentSessionRecord.isvideo = true;
+      await currentSessionRecord.save();
     }
 
-    // ✅ Get latest description record that matches session
-    const latestDescription = await DescriptionVideo.findOne({
-      userId,
-      topicId: topic._id,
-      learningId,
-      session: userSession // ✅ Only if session matches
-    })
-      .sort({ createdAt: -1 })
-      .select('isvideo isdescription');
-
-    // ✅ Get topic score only if session matches
+    // ✅ Score for current session only
     const topicScoreData = await TopicScore.findOne({
       userId,
       topicId: topic._id,
-      session: userSession // ✅ session match required
+      session: userSession,
     }).select(
       'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
     ).lean();
@@ -600,7 +590,7 @@ exports.getTopicById = async (req, res) => {
     const topicObj = topic.toObject();
     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
 
-    // Class info
+    // Class info (school or college)
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
@@ -611,11 +601,11 @@ exports.getTopicById = async (req, res) => {
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
-    // ✅ Set based on session match
-    topicObj.isvideo = latestDescription?.isvideo === true;
-    topicObj.isdescription = latestDescription?.isdescription === true;
+    // ✅ Set flags from session-specific record
+    topicObj.isvideo = currentSessionRecord?.isvideo === true;
+    topicObj.isdescription = currentSessionRecord?.isdescription === true;
 
-    // ✅ Only show score data if session matches
+    // ✅ Set score fields only if session matches
     topicObj.score = topicScoreData?.score || null;
     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
@@ -633,14 +623,14 @@ exports.getTopicById = async (req, res) => {
 
     res.status(200).json({
       message: 'Topic fetched successfully.',
-      data: topicObj
+      data: topicObj,
     });
 
   } catch (error) {
     console.error('Error fetching topic by ID:', error);
     res.status(500).json({
       message: 'Error fetching topic.',
-      error: error.message
+      error: error.message,
     });
   }
 };
