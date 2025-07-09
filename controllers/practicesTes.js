@@ -107,7 +107,7 @@ exports.PracticeTest = async (req, res) => {
       await PracticesQuizAnswer.findByIdAndUpdate(existingAnswer._id, {
         selectedAnswer: answerToSave,
         learningId,
-        session: userSession,              // ✅ Save session on update
+        session: userSession,           
         isSkipped: !selectedAnswer
       });
     } else {
