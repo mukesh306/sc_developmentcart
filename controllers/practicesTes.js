@@ -68,7 +68,6 @@ const User = require('../models/User');
 //   }
 // };
 
-
 exports.PracticeTest = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -85,53 +84,54 @@ exports.PracticeTest = async (req, res) => {
       return res.status(400).json({ message: 'User session not found.' });
     }
 
-    // ✅ Verify quiz question exists
+    // ✅ Check quiz question exists
     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
     }
 
-    const answerToSave = selectedAnswer ? selectedAnswer : null;
-
+    const answerToSave = selectedAnswer || null;
     const startOfDay = moment().startOf('day').toDate();
     const endOfDay = moment().endOf('day').toDate();
 
-    const existingAnswer = await PracticesQuizAnswer.findOne({
+    // ✅ Check if user has already attempted ANY question for this topic today
+    const alreadyAttemptedToday = await PracticesQuizAnswer.exists({
       userId,
       topicId,
-      questionId,
+      session: userSession,
       createdAt: { $gte: startOfDay, $lte: endOfDay }
     });
 
-    if (existingAnswer) {
-      await PracticesQuizAnswer.findByIdAndUpdate(existingAnswer._id, {
-        selectedAnswer: answerToSave,
-        learningId,
-        session: userSession,              // ✅ Save session on update
-        isSkipped: !selectedAnswer
+    if (alreadyAttemptedToday) {
+      return res.status(200).json({
+        message: 'You have already taken the practice test for this topic today.',
+        allowed: false
       });
-    } else {
-      const newAnswer = new PracticesQuizAnswer({
-        userId,
-        topicId,
-        questionId,
-        selectedAnswer: answerToSave,
-        learningId,
-        session: userSession,              // ✅ Save session on insert
-        isSkipped: !selectedAnswer
-      });
-      await newAnswer.save();
     }
 
-    const message = selectedAnswer ? 'Answer saved successfully.' : 'Question skipped and recorded.';
-    return res.status(200).json({ message });
+    // ✅ Save only first attempt of the day
+    const newAnswer = new PracticesQuizAnswer({
+      userId,
+      topicId,
+      questionId,
+      selectedAnswer: answerToSave,
+      learningId,
+      session: userSession,
+      isSkipped: !selectedAnswer
+    });
+
+    await newAnswer.save();
+
+    return res.status(200).json({
+      message: selectedAnswer ? 'Answer saved successfully.' : 'Question skipped and recorded.',
+      allowed: true
+    });
 
   } catch (error) {
     console.error('Error in PracticeTest:', error);
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 // exports.calculateQuizScoreByLearning = async (req, res) => {
