@@ -541,7 +541,6 @@ exports.TopicWithLeaning = async (req, res) => {
 // };
 
 
-
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -601,6 +600,12 @@ exports.getTopicById = async (req, res) => {
 
     const topicObj = topic.toObject();
     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
+
+    // ✅ Add full image URL
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    if (topicObj.image) {
+      topicObj.image = `${baseUrl}/uploads/${path.basename(topicObj.image)}`;
+    }
 
     // Class info (school or college)
     let classInfo = await School.findById(topic.classId).lean();
