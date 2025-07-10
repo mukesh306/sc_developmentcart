@@ -1003,6 +1003,7 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
+    
     topicScores.forEach(score => {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
