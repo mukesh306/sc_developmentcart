@@ -14,6 +14,8 @@ const LearningScore = require('../models/learningScore');
 const TopicScore = require('../models/topicScore');
 const DescriptionVideo = require('../models/descriptionvideo'); 
 const User = require('../models/User');
+const path = require('path');
+const fs = require('fs');
 
 exports.createTopicWithQuiz = async (req, res) => {
   try {
@@ -27,7 +29,15 @@ exports.createTopicWithQuiz = async (req, res) => {
     } = req.body;
 
     const createdBy = req.user._id;
-    const image = req.files?.image?.[0]?.path || null;
+    // const image = req.files?.image?.[0]?.path || null;
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+    // ⬇️ Handle image
+    let image = req.files?.image?.[0]?.path || null;
+    if (image && fs.existsSync(image)) {
+      image = `${baseUrl}/uploads/${path.basename(image)}`;
+    }
 
     const videoFile = req.files?.video?.[0]?.path || null;
     const videoLink = req.body.video || null;
@@ -529,6 +539,8 @@ exports.TopicWithLeaning = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
+
+
 
 exports.getTopicById = async (req, res) => {
   try {
