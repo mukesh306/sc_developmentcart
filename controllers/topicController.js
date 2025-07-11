@@ -1483,11 +1483,11 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
   }
 };
 
+
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // 🧠 Get user's current session
     const user = await User.findById(userId).lean();
     if (!user?.session) {
       return res.status(400).json({ message: 'User session not found.' });
@@ -1497,20 +1497,20 @@ exports.PracticescoreCard = async (req, res) => {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          session: user.session  // ✅ Only match scores from current session
+          session: user.session
         }
       },
-      { $sort: { scoreDate: 1 } },
+      { $sort: { scoreDate: 1, createdAt: 1 } },
       {
         $group: {
           _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+            learningId: '$learningId',
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
           },
           doc: { $first: "$$ROOT" }
         }
       },
       { $replaceRoot: { newRoot: "$doc" } },
-      { $sort: { scoreDate: -1 } }
     ]);
 
     const populatedScores = await LearningScore.populate(rawScores, {
@@ -1518,13 +1518,42 @@ exports.PracticescoreCard = async (req, res) => {
       select: 'name'
     });
 
-    res.status(200).json({ scores: populatedScores });
+    // Group and average by learningId
+    const scoresByLearning = {};
+    for (const score of populatedScores) {
+      const lid = score.learningId?._id?.toString();
+      if (!lid) continue;
+
+      if (!scoresByLearning[lid]) {
+        scoresByLearning[lid] = {
+          learningId: lid,
+          learningName: score.learningId.name,
+          scores: []
+        };
+      }
+
+      scoresByLearning[lid].scores.push(score.score);
+    }
+
+    const result = Object.values(scoresByLearning).map(item => {
+      const total = item.scores.reduce((a, b) => a + b, 0);
+      const average = parseFloat((total / item.scores.length).toFixed(2));
+      return {
+        learningId: item.learningId,
+        learningName: item.learningName,
+        averageScore: average,
+        scores: item.scores
+      };
+    });
+
+    res.status(200).json({ scores: result });
 
   } catch (error) {
     console.error('Error in PracticescoreCard:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // exports.PracticescoreCard = async (req, res) => {
 //   try {
