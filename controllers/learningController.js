@@ -1430,69 +1430,28 @@ exports.getUserLevelData = async (req, res) => {
 //   }
 // };
 
+
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
+    const learningIdFilter = req.query.learningId;
+
+    if (!learningIdFilter) {
+      return res.status(400).json({ message: 'learningId is required.' });
+    }
 
     const user = await User.findById(userId).lean();
     if (!user || !user.session) {
       return res.status(400).json({ message: 'User session not found.' });
     }
 
-    const todayStart = moment().startOf('day').toDate();
-    const todayEnd = moment().endOf('day').toDate();
-
-    // Fetch all today's scores (all subjects)
-    const allLearningScores = await LearningScore.find({
-      userId,
-      session: user.session,
-      strickStatus: true,
-      scoreDate: { $gte: todayStart, $lte: todayEnd }
-    })
-      .sort({ scoreDate: 1 })
-      .lean();
-
-    const allTopicScores = await TopicScore.find({
-      userId,
-      session: user.session,
-      strickStatus: true,
-      updatedAt: { $gte: todayStart, $lte: todayEnd }
-    })
-      .sort({ updatedAt: 1 })
-      .lean();
-
-    // Get the first score (either from learning or topic)
-    let firstLearning = null;
-    if (allLearningScores.length > 0 && allTopicScores.length > 0) {
-      const firstLS = allLearningScores[0];
-      const firstTS = allTopicScores[0];
-
-      firstLearning =
-        new Date(firstLS.scoreDate) < new Date(firstTS.updatedAt)
-          ? firstLS.learningId.toString()
-          : firstTS.learningId.toString();
-    } else if (allLearningScores.length > 0) {
-      firstLearning = allLearningScores[0].learningId.toString();
-    } else if (allTopicScores.length > 0) {
-      firstLearning = allTopicScores[0].learningId.toString();
-    }
-
-    if (!firstLearning) {
-      return res.status(200).json({
-        count: 0,
-        overallAverage: 0,
-        results: []
-      });
-    }
-
-    // Fetch only today's data for the first learningId
     const learningScores = await LearningScore.find({
       userId,
       session: user.session,
       strickStatus: true,
-      learningId: firstLearning,
-      scoreDate: { $gte: todayStart, $lte: todayEnd }
+      learningId: learningIdFilter
     })
+      .sort({ scoreDate: 1 })
       .populate('learningId', 'name')
       .lean();
 
@@ -1500,9 +1459,9 @@ exports.genraliqAverage = async (req, res) => {
       userId,
       session: user.session,
       strickStatus: true,
-      learningId: firstLearning,
-      updatedAt: { $gte: todayStart, $lte: todayEnd }
+      learningId: learningIdFilter
     })
+      .sort({ updatedAt: 1 })
       .populate('learningId', 'name')
       .lean();
 
@@ -1547,14 +1506,14 @@ exports.genraliqAverage = async (req, res) => {
         score: null,
         updatedAt: null,
         scoreDate: null,
-        learningId: { _id: firstLearning, name: '' }
+        learningId: { _id: learningIdFilter, name: '' }
       };
 
       const topic = record.topic || {
         type: 'topic',
         score: null,
         updatedAt: null,
-        learningId: { _id: firstLearning, name: '' }
+        learningId: { _id: learningIdFilter, name: '' }
       };
 
       let avg = 0;
@@ -1574,10 +1533,14 @@ exports.genraliqAverage = async (req, res) => {
       });
     }
 
+    // ✅ Sort results by latest date (descending)
+    results.sort((a, b) => new Date(b.date) - new Date(a.date));
+
     const overallAverage = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
 
+    // ✅ Save or update GenralIQ document
     await GenralIQ.findOneAndUpdate(
-      { userId, learningId: firstLearning, session: user.session },
+      { userId, learningId: learningIdFilter, session: user.session },
       { overallAverage },
       { upsert: true, new: true }
     );
