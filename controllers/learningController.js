@@ -1433,98 +1433,106 @@ exports.getUserLevelData = async (req, res) => {
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
-
-    const user = await User.findById(userId).lean();
-    if (!user || !user.session) {
-      return res.status(400).json({ message: 'User session not found.' });
-    }
-
     const learningIdFilter = req.query.learningId;
 
     if (!learningIdFilter) {
       return res.status(400).json({ message: 'learningId is required.' });
     }
 
-    const practice = await LearningScore.findOne({
+    const user = await User.findById(userId).lean();
+    if (!user || !user.session) {
+      return res.status(400).json({ message: 'User session not found.' });
+    }
+
+    const learningScores = await LearningScore.find({
       userId,
       session: user.session,
       strickStatus: true,
       learningId: learningIdFilter
     })
-      .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
+      .populate('learningId', 'name')
       .lean();
 
-    const topic = await TopicScore.findOne({
+    const topicScores = await TopicScore.find({
       userId,
       session: user.session,
       strickStatus: true,
       learningId: learningIdFilter
     })
-      .populate('learningId', 'name')
       .sort({ updatedAt: 1 })
+      .populate('learningId', 'name')
       .lean();
 
-    let average = 0;
+    const dateMap = new Map();
+
+    learningScores.forEach(score => {
+      const date = moment(score.scoreDate).format('YYYY-MM-DD');
+      if (!dateMap.has(date)) {
+        dateMap.set(date, { practice: null, topic: null });
+      }
+      dateMap.get(date).practice = {
+        type: 'practice',
+        score: score.score,
+        updatedAt: score.updatedAt,
+        scoreDate: score.scoreDate,
+        learningId: score.learningId
+      };
+    });
+
+    topicScores.forEach(score => {
+      const date = moment(score.updatedAt).format('YYYY-MM-DD');
+      if (!dateMap.has(date)) {
+        dateMap.set(date, { practice: null, topic: null });
+      }
+      dateMap.get(date).topic = {
+        type: 'topic',
+        score: score.score,
+        updatedAt: score.updatedAt,
+        learningId: score.learningId
+      };
+    });
+
+    const results = [];
+    let total = 0;
     let count = 0;
 
-    if (practice && topic) {
-      average = (practice.score + topic.score) / 2;
-      count = 1;
-    } else if (practice || topic) {
-      average = (practice?.score || topic?.score);
-      count = 1;
-    }
+    for (let [date, record] of dateMap.entries()) {
+      let avg = 0;
+      if (record.practice && record.topic) {
+        avg = (record.practice.score + record.topic.score) / 2;
+      } else if (record.practice || record.topic) {
+        avg = record.practice?.score || record.topic?.score;
+      }
+      total += avg;
+      count++;
 
-    const date = moment(practice?.scoreDate || topic?.updatedAt || new Date()).format('YYYY-MM-DD');
-    const learningIdToSave = practice?.learningId?._id || topic?.learningId?._id || learningIdFilter;
-
-    const results = [
-      {
+      results.push({
         date,
-        data: [
-          practice
-            ? {
-                type: 'practice',
-                score: practice.score,
-                updatedAt: practice.updatedAt,
-                scoreDate: practice.scoreDate,
-                learningId: practice.learningId,
-              }
-            : null,
-          topic
-            ? {
-                type: 'topic',
-                score: topic.score,
-                updatedAt: topic.updatedAt,
-                learningId: topic.learningId,
-              }
-            : null,
-        ],
-        average: Math.round(average * 100) / 100,
-      },
-    ];
-
-    const overallAverage = Math.round(average * 100) / 100;
-
-    if (learningIdToSave) {
-      await GenralIQ.findOneAndUpdate(
-        { userId, learningId: learningIdToSave, session: user.session },
-        { overallAverage },
-        { upsert: true, new: true }
-      );
+        data: [record.practice, record.topic],
+        average: Math.round(avg * 100) / 100
+      });
     }
+
+    const overallAverage = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
+
+    await GenralIQ.findOneAndUpdate(
+      { userId, learningId: learningIdFilter, session: user.session },
+      { overallAverage },
+      { upsert: true, new: true }
+    );
 
     return res.status(200).json({
       count,
       overallAverage,
-      results,
+      results
     });
   } catch (error) {
-    console.error("Error in genraliqAverage:", error);
+    console.error('Error in genraliqAverage:', error);
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 exports.getGenrelIq = async (req, res) => {
