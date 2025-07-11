@@ -1483,7 +1483,6 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
   }
 };
 
-
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1504,55 +1503,40 @@ exports.PracticescoreCard = async (req, res) => {
       {
         $group: {
           _id: {
-            learningId: '$learningId',
-            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } },
+            learningId: "$learningId"
           },
           doc: { $first: "$$ROOT" }
         }
       },
       { $replaceRoot: { newRoot: "$doc" } },
+      { $sort: { scoreDate: -1 } }
     ]);
 
+    // Populate learningId for name
     const populatedScores = await LearningScore.populate(rawScores, {
       path: 'learningId',
       select: 'name'
     });
 
-    // Group and average by learningId
-    const scoresByLearning = {};
-    for (const score of populatedScores) {
-      const lid = score.learningId?._id?.toString();
-      if (!lid) continue;
+    // 🔢 Calculate overall average score
+    const scoresOnly = populatedScores.map(s => s.score);
+    const avgScore = scoresOnly.length > 0 
+      ? parseFloat((scoresOnly.reduce((a, b) => a + b, 0) / scoresOnly.length).toFixed(2))
+      : 0;
 
-      if (!scoresByLearning[lid]) {
-        scoresByLearning[lid] = {
-          learningId: lid,
-          learningName: score.learningId.name,
-          scores: []
-        };
-      }
-
-      scoresByLearning[lid].scores.push(score.score);
-    }
-
-    const result = Object.values(scoresByLearning).map(item => {
-      const total = item.scores.reduce((a, b) => a + b, 0);
-      const average = parseFloat((total / item.scores.length).toFixed(2));
-      return {
-        learningId: item.learningId,
-        learningName: item.learningName,
-        averageScore: average,
-        scores: item.scores
-      };
+    // ✅ Response structure same as before
+    res.status(200).json({
+      scores: populatedScores,
+      averageScore: avgScore
     });
-
-    res.status(200).json({ scores: result });
 
   } catch (error) {
     console.error('Error in PracticescoreCard:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.PracticescoreCard = async (req, res) => {
