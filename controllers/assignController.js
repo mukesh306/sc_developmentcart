@@ -61,13 +61,73 @@ exports.getAssignedList = async (req, res) => {
   }
 };
 
+// exports.getAssignedListUser = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const user = await User.findById(userId).lean();
+//     if (!user || !user.className || !user.session) {
+//       return res.status(400).json({ message: 'User className or session not found.' });
+//     }
+//     const assignedList = await Assigned.find({ classId: user.className })
+//       .populate('learning')
+//       .populate('learning2')
+//       .populate('learning3')
+//       .populate('learning4')
+//       .lean();
+
+//     // Process each assigned item
+//     for (let item of assignedList) {
+//       // Populate class info (School or College)
+//       let classInfo = await School.findById(item.classId).lean();
+//       if (!classInfo) {
+//         classInfo = await College.findById(item.classId).lean();
+//       }
+//       item.classInfo = classInfo || null;
+ 
+//       const getScore = async (learningField) => {
+//         const learning = item[learningField];
+//         if (learning && learning._id) {
+//           const scoreDoc = await TopicScore.findOne({
+//             userId,
+//             learningId: learning._id,
+//             session: user.session 
+//           }).lean();
+
+//           return scoreDoc?.score ?? 0;
+//         }
+//         return 0;
+//       };
+
+//       // Clean empty learning fields
+//       ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
+//         if (!item[field] || Object.keys(item[field]).length === 0) {
+//           item[field] = null;
+//         }
+//       });
+
+//       // Attach score averages per learningId and session
+//       item.learningAverage = await getScore('learning');
+//       item.learning2Average = await getScore('learning2');
+//       item.learning3Average = await getScore('learning3');
+//       item.learning4Average = await getScore('learning4');
+//     }
+
+//     res.status(200).json({ data: assignedList });
+//   } catch (error) {
+//     console.error('Get Assigned Error:', error);
+//     res.status(500).json({ message: 'Internal server error', error: error.message });
+//   }
+// };
+
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
     const user = await User.findById(userId).lean();
+
     if (!user || !user.className || !user.session) {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
+
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
@@ -75,50 +135,65 @@ exports.getAssignedListUser = async (req, res) => {
       .populate('learning4')
       .lean();
 
-    // Process each assigned item
+    // 🔍 Fetch all TopicScores for this user and session
+    const allScores = await TopicScore.find({
+      userId,
+      session: user.session
+    }).lean();
+
+    // 📊 Create average score map by learningId
+    const scoreMap = {};
+
+    for (const score of allScores) {
+      const lid = score.learningId?.toString();
+      if (!lid || typeof score.score !== 'number') continue;
+
+      if (!scoreMap[lid]) {
+        scoreMap[lid] = [];
+      }
+
+      scoreMap[lid].push(score.score);
+    }
+
+    // 📈 Calculate average scores
+    const averageMap = {};
+    for (const [lid, scores] of Object.entries(scoreMap)) {
+      const avg = scores.reduce((sum, s) => sum + s, 0) / scores.length;
+      averageMap[lid] = parseFloat(avg.toFixed(2));
+    }
+
+    // 🧠 Attach class info and averages to each assigned item
     for (let item of assignedList) {
-      // Populate class info (School or College)
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
- 
-      const getScore = async (learningField) => {
-        const learning = item[learningField];
-        if (learning && learning._id) {
-          const scoreDoc = await TopicScore.findOne({
-            userId,
-            learningId: learning._id,
-            session: user.session 
-          }).lean();
 
-          return scoreDoc?.score ?? 0;
+      // Helper: get average for a learning field
+      const setAverage = (field, avgField) => {
+        const learning = item[field];
+        if (learning && learning._id) {
+          const avg = averageMap[learning._id.toString()];
+          item[avgField] = avg ?? 0;
+        } else {
+          item[avgField] = 0;
         }
-        return 0;
       };
 
-      // Clean empty learning fields
-      ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
-        if (!item[field] || Object.keys(item[field]).length === 0) {
-          item[field] = null;
-        }
-      });
-
-      // Attach score averages per learningId and session
-      item.learningAverage = await getScore('learning');
-      item.learning2Average = await getScore('learning2');
-      item.learning3Average = await getScore('learning3');
-      item.learning4Average = await getScore('learning4');
+      setAverage('learning', 'learningAverage');
+      setAverage('learning2', 'learning2Average');
+      setAverage('learning3', 'learning3Average');
+      setAverage('learning4', 'learning4Average');
     }
 
     res.status(200).json({ data: assignedList });
+
   } catch (error) {
     console.error('Get Assigned Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
 
 // exports.getAssignedListUser = async (req, res) => {
 //   try {
