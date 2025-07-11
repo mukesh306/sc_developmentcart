@@ -135,34 +135,39 @@ exports.getAssignedListUser = async (req, res) => {
       .populate('learning4')
       .lean();
 
-    // 🔍 Fetch all TopicScores for this user and session
+    // Fetch all TopicScores for this user and session
     const allScores = await TopicScore.find({
       userId,
       session: user.session
-    }).lean();
+    })
+      .populate('learningId', 'name') // So we can get name for learningWiseAverage
+      .lean();
 
-    // 📊 Create average score map by learningId
+    // Create learningWiseAverage same as scoreCard logic
     const scoreMap = {};
 
     for (const score of allScores) {
-      const lid = score.learningId?.toString();
+      const lid = score.learningId?._id?.toString();
       if (!lid || typeof score.score !== 'number') continue;
 
       if (!scoreMap[lid]) {
-        scoreMap[lid] = [];
+        scoreMap[lid] = {
+          name: score.learningId.name || "Unknown",
+          scores: []
+        };
       }
 
-      scoreMap[lid].push(score.score);
+      scoreMap[lid].scores.push(score.score);
     }
 
-    // 📈 Calculate average scores
-    const averageMap = {};
-    for (const [lid, scores] of Object.entries(scoreMap)) {
-      const avg = scores.reduce((sum, s) => sum + s, 0) / scores.length;
-      averageMap[lid] = parseFloat(avg.toFixed(2));
+    const learningWiseAverage = {};
+    for (const [lid, obj] of Object.entries(scoreMap)) {
+      const total = obj.scores.reduce((sum, s) => sum + s, 0);
+      const avg = parseFloat((total / obj.scores.length).toFixed(2));
+      learningWiseAverage[lid] = avg;
     }
 
-    // 🧠 Attach class info and averages to each assigned item
+    // Attach class info and reuse learningWiseAverage for average fields
     for (let item of assignedList) {
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
@@ -170,11 +175,11 @@ exports.getAssignedListUser = async (req, res) => {
       }
       item.classInfo = classInfo || null;
 
-      // Helper: get average for a learning field
+      // Set learning averages from pre-calculated map
       const setAverage = (field, avgField) => {
         const learning = item[field];
         if (learning && learning._id) {
-          const avg = averageMap[learning._id.toString()];
+          const avg = learningWiseAverage[learning._id.toString()];
           item[avgField] = avg ?? 0;
         } else {
           item[avgField] = 0;
@@ -194,6 +199,7 @@ exports.getAssignedListUser = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 
 // exports.getAssignedListUser = async (req, res) => {
 //   try {
