@@ -1036,6 +1036,7 @@ exports.Strikecalculation = async (req, res) => {
 //   }
 // };
 
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1113,6 +1114,7 @@ exports.StrikePath = async (req, res) => {
     const endDate = moment(datesList[datesList.length - 1]);
 
     const result = [];
+    const dateOrderMap = new Map();
 
     const existingBonusDates = user?.bonusDates || [];
     const existingDeductedDates = user?.deductedDates || [];
@@ -1154,47 +1156,59 @@ exports.StrikePath = async (req, res) => {
       }
 
       result.push(item);
+      if (!dateOrderMap.has(item.date)) dateOrderMap.set(item.date, result.length - 1);
     }
 
-    // Weekly Bonus
+    // Weekly bonus
     for (let i = 6; i < result.length; i++) {
       const streak = result.slice(i - 6, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
         r.data.some(d => d.type === 'topic')
       );
       const bonusDate = result[i].date;
-
       if (streak && !existingWeeklyBonusDates.includes(bonusDate)) {
         result[i].weeklyBonus = weeklyBonus;
         weeklyBonusToAdd += weeklyBonus;
         weeklyBonusDatesToAdd.push(bonusDate);
       }
-
       if (existingWeeklyBonusDates.includes(bonusDate)) {
         result[i].weeklyBonus = weeklyBonus;
       }
     }
 
-    // Monthly Bonus
+    // Monthly bonus
     for (let i = 29; i < result.length; i++) {
       const streak = result.slice(i - 29, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
         r.data.some(d => d.type === 'topic')
       );
       const bonusDate = result[i].date;
-
       if (streak && !existingMonthlyBonusDates.includes(bonusDate)) {
         result[i].monthlyBonus = monthlyBonus;
         monthlyBonusToAdd += monthlyBonus;
         monthlyBonusDatesToAdd.push(bonusDate);
       }
-
       if (existingMonthlyBonusDates.includes(bonusDate)) {
         result[i].monthlyBonus = monthlyBonus;
       }
     }
 
-    // Update User
+    // Sort inside each date's data by updatedAt ASC
+    result.forEach(item => {
+      item.data.sort((a, b) => new Date(a.updatedAt || a.scoreDate) - new Date(b.updatedAt || b.scoreDate));
+    });
+
+    // Sort result: latest date first, then by insert order if same date
+    result.sort((a, b) => {
+      const dateA = new Date(a.date);
+      const dateB = new Date(b.date);
+      if (dateA.getTime() !== dateB.getTime()) {
+        return dateB - dateA; // latest date first
+      }
+      return dateOrderMap.get(a.date) - dateOrderMap.get(b.date);
+    });
+
+    // Update User with bonus calculations
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -1218,7 +1232,6 @@ exports.StrikePath = async (req, res) => {
       updateData.$push = updateData.$push || {};
       updateData.$push.monthlyBonusDates = { $each: monthlyBonusDatesToAdd };
     }
-
     if (Object.keys(updateData).length > 0) {
       await User.findByIdAndUpdate(userId, updateData);
     }
@@ -1245,30 +1258,20 @@ exports.StrikePath = async (req, res) => {
 
     const exists = await Experienceleavel.findOne({ userId, session, level: newLevel });
     if (!exists) {
-      await Experienceleavel.create({
-        userId,
-        session,
-        level: newLevel,
-        levelBonusPoint
-      });
+      await Experienceleavel.create({ userId, session, level: newLevel, levelBonusPoint });
     }
 
     const matched = requestedLevel && requestedLevel !== newLevel
       ? updatedUser.userLevelData.find(l => l.level === requestedLevel)?.data || []
       : result;
 
-    // ✅ ROUNDING LOGIC
-    const roundedBonusPoint = Math.round(updatedUser?.bonuspoint || 0);
-    const roundedLevelBonusPoint = Math.round(levelBonusPoint);
-
     return res.status(200).json({
-      bonuspoint: roundedBonusPoint,
-      levelBonusPoint: roundedLevelBonusPoint,
+      bonuspoint: updatedUser?.bonuspoint || 0,
+      levelBonusPoint,
       experiencePoint,
       level: newLevel,
       dates: matched
     });
-
   } catch (error) {
     console.error('StrikePath error:', error);
     return res.status(500).json({ message: error.message });
@@ -1282,7 +1285,6 @@ const getLevelFromPoints = async (points) => {
   if (points < experiencePoint) return 1;
   return Math.floor(points / experiencePoint) + 1;
 };
-
 
 
 
