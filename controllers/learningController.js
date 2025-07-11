@@ -1467,6 +1467,7 @@ exports.genraliqAverage = async (req, res) => {
 
     const dateMap = new Map();
 
+    // Fill practice scores into map
     learningScores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!dateMap.has(date)) {
@@ -1481,6 +1482,7 @@ exports.genraliqAverage = async (req, res) => {
       };
     });
 
+    // Fill topic scores into map
     topicScores.forEach(score => {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
       if (!dateMap.has(date)) {
@@ -1499,24 +1501,49 @@ exports.genraliqAverage = async (req, res) => {
     let count = 0;
 
     for (let [date, record] of dateMap.entries()) {
+      // Create default objects if practice/topic is missing
+      const practice = record.practice || {
+        type: 'practice',
+        score: null,
+        updatedAt: null,
+        scoreDate: null,
+        learningId: {
+          _id: learningIdFilter,
+          name: ''
+        }
+      };
+
+      const topic = record.topic || {
+        type: 'topic',
+        score: null,
+        updatedAt: null,
+        learningId: {
+          _id: learningIdFilter,
+          name: ''
+        }
+      };
+
+      // Calculate average
       let avg = 0;
-      if (record.practice && record.topic) {
-        avg = (record.practice.score + record.topic.score) / 2;
-      } else if (record.practice || record.topic) {
-        avg = record.practice?.score || record.topic?.score;
+      if (practice.score !== null && topic.score !== null) {
+        avg = (practice.score + topic.score) / 2;
+      } else if (practice.score !== null || topic.score !== null) {
+        avg = practice.score ?? topic.score;
       }
+
       total += avg;
       count++;
 
       results.push({
         date,
-        data: [record.practice, record.topic],
+        data: [practice, topic],
         average: Math.round(avg * 100) / 100
       });
     }
 
     const overallAverage = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
 
+    // Update or insert into GenralIQ
     await GenralIQ.findOneAndUpdate(
       { userId, learningId: learningIdFilter, session: user.session },
       { overallAverage },
@@ -1533,7 +1560,6 @@ exports.genraliqAverage = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 exports.getGenrelIq = async (req, res) => {
