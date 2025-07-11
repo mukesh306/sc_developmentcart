@@ -1036,6 +1036,7 @@ exports.Strikecalculation = async (req, res) => {
 //   }
 // };
 
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1243,7 +1244,6 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
-    // ✅ Save to Experienceleavel only if not already exists for same session + level
     const exists = await Experienceleavel.findOne({ userId, session, level: newLevel });
     if (!exists) {
       await Experienceleavel.create({
@@ -1254,13 +1254,23 @@ exports.StrikePath = async (req, res) => {
       });
     }
 
-    const matched = requestedLevel && requestedLevel !== newLevel
+    let matched = requestedLevel && requestedLevel !== newLevel
       ? updatedUser.userLevelData.find(l => l.level === requestedLevel)?.data || []
       : result;
 
+    // Custom sort: latest date at top, then oldest to newest (excluding latest)
+    if (matched.length > 1) {
+      const latest = matched[matched.length - 1];
+      const rest = matched.slice(0, -1).sort((a, b) => new Date(a.date) - new Date(b.date));
+      matched = [latest, ...rest];
+    }
+
+    const roundedBonusPoint = Math.round(updatedUser?.bonuspoint || 0);
+    const roundedLevelBonusPoint = Math.round(levelBonusPoint);
+
     return res.status(200).json({
-      bonuspoint: updatedUser?.bonuspoint || 0,
-      levelBonusPoint,
+      bonuspoint: roundedBonusPoint,
+      levelBonusPoint: roundedLevelBonusPoint,
       experiencePoint,
       level: newLevel,
       dates: matched
@@ -1272,7 +1282,7 @@ exports.StrikePath = async (req, res) => {
   }
 };
 
-// Helper
+// Helper function
 const getLevelFromPoints = async (points) => {
   const setting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
   const experiencePoint = setting?.experiencePoint || 1000;
