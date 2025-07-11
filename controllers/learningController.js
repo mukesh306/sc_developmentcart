@@ -1430,15 +1430,9 @@ exports.getUserLevelData = async (req, res) => {
 //   }
 // };
 
-
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
-    const learningIdFilter = req.query.learningId;
-
-    if (!learningIdFilter) {
-      return res.status(400).json({ message: 'learningId is required.' });
-    }
 
     const user = await User.findById(userId).lean();
     if (!user || !user.session) {
@@ -1448,29 +1442,66 @@ exports.genraliqAverage = async (req, res) => {
     const todayStart = moment().startOf('day').toDate();
     const todayEnd = moment().endOf('day').toDate();
 
-    // Fetch only the FIRST LearningScore of today
-    const practice = await LearningScore.findOne({
-      userId,
-      session: user.session,
-      strickStatus: true,
-      learningId: learningIdFilter,
-      scoreDate: { $gte: todayStart, $lte: todayEnd }
-    })
-      .sort({ scoreDate: 1 })
-      .populate('learningId', 'name')
-      .lean();
+    // Get all learningScores and topicScores for today
+    const [allLearningScores, allTopicScores] = await Promise.all([
+      LearningScore.find({
+        userId,
+        session: user.session,
+        strickStatus: true,
+        scoreDate: { $gte: todayStart, $lte: todayEnd }
+      }).sort({ scoreDate: 1 }).lean(),
 
-    // Fetch only the FIRST TopicScore of today
-    const topic = await TopicScore.findOne({
-      userId,
-      session: user.session,
-      strickStatus: true,
-      learningId: learningIdFilter,
-      updatedAt: { $gte: todayStart, $lte: todayEnd }
-    })
-      .sort({ updatedAt: 1 })
-      .populate('learningId', 'name')
-      .lean();
+      TopicScore.find({
+        userId,
+        session: user.session,
+        strickStatus: true,
+        updatedAt: { $gte: todayStart, $lte: todayEnd }
+      }).sort({ updatedAt: 1 }).lean()
+    ]);
+
+    // Determine the first learningId used today
+    let firstLearningId = null;
+
+    if (allLearningScores.length && allTopicScores.length) {
+      const firstLS = allLearningScores[0];
+      const firstTS = allTopicScores[0];
+
+      firstLearningId =
+        new Date(firstLS.scoreDate) <= new Date(firstTS.updatedAt)
+          ? firstLS.learningId.toString()
+          : firstTS.learningId.toString();
+    } else if (allLearningScores.length) {
+      firstLearningId = allLearningScores[0].learningId.toString();
+    } else if (allTopicScores.length) {
+      firstLearningId = allTopicScores[0].learningId.toString();
+    }
+
+    if (!firstLearningId) {
+      return res.status(200).json({
+        count: 0,
+        overallAverage: 0,
+        results: []
+      });
+    }
+
+    // Now fetch first practice and topic score for that firstLearningId
+    const [practice, topic] = await Promise.all([
+      LearningScore.findOne({
+        userId,
+        session: user.session,
+        strickStatus: true,
+        learningId: firstLearningId,
+        scoreDate: { $gte: todayStart, $lte: todayEnd }
+      }).sort({ scoreDate: 1 }).populate('learningId', 'name').lean(),
+
+      TopicScore.findOne({
+        userId,
+        session: user.session,
+        strickStatus: true,
+        learningId: firstLearningId,
+        updatedAt: { $gte: todayStart, $lte: todayEnd }
+      }).sort({ updatedAt: 1 }).populate('learningId', 'name').lean()
+    ]);
 
     const date = moment().format('YYYY-MM-DD');
     const scorePractice = practice
@@ -1486,7 +1517,7 @@ exports.genraliqAverage = async (req, res) => {
           score: null,
           updatedAt: null,
           scoreDate: null,
-          learningId: { _id: learningIdFilter, name: '' }
+          learningId: { _id: firstLearningId, name: '' }
         };
 
     const scoreTopic = topic
@@ -1500,7 +1531,7 @@ exports.genraliqAverage = async (req, res) => {
           type: 'topic',
           score: null,
           updatedAt: null,
-          learningId: { _id: learningIdFilter, name: '' }
+          learningId: { _id: firstLearningId, name: '' }
         };
 
     let avg = 0;
@@ -1525,7 +1556,7 @@ exports.genraliqAverage = async (req, res) => {
 
     if (results.length) {
       await GenralIQ.findOneAndUpdate(
-        { userId, learningId: learningIdFilter, session: user.session },
+        { userId, learningId: firstLearningId, session: user.session },
         { overallAverage },
         { upsert: true, new: true }
       );
