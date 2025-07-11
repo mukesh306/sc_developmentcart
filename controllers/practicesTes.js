@@ -430,7 +430,6 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 //   }
 // };
 
-
 exports.getAssignedListUserpractice = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -440,6 +439,44 @@ exports.getAssignedListUserpractice = async (req, res) => {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
 
+    // 🧠 STEP 1: Pre-calculate learningId-based averages
+    const scores = await LearningScore.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          session: user.session
+        }
+      },
+      { $sort: { scoreDate: 1, createdAt: 1 } },
+      {
+        $group: {
+          _id: {
+            learningId: '$learningId',
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
+          },
+          doc: { $first: "$$ROOT" }
+        }
+      },
+      { $replaceRoot: { newRoot: "$doc" } },
+    ]);
+
+    // Create map of learningId to average score
+    const learningScoresMap = {};
+    for (let s of scores) {
+      const lid = s.learningId.toString();
+      if (!learningScoresMap[lid]) {
+        learningScoresMap[lid] = [];
+      }
+      learningScoresMap[lid].push(s.score);
+    }
+
+    const averageScoreMap = {};
+    for (const [lid, scoreArr] of Object.entries(learningScoresMap)) {
+      const total = scoreArr.reduce((a, b) => a + b, 0);
+      averageScoreMap[lid] = parseFloat((total / scoreArr.length).toFixed(2));
+    }
+
+    // 🧠 STEP 2: Populate and attach averages
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
@@ -448,39 +485,29 @@ exports.getAssignedListUserpractice = async (req, res) => {
       .lean();
 
     for (let item of assignedList) {
-      // Populate class info from School or College
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
 
-      const getScore = async (learningField) => {
-        const learning = item[learningField];
-        if (learning && learning._id) {
-          const learningScore = await LearningScore.findOne({
-            userId,
-            learningId: learning._id,
-            session: user.session   // ✅ Filter by user session
-          }).sort({ createdAt: 1 }).lean();
-
-          return learningScore?.score ?? 0; // Return 0 if no score
+      const getAverage = (learningObj) => {
+        if (learningObj && learningObj._id) {
+          return averageScoreMap[learningObj._id.toString()] || 0;
         }
         return 0;
       };
 
-      // Clean empty learning fields
       ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
         if (!item[field] || Object.keys(item[field]).length === 0) {
           item[field] = null;
         }
       });
 
-      // Attach scores by learning and session
-      item.learningAverage = await getScore('learning');
-      item.learning2Average = await getScore('learning2');
-      item.learning3Average = await getScore('learning3');
-      item.learning4Average = await getScore('learning4');
+      item.learningAverage = getAverage(item.learning);
+      item.learning2Average = getAverage(item.learning2);
+      item.learning3Average = getAverage(item.learning3);
+      item.learning4Average = getAverage(item.learning4);
     }
 
     res.status(200).json({ data: assignedList });
@@ -489,4 +516,5 @@ exports.getAssignedListUserpractice = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 

@@ -1515,7 +1515,6 @@ exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // 🧠 Get user's current session
     const user = await User.findById(userId).lean();
     if (!user?.session) {
       return res.status(400).json({ message: 'User session not found.' });
@@ -1525,14 +1524,15 @@ exports.PracticescoreCard = async (req, res) => {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          session: user.session  // ✅ Only match scores from current session
+          session: user.session
         }
       },
-      { $sort: { scoreDate: 1 } },
+      { $sort: { scoreDate: 1, createdAt: 1 } },
       {
         $group: {
           _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } },
+            learningId: "$learningId"
           },
           doc: { $first: "$$ROOT" }
         }
@@ -1541,18 +1541,31 @@ exports.PracticescoreCard = async (req, res) => {
       { $sort: { scoreDate: -1 } }
     ]);
 
+    // Populate learningId for name
     const populatedScores = await LearningScore.populate(rawScores, {
       path: 'learningId',
       select: 'name'
     });
 
-    res.status(200).json({ scores: populatedScores });
+    // 🔢 Calculate overall average score
+    const scoresOnly = populatedScores.map(s => s.score);
+    const avgScore = scoresOnly.length > 0 
+      ? parseFloat((scoresOnly.reduce((a, b) => a + b, 0) / scoresOnly.length).toFixed(2))
+      : 0;
+
+    // ✅ Response structure same as before
+    res.status(200).json({
+      scores: populatedScores,
+      averageScore: avgScore
+    });
 
   } catch (error) {
     console.error('Error in PracticescoreCard:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
 // exports.PracticescoreCard = async (req, res) => {
 //   try {
