@@ -61,8 +61,6 @@ exports.getAssignedList = async (req, res) => {
   }
 };
 
-
-
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -72,7 +70,6 @@ exports.getAssignedListUser = async (req, res) => {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
 
-    // 🧠 Fetch Assigned Items with learning fields
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
@@ -80,31 +77,34 @@ exports.getAssignedListUser = async (req, res) => {
       .populate('learning4')
       .lean();
 
-    // 📊 Fetch all TopicScores for that user and session
+    // 🔍 Fetch all TopicScores for this user and session
     const allScores = await TopicScore.find({
       userId,
       session: user.session
     }).lean();
 
-    // 📈 Group scores by learningId
+    // 📊 Create average score map by learningId
     const scoreMap = {};
 
     for (const score of allScores) {
       const lid = score.learningId?.toString();
       if (!lid || typeof score.score !== 'number') continue;
 
-      if (!scoreMap[lid]) scoreMap[lid] = [];
+      if (!scoreMap[lid]) {
+        scoreMap[lid] = [];
+      }
+
       scoreMap[lid].push(score.score);
     }
 
-    // 🧮 Create learning-wise average map
-    const learningWiseAverage = {};
+    // 📈 Calculate average scores
+    const averageMap = {};
     for (const [lid, scores] of Object.entries(scoreMap)) {
       const avg = scores.reduce((sum, s) => sum + s, 0) / scores.length;
-      learningWiseAverage[lid] = parseFloat(avg.toFixed(2));
+      averageMap[lid] = parseFloat(avg.toFixed(2));
     }
 
-    // 🧠 Add classInfo and inject averages into assignedList
+    // 🧠 Attach class info and averages to each assigned item
     for (let item of assignedList) {
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
@@ -112,23 +112,23 @@ exports.getAssignedListUser = async (req, res) => {
       }
       item.classInfo = classInfo || null;
 
-      const addAverage = (field, avgField) => {
+      // Helper: get average for a learning field
+      const setAverage = (field, avgField) => {
         const learning = item[field];
         if (learning && learning._id) {
-          const lid = learning._id.toString();
-          item[avgField] = learningWiseAverage[lid] ?? 0;
+          const avg = averageMap[learning._id.toString()];
+          item[avgField] = avg ?? 0;
         } else {
           item[avgField] = 0;
         }
       };
 
-      addAverage('learning', 'learningAverage');
-      addAverage('learning2', 'learning2Average');
-      addAverage('learning3', 'learning3Average');
-      addAverage('learning4', 'learning4Average');
+      setAverage('learning', 'learningAverage');
+      setAverage('learning2', 'learning2Average');
+      setAverage('learning3', 'learning3Average');
+      setAverage('learning4', 'learning4Average');
     }
 
-    // ✅ Final response
     res.status(200).json({ data: assignedList });
 
   } catch (error) {
@@ -136,7 +136,6 @@ exports.getAssignedListUser = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
 
 
 // exports.getAssignedListUser = async (req, res) => {
