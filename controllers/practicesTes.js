@@ -439,7 +439,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
 
-    // STEP 1: Get first score per day per learningId
+    // 🔹 STEP 1: Get only first score per day per learningId for current user + session
     const scores = await LearningScore.aggregate([
       {
         $match: {
@@ -460,23 +460,23 @@ exports.getAssignedListUserpractice = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } },
     ]);
 
-    // Group scores by learningId and calculate average
-    const averageScoreMap = {};
+    // 🔹 STEP 2: Build average score map per learningId
     const grouped = {};
-
     for (let s of scores) {
+      if (!s.learningId) continue;
       const lid = s.learningId.toString();
       if (!grouped[lid]) grouped[lid] = [];
       grouped[lid].push(s.score);
     }
 
+    const averageScoreMap = {};
     for (const lid in grouped) {
       const arr = grouped[lid];
       const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
       averageScoreMap[lid] = parseFloat(avg.toFixed(2));
     }
 
-    // STEP 2: Get assigned list and attach average scores
+    // 🔹 STEP 3: Get assigned list and attach calculated averages
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
@@ -494,7 +494,10 @@ exports.getAssignedListUserpractice = async (req, res) => {
       const getAverage = (learningObj) => {
         if (learningObj && learningObj._id) {
           const lid = learningObj._id.toString();
-          return averageScoreMap[lid] !== undefined ? averageScoreMap[lid] : 0;
+          // ❗ Safe check: Only return average if exists in this session's score map
+          return Object.prototype.hasOwnProperty.call(averageScoreMap, lid)
+            ? averageScoreMap[lid]
+            : 0;
         }
         return 0;
       };
@@ -511,11 +514,12 @@ exports.getAssignedListUserpractice = async (req, res) => {
       item.learning4Average = getAverage(item.learning4);
     }
 
+    // 🔹 STEP 4: Send response
     res.status(200).json({ data: assignedList });
+
   } catch (error) {
     console.error('Get Assigned Practice Error:', error);
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
 
