@@ -1527,7 +1527,7 @@ exports.PracticescoreCard = async (req, res) => {
           session: user.session
         }
       },
-      { $sort: { scoreDate: 1, createdAt: 1 } }, // group ke liye
+      { $sort: { scoreDate: 1, createdAt: 1 } },
       {
         $group: {
           _id: {
@@ -1539,23 +1539,28 @@ exports.PracticescoreCard = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } },
     ]);
 
-    // Populate learningId for name
+    if (!rawScores || rawScores.length === 0) {
+      return res.status(200).json({ scores: [], averageScore: 0 });
+    }
+
     const populatedScores = await LearningScore.populate(rawScores, {
       path: 'learningId',
       select: 'name'
     });
 
-    // 🧠 STEP: Find latest entry by createdAt
-    const sorted = [...populatedScores].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    const latestEntry = sorted[0];
+    // Remove any undefined/null entries
+    const cleaned = populatedScores.filter(s => s && s.score !== undefined);
 
-    // 🧠 STEP: Remove latestEntry from rest, then sort rest by scoreDate ASC
+    const sorted = [...cleaned].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const latestEntry = sorted[0];
     const remaining = sorted.slice(1).sort((a, b) => new Date(a.scoreDate) - new Date(b.scoreDate));
 
     const finalSorted = [latestEntry, ...remaining];
 
-    // ✅ Calculate average from finalSorted
-    const scoresOnly = finalSorted.map(s => s.score);
+    const scoresOnly = finalSorted
+      .filter(s => s && typeof s.score === 'number')
+      .map(s => s.score);
+
     const avgScore = scoresOnly.length > 0
       ? parseFloat((scoresOnly.reduce((a, b) => a + b, 0) / scoresOnly.length).toFixed(2))
       : 0;
