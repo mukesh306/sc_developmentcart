@@ -1430,13 +1430,6 @@ exports.getUserLevelData = async (req, res) => {
 //   }
 // };
 
-const moment = require('moment');
-const mongoose = require('mongoose');
-const User = require('../models/User');
-const LearningScore = require('../models/LearningScore');
-const TopicScore = require('../models/TopicScore');
-const GenralIQ = require('../models/GenralIQ');
-
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
