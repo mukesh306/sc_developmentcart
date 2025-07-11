@@ -99,12 +99,10 @@ exports.updateLearning = async (req, res) => {
 
 // second last
 
-
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // 🔍 Fetch user session
     const user = await User.findById(userId).lean();
     const userSession = user?.session;
 
@@ -139,7 +137,7 @@ exports.scoreCard = async (req, res) => {
 
     const scoreMap = new Map();
     let minDate = null;
-    let maxDate = moment().startOf('day'); // restrict max date to today
+    let maxDate = moment().startOf('day');
     const todayStr = moment().format('YYYY-MM-DD');
 
     for (const score of populatedScores) {
@@ -156,10 +154,8 @@ exports.scoreCard = async (req, res) => {
       if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
     }
 
-    // If no scores at all, set minDate as today
     if (!minDate) minDate = moment().startOf('day');
 
-    // Fill all dates between minDate and maxDate
     const fullResult = [];
     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
       const dateStr = m.format('YYYY-MM-DD');
@@ -174,16 +170,49 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
-    // Reverse the result to show latest first
-    fullResult.reverse();
+    // 🔢 Learning-wise average calculation
+    const learningScores = {};
 
-    res.status(200).json({ scores: fullResult });
+    for (const entry of fullResult) {
+      if (entry.score !== null && entry.learningId?._id) {
+        const lid = entry.learningId._id.toString();
+        const lname = entry.learningId.name || "Unknown";
+
+        if (!learningScores[lid]) {
+          learningScores[lid] = {
+            learningId: lid,
+            name: lname,
+            scores: []
+          };
+        }
+        learningScores[lid].scores.push(entry.score);
+      }
+    }
+
+    const learningWiseAverage = Object.values(learningScores).map(item => {
+      const total = item.scores.reduce((sum, s) => sum + s, 0);
+      const average = parseFloat((total / item.scores.length).toFixed(2));
+      return {
+        learningId: item.learningId,
+        name: item.name,
+        averageScore: average
+      };
+    });
+
+    fullResult.reverse(); // Show latest first
+
+    // ✅ Response stays the same + adds new average list
+    res.status(200).json({
+      scores: fullResult,
+      learningWiseAverage
+    });
 
   } catch (error) {
     console.error('Error in scoreCard:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // exports.scoreCard = async (req, res) => {
 //   try {
