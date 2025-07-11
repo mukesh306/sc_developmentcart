@@ -439,8 +439,8 @@ exports.getAssignedListUserpractice = async (req, res) => {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
 
-    // 🔹 STEP 1: Get only first score per day per learningId for current user + session
-    const scores = await LearningScore.aggregate([
+    // STEP 1: Get only first score of each day (for all learningIds together)
+    const dailyFirstScores = await LearningScore.aggregate([
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
@@ -451,18 +451,17 @@ exports.getAssignedListUserpractice = async (req, res) => {
       {
         $group: {
           _id: {
-            learningId: '$learningId',
             date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
           },
-          doc: { $first: "$$ROOT" }
+          doc: { $first: "$$ROOT" } // only one entry per day
         }
       },
       { $replaceRoot: { newRoot: "$doc" } },
     ]);
 
-    // 🔹 STEP 2: Build average score map per learningId
+    // STEP 2: Group those by learningId and calculate average
     const grouped = {};
-    for (let s of scores) {
+    for (let s of dailyFirstScores) {
       if (!s.learningId) continue;
       const lid = s.learningId.toString();
       if (!grouped[lid]) grouped[lid] = [];
@@ -476,7 +475,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
       averageScoreMap[lid] = parseFloat(avg.toFixed(2));
     }
 
-    // 🔹 STEP 3: Get assigned list and attach calculated averages
+    // STEP 3: Get assigned list and attach calculated averages
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
@@ -494,7 +493,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
       const getAverage = (learningObj) => {
         if (learningObj && learningObj._id) {
           const lid = learningObj._id.toString();
-          // ❗ Safe check: Only return average if exists in this session's score map
+          // ✅ Return only if learningId exists in FIRST-of-day scores
           return Object.prototype.hasOwnProperty.call(averageScoreMap, lid)
             ? averageScoreMap[lid]
             : 0;
@@ -514,7 +513,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
       item.learning4Average = getAverage(item.learning4);
     }
 
-    // 🔹 STEP 4: Send response
+    // Final response
     res.status(200).json({ data: assignedList });
 
   } catch (error) {
@@ -522,4 +521,5 @@ exports.getAssignedListUserpractice = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 
