@@ -1527,18 +1527,17 @@ exports.PracticescoreCard = async (req, res) => {
           session: user.session
         }
       },
-      { $sort: { scoreDate: 1, createdAt: 1 } },
+      { $sort: { scoreDate: 1, createdAt: 1 } }, // Ascending
       {
         $group: {
           _id: {
-            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } },
-            learningId: "$learningId"
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
           },
           doc: { $first: "$$ROOT" }
         }
       },
       { $replaceRoot: { newRoot: "$doc" } },
-      { $sort: { scoreDate: -1 } }
+      { $sort: { scoreDate: -1 } } // Show latest day first
     ]);
 
     // Populate learningId for name
@@ -1547,13 +1546,12 @@ exports.PracticescoreCard = async (req, res) => {
       select: 'name'
     });
 
-    // 🔢 Calculate overall average score
+    // Calculate overall average score
     const scoresOnly = populatedScores.map(s => s.score);
     const avgScore = scoresOnly.length > 0 
       ? parseFloat((scoresOnly.reduce((a, b) => a + b, 0) / scoresOnly.length).toFixed(2))
       : 0;
 
-    // ✅ Response structure same as before
     res.status(200).json({
       scores: populatedScores,
       averageScore: avgScore
@@ -1564,6 +1562,7 @@ exports.PracticescoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
