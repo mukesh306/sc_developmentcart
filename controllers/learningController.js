@@ -5,6 +5,7 @@ const Learning = require('../models/learning');
 const Assigned = require('../models/assignlearning'); 
 const LearningScore = require('../models/learningScore');
 
+
 const Topic = require('../models/topic'); 
 const TopicScore = require('../models/topicScore');
 const User = require('../models/User');
@@ -98,6 +99,8 @@ exports.updateLearning = async (req, res) => {
 };
 
 // second last
+
+
 
 exports.scoreCard = async (req, res) => {
   try {
@@ -201,7 +204,40 @@ exports.scoreCard = async (req, res) => {
 
     fullResult.reverse(); // Show latest first
 
-    // ✅ Response stays the same + adds new average list
+    // ✅ Save average scores to Assigned model
+    try {
+      const assignedList = await Assigned.find({
+        session: userSession,
+        classId: user.className
+      });
+
+      for (let assign of assignedList) {
+        const update = {};
+
+        const mapAvg = (learningField, avgField) => {
+          const learningId = assign[learningField]?.toString();
+          if (learningId) {
+            const found = learningWiseAverage.find(l => l.learningId === learningId);
+            if (found) {
+              update[avgField] = found.averageScore;
+            }
+          }
+        };
+
+        mapAvg('learning', 'learningAverage');
+        mapAvg('learning2', 'learning2Average');
+        mapAvg('learning3', 'learning3Average');
+        mapAvg('learning4', 'learning4Average');
+
+        if (Object.keys(update).length > 0) {
+          await Assigned.updateOne({ _id: assign._id }, { $set: update });
+        }
+      }
+    } catch (e) {
+      console.error('Error updating Assigned averages:', e.message);
+    }
+
+    // ✅ Final response with score list and averages
     res.status(200).json({
       scores: fullResult,
       learningWiseAverage
@@ -212,7 +248,6 @@ exports.scoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // exports.scoreCard = async (req, res) => {
 //   try {
