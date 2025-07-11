@@ -439,7 +439,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
 
-    // 🧠 STEP 1: Get first score per day per learningId
+    // STEP 1: Get first score per day per learningId
     const scores = await LearningScore.aggregate([
       {
         $match: {
@@ -460,23 +460,23 @@ exports.getAssignedListUserpractice = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } },
     ]);
 
-    // Group scores by learningId and calculate average from first scores only
-    const learningScoresMap = {};
+    // Group scores by learningId and calculate average
+    const averageScoreMap = {};
+    const grouped = {};
+
     for (let s of scores) {
       const lid = s.learningId.toString();
-      if (!learningScoresMap[lid]) {
-        learningScoresMap[lid] = [];
-      }
-      learningScoresMap[lid].push(s.score);
+      if (!grouped[lid]) grouped[lid] = [];
+      grouped[lid].push(s.score);
     }
 
-    const averageScoreMap = {};
-    for (const [lid, scoreArr] of Object.entries(learningScoresMap)) {
-      const total = scoreArr.reduce((a, b) => a + b, 0);
-      averageScoreMap[lid] = parseFloat((total / scoreArr.length).toFixed(2));
+    for (const lid in grouped) {
+      const arr = grouped[lid];
+      const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
+      averageScoreMap[lid] = parseFloat(avg.toFixed(2));
     }
 
-    // 🧠 STEP 2: Get assigned list and attach average scores
+    // STEP 2: Get assigned list and attach average scores
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
@@ -493,7 +493,8 @@ exports.getAssignedListUserpractice = async (req, res) => {
 
       const getAverage = (learningObj) => {
         if (learningObj && learningObj._id) {
-          return averageScoreMap[learningObj._id.toString()] || 0;
+          const lid = learningObj._id.toString();
+          return averageScoreMap[lid] !== undefined ? averageScoreMap[lid] : 0;
         }
         return 0;
       };
