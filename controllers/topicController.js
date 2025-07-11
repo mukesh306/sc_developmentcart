@@ -1511,7 +1511,6 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
   }
 };
 
-
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1528,7 +1527,7 @@ exports.PracticescoreCard = async (req, res) => {
           session: user.session
         }
       },
-      { $sort: { scoreDate: 1, createdAt: 1 } }, // Ascending
+      { $sort: { scoreDate: 1, createdAt: 1 } }, // group ke liye
       {
         $group: {
           _id: {
@@ -1538,7 +1537,6 @@ exports.PracticescoreCard = async (req, res) => {
         }
       },
       { $replaceRoot: { newRoot: "$doc" } },
-      { $sort: { scoreDate: -1 } } // Show latest day first
     ]);
 
     // Populate learningId for name
@@ -1547,14 +1545,23 @@ exports.PracticescoreCard = async (req, res) => {
       select: 'name'
     });
 
-    // Calculate overall average score
-    const scoresOnly = populatedScores.map(s => s.score);
-    const avgScore = scoresOnly.length > 0 
+    // 🧠 STEP: Find latest entry by createdAt
+    const sorted = [...populatedScores].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+    const latestEntry = sorted[0];
+
+    // 🧠 STEP: Remove latestEntry from rest, then sort rest by scoreDate ASC
+    const remaining = sorted.slice(1).sort((a, b) => new Date(a.scoreDate) - new Date(b.scoreDate));
+
+    const finalSorted = [latestEntry, ...remaining];
+
+    // ✅ Calculate average from finalSorted
+    const scoresOnly = finalSorted.map(s => s.score);
+    const avgScore = scoresOnly.length > 0
       ? parseFloat((scoresOnly.reduce((a, b) => a + b, 0) / scoresOnly.length).toFixed(2))
       : 0;
 
     res.status(200).json({
-      scores: populatedScores,
+      scores: finalSorted,
       averageScore: avgScore
     });
 
