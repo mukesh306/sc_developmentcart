@@ -69,6 +69,7 @@ exports.getAssignedListUser = async (req, res) => {
     if (!user || !user.className || !user.session) {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
+    
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
