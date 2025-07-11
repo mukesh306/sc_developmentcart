@@ -1445,15 +1445,11 @@ exports.genraliqAverage = async (req, res) => {
       return res.status(400).json({ message: 'User session not found.' });
     }
 
-    const todayStart = moment().startOf('day').toDate();
-    const todayEnd = moment().endOf('day').toDate();
-
     const learningScores = await LearningScore.find({
       userId,
       session: user.session,
       strickStatus: true,
-      learningId: learningIdFilter,
-      scoreDate: { $gte: todayStart, $lte: todayEnd }
+      learningId: learningIdFilter
     })
       .sort({ scoreDate: 1 })
       .populate('learningId', 'name')
@@ -1463,8 +1459,7 @@ exports.genraliqAverage = async (req, res) => {
       userId,
       session: user.session,
       strickStatus: true,
-      learningId: learningIdFilter,
-      updatedAt: { $gte: todayStart, $lte: todayEnd }
+      learningId: learningIdFilter
     })
       .sort({ updatedAt: 1 })
       .populate('learningId', 'name')
@@ -1538,19 +1533,17 @@ exports.genraliqAverage = async (req, res) => {
       });
     }
 
-    // ✅ Sort results by latest date
+    // ✅ Sort results by latest date (descending)
     results.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const overallAverage = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
 
-    // ✅ Update GenralIQ
-    if (count > 0) {
-      await GenralIQ.findOneAndUpdate(
-        { userId, learningId: learningIdFilter, session: user.session },
-        { overallAverage },
-        { upsert: true, new: true }
-      );
-    }
+    // ✅ Save or update GenralIQ document
+    await GenralIQ.findOneAndUpdate(
+      { userId, learningId: learningIdFilter, session: user.session },
+      { overallAverage },
+      { upsert: true, new: true }
+    );
 
     return res.status(200).json({
       count,
@@ -1562,6 +1555,7 @@ exports.genraliqAverage = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
