@@ -1098,7 +1098,7 @@ exports.StrikePath = async (req, res) => {
     const monthlyBonus = markingSetting?.monthlyBonus || 0;
     const experiencePoint = markingSetting?.experiencePoint || 1000;
 
-    const datesList = Array.from(scoreMap.keys());
+    const datesList = Array.from(scoreMap.keys()).sort();
     if (datesList.length === 0) {
       return res.status(200).json({
         bonuspoint: 0,
@@ -1109,8 +1109,10 @@ exports.StrikePath = async (req, res) => {
       });
     }
 
-    // Prepare unsorted result
-    const resultUnsorted = [];
+    const startDate = moment(datesList[0]);
+    const endDate = moment(datesList[datesList.length - 1]);
+
+    const result = [];
 
     const existingBonusDates = user?.bonusDates || [];
     const existingDeductedDates = user?.deductedDates || [];
@@ -1121,94 +1123,78 @@ exports.StrikePath = async (req, res) => {
     let weeklyBonusToAdd = 0, monthlyBonusToAdd = 0;
     let datesToAddBonus = [], datesToDeduct = [], weeklyBonusDatesToAdd = [], monthlyBonusDatesToAdd = [];
 
-    for (let date of datesList) {
-      const item = { date, data: scoreMap.get(date) || [] };
+    for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
+      const currentDate = m.format('YYYY-MM-DD');
+      const item = { date: currentDate, data: [] };
 
-      // Sort data within each date by updatedAt
-      item.data.sort((a, b) => new Date(a.updatedAt || a.scoreDate) - new Date(b.updatedAt || b.scoreDate));
+      if (scoreMap.has(currentDate)) {
+        item.data = scoreMap.get(currentDate);
+        const types = item.data.map(d => d.type);
+        const hasPractice = types.includes('practice');
+        const hasTopic = types.includes('topic');
 
-      const types = item.data.map(d => d.type);
-      const hasPractice = types.includes('practice');
-      const hasTopic = types.includes('topic');
+        if (hasPractice && hasTopic && baseDailyExp > 0) {
+          const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
+          const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
+          const avgScore = (practiceScore + topicScore) / 2;
+          const calculatedDailyExp = Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
+          item.dailyExperience = calculatedDailyExp;
 
-      if (hasPractice && hasTopic && baseDailyExp > 0) {
-        const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
-        const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
-        const avgScore = (practiceScore + topicScore) / 2;
-        const calculatedDailyExp = Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
-        item.dailyExperience = calculatedDailyExp;
-
-        if (!existingBonusDates.includes(date)) {
-          bonusToAdd += calculatedDailyExp;
-          datesToAddBonus.push(date);
+          if (!existingBonusDates.includes(currentDate)) {
+            bonusToAdd += calculatedDailyExp;
+            datesToAddBonus.push(currentDate);
+          }
         }
       } else {
         item.deduction = deductions;
-        if (!existingDeductedDates.includes(date)) {
+        if (!existingDeductedDates.includes(currentDate)) {
           deductionToSubtract += deductions;
-          datesToDeduct.push(date);
+          datesToDeduct.push(currentDate);
         }
       }
 
-      resultUnsorted.push(item);
+      result.push(item);
     }
 
-    // Weekly and Monthly Bonus
-    for (let i = 6; i < resultUnsorted.length; i++) {
-      const streak = resultUnsorted.slice(i - 6, i + 1).every(r =>
+    // Weekly Bonus
+    for (let i = 6; i < result.length; i++) {
+      const streak = result.slice(i - 6, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
         r.data.some(d => d.type === 'topic')
       );
-      const bonusDate = resultUnsorted[i].date;
+      const bonusDate = result[i].date;
 
       if (streak && !existingWeeklyBonusDates.includes(bonusDate)) {
-        resultUnsorted[i].weeklyBonus = weeklyBonus;
+        result[i].weeklyBonus = weeklyBonus;
         weeklyBonusToAdd += weeklyBonus;
         weeklyBonusDatesToAdd.push(bonusDate);
       }
 
       if (existingWeeklyBonusDates.includes(bonusDate)) {
-        resultUnsorted[i].weeklyBonus = weeklyBonus;
+        result[i].weeklyBonus = weeklyBonus;
       }
     }
 
-    for (let i = 29; i < resultUnsorted.length; i++) {
-      const streak = resultUnsorted.slice(i - 29, i + 1).every(r =>
+    // Monthly Bonus
+    for (let i = 29; i < result.length; i++) {
+      const streak = result.slice(i - 29, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
         r.data.some(d => d.type === 'topic')
       );
-      const bonusDate = resultUnsorted[i].date;
+      const bonusDate = result[i].date;
 
       if (streak && !existingMonthlyBonusDates.includes(bonusDate)) {
-        resultUnsorted[i].monthlyBonus = monthlyBonus;
+        result[i].monthlyBonus = monthlyBonus;
         monthlyBonusToAdd += monthlyBonus;
         monthlyBonusDatesToAdd.push(bonusDate);
       }
 
       if (existingMonthlyBonusDates.includes(bonusDate)) {
-        resultUnsorted[i].monthlyBonus = monthlyBonus;
+        result[i].monthlyBonus = monthlyBonus;
       }
     }
 
-    // ✅ Custom Sorting: latest first, then by first created
-    const sorted = [...resultUnsorted];
-
-    // Find latest date
-    const latestItem = sorted.reduce((latest, curr) => {
-      const currDate = moment(curr.date);
-      return currDate.isAfter(latest.date) ? curr : latest;
-    }, { date: '1900-01-01' });
-
-    const rest = sorted.filter(item => item.date !== latestItem.date);
-    rest.sort((a, b) => {
-      const aTime = new Date(a.data?.[0]?.updatedAt || a.data?.[0]?.scoreDate || a.date);
-      const bTime = new Date(b.data?.[0]?.updatedAt || b.data?.[0]?.scoreDate || b.date);
-      return aTime - bTime;
-    });
-
-    const finalSorted = [latestItem, ...rest];
-
-    // Update user bonuses
+    // Update User
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -1243,7 +1229,7 @@ exports.StrikePath = async (req, res) => {
     await User.findByIdAndUpdate(userId, { level: newLevel });
     await User.findByIdAndUpdate(userId, { $pull: { userLevelData: { level: newLevel } } });
 
-    const levelBonusPoint = finalSorted.reduce((acc, item) =>
+    const levelBonusPoint = result.reduce((acc, item) =>
       acc + (item.dailyExperience || 0) + (item.weeklyBonus || 0) + (item.monthlyBonus || 0) - (item.deduction || 0), 0
     );
 
@@ -1252,7 +1238,7 @@ exports.StrikePath = async (req, res) => {
         userLevelData: {
           level: newLevel,
           levelBonusPoint,
-          data: finalSorted
+          data: result
         }
       }
     });
@@ -1269,11 +1255,15 @@ exports.StrikePath = async (req, res) => {
 
     const matched = requestedLevel && requestedLevel !== newLevel
       ? updatedUser.userLevelData.find(l => l.level === requestedLevel)?.data || []
-      : finalSorted;
+      : result;
+
+    // ✅ ROUNDING LOGIC
+    const roundedBonusPoint = Math.round(updatedUser?.bonuspoint || 0);
+    const roundedLevelBonusPoint = Math.round(levelBonusPoint);
 
     return res.status(200).json({
-      bonuspoint: updatedUser?.bonuspoint || 0,
-      levelBonusPoint,
+      bonuspoint: roundedBonusPoint,
+      levelBonusPoint: roundedLevelBonusPoint,
       experiencePoint,
       level: newLevel,
       dates: matched
@@ -1285,13 +1275,14 @@ exports.StrikePath = async (req, res) => {
   }
 };
 
-// Helper function
+// Helper
 const getLevelFromPoints = async (points) => {
   const setting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
   const experiencePoint = setting?.experiencePoint || 1000;
   if (points < experiencePoint) return 1;
   return Math.floor(points / experiencePoint) + 1;
 };
+
 
 
 
