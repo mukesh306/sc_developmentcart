@@ -1430,7 +1430,6 @@ exports.getUserLevelData = async (req, res) => {
 //   }
 // };
 
-
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1442,30 +1441,29 @@ exports.genraliqAverage = async (req, res) => {
 
     const learningIdFilter = req.query.learningId;
 
-    const learningScores = await LearningScore.find({
+    if (!learningIdFilter) {
+      return res.status(400).json({ message: 'learningId is required.' });
+    }
+
+    const practice = await LearningScore.findOne({
       userId,
       session: user.session,
       strickStatus: true,
-      ...(learningIdFilter && { learningId: learningIdFilter })
+      learningId: learningIdFilter
     })
       .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
-      .limit(1)
       .lean();
 
-    const topicScores = await TopicScore.find({
+    const topic = await TopicScore.findOne({
       userId,
       session: user.session,
       strickStatus: true,
-      ...(learningIdFilter && { learningId: learningIdFilter })
+      learningId: learningIdFilter
     })
       .populate('learningId', 'name')
       .sort({ updatedAt: 1 })
-      .limit(1)
       .lean();
-
-    const practice = learningScores[0] || null;
-    const topic = topicScores[0] || null;
 
     let average = 0;
     let count = 0;
@@ -1478,8 +1476,8 @@ exports.genraliqAverage = async (req, res) => {
       count = 1;
     }
 
-    const date = moment(practice?.scoreDate || topic?.updatedAt).format('YYYY-MM-DD');
-    const learningIdToSave = practice?.learningId?._id || topic?.learningId?._id;
+    const date = moment(practice?.scoreDate || topic?.updatedAt || new Date()).format('YYYY-MM-DD');
+    const learningIdToSave = practice?.learningId?._id || topic?.learningId?._id || learningIdFilter;
 
     const results = [
       {
@@ -1527,7 +1525,6 @@ exports.genraliqAverage = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 exports.getGenrelIq = async (req, res) => {
