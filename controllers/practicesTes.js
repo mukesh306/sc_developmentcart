@@ -433,13 +433,13 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 exports.getAssignedListUserpractice = async (req, res) => {
   try {
     const userId = req.user._id;
-    
+
     const user = await User.findById(userId).lean();
     if (!user || !user.className || !user.session) {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
 
-    // 🧠 STEP 1: Pre-calculate learningId-based averages
+    // 🧠 STEP 1: Get first score per day per learningId
     const scores = await LearningScore.aggregate([
       {
         $match: {
@@ -460,7 +460,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } },
     ]);
 
-    // Create map of learningId to average score
+    // Group scores by learningId and calculate average from first scores only
     const learningScoresMap = {};
     for (let s of scores) {
       const lid = s.learningId.toString();
@@ -476,7 +476,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
       averageScoreMap[lid] = parseFloat((total / scoreArr.length).toFixed(2));
     }
 
-    // 🧠 STEP 2: Populate and attach averages
+    // 🧠 STEP 2: Get assigned list and attach average scores
     const assignedList = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
