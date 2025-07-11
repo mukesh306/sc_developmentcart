@@ -113,6 +113,7 @@ exports.scoreCard = async (req, res) => {
       return res.status(400).json({ message: 'User session not found.' });
     }
 
+    // Step 1: Aggregate - Get first score per day
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
@@ -120,24 +121,25 @@ exports.scoreCard = async (req, res) => {
           session: userSession
         }
       },
-      { $sort: { scoreDate: 1 } },
+      { $sort: { scoreDate: 1, createdAt: 1 } },
       {
         $group: {
           _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
           },
           doc: { $first: "$$ROOT" }
         }
       },
-      { $replaceRoot: { newRoot: "$doc" } },
-      { $sort: { scoreDate: 1 } }
+      { $replaceRoot: { newRoot: "$doc" } }
     ]);
 
+    // Step 2: Populate learning & topic
     const populatedScores = await TopicScore.populate(rawScores, [
       { path: 'topicId', select: 'topic' },
       { path: 'learningId', select: 'name' }
     ]);
 
+    // Step 3: Normalize & map scores
     const scoreMap = new Map();
     let minDate = null;
     let maxDate = moment().startOf('day');
@@ -159,6 +161,7 @@ exports.scoreCard = async (req, res) => {
 
     if (!minDate) minDate = moment().startOf('day');
 
+    // Step 4: Fill missing dates
     const fullResult = [];
     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
       const dateStr = m.format('YYYY-MM-DD');
@@ -173,20 +176,27 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
-    // 🔢 Learning-wise average calculation
-    const learningScores = {};
+    // Step 5: Sort - latest createdAt first, rest by scoreDate
+    const latestByCreatedAt = fullResult
+      .filter(entry => entry.score !== null)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
 
+    const remainingSorted = fullResult
+      .filter(entry => entry !== latestByCreatedAt)
+      .sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    const sortedFinal = latestByCreatedAt
+      ? [latestByCreatedAt, ...remainingSorted]
+      : remainingSorted;
+
+    // Step 6: Learning-wise average
+    const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
         const lid = entry.learningId._id.toString();
         const lname = entry.learningId.name || "Unknown";
-
         if (!learningScores[lid]) {
-          learningScores[lid] = {
-            learningId: lid,
-            name: lname,
-            scores: []
-          };
+          learningScores[lid] = { learningId: lid, name: lname, scores: [] };
         }
         learningScores[lid].scores.push(entry.score);
       }
@@ -202,9 +212,7 @@ exports.scoreCard = async (req, res) => {
       };
     });
 
-    fullResult.reverse(); // Show latest first
-
-    // ✅ Save average scores to Assigned model
+    // Step 7: Update Assigned averages
     try {
       const assignedList = await Assigned.find({
         session: userSession,
@@ -233,13 +241,13 @@ exports.scoreCard = async (req, res) => {
           await Assigned.updateOne({ _id: assign._id }, { $set: update });
         }
       }
-    } catch (e) {
-      console.error('Error updating Assigned averages:', e.message);
+    } catch (err) {
+      console.error('Error updating Assigned averages:', err.message);
     }
 
-    // ✅ Final response with score list and averages
+    // Step 8: Final Response
     res.status(200).json({
-      scores: fullResult,
+      scores: sortedFinal,
       learningWiseAverage
     });
 
@@ -248,6 +256,7 @@ exports.scoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // exports.scoreCard = async (req, res) => {
 //   try {
