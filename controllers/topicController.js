@@ -1485,6 +1485,73 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 
 
 
+// exports.PracticescoreCard = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     const user = await User.findById(userId).lean();
+//     if (!user?.session) {
+//       return res.status(400).json({ message: 'User session not found.' });
+//     }
+
+//     const rawScores = await LearningScore.aggregate([
+//       {
+//         $match: {
+//           userId: new mongoose.Types.ObjectId(userId),
+//           session: user.session
+//         }
+//       },
+//       { $sort: { scoreDate: 1, createdAt: 1 } },
+//       {
+//         $group: {
+//           _id: {
+//             date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
+//           },
+//           doc: { $first: "$$ROOT" }
+//         }
+//       },
+//       { $replaceRoot: { newRoot: "$doc" } },
+//     ]);
+
+//     if (!rawScores || rawScores.length === 0) {
+//       return res.status(200).json({ scores: [], averageScore: 0 });
+//     }
+
+//     const populatedScores = await LearningScore.populate(rawScores, {
+//       path: 'learningId',
+//       select: 'name'
+//     });
+
+//     const cleaned = populatedScores.filter(s => s && s.score !== undefined);
+
+//     const todayStr = moment().format('YYYY-MM-DD');
+//     const finalSorted = cleaned.sort((a, b) => {
+//       const aDate = moment(a.scoreDate).format('YYYY-MM-DD');
+//       const bDate = moment(b.scoreDate).format('YYYY-MM-DD');
+//       if (aDate === todayStr) return -1;
+//       if (bDate === todayStr) return 1;
+//       return new Date(a.scoreDate) - new Date(b.scoreDate);
+//     });
+
+//     const scoresOnly = finalSorted
+//       .filter(s => typeof s.score === 'number')
+//       .map(s => s.score);
+
+//     const avgScore = scoresOnly.length > 0
+//       ? parseFloat((scoresOnly.reduce((a, b) => a + b, 0) / scoresOnly.length).toFixed(2))
+//       : 0;
+
+//     res.status(200).json({
+//       scores: finalSorted,
+//       averageScore: avgScore
+//     });
+
+//   } catch (error) {
+//     console.error('Error in PracticescoreCard:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1513,10 +1580,6 @@ exports.PracticescoreCard = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } },
     ]);
 
-    if (!rawScores || rawScores.length === 0) {
-      return res.status(200).json({ scores: [], averageScore: 0 });
-    }
-
     const populatedScores = await LearningScore.populate(rawScores, {
       path: 'learningId',
       select: 'name'
@@ -1525,6 +1588,22 @@ exports.PracticescoreCard = async (req, res) => {
     const cleaned = populatedScores.filter(s => s && s.score !== undefined);
 
     const todayStr = moment().format('YYYY-MM-DD');
+    const hasToday = cleaned.some(s =>
+      moment(s.scoreDate).format('YYYY-MM-DD') === todayStr
+    );
+
+    // ✅ Add today's entry manually if not present
+    if (!hasToday) {
+      cleaned.push({
+        score: null,
+        scoreDate: new Date(),
+        createdAt: new Date(),
+        isToday: true,
+        date: todayStr
+      });
+    }
+
+    // ✅ Sort: today's date on top, rest ascending by scoreDate
     const finalSorted = cleaned.sort((a, b) => {
       const aDate = moment(a.scoreDate).format('YYYY-MM-DD');
       const bDate = moment(b.scoreDate).format('YYYY-MM-DD');
@@ -1541,8 +1620,17 @@ exports.PracticescoreCard = async (req, res) => {
       ? parseFloat((scoresOnly.reduce((a, b) => a + b, 0) / scoresOnly.length).toFixed(2))
       : 0;
 
+    const normalized = finalSorted.map(s => {
+      const dateStr = moment(s.scoreDate).format('YYYY-MM-DD');
+      return {
+        ...s,
+        date: dateStr,
+        isToday: dateStr === todayStr
+      };
+    });
+
     res.status(200).json({
-      scores: finalSorted,
+      scores: normalized,
       averageScore: avgScore
     });
 
@@ -1551,53 +1639,6 @@ exports.PracticescoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
-
-
-// exports.PracticescoreCard = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-
-//     // 🧠 Get user's current session
-//     const user = await User.findById(userId).lean();
-//     if (!user?.session) {
-//       return res.status(400).json({ message: 'User session not found.' });
-//     }
-
-//     const rawScores = await LearningScore.aggregate([
-//       {
-//         $match: {
-//           userId: new mongoose.Types.ObjectId(userId),
-//           session: user.session  // ✅ Only match scores from current session
-//         }
-//       },
-//       { $sort: { scoreDate: 1 } },
-//       {
-//         $group: {
-//           _id: {
-//             $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
-//           },
-//           doc: { $first: "$$ROOT" }
-//         }
-//       },
-//       { $replaceRoot: { newRoot: "$doc" } },
-//       { $sort: { scoreDate: -1 } }
-//     ]);
-
-//     const populatedScores = await LearningScore.populate(rawScores, {
-//       path: 'learningId',
-//       select: 'name'
-//     });
-
-//     res.status(200).json({ scores: populatedScores });
-
-//   } catch (error) {
-//     console.error('Error in PracticescoreCard:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
 
 exports.StrictScore = async (req, res) => {
   try {
