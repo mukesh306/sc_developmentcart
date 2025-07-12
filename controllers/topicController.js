@@ -1483,6 +1483,8 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
   }
 };
 
+
+
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1520,17 +1522,19 @@ exports.PracticescoreCard = async (req, res) => {
       select: 'name'
     });
 
-    // Remove any undefined/null entries
     const cleaned = populatedScores.filter(s => s && s.score !== undefined);
 
-    const sorted = [...cleaned].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-    const latestEntry = sorted[0];
-    const remaining = sorted.slice(1).sort((a, b) => new Date(a.scoreDate) - new Date(b.scoreDate));
-
-    const finalSorted = [latestEntry, ...remaining];
+    const todayStr = moment().format('YYYY-MM-DD');
+    const finalSorted = cleaned.sort((a, b) => {
+      const aDate = moment(a.scoreDate).format('YYYY-MM-DD');
+      const bDate = moment(b.scoreDate).format('YYYY-MM-DD');
+      if (aDate === todayStr) return -1;
+      if (bDate === todayStr) return 1;
+      return new Date(a.scoreDate) - new Date(b.scoreDate);
+    });
 
     const scoresOnly = finalSorted
-      .filter(s => s && typeof s.score === 'number')
+      .filter(s => typeof s.score === 'number')
       .map(s => s.score);
 
     const avgScore = scoresOnly.length > 0
