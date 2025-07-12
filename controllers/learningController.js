@@ -176,18 +176,12 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
-    // Step 5: Sort - latest createdAt first, rest by scoreDate
-    const latestByCreatedAt = fullResult
-      .filter(entry => entry.score !== null)
-      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
-
-    const remainingSorted = fullResult
-      .filter(entry => entry !== latestByCreatedAt)
-      .sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    const sortedFinal = latestByCreatedAt
-      ? [latestByCreatedAt, ...remainingSorted]
-      : remainingSorted;
+    // ✅ Step 5: Bring today's score first, rest sorted by date ascending
+    const sortedFinal = fullResult.sort((a, b) => {
+      if (a.date === todayStr) return -1;
+      if (b.date === todayStr) return 1;
+      return new Date(a.date) - new Date(b.date);
+    });
 
     // Step 6: Learning-wise average
     const learningScores = {};
@@ -256,6 +250,7 @@ exports.scoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.scoreCard = async (req, res) => {
