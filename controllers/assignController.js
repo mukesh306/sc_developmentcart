@@ -155,34 +155,6 @@ exports.getAssignedList = async (req, res) => {
 
 
 
-// exports.getAssignedListUser = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-
-//     const user = await User.findById(userId).lean();
-//     if (!user || !user.className) {
-//       return res.status(400).json({ message: 'User className not found.' });
-//     }
-//     const assignedList = await Assigned.find({ classId: user.className })
-//       .populate('learning')
-//       .populate('learning2')
-//       .populate('learning3')
-//       .lean();
-
-//     for (let item of assignedList) {
-//       let classInfo = await School.findById(item.classId).lean();
-//       if (!classInfo) {
-//         classInfo = await College.findById(item.classId).lean();
-//       }
-//       item.classInfo = classInfo || null;
-//     }
-//     res.status(200).json({ data: assignedList });
-//   } catch (error) {
-//     console.error('Get Assigned Error:', error);
-//     res.status(500).json({ message: 'Internal server error', error: error.message });
-//   }
-// };
-
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -192,7 +164,7 @@ exports.getAssignedListUser = async (req, res) => {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
 
-    // Step 1: Get only first score of each day
+    // Fetch first score per day
     const dailyFirstScores = await TopicScore.aggregate([
       {
         $match: {
@@ -212,7 +184,7 @@ exports.getAssignedListUser = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } }
     ]);
 
-    // Step 2: Group by learningId and calculate average
+    // Calculate learning-wise average
     const grouped = {};
     for (let s of dailyFirstScores) {
       if (!s.learningId) continue;
@@ -228,16 +200,35 @@ exports.getAssignedListUser = async (req, res) => {
       averageScoreMap[lid] = parseFloat(avg.toFixed(2));
     }
 
-    // Step 3: Get assigned list with className and session match
+    // Fetch assigned content
     const assignedList = await Assigned.find({
       classId: user.className,
-      session: user.session // ✅ this ensures both className and session match
+      session: user.session
     })
-      .populate('learning')
-      .populate('learning2')
-      .populate('learning3')
-      .populate('learning4')
+      .populate('learning', 'name')
+      .populate('learning2', 'name')
+      .populate('learning3', 'name')
+      .populate('learning4', 'name')
       .lean();
+
+    // If no assigned data found, return default object
+    if (!assignedList || assignedList.length === 0) {
+      return res.status(200).json({
+        data: [
+          {
+            learning: null,
+            learning2: null,
+            learning3: null,
+            learning4: null,
+            learningAverage: 0,
+            learning2Average: 0,
+            learning3Average: 0,
+            learning4Average: 0,
+            classInfo: null
+          }
+        ]
+      });
+    }
 
     for (let item of assignedList) {
       let classInfo = await School.findById(item.classId).lean();
@@ -249,15 +240,13 @@ exports.getAssignedListUser = async (req, res) => {
       const getAverage = (learningObj) => {
         if (learningObj && learningObj._id) {
           const lid = learningObj._id.toString();
-          return Object.prototype.hasOwnProperty.call(averageScoreMap, lid)
-            ? averageScoreMap[lid]
-            : 0;
+          return averageScoreMap[lid] ?? 0;
         }
         return 0;
       };
 
       ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
-        if (!item[field] || Object.keys(item[field]).length === 0) {
+        if (!item[field] || typeof item[field] !== 'object' || !item[field]._id) {
           item[field] = null;
         }
       });
@@ -268,7 +257,6 @@ exports.getAssignedListUser = async (req, res) => {
       item.learning4Average = getAverage(item.learning4);
     }
 
-    // ✅ Final response
     res.status(200).json({ data: assignedList });
 
   } catch (error) {
@@ -276,6 +264,7 @@ exports.getAssignedListUser = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 
 
 
