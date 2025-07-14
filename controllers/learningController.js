@@ -250,6 +250,7 @@ exports.updateLearning = async (req, res) => {
 //   }
 // };
 
+
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -262,13 +263,13 @@ exports.scoreCard = async (req, res) => {
       return res.status(400).json({ message: 'User session or className not found.' });
     }
 
-    // ✅ Step 1: Aggregate - Get first score per day with session and classId match
+    // ✅ Step 1: Get first score per day — with proper ObjectId usage
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
-          userId: mongoose.Types.ObjectId(userId),
+          userId: new mongoose.Types.ObjectId(userId), // ✅ FIXED: using `new`
           session: userSession,
-          classId: userClassId.toString() // ✅ convert ObjectId to string for matching
+          classId: userClassId.toString() // ✅ Match as string
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -289,7 +290,7 @@ exports.scoreCard = async (req, res) => {
       { path: 'learningId', select: 'name' }
     ]);
 
-    // Step 3: Normalize & map scores
+    // Step 3: Normalize scores
     const scoreMap = new Map();
     let minDate = null;
     let maxDate = moment().startOf('day');
@@ -326,7 +327,7 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
-    // Step 5: Sort - today first
+    // Step 5: Today's first, then ascending
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
@@ -356,7 +357,7 @@ exports.scoreCard = async (req, res) => {
       };
     });
 
-    // Step 7: Update Assigned learning averages
+    // Step 7: Update Assigned averages
     try {
       const assignedList = await Assigned.find({
         session: userSession,
@@ -389,7 +390,7 @@ exports.scoreCard = async (req, res) => {
       console.error('Error updating Assigned averages:', err.message);
     }
 
-    // Step 8: Final response
+    // Step 8: Final Response
     res.status(200).json({
       scores: sortedFinal,
       learningWiseAverage
@@ -400,7 +401,6 @@ exports.scoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
