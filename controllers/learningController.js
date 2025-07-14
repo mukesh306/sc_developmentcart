@@ -603,14 +603,187 @@ exports.StrikeBothSameDate = async (req, res) => {
 };
 
 
+exports.Strikecalculation = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { type = '' } = req.query;
+    const typeArray = Array.isArray(type) ? type : type.split(',');
+
+    // Get the user's current session and classId
+    const user = await User.findById(userId).lean();
+    if (!user?.session || !user?.className) {
+      return res.status(400).json({ message: 'User session or className not found.' });
+    }
+
+    const scoreQuery = {
+      userId,
+      session: user.session,
+      classId: user.className.toString(),
+      strickStatus: true
+    };
+    const topicScoreQuery = {
+      userId,
+      session: user.session,
+      classId: user.className.toString(),
+      strickStatus: true
+    };
+
+    const scores = await LearningScore.find(scoreQuery)
+      .populate('learningId', 'name')
+      .lean();
+
+    const topicScores = await TopicScore.find(topicScoreQuery)
+      .populate('learningId', 'name')
+      .lean();
+
+    const scoreDateMap = new Map();
+    const topicDateMap = new Map();
+    const allDatesSet = new Set();
+
+    scores.forEach(score => {
+      const date = moment(score.scoreDate).format('YYYY-MM-DD');
+      allDatesSet.add(date);
+      if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
+      scoreDateMap.get(date).push({ type: 'practice' });
+    });
+
+    topicScores.forEach(score => {
+      const date = moment(score.updatedAt).format('YYYY-MM-DD');
+      allDatesSet.add(date);
+      if (!topicDateMap.has(date)) topicDateMap.set(date, []);
+      topicDateMap.get(date).push({ type: 'topic' });
+    });
+
+    const result = [];
+    for (let date of allDatesSet) {
+      const scoreItems = scoreDateMap.get(date) || [];
+      const topicItems = topicDateMap.get(date) || [];
+
+      if (typeArray.includes('topic') && typeArray.includes('practice')) {
+        if (scoreItems.length > 0 && topicItems.length > 0) {
+          result.push({ date });
+        }
+      } else if (typeArray.length === 1 && typeArray.includes('practice')) {
+        if (scoreItems.length > 0) {
+          result.push({ date });
+        }
+      } else if (typeArray.length === 1 && typeArray.includes('topic')) {
+        if (topicItems.length > 0) {
+          result.push({ date });
+        }
+      }
+    }
+
+    result.sort((a, b) => new Date(a.date) - new Date(b.date));
+
+    // --- Streak Calculations ---
+    let largestStreak = { count: 0, startDate: null, endDate: null };
+    let currentStreak = { count: 0, startDate: null, endDate: null };
+    const weeklyBonus = [];
+    const monthlyBonus = [];
+
+    const sortedDates = result.map(r => r.date).sort();
+    let streakStart = null;
+    let tempStreak = [];
+
+    for (let i = 0; i < sortedDates.length; i++) {
+      const curr = moment(sortedDates[i]);
+      const prev = i > 0 ? moment(sortedDates[i - 1]) : null;
+
+      if (!prev || curr.diff(prev, 'days') === 1) {
+        if (!streakStart) streakStart = sortedDates[i];
+        tempStreak.push(sortedDates[i]);
+      } else {
+        if (tempStreak.length > largestStreak.count) {
+          largestStreak = {
+            count: tempStreak.length,
+            startDate: streakStart,
+            endDate: tempStreak[tempStreak.length - 1]
+          };
+        }
+
+        for (let j = 0; j + 6 < tempStreak.length; j += 7) {
+          weeklyBonus.push({
+            week: weeklyBonus.length + 1,
+            startDate: tempStreak[j],
+            endDate: tempStreak[j + 6]
+          });
+        }
+
+        for (let j = 0; j + 29 < tempStreak.length; j += 30) {
+          monthlyBonus.push({
+            month: monthlyBonus.length + 1,
+            startDate: tempStreak[j],
+            endDate: tempStreak[j + 29]
+          });
+        }
+
+        streakStart = sortedDates[i];
+        tempStreak = [sortedDates[i]];
+      }
+    }
+
+    if (tempStreak.length > 0) {
+      if (tempStreak.length > largestStreak.count) {
+        largestStreak = {
+          count: tempStreak.length,
+          startDate: streakStart,
+          endDate: tempStreak[tempStreak.length - 1]
+        };
+      }
+
+      for (let j = 0; j + 6 < tempStreak.length; j += 7) {
+        weeklyBonus.push({
+          week: weeklyBonus.length + 1,
+          startDate: tempStreak[j],
+          endDate: tempStreak[j + 6]
+        });
+      }
+
+      for (let j = 0; j + 29 < tempStreak.length; j += 30) {
+        monthlyBonus.push({
+          month: monthlyBonus.length + 1,
+          startDate: tempStreak[j],
+          endDate: tempStreak[j + 29]
+        });
+      }
+
+      currentStreak = {
+        count: tempStreak.length,
+        startDate: streakStart,
+        endDate: tempStreak[tempStreak.length - 1]
+      };
+    }
+
+    return res.status(200).json({
+      largestStreak,
+      currentStreak,
+      weeklyBonus,
+      monthlyBonus
+    });
+
+  } catch (error) {
+    console.error('Error in Strikecalculation:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+
+
 // exports.Strikecalculation = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
 //     const { type = '' } = req.query;
 //     const typeArray = Array.isArray(type) ? type : type.split(',');
 
-//     const scoreQuery = { userId, strickStatus: true };
-//     const topicScoreQuery = { userId, strickStatus: true };
+//     // Get the user's current session
+//     const user = await User.findById(userId).lean();
+//     if (!user || !user.session) {
+//       return res.status(400).json({ message: 'User session not found.' });
+//     }
+
+//     const scoreQuery = { userId, session: user.session, strickStatus: true };
+//     const topicScoreQuery = { userId, session: user.session, strickStatus: true };
 
 //     const scores = await LearningScore.find(scoreQuery)
 //       .populate('learningId', 'name')
@@ -705,7 +878,6 @@ exports.StrikeBothSameDate = async (req, res) => {
 //           });
 //         }
 
-//         // Reset streak
 //         streakStart = sortedDates[i];
 //         tempStreak = [sortedDates[i]];
 //       }
@@ -744,179 +916,18 @@ exports.StrikeBothSameDate = async (req, res) => {
 //       };
 //     }
 
-//     // ✅ Final Response (without dates array)
-//     const response = {
+//     return res.status(200).json({
 //       largestStreak,
 //       currentStreak,
 //       weeklyBonus,
 //       monthlyBonus
-//     };
+//     });
 
-//     return res.status(200).json(response);
 //   } catch (error) {
 //     console.error('Error in Strikecalculation:', error);
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
-
-exports.Strikecalculation = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { type = '' } = req.query;
-    const typeArray = Array.isArray(type) ? type : type.split(',');
-
-    // Get the user's current session
-    const user = await User.findById(userId).lean();
-    if (!user || !user.session) {
-      return res.status(400).json({ message: 'User session not found.' });
-    }
-
-    const scoreQuery = { userId, session: user.session, strickStatus: true };
-    const topicScoreQuery = { userId, session: user.session, strickStatus: true };
-
-    const scores = await LearningScore.find(scoreQuery)
-      .populate('learningId', 'name')
-      .lean();
-
-    const topicScores = await TopicScore.find(topicScoreQuery)
-      .populate('learningId', 'name')
-      .lean();
-
-    const scoreDateMap = new Map();
-    const topicDateMap = new Map();
-    const allDatesSet = new Set();
-
-    scores.forEach(score => {
-      const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      allDatesSet.add(date);
-      if (!scoreDateMap.has(date)) scoreDateMap.set(date, []);
-      scoreDateMap.get(date).push({ type: 'practice' });
-    });
-
-    topicScores.forEach(score => {
-      const date = moment(score.updatedAt).format('YYYY-MM-DD');
-      allDatesSet.add(date);
-      if (!topicDateMap.has(date)) topicDateMap.set(date, []);
-      topicDateMap.get(date).push({ type: 'topic' });
-    });
-
-    const result = [];
-    for (let date of allDatesSet) {
-      const scoreItems = scoreDateMap.get(date) || [];
-      const topicItems = topicDateMap.get(date) || [];
-
-      if (typeArray.includes('topic') && typeArray.includes('practice')) {
-        if (scoreItems.length > 0 && topicItems.length > 0) {
-          result.push({ date });
-        }
-      } else if (typeArray.length === 1 && typeArray.includes('practice')) {
-        if (scoreItems.length > 0) {
-          result.push({ date });
-        }
-      } else if (typeArray.length === 1 && typeArray.includes('topic')) {
-        if (topicItems.length > 0) {
-          result.push({ date });
-        }
-      }
-    }
-
-    result.sort((a, b) => new Date(a.date) - new Date(b.date));
-
-    // --- Streak Calculations ---
-    let largestStreak = { count: 0, startDate: null, endDate: null };
-    let currentStreak = { count: 0, startDate: null, endDate: null };
-    const weeklyBonus = [];
-    const monthlyBonus = [];
-
-    const sortedDates = result.map(r => r.date).sort();
-    let streakStart = null;
-    let tempStreak = [];
-
-    for (let i = 0; i < sortedDates.length; i++) {
-      const curr = moment(sortedDates[i]);
-      const prev = i > 0 ? moment(sortedDates[i - 1]) : null;
-
-      if (!prev || curr.diff(prev, 'days') === 1) {
-        if (!streakStart) streakStart = sortedDates[i];
-        tempStreak.push(sortedDates[i]);
-      } else {
-        // Finalize last streak
-        if (tempStreak.length > largestStreak.count) {
-          largestStreak = {
-            count: tempStreak.length,
-            startDate: streakStart,
-            endDate: tempStreak[tempStreak.length - 1]
-          };
-        }
-
-        // Weekly Bonus
-        for (let j = 0; j + 6 < tempStreak.length; j += 7) {
-          weeklyBonus.push({
-            week: weeklyBonus.length + 1,
-            startDate: tempStreak[j],
-            endDate: tempStreak[j + 6]
-          });
-        }
-
-        // Monthly Bonus
-        for (let j = 0; j + 29 < tempStreak.length; j += 30) {
-          monthlyBonus.push({
-            month: monthlyBonus.length + 1,
-            startDate: tempStreak[j],
-            endDate: tempStreak[j + 29]
-          });
-        }
-
-        streakStart = sortedDates[i];
-        tempStreak = [sortedDates[i]];
-      }
-    }
-
-    // Final streak update
-    if (tempStreak.length > 0) {
-      if (tempStreak.length > largestStreak.count) {
-        largestStreak = {
-          count: tempStreak.length,
-          startDate: streakStart,
-          endDate: tempStreak[tempStreak.length - 1]
-        };
-      }
-
-      for (let j = 0; j + 6 < tempStreak.length; j += 7) {
-        weeklyBonus.push({
-          week: weeklyBonus.length + 1,
-          startDate: tempStreak[j],
-          endDate: tempStreak[j + 6]
-        });
-      }
-
-      for (let j = 0; j + 29 < tempStreak.length; j += 30) {
-        monthlyBonus.push({
-          month: monthlyBonus.length + 1,
-          startDate: tempStreak[j],
-          endDate: tempStreak[j + 29]
-        });
-      }
-
-      currentStreak = {
-        count: tempStreak.length,
-        startDate: streakStart,
-        endDate: tempStreak[tempStreak.length - 1]
-      };
-    }
-
-    return res.status(200).json({
-      largestStreak,
-      currentStreak,
-      weeklyBonus,
-      monthlyBonus
-    });
-
-  } catch (error) {
-    console.error('Error in Strikecalculation:', error);
-    return res.status(500).json({ message: error.message });
-  }
-};
 
 
 
