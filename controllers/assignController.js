@@ -62,14 +62,13 @@ exports.getAssignedList = async (req, res) => {
 };
 
 
-
 // exports.getAssignedListUser = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
 //     const user = await User.findById(userId).lean();
 
-//     if (!user || !user.className || !user.session) {
-//       return res.status(400).json({ message: 'User className or session not found.' });
+//     if (!user?.session) {
+//       return res.status(200).json({ data: [] });
 //     }
 
 //     // Step 1: Get only first score of each day
@@ -86,7 +85,7 @@ exports.getAssignedList = async (req, res) => {
 //           _id: {
 //             date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
 //           },
-//           doc: { $first: "$$ROOT" } // First record per date
+//           doc: { $first: "$$ROOT" }
 //         }
 //       },
 //       { $replaceRoot: { newRoot: "$doc" } }
@@ -108,8 +107,9 @@ exports.getAssignedList = async (req, res) => {
 //       averageScoreMap[lid] = parseFloat(avg.toFixed(2));
 //     }
 
-//     // Step 3: Get assigned list and attach calculated averages
-//     const assignedList = await Assigned.find({ classId: user.className })
+//     // Step 3: Get assigned list (based on className if available)
+//     const assignedQuery = user.className ? { classId: user.className } : {};
+//     const assignedList = await Assigned.find(assignedQuery)
 //       .populate('learning')
 //       .populate('learning2')
 //       .populate('learning3')
@@ -145,7 +145,6 @@ exports.getAssignedList = async (req, res) => {
 //       item.learning4Average = getAverage(item.learning4);
 //     }
 
-//     // ✅ Final response
 //     res.status(200).json({ data: assignedList });
 
 //   } catch (error) {
@@ -163,12 +162,13 @@ exports.getAssignedListUser = async (req, res) => {
       return res.status(200).json({ data: [] });
     }
 
-    // Step 1: Get only first score of each day
+    // Step 1: Get only first score of each day with session and class match
     const dailyFirstScores = await TopicScore.aggregate([
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          session: user.session
+          session: user.session,
+          classId: user.className?.toString() // ✅ match classId in TopicScore with user.className
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -244,8 +244,6 @@ exports.getAssignedListUser = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
-
 
 exports.deleteAssigned = async (req, res) => {
   try {
