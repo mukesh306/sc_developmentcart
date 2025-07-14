@@ -62,126 +62,100 @@ exports.getAssignedList = async (req, res) => {
 };
 
 
-// exports.getAssignedListUser = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const user = await User.findById(userId).lean();
+exports.getAssignedListUser = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).lean();
 
-//     if (!user || !user.className || !user.session) {
-//       return res.status(400).json({ message: 'User className or session not found.' });
-//     }
+    if (!user || !user.className || !user.session) {
+      return res.status(400).json({ message: 'User className or session not found.' });
+    }
 
-//     // Step 1: Get only first score of each day
-//     const dailyFirstScores = await TopicScore.aggregate([
-//       {
-//         $match: {
-//           userId: new mongoose.Types.ObjectId(userId),
-//           session: user.session
-//         }
-//       },
-//       { $sort: { scoreDate: 1, createdAt: 1 } },
-//       {
-//         $group: {
-//           _id: {
-//             date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
-//           },
-//           doc: { $first: "$$ROOT" } // First record per date
-//         }
-//       },
-//       { $replaceRoot: { newRoot: "$doc" } }
-//     ]);
+    // Step 1: Get only first score of each day
+    const dailyFirstScores = await TopicScore.aggregate([
+      {
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          session: user.session
+        }
+      },
+      { $sort: { scoreDate: 1, createdAt: 1 } },
+      {
+        $group: {
+          _id: {
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
+          },
+          doc: { $first: "$$ROOT" } // First record per date
+        }
+      },
+      { $replaceRoot: { newRoot: "$doc" } }
+    ]);
 
-//     // Step 2: Group by learningId and calculate average
-//     const grouped = {};
-//     for (let s of dailyFirstScores) {
-//       if (!s.learningId) continue;
-//       const lid = s.learningId.toString();
-//       if (!grouped[lid]) grouped[lid] = [];
-//       grouped[lid].push(s.score);
-//     }
+    // Step 2: Group by learningId and calculate average
+    const grouped = {};
+    for (let s of dailyFirstScores) {
+      if (!s.learningId) continue;
+      const lid = s.learningId.toString();
+      if (!grouped[lid]) grouped[lid] = [];
+      grouped[lid].push(s.score);
+    }
 
-//     const averageScoreMap = {};
-//     for (const lid in grouped) {
-//       const arr = grouped[lid];
-//       const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
-//       averageScoreMap[lid] = parseFloat(avg.toFixed(2));
-//     }
+    const averageScoreMap = {};
+    for (const lid in grouped) {
+      const arr = grouped[lid];
+      const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
+      averageScoreMap[lid] = parseFloat(avg.toFixed(2));
+    }
 
-//     // Step 3: Get assigned list and attach calculated averages
-//     const assignedList = await Assigned.find({ classId: user.className })
-//       .populate('learning')
-//       .populate('learning2')
-//       .populate('learning3')
-//       .populate('learning4')
-//       .lean();
+    // Step 3: Get assigned list and attach calculated averages
+    const assignedList = await Assigned.find({ classId: user.className })
+      .populate('learning')
+      .populate('learning2')
+      .populate('learning3')
+      .populate('learning4')
+      .lean();
 
-//     for (let item of assignedList) {
-//       let classInfo = await School.findById(item.classId).lean();
-//       if (!classInfo) {
-//         classInfo = await College.findById(item.classId).lean();
-//       }
-//       item.classInfo = classInfo || null;
+    for (let item of assignedList) {
+      let classInfo = await School.findById(item.classId).lean();
+      if (!classInfo) {
+        classInfo = await College.findById(item.classId).lean();
+      }
+      item.classInfo = classInfo || null;
 
-//       const getAverage = (learningObj) => {
-//         if (learningObj && learningObj._id) {
-//           const lid = learningObj._id.toString();
-//           return Object.prototype.hasOwnProperty.call(averageScoreMap, lid)
-//             ? averageScoreMap[lid]
-//             : 0;
-//         }
-//         return 0;
-//       };
+      const getAverage = (learningObj) => {
+        if (learningObj && learningObj._id) {
+          const lid = learningObj._id.toString();
+          return Object.prototype.hasOwnProperty.call(averageScoreMap, lid)
+            ? averageScoreMap[lid]
+            : 0;
+        }
+        return 0;
+      };
 
-//       ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
-//         if (!item[field] || Object.keys(item[field]).length === 0) {
-//           item[field] = null;
-//         }
-//       });
+      ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
+        if (!item[field] || Object.keys(item[field]).length === 0) {
+          item[field] = null;
+        }
+      });
 
-//       item.learningAverage = getAverage(item.learning);
-//       item.learning2Average = getAverage(item.learning2);
-//       item.learning3Average = getAverage(item.learning3);
-//       item.learning4Average = getAverage(item.learning4);
-//     }
+      item.learningAverage = getAverage(item.learning);
+      item.learning2Average = getAverage(item.learning2);
+      item.learning3Average = getAverage(item.learning3);
+      item.learning4Average = getAverage(item.learning4);
+    }
 
-//     // ✅ Final response
-//     res.status(200).json({ data: assignedList });
+    // ✅ Final response
+    res.status(200).json({ data: assignedList });
 
-//   } catch (error) {
-//     console.error('Get Assigned Error:', error);
-//     res.status(500).json({ message: 'Internal server error', error: error.message });
-//   }
-// };
+  } catch (error) {
+    console.error('Get Assigned Error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
 
 
 
-// exports.getAssignedListUser = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
 
-//     const user = await User.findById(userId).lean();
-//     if (!user || !user.className) {
-//       return res.status(400).json({ message: 'User className not found.' });
-//     }
-//     const assignedList = await Assigned.find({ classId: user.className })
-//       .populate('learning')
-//       .populate('learning2')
-//       .populate('learning3')
-//       .lean();
-
-//     for (let item of assignedList) {
-//       let classInfo = await School.findById(item.classId).lean();
-//       if (!classInfo) {
-//         classInfo = await College.findById(item.classId).lean();
-//       }
-//       item.classInfo = classInfo || null;
-//     }
-//     res.status(200).json({ data: assignedList });
-//   } catch (error) {
-//     console.error('Get Assigned Error:', error);
-//     res.status(500).json({ message: 'Internal server error', error: error.message });
-//   }
-// };
 
 exports.getAssignedListUser = async (req, res) => {
   try {
