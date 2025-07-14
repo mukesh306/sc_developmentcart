@@ -98,6 +98,9 @@ exports.updateLearning = async (req, res) => {
   }
 };
 
+
+
+
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -246,6 +249,8 @@ exports.scoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
 
 
@@ -911,6 +916,7 @@ exports.Strikecalculation = async (req, res) => {
 //   }
 // };
 
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -986,6 +992,7 @@ exports.StrikePath = async (req, res) => {
 
     const startDate = moment(datesList[0]);
     const endDate = moment(datesList[datesList.length - 1]);
+
     const result = [];
 
     const existingBonusDates = user?.bonusDates || [];
@@ -1131,14 +1138,11 @@ exports.StrikePath = async (req, res) => {
       ? updatedUser.userLevelData.find(l => l.level === requestedLevel)?.data || []
       : result;
 
-    // ✅ Custom sort: today's date at top, rest in ascending order
-    const todayStr = moment().format('YYYY-MM-DD');
+    // Custom sort: latest date at top, then oldest to newest (excluding latest)
     if (matched.length > 1) {
-      const todayData = matched.find(m => m.date === todayStr);
-      const rest = matched
-        .filter(m => m.date !== todayStr)
-        .sort((a, b) => new Date(a.date) - new Date(b.date));
-      matched = todayData ? [todayData, ...rest] : rest;
+      const latest = matched[matched.length - 1];
+      const rest = matched.slice(0, -1).sort((a, b) => new Date(a.date) - new Date(b.date));
+      matched = [latest, ...rest];
     }
 
     const roundedBonusPoint = Math.round(updatedUser?.bonuspoint || 0);
