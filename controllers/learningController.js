@@ -1753,17 +1753,42 @@ exports.getGenrelIq = async (req, res) => {
 };
 
 
+
 // exports.Dashboard = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
 
 //     // --- Get user and session
 //     const user = await User.findById(userId).lean();
-//     if (!user || !user.session) {
-//       return res.status(400).json({ message: 'User or session not found.' });
+//     if (!user) {
+//       return res.status(400).json({ message: 'User not found.' });
 //     }
 
 //     const session = user.session;
+
+//     // If session is missing, return an empty dashboard
+//     if (!session) {
+//       return res.status(200).json({
+//         currentStreak: { count: 0, startDate: null, endDate: null },
+//         bonus: {
+//           bonuspoint: user?.bonuspoint || 0,
+//           weekly: { count: 0, startDate: null, endDate: null },
+//           monthly: { count: 0, startDate: null, endDate: null },
+//           weeklyBonus: 0,
+//           monthlyBonus: 0
+//         },
+//         levelBonusPoint: 0,
+//         experiencePoint: 0,
+//         totalNoOfQuestion: 0,
+//         totalQuiz: 0,
+//         level: user?.level || 1,
+//         generalIq: [],
+//         assignedLearnings: [],
+//         practice: [],
+//         classInfo: null,
+//         quotes: []
+//       });
+//     }
 
 //     // --- Scores for Streak Calculation (session-based)
 //     const learningScores = await LearningScore.find({ userId, session, strickStatus: true }).lean();
@@ -1773,7 +1798,6 @@ exports.getGenrelIq = async (req, res) => {
 //     const topicDates = new Set(topicScores.map(s => moment(s.updatedAt).format('YYYY-MM-DD')));
 //     const commonDates = [...practiceDates].filter(date => topicDates.has(date)).sort();
 
-//     // --- currentStreak Calculation
 //     let currentStreak = { count: 0, startDate: null, endDate: null };
 //     let streakStart = null;
 //     let tempStreak = [];
@@ -1813,10 +1837,10 @@ exports.getGenrelIq = async (req, res) => {
 
 //     const weeklyCount = currentStreak.count % 7 === 0 ? 7 : currentStreak.count % 7;
 //     const monthlyCount = currentStreak.count % 30 === 0 ? 30 : currentStreak.count % 30;
-//     const levelData = user?.userLevelData?.find((item) => item.level === level);
-//     const levelBonusPoint = levelData?.levelBonusPoint || 0;
 
-//     // --- Assigned Learnings with IQ ---
+//     const experienceLevel = await Experienceleavel.findOne({ userId, session }).lean();
+//     const levelBonusPoint = experienceLevel?.levelBonusPoint || 0;
+
 //     let assignedLearnings = [];
 //     let classInfo = null;
 
@@ -1852,16 +1876,13 @@ exports.getGenrelIq = async (req, res) => {
 //         item.learning4Average = await getIQScore('learning4');
 //       }
 
-//       // Class info
 //       classInfo = await School.findById(user.className).lean();
 //       if (!classInfo) {
 //         classInfo = await College.findById(user.className).lean();
 //       }
 //     }
 
-//     // --- Practice Learnings + Quiz Count
 //     const totalQuiz = markingSetting?.totalquiz || 0;
-
 //     const practice = [];
 //     const seen = new Set();
 
@@ -1879,10 +1900,8 @@ exports.getGenrelIq = async (req, res) => {
 //       }
 //     }
 
-//     // --- Quotes
 //     const quotes = await Quotes.find({ Status: 'Published' }).lean();
 
-//     // --- Final Response
 //     return res.status(200).json({
 //       currentStreak,
 //       bonus: {
@@ -1924,39 +1943,45 @@ exports.Dashboard = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // --- Get user and session
     const user = await User.findById(userId).lean();
     if (!user) {
       return res.status(400).json({ message: 'User not found.' });
     }
 
+    const classId = user.className;
     const session = user.session;
 
-    // If session is missing, return an empty dashboard
+    const emptyDashboardResponse = {
+      currentStreak: { count: 0, startDate: null, endDate: null },
+      bonus: {
+        bonuspoint: user?.bonuspoint || 0,
+        weekly: { count: 0, startDate: null, endDate: null },
+        monthly: { count: 0, startDate: null, endDate: null },
+        weeklyBonus: 0,
+        monthlyBonus: 0
+      },
+      levelBonusPoint: 0,
+      experiencePoint: 0,
+      totalNoOfQuestion: 0,
+      totalQuiz: 0,
+      level: user?.level || 1,
+      generalIq: [],
+      assignedLearnings: [],
+      practice: [],
+      classInfo: null,
+      quotes: []
+    };
+
     if (!session) {
-      return res.status(200).json({
-        currentStreak: { count: 0, startDate: null, endDate: null },
-        bonus: {
-          bonuspoint: user?.bonuspoint || 0,
-          weekly: { count: 0, startDate: null, endDate: null },
-          monthly: { count: 0, startDate: null, endDate: null },
-          weeklyBonus: 0,
-          monthlyBonus: 0
-        },
-        levelBonusPoint: 0,
-        experiencePoint: 0,
-        totalNoOfQuestion: 0,
-        totalQuiz: 0,
-        level: user?.level || 1,
-        generalIq: [],
-        assignedLearnings: [],
-        practice: [],
-        classInfo: null,
-        quotes: []
-      });
+      return res.status(200).json(emptyDashboardResponse);
     }
 
-    // --- Scores for Streak Calculation (session-based)
+    const school = await School.findById(classId).lean();
+    const college = !school ? await College.findById(classId).lean() : null;
+    if (!school && !college) {
+      return res.status(200).json(emptyDashboardResponse);
+    }
+
     const learningScores = await LearningScore.find({ userId, session, strickStatus: true }).lean();
     const topicScores = await TopicScore.find({ userId, session, strickStatus: true }).lean();
 
@@ -2042,10 +2067,7 @@ exports.Dashboard = async (req, res) => {
         item.learning4Average = await getIQScore('learning4');
       }
 
-      classInfo = await School.findById(user.className).lean();
-      if (!classInfo) {
-        classInfo = await College.findById(user.className).lean();
-      }
+      classInfo = school || college;
     }
 
     const totalQuiz = markingSetting?.totalquiz || 0;
@@ -2103,6 +2125,8 @@ exports.Dashboard = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
 
 // new yahi ahi
 
