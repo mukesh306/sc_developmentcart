@@ -1220,6 +1220,7 @@ exports.calculateQuizScore = async (req, res) => {
   }
 };
 
+
 exports.updateTopicWithQuiz = async (req, res) => {
   try {
     const topicId = req.params.id;
