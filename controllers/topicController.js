@@ -1484,7 +1484,6 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 };
 
 
-
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1494,11 +1493,17 @@ exports.PracticescoreCard = async (req, res) => {
       return res.status(400).json({ message: 'User session not found.' });
     }
 
+    const userSession = user.session;
+    const todayStr = moment().format('YYYY-MM-DD');
+    let minDate = null;
+    let maxDate = moment().startOf('day');
+
+    // Step 1: Get first practice score per day
     const rawScores = await LearningScore.aggregate([
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          session: user.session
+          session: userSession
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -1513,27 +1518,55 @@ exports.PracticescoreCard = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } },
     ]);
 
-    if (!rawScores || rawScores.length === 0) {
-      return res.status(200).json({ scores: [], averageScore: 0 });
-    }
-
+    // Step 2: Populate learningId
     const populatedScores = await LearningScore.populate(rawScores, {
       path: 'learningId',
       select: 'name'
     });
 
-    const cleaned = populatedScores.filter(s => s && s.score !== undefined);
+    // Step 3: Normalize and map
+    const scoreMap = new Map();
 
-    const todayStr = moment().format('YYYY-MM-DD');
-    const finalSorted = cleaned.sort((a, b) => {
-      const aDate = moment(a.scoreDate).format('YYYY-MM-DD');
-      const bDate = moment(b.scoreDate).format('YYYY-MM-DD');
-      if (aDate === todayStr) return -1;
-      if (bDate === todayStr) return 1;
-      return new Date(a.scoreDate) - new Date(b.scoreDate);
+    for (const score of populatedScores) {
+      const scoreDate = moment(score.scoreDate).startOf('day');
+      const dateStr = scoreDate.format('YYYY-MM-DD');
+
+      scoreMap.set(dateStr, {
+        ...score.toObject?.() || score,
+        date: dateStr,
+        isToday: dateStr === todayStr
+      });
+
+      if (!minDate || scoreDate.isBefore(minDate)) minDate = scoreDate;
+      if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
+    }
+
+    if (!minDate) minDate = moment().startOf('day');
+
+    // Step 4: Fill missing days
+    const fullResult = [];
+    for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
+      const dateStr = m.format('YYYY-MM-DD');
+      if (scoreMap.has(dateStr)) {
+        fullResult.push(scoreMap.get(dateStr));
+      } else {
+        fullResult.push({
+          date: dateStr,
+          score: null,
+          isToday: dateStr === todayStr
+        });
+      }
+    }
+
+    // Step 5: Bring today's score to top, rest sorted by date ascending
+    const sortedFinal = fullResult.sort((a, b) => {
+      if (a.date === todayStr) return -1;
+      if (b.date === todayStr) return 1;
+      return new Date(a.date) - new Date(b.date);
     });
 
-    const scoresOnly = finalSorted
+    // Step 6: Calculate average
+    const scoresOnly = fullResult
       .filter(s => typeof s.score === 'number')
       .map(s => s.score);
 
@@ -1541,8 +1574,9 @@ exports.PracticescoreCard = async (req, res) => {
       ? parseFloat((scoresOnly.reduce((a, b) => a + b, 0) / scoresOnly.length).toFixed(2))
       : 0;
 
+    // Step 7: Return response
     res.status(200).json({
-      scores: finalSorted,
+      scores: sortedFinal,
       averageScore: avgScore
     });
 
@@ -1551,7 +1585,6 @@ exports.PracticescoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 // exports.PracticescoreCard = async (req, res) => {
