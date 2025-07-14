@@ -183,7 +183,6 @@ exports.getAssignedList = async (req, res) => {
 //   }
 // };
 
-
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -230,7 +229,7 @@ exports.getAssignedListUser = async (req, res) => {
     }
 
     // Step 3: Get assigned list for same class & session
-    const assignedList = await Assigned.find({
+    let assignedList = await Assigned.find({
       classId: user.className,
       session: user.session
     })
@@ -240,20 +239,33 @@ exports.getAssignedListUser = async (req, res) => {
       .populate('learning4', 'name')
       .lean();
 
+    // If no assigned data, build new user dummy response
+    if (!assignedList || assignedList.length === 0) {
+      // Optional: you can return fixed sample learning subjects here
+      assignedList = [
+        {
+          learning: null,
+          learning2: null,
+          learning3: null,
+          learning4: null,
+          learningAverage: 0,
+          learning2Average: 0,
+          learning3Average: 0,
+          learning4Average: 0,
+          classInfo: null
+        }
+      ];
+
+      return res.status(200).json({ data: assignedList });
+    }
+
+    // Step 4: Attach averages and class info to each item
     for (let item of assignedList) {
-      // Populate classInfo from School or College
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
-
-      // Ensure learning fields have null or populated values
-      ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
-        if (!item[field] || Object.keys(item[field]).length === 0) {
-          item[field] = null;
-        }
-      });
 
       const getAverage = (learningObj) => {
         if (learningObj && learningObj._id) {
@@ -265,13 +277,18 @@ exports.getAssignedListUser = async (req, res) => {
         return 0;
       };
 
+      ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
+        if (!item[field] || Object.keys(item[field]).length === 0) {
+          item[field] = null;
+        }
+      });
+
       item.learningAverage = getAverage(item.learning);
       item.learning2Average = getAverage(item.learning2);
       item.learning3Average = getAverage(item.learning3);
       item.learning4Average = getAverage(item.learning4);
     }
 
-    // ✅ Final response
     res.status(200).json({ data: assignedList });
 
   } catch (error) {
