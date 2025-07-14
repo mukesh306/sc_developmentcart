@@ -262,13 +262,13 @@ exports.scoreCard = async (req, res) => {
       return res.status(400).json({ message: 'User session or className not found.' });
     }
 
-    // ✅ Match by string (classId is plain string)
+    // ✅ Step 1: Aggregate - Get first score per day with session and classId match
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
           userId: mongoose.Types.ObjectId(userId),
           session: userSession,
-          classId: userClassId  // ✅ Match by string (no ObjectId conversion)
+          classId: userClassId.toString() // ✅ convert ObjectId to string for matching
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -326,7 +326,7 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
-    // Step 5: Sort by today first
+    // Step 5: Sort - today first
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
@@ -389,7 +389,7 @@ exports.scoreCard = async (req, res) => {
       console.error('Error updating Assigned averages:', err.message);
     }
 
-    // Step 8: Send Response
+    // Step 8: Final response
     res.status(200).json({
       scores: sortedFinal,
       learningWiseAverage
