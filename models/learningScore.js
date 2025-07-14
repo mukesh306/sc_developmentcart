@@ -15,6 +15,7 @@ const LearningScoreSchema = new mongoose.Schema({
   scorePercent: { type: Number },
  strickStatus: { type: Boolean, default: false },
  session: { type: String },
+ classId: { type: String },
   createdAt: {
         type: Date,
         default: Date.now
