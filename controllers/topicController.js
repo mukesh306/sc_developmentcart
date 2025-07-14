@@ -1219,6 +1219,7 @@ exports.calculateQuizScore = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 exports.updateTopicWithQuiz = async (req, res) => {
   try {
     const topicId = req.params.id;
