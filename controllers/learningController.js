@@ -1065,25 +1065,35 @@ exports.Strikecalculation = async (req, res) => {
 //   }
 // };
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
     const requestedLevel = parseInt(req.query.level || 0);
 
     const user = await User.findById(userId).lean();
-    if (!user?.session) {
-      return res.status(400).json({ message: 'User session not found.' });
+    if (!user?.session || !user?.className) {
+      return res.status(400).json({ message: 'User session or className not found.' });
     }
 
     const session = user.session;
+    const classId = user.className.toString();
 
-    const scores = await LearningScore.find({ userId, session, strickStatus: true })
+    const scores = await LearningScore.find({
+      userId,
+      session,
+      classId,
+      strickStatus: true
+    })
       .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
       .lean();
 
-    const topicScores = await TopicScore.find({ userId, session, strickStatus: true })
+    const topicScores = await TopicScore.find({
+      userId,
+      session,
+      classId,
+      strickStatus: true
+    })
       .populate('learningId', 'name')
       .sort({ updatedAt: 1 })
       .lean();
@@ -1141,7 +1151,6 @@ exports.StrikePath = async (req, res) => {
 
     const startDate = moment(datesList[0]);
     const endDate = moment(datesList[datesList.length - 1]);
-
     const result = [];
 
     const existingBonusDates = user?.bonusDates || [];
@@ -1186,45 +1195,38 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
-    // Weekly Bonus
     for (let i = 6; i < result.length; i++) {
       const streak = result.slice(i - 6, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
         r.data.some(d => d.type === 'topic')
       );
       const bonusDate = result[i].date;
-
       if (streak && !existingWeeklyBonusDates.includes(bonusDate)) {
         result[i].weeklyBonus = weeklyBonus;
         weeklyBonusToAdd += weeklyBonus;
         weeklyBonusDatesToAdd.push(bonusDate);
       }
-
       if (existingWeeklyBonusDates.includes(bonusDate)) {
         result[i].weeklyBonus = weeklyBonus;
       }
     }
 
-    // Monthly Bonus
     for (let i = 29; i < result.length; i++) {
       const streak = result.slice(i - 29, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
         r.data.some(d => d.type === 'topic')
       );
       const bonusDate = result[i].date;
-
       if (streak && !existingMonthlyBonusDates.includes(bonusDate)) {
         result[i].monthlyBonus = monthlyBonus;
         monthlyBonusToAdd += monthlyBonus;
         monthlyBonusDatesToAdd.push(bonusDate);
       }
-
       if (existingMonthlyBonusDates.includes(bonusDate)) {
         result[i].monthlyBonus = monthlyBonus;
       }
     }
 
-    // Update User
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -1287,7 +1289,6 @@ exports.StrikePath = async (req, res) => {
       ? updatedUser.userLevelData.find(l => l.level === requestedLevel)?.data || []
       : result;
 
-    // Custom sort: latest date at top, then oldest to newest (excluding latest)
     if (matched.length > 1) {
       const latest = matched[matched.length - 1];
       const rest = matched.slice(0, -1).sort((a, b) => new Date(a.date) - new Date(b.date));
@@ -1304,21 +1305,18 @@ exports.StrikePath = async (req, res) => {
       level: newLevel,
       dates: matched
     });
-
   } catch (error) {
     console.error('StrikePath error:', error);
     return res.status(500).json({ message: error.message });
   }
 };
 
-// Helper function
 const getLevelFromPoints = async (points) => {
   const setting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
   const experiencePoint = setting?.experiencePoint || 1000;
   if (points < experiencePoint) return 1;
   return Math.floor(points / experiencePoint) + 1;
 };
-
 
 
 exports.getUserLevelData = async (req, res) => {
