@@ -155,6 +155,35 @@ exports.getAssignedList = async (req, res) => {
 
 
 
+// exports.getAssignedListUser = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     const user = await User.findById(userId).lean();
+//     if (!user || !user.className) {
+//       return res.status(400).json({ message: 'User className not found.' });
+//     }
+//     const assignedList = await Assigned.find({ classId: user.className })
+//       .populate('learning')
+//       .populate('learning2')
+//       .populate('learning3')
+//       .lean();
+
+//     for (let item of assignedList) {
+//       let classInfo = await School.findById(item.classId).lean();
+//       if (!classInfo) {
+//         classInfo = await College.findById(item.classId).lean();
+//       }
+//       item.classInfo = classInfo || null;
+//     }
+//     res.status(200).json({ data: assignedList });
+//   } catch (error) {
+//     console.error('Get Assigned Error:', error);
+//     res.status(500).json({ message: 'Internal server error', error: error.message });
+//   }
+// };
+
+
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -164,7 +193,7 @@ exports.getAssignedListUser = async (req, res) => {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
 
-    // Fetch first score per day
+    // Step 1: Get only first score of each day for the session
     const dailyFirstScores = await TopicScore.aggregate([
       {
         $match: {
@@ -184,7 +213,7 @@ exports.getAssignedListUser = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } }
     ]);
 
-    // Calculate learning-wise average
+    // Step 2: Group by learningId and calculate average
     const grouped = {};
     for (let s of dailyFirstScores) {
       if (!s.learningId) continue;
@@ -200,7 +229,7 @@ exports.getAssignedListUser = async (req, res) => {
       averageScoreMap[lid] = parseFloat(avg.toFixed(2));
     }
 
-    // Fetch assigned content
+    // Step 3: Get assigned list for same class & session
     const assignedList = await Assigned.find({
       classId: user.className,
       session: user.session
@@ -211,45 +240,30 @@ exports.getAssignedListUser = async (req, res) => {
       .populate('learning4', 'name')
       .lean();
 
-    // If no assigned data found, return default object
-    if (!assignedList || assignedList.length === 0) {
-      return res.status(200).json({
-        data: [
-          {
-            learning: null,
-            learning2: null,
-            learning3: null,
-            learning4: null,
-            learningAverage: 0,
-            learning2Average: 0,
-            learning3Average: 0,
-            learning4Average: 0,
-            classInfo: null
-          }
-        ]
-      });
-    }
-
     for (let item of assignedList) {
+      // Populate classInfo from School or College
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
         classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
 
-      const getAverage = (learningObj) => {
-        if (learningObj && learningObj._id) {
-          const lid = learningObj._id.toString();
-          return averageScoreMap[lid] ?? 0;
-        }
-        return 0;
-      };
-
+      // Ensure learning fields have null or populated values
       ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
-        if (!item[field] || typeof item[field] !== 'object' || !item[field]._id) {
+        if (!item[field] || Object.keys(item[field]).length === 0) {
           item[field] = null;
         }
       });
+
+      const getAverage = (learningObj) => {
+        if (learningObj && learningObj._id) {
+          const lid = learningObj._id.toString();
+          return Object.prototype.hasOwnProperty.call(averageScoreMap, lid)
+            ? averageScoreMap[lid]
+            : 0;
+        }
+        return 0;
+      };
 
       item.learningAverage = getAverage(item.learning);
       item.learning2Average = getAverage(item.learning2);
@@ -257,6 +271,7 @@ exports.getAssignedListUser = async (req, res) => {
       item.learning4Average = getAverage(item.learning4);
     }
 
+    // ✅ Final response
     res.status(200).json({ data: assignedList });
 
   } catch (error) {
@@ -264,9 +279,6 @@ exports.getAssignedListUser = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
-
-
 
 exports.deleteAssigned = async (req, res) => {
   try {
