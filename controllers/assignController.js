@@ -399,11 +399,10 @@ exports.updateAssigned = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
-
 exports.assignBonusPoint = async (req, res) => {
   try {
     const userId = req.user._id;
-    const bonuspoint = Number(req.query.bonuspoint);
+    const bonuspointQuery = Number(req.query.bonuspoint);
 
     const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
       .sort({ createdAt: -1 })
@@ -421,12 +420,12 @@ exports.assignBonusPoint = async (req, res) => {
     const session = user.session;
     const classId = user.className?.toString();
 
-    let currentStreak = { count: 0, startDate: null, endDate: null };
+    let bonuspoint = 0;
     let weeklyCount = 0;
     let monthlyCount = 0;
+    let currentStreak = { count: 0, startDate: null, endDate: null };
 
     if (session && classId) {
-      // Fetch scores with session + classId match
       const scores = await LearningScore.find({
         userId,
         session,
@@ -442,6 +441,7 @@ exports.assignBonusPoint = async (req, res) => {
       }).lean();
 
       if (scores.length > 0 && topicScores.length > 0) {
+        // ✅ Calculate streak
         const allDatesSet = new Set();
 
         scores.forEach(score => {
@@ -478,21 +478,22 @@ exports.assignBonusPoint = async (req, res) => {
 
         weeklyCount = currentStreak.count >= 7 ? 7 : currentStreak.count;
         monthlyCount = currentStreak.count >= 30 ? 30 : currentStreak.count;
+
+        // ✅ Add bonus only when matched
+        if (!isNaN(bonuspointQuery)) {
+          bonuspoint = (user.bonuspoint || 0) + bonuspointQuery;
+          await User.findByIdAndUpdate(userId, { bonuspoint });
+        } else {
+          bonuspoint = user.bonuspoint || 0;
+        }
       }
     }
 
-    // ✅ Update bonus point if requested
-    let updatedBonus = user.bonuspoint || 0;
-    if (!isNaN(bonuspoint)) {
-      updatedBonus += bonuspoint;
-      await User.findByIdAndUpdate(userId, { bonuspoint: updatedBonus });
-    }
-
     return res.status(200).json({
-      message: !isNaN(bonuspoint)
-        ? 'Bonus point added successfully.'
-        : 'Streak data fetched successfully.',
-      bonuspoint: updatedBonus,
+      message: session && classId
+        ? (!isNaN(bonuspointQuery) ? 'Bonus point added successfully.' : 'Streak data fetched successfully.')
+        : 'No valid session/classId or no streak data.',
+      bonuspoint,
       weekly: {
         count: weeklyCount,
         startDate: weeklyCount === 7 ? currentStreak.startDate : null,
@@ -503,8 +504,8 @@ exports.assignBonusPoint = async (req, res) => {
         startDate: monthlyCount === 30 ? currentStreak.startDate : null,
         endDate: monthlyCount === 30 ? currentStreak.endDate : null
       },
-      weeklyBonus: markingSetting.weeklyBonus || 0,
-      monthlyBonus: markingSetting.monthlyBonus || 0
+      weeklyBonus: weeklyCount === 7 ? (markingSetting.weeklyBonus || 0) : 0,
+      monthlyBonus: monthlyCount === 30 ? (markingSetting.monthlyBonus || 0) : 0
     });
 
   } catch (error) {
@@ -512,6 +513,7 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 // exports.assignBonusPoint = async (req, res) => {
 //   try {
