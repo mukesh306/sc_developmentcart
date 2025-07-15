@@ -5,7 +5,8 @@ const SimpleInstitution = require('../models/adminschool');
   
 const AdminSchool = require('../models/adminschool');
 const AdminCollege = require('../models/admincollege');
-
+const jwt = require('jsonwebtoken');
+const Admin = require('../models/admin1');
 
   exports.addInstitution = async (req, res) => {
     try {
@@ -62,24 +63,40 @@ exports.getSchools = async (req, res) => {
   try {
     const { price } = req.query;
 
-    // If price filter is present, enforce token check
+    // If price is present, verify token manually
     if (price) {
-      if (!req.user || !req.user._id) {
-        return res.status(401).json({ message: 'Unauthorized: Token invalid or missing' });
+      const token = req.headers.authorization?.split(" ")[1];
+
+      if (!token) {
+        return res.status(401).json({ message: 'Unauthorized: Token missing' });
       }
 
+      let decoded;
+      try {
+        decoded = jwt.verify(token, process.env.JWT_SECRET);
+      } catch (err) {
+        return res.status(401).json({ message: 'Token is not valid', error: err.message });
+      }
+
+      const admin = await Admin.findById(decoded._id).select('_id');
+      if (!admin) {
+        return res.status(401).json({ message: 'Unauthorized: Admin not found' });
+      }
+
+      // ✅ Filter by price and updatedBy
       const filter = {
         price: { $ne: null },
-        updatedBy: req.user._id,
+        updatedBy: admin._id
       };
 
       const schools = await School.find(filter);
       return res.status(200).json(schools);
     }
 
-    // No price filter? Return all schools (even if token is invalid or missing)
+    // ✅ No price filter — return all data
     const schools = await School.find({});
     return res.status(200).json(schools);
+
   } catch (error) {
     console.error('Error fetching schools:', error);
     return res.status(500).json({ message: 'Server error while fetching schools' });

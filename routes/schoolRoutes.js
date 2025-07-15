@@ -6,7 +6,7 @@ const auth = require('../middleware/auth');
 
 router.post('/add', auth, schoolController.addInstitution);
 
-router.get('/School',auth, schoolController.getSchools);
+router.get('/School', schoolController.getSchools);
 router.get('/college', schoolController.getCollege);
 router.get('/institute', schoolController.institute);
 router.delete('/School/:id', auth, schoolController.deleteSchool);
