@@ -1825,23 +1825,28 @@ exports.genraliqAverage = async (req, res) => {
     }
 
     const user = await User.findById(userId).lean();
-    if (!user || !user.session) {
-      return res.status(400).json({ message: 'User session not found.' });
+    if (!user || !user.session || !user.className) {
+      return res.status(400).json({ message: 'User session or classId not found.' });
     }
+
+    const session = user.session;
+    const classId = user.className.toString();
 
     const learningScores = await LearningScore.find({
       userId,
-      session: user.session,
+      session,
+      classId,
       strickStatus: true,
       learningId: learningIdFilter
     })
-      .sort({ scoreDate: 1 }) // earliest first
+      .sort({ scoreDate: 1 })
       .populate('learningId', 'name')
       .lean();
 
     const topicScores = await TopicScore.find({
       userId,
-      session: user.session,
+      session,
+      classId,
       strickStatus: true,
       learningId: learningIdFilter
     })
@@ -1850,9 +1855,8 @@ exports.genraliqAverage = async (req, res) => {
       .lean();
 
     const dateMap = new Map();
-
-    // ✅ Only take first LearningScore per date per learningId
     const practiceMap = new Map();
+
     learningScores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       const key = `${date}_${score.learningId._id.toString()}`;
@@ -1861,7 +1865,6 @@ exports.genraliqAverage = async (req, res) => {
       }
     });
 
-    // ✅ Add selected practice scores to dateMap
     practiceMap.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!dateMap.has(date)) {
@@ -1876,7 +1879,6 @@ exports.genraliqAverage = async (req, res) => {
       };
     });
 
-    // ✅ Map topicScores normally
     topicScores.forEach(score => {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
       if (!dateMap.has(date)) {
@@ -1927,14 +1929,12 @@ exports.genraliqAverage = async (req, res) => {
       });
     }
 
-    // ✅ Sort results by latest date (descending)
     results.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const overallAverage = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
 
-    // ✅ Save or update GenralIQ document
     await GenralIQ.findOneAndUpdate(
-      { userId, learningId: learningIdFilter, session: user.session },
+      { userId, learningId: learningIdFilter, session, classId },
       { overallAverage },
       { upsert: true, new: true }
     );
@@ -1944,11 +1944,148 @@ exports.genraliqAverage = async (req, res) => {
       overallAverage,
       results
     });
+
   } catch (error) {
     console.error('Error in genraliqAverage:', error);
     return res.status(500).json({ message: error.message });
   }
 };
+
+
+// exports.genraliqAverage = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const learningIdFilter = req.query.learningId;
+
+//     if (!learningIdFilter) {
+//       return res.status(400).json({ message: 'learningId is required.' });
+//     }
+
+//     const user = await User.findById(userId).lean();
+//     if (!user || !user.session) {
+//       return res.status(400).json({ message: 'User session not found.' });
+//     }
+
+//     const learningScores = await LearningScore.find({
+//       userId,
+//       session: user.session,
+//       strickStatus: true,
+//       learningId: learningIdFilter
+//     })
+//       .sort({ scoreDate: 1 }) // earliest first
+//       .populate('learningId', 'name')
+//       .lean();
+
+//     const topicScores = await TopicScore.find({
+//       userId,
+//       session: user.session,
+//       strickStatus: true,
+//       learningId: learningIdFilter
+//     })
+//       .sort({ updatedAt: 1 })
+//       .populate('learningId', 'name')
+//       .lean();
+
+//     const dateMap = new Map();
+
+//     // ✅ Only take first LearningScore per date per learningId
+//     const practiceMap = new Map();
+//     learningScores.forEach(score => {
+//       const date = moment(score.scoreDate).format('YYYY-MM-DD');
+//       const key = `${date}_${score.learningId._id.toString()}`;
+//       if (!practiceMap.has(key)) {
+//         practiceMap.set(key, score);
+//       }
+//     });
+
+//     // ✅ Add selected practice scores to dateMap
+//     practiceMap.forEach(score => {
+//       const date = moment(score.scoreDate).format('YYYY-MM-DD');
+//       if (!dateMap.has(date)) {
+//         dateMap.set(date, { practice: null, topic: null });
+//       }
+//       dateMap.get(date).practice = {
+//         type: 'practice',
+//         score: score.score,
+//         updatedAt: score.updatedAt,
+//         scoreDate: score.scoreDate,
+//         learningId: score.learningId
+//       };
+//     });
+
+//     // ✅ Map topicScores normally
+//     topicScores.forEach(score => {
+//       const date = moment(score.updatedAt).format('YYYY-MM-DD');
+//       if (!dateMap.has(date)) {
+//         dateMap.set(date, { practice: null, topic: null });
+//       }
+//       dateMap.get(date).topic = {
+//         type: 'topic',
+//         score: score.score,
+//         updatedAt: score.updatedAt,
+//         learningId: score.learningId
+//       };
+//     });
+
+//     const results = [];
+//     let total = 0;
+//     let count = 0;
+
+//     for (let [date, record] of dateMap.entries()) {
+//       const practice = record.practice || {
+//         type: 'practice',
+//         score: null,
+//         updatedAt: null,
+//         scoreDate: null,
+//         learningId: { _id: learningIdFilter, name: '' }
+//       };
+
+//       const topic = record.topic || {
+//         type: 'topic',
+//         score: null,
+//         updatedAt: null,
+//         learningId: { _id: learningIdFilter, name: '' }
+//       };
+
+//       let avg = 0;
+//       if (practice.score !== null && topic.score !== null) {
+//         avg = (practice.score + topic.score) / 2;
+//       } else if (practice.score !== null || topic.score !== null) {
+//         avg = practice.score ?? topic.score;
+//       }
+
+//       total += avg;
+//       count++;
+
+//       results.push({
+//         date,
+//         data: [practice, topic],
+//         average: Math.round(avg * 100) / 100
+//       });
+//     }
+
+//     // ✅ Sort results by latest date (descending)
+//     results.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+//     const overallAverage = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
+
+//     // ✅ Save or update GenralIQ document
+//     await GenralIQ.findOneAndUpdate(
+//       { userId, learningId: learningIdFilter, session: user.session },
+//       { overallAverage },
+//       { upsert: true, new: true }
+//     );
+
+//     return res.status(200).json({
+//       count,
+//       overallAverage,
+//       results
+//     });
+//   } catch (error) {
+//     console.error('Error in genraliqAverage:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 
