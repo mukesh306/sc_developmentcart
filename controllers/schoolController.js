@@ -44,64 +44,23 @@ const Admin = require('../models/admin1');
   };
   
 
-// exports.getSchools = async (req, res) => {
-//     try {
-//     const { price } = req.query; 
-//     const filter = {};
-//     if (price) {
-//       filter.price = { $ne: null }; 
-//     }
-//       const schools = await School.find(filter); 
-//       res.status(200).json(schools);
-//     } catch (error) {
-//       console.error('Error fetching schools:', error);
-//       res.status(500).json({ message: 'Server error while fetching schools' });
-//     }
-//   };
-  
 exports.getSchools = async (req, res) => {
-  try {
-    const { price } = req.query;
-
-    // If price is present, verify token manually
+    try {
+    const { price } = req.query; 
+    const filter = {};
     if (price) {
-      const token = req.headers.authorization?.split(" ")[1];
-
-      if (!token) {
-        return res.status(401).json({ message: 'Unauthorized: Token missing' });
-      }
-
-      let decoded;
-      try {
-        decoded = jwt.verify(token, process.env.JWT_SECRET);
-      } catch (err) {
-        return res.status(401).json({ message: 'Token is not valid', error: err.message });
-      }
-
-      const admin = await Admin.findById(decoded._id).select('_id');
-      if (!admin) {
-        return res.status(401).json({ message: 'Unauthorized: Admin not found' });
-      }
-
-      // ✅ Filter by price and updatedBy
-      const filter = {
-        price: { $ne: null },
-        updatedBy: admin._id
-      };
-
-      const schools = await School.find(filter);
-      return res.status(200).json(schools);
+      filter.price = { $ne: null }; 
     }
+      const schools = await School.find(filter); 
+      res.status(200).json(schools);
+    } catch (error) {
+      console.error('Error fetching schools:', error);
+      res.status(500).json({ message: 'Server error while fetching schools' });
+    }
+  };
+  
 
-    // ✅ No price filter — return all data
-    const schools = await School.find({});
-    return res.status(200).json(schools);
 
-  } catch (error) {
-    console.error('Error fetching schools:', error);
-    return res.status(500).json({ message: 'Server error while fetching schools' });
-  }
-};
 
 
 
