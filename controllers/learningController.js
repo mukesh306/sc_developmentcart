@@ -603,10 +603,11 @@ exports.StrikeBothSameDate = async (req, res) => {
 };
 
 
+
 exports.Strikecalculation = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { type = '' } = req.query;
+    const { type = '', startDate, endDate } = req.query;
     const typeArray = Array.isArray(type) ? type : type.split(',');
 
     // Get the user's current session and classId
@@ -676,13 +677,25 @@ exports.Strikecalculation = async (req, res) => {
 
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
+    // 🔽 Apply date filtering if startDate and endDate provided
+    const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
+    const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
+
+    let filteredResult = result;
+    if (start && end) {
+      filteredResult = result.filter(r => {
+        const d = moment(r.date, 'YYYY-MM-DD');
+        return d.isSameOrAfter(start) && d.isSameOrBefore(end);
+      });
+    }
+
     // --- Streak Calculations ---
     let largestStreak = { count: 0, startDate: null, endDate: null };
     let currentStreak = { count: 0, startDate: null, endDate: null };
     const weeklyBonus = [];
     const monthlyBonus = [];
 
-    const sortedDates = result.map(r => r.date).sort();
+    const sortedDates = filteredResult.map(r => r.date).sort();
     let streakStart = null;
     let tempStreak = [];
 
@@ -767,8 +780,6 @@ exports.Strikecalculation = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
 
 // exports.Strikecalculation = async (req, res) => {
 //   try {
