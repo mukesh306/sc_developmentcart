@@ -2336,7 +2336,6 @@ exports.getGenrelIq = async (req, res) => {
 //   }
 // };
 
-
 exports.Dashboard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -2423,13 +2422,15 @@ exports.Dashboard = async (req, res) => {
     const monthlyCount = currentStreak.count >= 30 ? 30 : currentStreak.count;
 
     let assignedLearnings = [];
-    let practice = [];
     let classInfo = null;
+    let practice = [];
 
-    // ✅ Only fetch assignedLearnings & practice if GenralIQ exists for user + session + classId
-    const genIqExists = await GenralIQ.exists({ userId, session, classId });
+    const hasClassMatch = await Promise.all([
+      LearningScore.exists({ userId, session, classId, strickStatus: true }),
+      TopicScore.exists({ userId, session, classId, strickStatus: true })
+    ]);
 
-    if (genIqExists) {
+    if (hasClassMatch[0] || hasClassMatch[1]) {
       assignedLearnings = await Assigned.find({ classId })
         .populate('learning')
         .populate('learning2')
@@ -2442,9 +2443,9 @@ exports.Dashboard = async (req, res) => {
           if (item[learningField]?._id) {
             const iqRecord = await GenralIQ.findOne({
               userId,
-              learningId: item[learningField]._id,
               session,
-              classId
+              classId,
+              learningId: item[learningField]._id
             }).lean();
             return iqRecord?.overallAverage ?? null;
           }
@@ -2462,8 +2463,8 @@ exports.Dashboard = async (req, res) => {
         classInfo = await College.findById(classId).lean();
       }
 
-      const seen = new Set();
       const totalQuiz = markingSetting?.totalquiz || 0;
+      const seen = new Set();
 
       for (let item of assignedLearnings) {
         const fields = ['learning', 'learning2', 'learning3', 'learning4'];
@@ -2482,7 +2483,6 @@ exports.Dashboard = async (req, res) => {
 
     const quotes = await Quotes.find({ Status: 'Published' }).lean();
 
-    // ✅ Level bonus point from Experienceleavel
     let levelBonusPoint = 0;
     const expData = await Experienceleavel.findOne({ userId, session, classId }).lean();
     levelBonusPoint = Math.round(expData?.levelBonusPoint || 0);
@@ -2522,6 +2522,7 @@ exports.Dashboard = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.Dashboard = async (req, res) => {
