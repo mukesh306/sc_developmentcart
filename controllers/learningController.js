@@ -1817,7 +1817,6 @@ exports.getUserLevelData = async (req, res) => {
 
 
 
-
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1835,67 +1834,81 @@ exports.genraliqAverage = async (req, res) => {
     const session = user.session;
     const classId = user.className.toString();
 
-    const learningScoresRaw = await LearningScore.find({
+    const learningScores = await LearningScore.find({
       userId,
       session,
       classId,
       strickStatus: true,
       learningId: learningIdFilter
-    }).sort({ createdAt: 1 }).populate('learningId', 'name').lean();
+    })
+      .sort({ createdAt: 1 }) // earliest first
+      .populate('learningId', 'name')
+      .lean();
 
-    const topicScoresRaw = await TopicScore.find({
+    const topicScores = await TopicScore.find({
       userId,
       session,
       classId,
       strickStatus: true,
       learningId: learningIdFilter
-    }).sort({ createdAt: 1 }).populate('learningId', 'name').lean();
+    })
+      .sort({ createdAt: 1 }) // earliest first
+      .populate('learningId', 'name')
+      .lean();
 
-    // Only first LearningScore per date
-    const practiceMap = new Map();
-    for (let score of learningScoresRaw) {
+    // Combine all scores and group by date
+    const allScores = [];
+
+    for (let score of learningScores) {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      if (!practiceMap.has(date)) {
-        practiceMap.set(date, {
-          type: 'practice',
-          score: score.score,
-          updatedAt: score.updatedAt,
-          scoreDate: score.scoreDate,
-          learningId: score.learningId
-        });
-      }
-    }
-
-    // Only first TopicScore per date
-    const topicMap = new Map();
-    for (let score of topicScoresRaw) {
-      const date = moment(score.updatedAt).format('YYYY-MM-DD');
-      if (!topicMap.has(date)) {
-        topicMap.set(date, {
-          type: 'topic',
-          score: score.score,
-          updatedAt: score.updatedAt,
-          learningId: score.learningId
-        });
-      }
-    }
-
-    // Combine practice and topic into final dateMap
-    const allDates = new Set([...practiceMap.keys(), ...topicMap.keys()]);
-    const dateMap = new Map();
-
-    for (let date of allDates) {
-      dateMap.set(date, {
-        practice: practiceMap.get(date) || null,
-        topic: topicMap.get(date) || null
+      allScores.push({
+        date,
+        type: 'practice',
+        score: score.score,
+        updatedAt: score.updatedAt,
+        scoreDate: score.scoreDate,
+        createdAt: score.createdAt || score._id.getTimestamp(),
+        learningId: score.learningId
       });
+    }
+
+    for (let score of topicScores) {
+      const date = moment(score.updatedAt).format('YYYY-MM-DD');
+      allScores.push({
+        date,
+        type: 'topic',
+        score: score.score,
+        updatedAt: score.updatedAt,
+        scoreDate: null,
+        createdAt: score.createdAt || score._id.getTimestamp(),
+        learningId: score.learningId
+      });
+    }
+
+    // Sort all combined scores by createdAt (earliest first)
+    allScores.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+
+    // For each date, keep only the first saved record of each type
+    const finalDateMap = new Map(); // Map<date, {practice, topic}>
+
+    for (let item of allScores) {
+      if (!finalDateMap.has(item.date)) {
+        finalDateMap.set(item.date, { practice: null, topic: null });
+      }
+      const record = finalDateMap.get(item.date);
+
+      if (item.type === 'practice' && !record.practice) {
+        record.practice = item;
+      } else if (item.type === 'topic' && !record.topic) {
+        record.topic = item;
+      }
     }
 
     const results = [];
     let total = 0;
     let count = 0;
 
-    for (let [date, record] of dateMap.entries()) {
+    for (let [date, record] of finalDateMap.entries()) {
       const practice = record.practice || {
         type: 'practice',
         score: null,
@@ -1928,6 +1941,7 @@ exports.genraliqAverage = async (req, res) => {
       });
     }
 
+    // Sort results latest date first
     results.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const overallAverage = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
