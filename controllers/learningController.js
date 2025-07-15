@@ -2196,6 +2196,7 @@ exports.getGenrelIq = async (req, res) => {
 //   }
 // };
 
+
 exports.Dashboard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -2217,7 +2218,7 @@ exports.Dashboard = async (req, res) => {
           weeklyBonus: 0,
           monthlyBonus: 0
         },
-        levelBonusPoint: user?.bonuspoint || 0, // 👈 your requirement
+        levelBonusPoint: 0,
         experiencePoint: 0,
         totalNoOfQuestion: 0,
         totalQuiz: 0,
@@ -2333,6 +2334,15 @@ exports.Dashboard = async (req, res) => {
 
     const quotes = await Quotes.find({ Status: 'Published' }).lean();
 
+    // ✅ Get levelBonusPoint from Experienceleavel based on userId + session + classId
+    let levelBonusPoint = 0;
+    const classId = user.className?.toString();
+
+    if (session && classId) {
+      const expData = await Experienceleavel.findOne({ userId, session, classId }).lean();
+      levelBonusPoint = Math.round(expData?.levelBonusPoint || 0);
+    }
+
     return res.status(200).json({
       currentStreak,
       bonus: {
@@ -2350,7 +2360,7 @@ exports.Dashboard = async (req, res) => {
         weeklyBonus: markingSetting?.weeklyBonus || 0,
         monthlyBonus: markingSetting?.monthlyBonus || 0
       },
-      levelBonusPoint: bonuspoint, // 👈 Same as user's bonuspoint
+      levelBonusPoint, // ✅ filtered from Experienceleavel
       experiencePoint: markingSetting?.experiencePoint || 0,
       totalNoOfQuestion: markingSetting?.totalnoofquestion || 0,
       totalQuiz: markingSetting?.totalquiz || 0,
