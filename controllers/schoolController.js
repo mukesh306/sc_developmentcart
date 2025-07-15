@@ -5,7 +5,8 @@ const SimpleInstitution = require('../models/adminschool');
   
 const AdminSchool = require('../models/adminschool');
 const AdminCollege = require('../models/admincollege');
-
+const jwt = require('jsonwebtoken');
+const Admin = require('../models/admin1');
 
   exports.addInstitution = async (req, res) => {
     try {
@@ -58,6 +59,11 @@ exports.getSchools = async (req, res) => {
     }
   };
   
+
+
+
+
+
 exports.getCollege = async (req, res) => {
   try {
     const { price } = req.query; 

@@ -603,10 +603,11 @@ exports.StrikeBothSameDate = async (req, res) => {
 };
 
 
+
 exports.Strikecalculation = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { type = '' } = req.query;
+    const { type = '', startDate, endDate } = req.query;
     const typeArray = Array.isArray(type) ? type : type.split(',');
 
     // Get the user's current session and classId
@@ -676,13 +677,25 @@ exports.Strikecalculation = async (req, res) => {
 
     result.sort((a, b) => new Date(a.date) - new Date(b.date));
 
+    // 🔽 Apply date filtering if startDate and endDate provided
+    const start = startDate ? moment(startDate, 'DD-MM-YYYY').startOf('day') : null;
+    const end = endDate ? moment(endDate, 'DD-MM-YYYY').endOf('day') : null;
+
+    let filteredResult = result;
+    if (start && end) {
+      filteredResult = result.filter(r => {
+        const d = moment(r.date, 'YYYY-MM-DD');
+        return d.isSameOrAfter(start) && d.isSameOrBefore(end);
+      });
+    }
+
     // --- Streak Calculations ---
     let largestStreak = { count: 0, startDate: null, endDate: null };
     let currentStreak = { count: 0, startDate: null, endDate: null };
     const weeklyBonus = [];
     const monthlyBonus = [];
 
-    const sortedDates = result.map(r => r.date).sort();
+    const sortedDates = filteredResult.map(r => r.date).sort();
     let streakStart = null;
     let tempStreak = [];
 
@@ -767,8 +780,6 @@ exports.Strikecalculation = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
 
 // exports.Strikecalculation = async (req, res) => {
 //   try {
@@ -1815,6 +1826,7 @@ exports.getUserLevelData = async (req, res) => {
 //   }
 // };
 
+
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1839,7 +1851,7 @@ exports.genraliqAverage = async (req, res) => {
       strickStatus: true,
       learningId: learningIdFilter
     })
-      .sort({ scoreDate: 1 })
+      .sort({ updatedAt: 1 }) // sort by updatedAt to get first per day
       .populate('learningId', 'name')
       .lean();
 
@@ -1850,53 +1862,47 @@ exports.genraliqAverage = async (req, res) => {
       strickStatus: true,
       learningId: learningIdFilter
     })
-      .sort({ updatedAt: 1 })
+      .sort({ updatedAt: 1 }) // sort by updatedAt to get first per day
       .populate('learningId', 'name')
       .lean();
 
-    const dateMap = new Map();
-    const practiceMap = new Map();
+    // Group by date and keep only first score per type
+    const finalMap = new Map(); // Map<date, { practice, topic }>
 
-    learningScores.forEach(score => {
+    for (let score of learningScores) {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      const key = `${date}_${score.learningId._id.toString()}`;
-      if (!practiceMap.has(key)) {
-        practiceMap.set(key, score);
+      if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
+      const record = finalMap.get(date);
+      if (!record.practice) {
+        record.practice = {
+          type: 'practice',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          scoreDate: score.scoreDate,
+          learningId: score.learningId
+        };
       }
-    });
+    }
 
-    practiceMap.forEach(score => {
-      const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      if (!dateMap.has(date)) {
-        dateMap.set(date, { practice: null, topic: null });
-      }
-      dateMap.get(date).practice = {
-        type: 'practice',
-        score: score.score,
-        updatedAt: score.updatedAt,
-        scoreDate: score.scoreDate,
-        learningId: score.learningId
-      };
-    });
-
-    topicScores.forEach(score => {
+    for (let score of topicScores) {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
-      if (!dateMap.has(date)) {
-        dateMap.set(date, { practice: null, topic: null });
+      if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
+      const record = finalMap.get(date);
+      if (!record.topic) {
+        record.topic = {
+          type: 'topic',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          learningId: score.learningId
+        };
       }
-      dateMap.get(date).topic = {
-        type: 'topic',
-        score: score.score,
-        updatedAt: score.updatedAt,
-        learningId: score.learningId
-      };
-    });
+    }
 
     const results = [];
     let total = 0;
     let count = 0;
 
-    for (let [date, record] of dateMap.entries()) {
+    for (let [date, record] of finalMap.entries()) {
       const practice = record.practice || {
         type: 'practice',
         score: null,
@@ -1950,8 +1956,6 @@ exports.genraliqAverage = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
 // exports.genraliqAverage = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
