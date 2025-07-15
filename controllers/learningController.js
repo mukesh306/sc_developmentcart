@@ -1815,6 +1815,9 @@ exports.getUserLevelData = async (req, res) => {
 //   }
 // };
 
+
+
+
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1832,27 +1835,25 @@ exports.genraliqAverage = async (req, res) => {
     const session = user.session;
     const classId = user.className.toString();
 
-    const learningScores = await LearningScore.find({
+    const learningScoresRaw = await LearningScore.find({
       userId,
       session,
       classId,
       strickStatus: true,
       learningId: learningIdFilter
-    }).sort({ scoreDate: 1 }).populate('learningId', 'name').lean();
+    }).sort({ createdAt: 1 }).populate('learningId', 'name').lean();
 
-    const topicScores = await TopicScore.find({
+    const topicScoresRaw = await TopicScore.find({
       userId,
       session,
       classId,
       strickStatus: true,
       learningId: learningIdFilter
-    }).sort({ updatedAt: 1 }).populate('learningId', 'name').lean();
+    }).sort({ createdAt: 1 }).populate('learningId', 'name').lean();
 
-    const dateMap = new Map();
-
-    // Pick only first LearningScore per day
+    // Only first LearningScore per date
     const practiceMap = new Map();
-    for (let score of learningScores) {
+    for (let score of learningScoresRaw) {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!practiceMap.has(date)) {
         practiceMap.set(date, {
@@ -1865,9 +1866,9 @@ exports.genraliqAverage = async (req, res) => {
       }
     }
 
-    // Pick only first TopicScore per day
+    // Only first TopicScore per date
     const topicMap = new Map();
-    for (let score of topicScores) {
+    for (let score of topicScoresRaw) {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
       if (!topicMap.has(date)) {
         topicMap.set(date, {
@@ -1879,8 +1880,10 @@ exports.genraliqAverage = async (req, res) => {
       }
     }
 
-    // Merge practiceMap and topicMap into dateMap
+    // Combine practice and topic into final dateMap
     const allDates = new Set([...practiceMap.keys(), ...topicMap.keys()]);
+    const dateMap = new Map();
+
     for (let date of allDates) {
       dateMap.set(date, {
         practice: practiceMap.get(date) || null,
