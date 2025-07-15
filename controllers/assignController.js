@@ -418,73 +418,80 @@ exports.assignBonusPoint = async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    const sessionFilter = user.session ? { session: user.session } : {};
-    const classFilter = user.className ? { classId: user.className.toString() } : {};
+    const session = user.session;
+    const classId = user.className?.toString();
 
-    // --- Fetch LearningScore & TopicScore with session and classId match
-    const scores = await LearningScore.find({
-      userId,
-      strickStatus: true,
-      ...sessionFilter,
-      ...classFilter
-    }).lean();
-
-    const topicScores = await TopicScore.find({
-      userId,
-      strickStatus: true,
-      ...sessionFilter,
-      ...classFilter
-    }).lean();
-
-    const allDatesSet = new Set();
-    scores.forEach(score => {
-      allDatesSet.add(moment(score.scoreDate).format('YYYY-MM-DD'));
-    });
-    topicScores.forEach(score => {
-      allDatesSet.add(moment(score.updatedAt).format('YYYY-MM-DD'));
-    });
-
-    const sortedDates = Array.from(allDatesSet).sort();
     let currentStreak = { count: 0, startDate: null, endDate: null };
-    let streakStart = null;
-    let tempStreak = [];
+    let weeklyCount = 0;
+    let monthlyCount = 0;
 
-    for (let i = 0; i < sortedDates.length; i++) {
-      const curr = moment(sortedDates[i]);
-      const prev = i > 0 ? moment(sortedDates[i - 1]) : null;
+    if (session && classId) {
+      // Fetch scores with session + classId match
+      const scores = await LearningScore.find({
+        userId,
+        session,
+        classId,
+        strickStatus: true
+      }).lean();
 
-      if (!prev || curr.diff(prev, 'days') === 1) {
-        if (!streakStart) streakStart = sortedDates[i];
-        tempStreak.push(sortedDates[i]);
-      } else {
-        tempStreak = [sortedDates[i]];
-        streakStart = sortedDates[i];
+      const topicScores = await TopicScore.find({
+        userId,
+        session,
+        classId,
+        strickStatus: true
+      }).lean();
+
+      if (scores.length > 0 && topicScores.length > 0) {
+        const allDatesSet = new Set();
+
+        scores.forEach(score => {
+          allDatesSet.add(moment(score.scoreDate).format('YYYY-MM-DD'));
+        });
+        topicScores.forEach(score => {
+          allDatesSet.add(moment(score.updatedAt).format('YYYY-MM-DD'));
+        });
+
+        const sortedDates = Array.from(allDatesSet).sort();
+        let streakStart = null;
+        let tempStreak = [];
+
+        for (let i = 0; i < sortedDates.length; i++) {
+          const curr = moment(sortedDates[i]);
+          const prev = i > 0 ? moment(sortedDates[i - 1]) : null;
+
+          if (!prev || curr.diff(prev, 'days') === 1) {
+            if (!streakStart) streakStart = sortedDates[i];
+            tempStreak.push(sortedDates[i]);
+          } else {
+            tempStreak = [sortedDates[i]];
+            streakStart = sortedDates[i];
+          }
+        }
+
+        if (tempStreak.length > 0) {
+          currentStreak = {
+            count: tempStreak.length,
+            startDate: streakStart,
+            endDate: tempStreak[tempStreak.length - 1]
+          };
+        }
+
+        weeklyCount = currentStreak.count >= 7 ? 7 : currentStreak.count;
+        monthlyCount = currentStreak.count >= 30 ? 30 : currentStreak.count;
       }
     }
 
-    if (tempStreak.length > 0) {
-      currentStreak = {
-        count: tempStreak.length,
-        startDate: streakStart,
-        endDate: tempStreak[tempStreak.length - 1]
-      };
-    } else {
-      currentStreak = { count: 0, startDate: null, endDate: null };
-    }
-
-    // --- Update bonus point if valid
+    // ✅ Update bonus point if requested
     let updatedBonus = user.bonuspoint || 0;
     if (!isNaN(bonuspoint)) {
       updatedBonus += bonuspoint;
       await User.findByIdAndUpdate(userId, { bonuspoint: updatedBonus });
     }
 
-    // --- Prepare response
-    const weeklyCount = currentStreak.count >= 7 ? 7 : currentStreak.count;
-    const monthlyCount = currentStreak.count >= 30 ? 30 : currentStreak.count;
-
     return res.status(200).json({
-      message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
+      message: !isNaN(bonuspoint)
+        ? 'Bonus point added successfully.'
+        : 'Streak data fetched successfully.',
       bonuspoint: updatedBonus,
       weekly: {
         count: weeklyCount,
@@ -505,7 +512,6 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 // exports.assignBonusPoint = async (req, res) => {
 //   try {
