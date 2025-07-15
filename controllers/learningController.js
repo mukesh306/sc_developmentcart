@@ -1816,7 +1816,6 @@ exports.getUserLevelData = async (req, res) => {
 // };
 
 
-
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1841,7 +1840,7 @@ exports.genraliqAverage = async (req, res) => {
       strickStatus: true,
       learningId: learningIdFilter
     })
-      .sort({ createdAt: 1 }) // earliest first
+      .sort({ updatedAt: 1 }) // sort by updatedAt to get first per day
       .populate('learningId', 'name')
       .lean();
 
@@ -1852,55 +1851,39 @@ exports.genraliqAverage = async (req, res) => {
       strickStatus: true,
       learningId: learningIdFilter
     })
-      .sort({ createdAt: 1 }) // earliest first
+      .sort({ updatedAt: 1 }) // sort by updatedAt to get first per day
       .populate('learningId', 'name')
       .lean();
 
-    // Combine all scores and group by date
-    const allScores = [];
+    // Group by date and keep only first score per type
+    const finalMap = new Map(); // Map<date, { practice, topic }>
 
     for (let score of learningScores) {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      allScores.push({
-        date,
-        type: 'practice',
-        score: score.score,
-        updatedAt: score.updatedAt,
-        scoreDate: score.scoreDate,
-        createdAt: score.createdAt || score._id.getTimestamp(),
-        learningId: score.learningId
-      });
+      if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
+      const record = finalMap.get(date);
+      if (!record.practice) {
+        record.practice = {
+          type: 'practice',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          scoreDate: score.scoreDate,
+          learningId: score.learningId
+        };
+      }
     }
 
     for (let score of topicScores) {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
-      allScores.push({
-        date,
-        type: 'topic',
-        score: score.score,
-        updatedAt: score.updatedAt,
-        scoreDate: null,
-        createdAt: score.createdAt || score._id.getTimestamp(),
-        learningId: score.learningId
-      });
-    }
-
-    // Sort all combined scores by createdAt (earliest first)
-    allScores.sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
-
-    // For each date, keep only the first saved record of each type
-    const finalDateMap = new Map(); // Map<date, {practice, topic}>
-
-    for (let item of allScores) {
-      if (!finalDateMap.has(item.date)) {
-        finalDateMap.set(item.date, { practice: null, topic: null });
-      }
-      const record = finalDateMap.get(item.date);
-
-      if (item.type === 'practice' && !record.practice) {
-        record.practice = item;
-      } else if (item.type === 'topic' && !record.topic) {
-        record.topic = item;
+      if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
+      const record = finalMap.get(date);
+      if (!record.topic) {
+        record.topic = {
+          type: 'topic',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          learningId: score.learningId
+        };
       }
     }
 
@@ -1908,7 +1891,7 @@ exports.genraliqAverage = async (req, res) => {
     let total = 0;
     let count = 0;
 
-    for (let [date, record] of finalDateMap.entries()) {
+    for (let [date, record] of finalMap.entries()) {
       const practice = record.practice || {
         type: 'practice',
         score: null,
@@ -1941,7 +1924,6 @@ exports.genraliqAverage = async (req, res) => {
       });
     }
 
-    // Sort results latest date first
     results.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const overallAverage = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
@@ -1963,9 +1945,6 @@ exports.genraliqAverage = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
-
 // exports.genraliqAverage = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
