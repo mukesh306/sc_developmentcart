@@ -61,23 +61,31 @@ const AdminCollege = require('../models/admincollege');
 exports.getSchools = async (req, res) => {
   try {
     const { price } = req.query;
-    const userId = req.user._id;
 
-    const filter = {};
-
-    // Agar price query me diya gaya hai, to filter lagayein
+    // If price filter is present, enforce token check
     if (price) {
-      filter.price = { $ne: null };
-      filter.updatedBy = userId;
+      if (!req.user || !req.user._id) {
+        return res.status(401).json({ message: 'Unauthorized: Token invalid or missing' });
+      }
+
+      const filter = {
+        price: { $ne: null },
+        updatedBy: req.user._id,
+      };
+
+      const schools = await School.find(filter);
+      return res.status(200).json(schools);
     }
 
-    const schools = await School.find(filter);
-    res.status(200).json(schools);
+    // No price filter? Return all schools (even if token is invalid or missing)
+    const schools = await School.find({});
+    return res.status(200).json(schools);
   } catch (error) {
     console.error('Error fetching schools:', error);
-    res.status(500).json({ message: 'Server error while fetching schools' });
+    return res.status(500).json({ message: 'Server error while fetching schools' });
   }
 };
+
 
 
 exports.getCollege = async (req, res) => {
