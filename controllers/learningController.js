@@ -1838,10 +1838,7 @@ exports.genraliqAverage = async (req, res) => {
       classId,
       strickStatus: true,
       learningId: learningIdFilter
-    })
-      .sort({ scoreDate: 1 })
-      .populate('learningId', 'name')
-      .lean();
+    }).sort({ scoreDate: 1 }).populate('learningId', 'name').lean();
 
     const topicScores = await TopicScore.find({
       userId,
@@ -1849,48 +1846,47 @@ exports.genraliqAverage = async (req, res) => {
       classId,
       strickStatus: true,
       learningId: learningIdFilter
-    })
-      .sort({ updatedAt: 1 })
-      .populate('learningId', 'name')
-      .lean();
+    }).sort({ updatedAt: 1 }).populate('learningId', 'name').lean();
 
     const dateMap = new Map();
+
+    // Pick only first LearningScore per day
     const practiceMap = new Map();
-
-    learningScores.forEach(score => {
+    for (let score of learningScores) {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      const key = `${date}_${score.learningId._id.toString()}`;
-      if (!practiceMap.has(key)) {
-        practiceMap.set(key, score);
+      if (!practiceMap.has(date)) {
+        practiceMap.set(date, {
+          type: 'practice',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          scoreDate: score.scoreDate,
+          learningId: score.learningId
+        });
       }
-    });
+    }
 
-    practiceMap.forEach(score => {
-      const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      if (!dateMap.has(date)) {
-        dateMap.set(date, { practice: null, topic: null });
-      }
-      dateMap.get(date).practice = {
-        type: 'practice',
-        score: score.score,
-        updatedAt: score.updatedAt,
-        scoreDate: score.scoreDate,
-        learningId: score.learningId
-      };
-    });
-
-    topicScores.forEach(score => {
+    // Pick only first TopicScore per day
+    const topicMap = new Map();
+    for (let score of topicScores) {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
-      if (!dateMap.has(date)) {
-        dateMap.set(date, { practice: null, topic: null });
+      if (!topicMap.has(date)) {
+        topicMap.set(date, {
+          type: 'topic',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          learningId: score.learningId
+        });
       }
-      dateMap.get(date).topic = {
-        type: 'topic',
-        score: score.score,
-        updatedAt: score.updatedAt,
-        learningId: score.learningId
-      };
-    });
+    }
+
+    // Merge practiceMap and topicMap into dateMap
+    const allDates = new Set([...practiceMap.keys(), ...topicMap.keys()]);
+    for (let date of allDates) {
+      dateMap.set(date, {
+        practice: practiceMap.get(date) || null,
+        topic: topicMap.get(date) || null
+      });
+    }
 
     const results = [];
     let total = 0;
@@ -1950,6 +1946,7 @@ exports.genraliqAverage = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.genraliqAverage = async (req, res) => {
