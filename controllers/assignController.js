@@ -403,11 +403,13 @@ exports.updateAssigned = async (req, res) => {
 exports.assignBonusPoint = async (req, res) => {
   try {
     const userId = req.user._id;
-    const bonuspoint = Number(req.query.bonuspoint);
+    const bonuspointQuery = Number(req.query.bonuspoint);
 
-    const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
-      .sort({ createdAt: -1 })
-      .lean();
+    const markingSetting = await MarkingSetting.findOne({}, {
+      weeklyBonus: 1,
+      monthlyBonus: 1,
+      _id: 0
+    }).sort({ createdAt: -1 }).lean();
 
     if (!markingSetting) {
       return res.status(404).json({ message: 'Marking setting not found.' });
@@ -418,74 +420,89 @@ exports.assignBonusPoint = async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    const sessionFilter = user.session ? { session: user.session } : {};
-    const classFilter = user.className ? { classId: user.className.toString() } : {};
+    const session = user.session;
+    const classId = user.className?.toString();
 
-    // --- Fetch LearningScore & TopicScore with session and classId match
-    const scores = await LearningScore.find({
-      userId,
-      strickStatus: true,
-      ...sessionFilter,
-      ...classFilter
-    }).lean();
-
-    const topicScores = await TopicScore.find({
-      userId,
-      strickStatus: true,
-      ...sessionFilter,
-      ...classFilter
-    }).lean();
-
-    const allDatesSet = new Set();
-    scores.forEach(score => {
-      allDatesSet.add(moment(score.scoreDate).format('YYYY-MM-DD'));
-    });
-    topicScores.forEach(score => {
-      allDatesSet.add(moment(score.updatedAt).format('YYYY-MM-DD'));
-    });
-
-    const sortedDates = Array.from(allDatesSet).sort();
+    let bonuspoint = 0;
+    let weeklyCount = 0;
+    let monthlyCount = 0;
     let currentStreak = { count: 0, startDate: null, endDate: null };
-    let streakStart = null;
-    let tempStreak = [];
+    let matched = false;
 
-    for (let i = 0; i < sortedDates.length; i++) {
-      const curr = moment(sortedDates[i]);
-      const prev = i > 0 ? moment(sortedDates[i - 1]) : null;
+    if (session && classId) {
+      const scores = await LearningScore.find({
+        userId,
+        session,
+        classId,
+        strickStatus: true
+      }).lean();
 
-      if (!prev || curr.diff(prev, 'days') === 1) {
-        if (!streakStart) streakStart = sortedDates[i];
-        tempStreak.push(sortedDates[i]);
-      } else {
-        tempStreak = [sortedDates[i]];
-        streakStart = sortedDates[i];
+      const topicScores = await TopicScore.find({
+        userId,
+        session,
+        classId,
+        strickStatus: true
+      }).lean();
+
+      if (scores.length > 0 && topicScores.length > 0) {
+        matched = true;
+        const allDatesSet = new Set();
+
+        scores.forEach(score => {
+          allDatesSet.add(moment(score.scoreDate).format('YYYY-MM-DD'));
+        });
+        topicScores.forEach(score => {
+          allDatesSet.add(moment(score.updatedAt).format('YYYY-MM-DD'));
+        });
+
+        const sortedDates = Array.from(allDatesSet).sort();
+        let streakStart = null;
+        let tempStreak = [];
+
+        for (let i = 0; i < sortedDates.length; i++) {
+          const curr = moment(sortedDates[i]);
+          const prev = i > 0 ? moment(sortedDates[i - 1]) : null;
+
+          if (!prev || curr.diff(prev, 'days') === 1) {
+            if (!streakStart) streakStart = sortedDates[i];
+            tempStreak.push(sortedDates[i]);
+          } else {
+            tempStreak = [sortedDates[i]];
+            streakStart = sortedDates[i];
+          }
+        }
+
+        if (tempStreak.length > 0) {
+          currentStreak = {
+            count: tempStreak.length,
+            startDate: streakStart,
+            endDate: tempStreak[tempStreak.length - 1]
+          };
+        }
+
+        weeklyCount = currentStreak.count >= 7 ? 7 : currentStreak.count;
+        monthlyCount = currentStreak.count >= 30 ? 30 : currentStreak.count;
+
+        // Add bonus only if match found
+        if (!isNaN(bonuspointQuery)) {
+          bonuspoint = (user.bonuspoint || 0) + bonuspointQuery;
+          await User.findByIdAndUpdate(userId, { bonuspoint });
+        } else {
+          bonuspoint = user.bonuspoint || 0;
+        }
       }
     }
 
-    if (tempStreak.length > 0) {
-      currentStreak = {
-        count: tempStreak.length,
-        startDate: streakStart,
-        endDate: tempStreak[tempStreak.length - 1]
-      };
-    } else {
-      currentStreak = { count: 0, startDate: null, endDate: null };
+    // If no match, use 0 bonuspoint regardless of what was in DB
+    if (!matched) {
+      bonuspoint = 0;
     }
-
-    // --- Update bonus point if valid
-    let updatedBonus = user.bonuspoint || 0;
-    if (!isNaN(bonuspoint)) {
-      updatedBonus += bonuspoint;
-      await User.findByIdAndUpdate(userId, { bonuspoint: updatedBonus });
-    }
-
-    // --- Prepare response
-    const weeklyCount = currentStreak.count >= 7 ? 7 : currentStreak.count;
-    const monthlyCount = currentStreak.count >= 30 ? 30 : currentStreak.count;
 
     return res.status(200).json({
-      message: !isNaN(bonuspoint) ? 'Bonus point added successfully.' : 'Streak fetched successfully.',
-      bonuspoint: updatedBonus,
+      message: matched
+        ? (!isNaN(bonuspointQuery) ? 'Bonus point added successfully.' : 'Streak data fetched successfully.')
+        : 'No valid session/classId or no streak data.',
+      bonuspoint,
       weekly: {
         count: weeklyCount,
         startDate: weeklyCount === 7 ? currentStreak.startDate : null,
@@ -496,8 +513,8 @@ exports.assignBonusPoint = async (req, res) => {
         startDate: monthlyCount === 30 ? currentStreak.startDate : null,
         endDate: monthlyCount === 30 ? currentStreak.endDate : null
       },
-      weeklyBonus: markingSetting.weeklyBonus || 0,
-      monthlyBonus: markingSetting.monthlyBonus || 0
+      weeklyBonus: markingSetting.weeklyBonus || 0,   // 👈 DO NOT CHANGE
+      monthlyBonus: markingSetting.monthlyBonus || 0  // 👈 DO NOT CHANGE
     });
 
   } catch (error) {
@@ -505,6 +522,7 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.assignBonusPoint = async (req, res) => {

@@ -14,6 +14,7 @@ const ExperienceleavelSchema = new mongoose.Schema(
      
     },
     session:{type:String},
+    classId:{type:String},
   },
   { timestamps: true }
 );

@@ -17,7 +17,8 @@ const GenralIQSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
-    session:{String},
+    session:{type:String},
+    classId:{type:String},
   },
   { timestamps: true }
 );
