@@ -2088,7 +2088,6 @@ exports.genraliqAverage = async (req, res) => {
 // };
 
 
-
 exports.getGenrelIq = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -2098,7 +2097,10 @@ exports.getGenrelIq = async (req, res) => {
       return res.status(400).json({ message: 'User className or session not found.' });
     }
 
-    const assignedList = await Assigned.find({ classId: user.className })
+    const session = user.session;
+    const classId = user.className.toString();
+
+    const assignedList = await Assigned.find({ classId })
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
@@ -2113,27 +2115,27 @@ exports.getGenrelIq = async (req, res) => {
       }
       item.classInfo = classInfo || null;
 
-
       const getIQScore = async (learningField) => {
         if (item[learningField]?._id) {
           const iqRecord = await GenralIQ.findOne({
             userId,
-            session: user.session, 
+            session,
+            classId,
             learningId: item[learningField]._id,
           }).lean();
 
-          return iqRecord?.overallAverage ?? 0; 
+          return iqRecord?.overallAverage ?? 0;
         }
         return 0;
       };
 
-      // Handle empty/null learning references
+      // Nullify empty learning fields
       if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
       if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
       if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
       if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
 
-      // Attach GenralIQ scores (or 0 if not found)
+      // Attach averages
       item.learningAverage = await getIQScore('learning');
       item.learning2Average = await getIQScore('learning2');
       item.learning3Average = await getIQScore('learning3');
@@ -2146,6 +2148,7 @@ exports.getGenrelIq = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 
 
 
