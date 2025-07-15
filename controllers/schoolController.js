@@ -43,21 +43,43 @@ const AdminCollege = require('../models/admincollege');
   };
   
 
-exports.getSchools = async (req, res) => {
-    try {
-    const { price } = req.query; 
-    const filter = {};
-    if (price) {
-      filter.price = { $ne: null }; 
-    }
-      const schools = await School.find(filter); 
-      res.status(200).json(schools);
-    } catch (error) {
-      console.error('Error fetching schools:', error);
-      res.status(500).json({ message: 'Server error while fetching schools' });
-    }
-  };
+// exports.getSchools = async (req, res) => {
+//     try {
+//     const { price } = req.query; 
+//     const filter = {};
+//     if (price) {
+//       filter.price = { $ne: null }; 
+//     }
+//       const schools = await School.find(filter); 
+//       res.status(200).json(schools);
+//     } catch (error) {
+//       console.error('Error fetching schools:', error);
+//       res.status(500).json({ message: 'Server error while fetching schools' });
+//     }
+//   };
   
+exports.getSchools = async (req, res) => {
+  try {
+    const { price } = req.query;
+    const userId = req.user._id;
+
+    const filter = {};
+
+    // Agar price query me diya gaya hai, to filter lagayein
+    if (price) {
+      filter.price = { $ne: null };
+      filter.updatedBy = userId;
+    }
+
+    const schools = await School.find(filter);
+    res.status(200).json(schools);
+  } catch (error) {
+    console.error('Error fetching schools:', error);
+    res.status(500).json({ message: 'Server error while fetching schools' });
+  }
+};
+
+
 exports.getCollege = async (req, res) => {
   try {
     const { price } = req.query; 
