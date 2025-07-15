@@ -2336,7 +2336,6 @@ exports.getGenrelIq = async (req, res) => {
 //   }
 // };
 
-
 exports.Dashboard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -2433,23 +2432,61 @@ exports.Dashboard = async (req, res) => {
         .populate('learning4')
         .lean();
 
-      for (let item of assignedLearnings) {
-        const getIQScore = async (learningField) => {
-          if (item[learningField]?._id) {
-            const iqRecord = await GenralIQ.findOne({
-              userId,
-              learningId: item[learningField]._id,
-              session
-            }).lean();
-            return iqRecord?.overallAverage ?? null;
-          }
-          return null;
-        };
+      const getIQScore = async (learningField, item) => {
+        if (!item[learningField]?._id) return null;
 
-        item.learningAverage = await getIQScore('learning');
-        item.learning2Average = await getIQScore('learning2');
-        item.learning3Average = await getIQScore('learning3');
-        item.learning4Average = await getIQScore('learning4');
+        const learningId = item[learningField]._id;
+
+        const iqRecord = await GenralIQ.findOne({
+          userId,
+          learningId,
+          session,
+          classId
+        }).lean();
+
+        if (iqRecord && typeof iqRecord.overallAverage === 'number') {
+          return iqRecord.overallAverage;
+        }
+
+        // Fallback to calculate manually if GenralIQ is missing
+        const learningScores = await LearningScore.find({
+          userId,
+          learningId,
+          session,
+          classId,
+          strickStatus: true
+        }).lean();
+
+        const topicScores = await TopicScore.find({
+          userId,
+          learningId,
+          session,
+          classId,
+          strickStatus: true
+        }).lean();
+
+        let total = 0;
+        let count = 0;
+
+        for (let score of learningScores) {
+          total += score.score;
+          count++;
+        }
+
+        for (let score of topicScores) {
+          total += score.score;
+          count++;
+        }
+
+        if (count === 0) return null;
+        return Math.round((total / count) * 100) / 100;
+      };
+
+      for (let item of assignedLearnings) {
+        item.learningAverage = await getIQScore('learning', item);
+        item.learning2Average = await getIQScore('learning2', item);
+        item.learning3Average = await getIQScore('learning3', item);
+        item.learning4Average = await getIQScore('learning4', item);
       }
 
       classInfo = await School.findById(user.className).lean();
@@ -2518,16 +2555,6 @@ exports.Dashboard = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
-
-
-
-
-
-
-
-
 
 
 
