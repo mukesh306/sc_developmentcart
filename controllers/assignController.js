@@ -399,14 +399,17 @@ exports.updateAssigned = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
+
 exports.assignBonusPoint = async (req, res) => {
   try {
     const userId = req.user._id;
     const bonuspointQuery = Number(req.query.bonuspoint);
 
-    const markingSetting = await MarkingSetting.findOne({}, { weeklyBonus: 1, monthlyBonus: 1, _id: 0 })
-      .sort({ createdAt: -1 })
-      .lean();
+    const markingSetting = await MarkingSetting.findOne({}, {
+      weeklyBonus: 1,
+      monthlyBonus: 1,
+      _id: 0
+    }).sort({ createdAt: -1 }).lean();
 
     if (!markingSetting) {
       return res.status(404).json({ message: 'Marking setting not found.' });
@@ -424,6 +427,7 @@ exports.assignBonusPoint = async (req, res) => {
     let weeklyCount = 0;
     let monthlyCount = 0;
     let currentStreak = { count: 0, startDate: null, endDate: null };
+    let matched = false;
 
     if (session && classId) {
       const scores = await LearningScore.find({
@@ -441,7 +445,7 @@ exports.assignBonusPoint = async (req, res) => {
       }).lean();
 
       if (scores.length > 0 && topicScores.length > 0) {
-        // ✅ Calculate streak
+        matched = true;
         const allDatesSet = new Set();
 
         scores.forEach(score => {
@@ -479,7 +483,7 @@ exports.assignBonusPoint = async (req, res) => {
         weeklyCount = currentStreak.count >= 7 ? 7 : currentStreak.count;
         monthlyCount = currentStreak.count >= 30 ? 30 : currentStreak.count;
 
-        // ✅ Add bonus only when matched
+        // Add bonus only if match found
         if (!isNaN(bonuspointQuery)) {
           bonuspoint = (user.bonuspoint || 0) + bonuspointQuery;
           await User.findByIdAndUpdate(userId, { bonuspoint });
@@ -489,8 +493,13 @@ exports.assignBonusPoint = async (req, res) => {
       }
     }
 
+    // If no match, use 0 bonuspoint regardless of what was in DB
+    if (!matched) {
+      bonuspoint = 0;
+    }
+
     return res.status(200).json({
-      message: session && classId
+      message: matched
         ? (!isNaN(bonuspointQuery) ? 'Bonus point added successfully.' : 'Streak data fetched successfully.')
         : 'No valid session/classId or no streak data.',
       bonuspoint,
@@ -504,8 +513,8 @@ exports.assignBonusPoint = async (req, res) => {
         startDate: monthlyCount === 30 ? currentStreak.startDate : null,
         endDate: monthlyCount === 30 ? currentStreak.endDate : null
       },
-      weeklyBonus: weeklyCount === 7 ? (markingSetting.weeklyBonus || 0) : 0,
-      monthlyBonus: monthlyCount === 30 ? (markingSetting.monthlyBonus || 0) : 0
+      weeklyBonus: markingSetting.weeklyBonus || 0,   // 👈 DO NOT CHANGE
+      monthlyBonus: markingSetting.monthlyBonus || 0  // 👈 DO NOT CHANGE
     });
 
   } catch (error) {
@@ -513,6 +522,7 @@ exports.assignBonusPoint = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.assignBonusPoint = async (req, res) => {
