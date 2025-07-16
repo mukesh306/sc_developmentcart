@@ -739,7 +739,7 @@ exports.getTopicById = async (req, res) => {
       message: 'Error fetching topic.',
       error: error.message,
     });
-  }
+  } 
 };
 
 
@@ -1165,6 +1165,7 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //   }
 // };
 
+
 exports.calculateQuizScore = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1287,6 +1288,7 @@ exports.calculateQuizScore = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.updateTopicWithQuiz = async (req, res) => {
   try {
