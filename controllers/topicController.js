@@ -949,6 +949,7 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 };
 
 
+
 // exports.calculateQuizScore = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -958,17 +959,15 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //       return res.status(400).json({ message: 'topicId is required.' });
 //     }
 
-//     // 🧠 Get topic
 //     const topic = await Topic.findById(topicId).lean();
 //     if (!topic) {
 //       return res.status(404).json({ message: 'Topic not found.' });
 //     }
 
-//     // 🧠 Get user & session
 //     const user = await User.findById(userId).lean();
 //     const userSession = user?.session || null;
+//     const userClassId = user?.className || null;
 
-//     // 🧠 Get all questions
 //     const allQuizzes = await Quiz.find({ topicId }).lean();
 //     const totalQuestions = allQuizzes.length;
 
@@ -976,7 +975,6 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //       return res.status(400).json({ message: 'No questions found for this topic.' });
 //     }
 
-//     // 🧠 Get marking settings
 //     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
 
 //     const maxMarkPerQuestion =
@@ -991,7 +989,6 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 
 //     const totalMarks = maxMarkPerQuestion * totalQuestions;
 
-//     // 🧠 Get answers
 //     const answers = await UserQuizAnswer.find({ userId, topicId });
 
 //     let correctCount = 0;
@@ -1017,7 +1014,6 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //     const scorePercent = (roundedMarks / totalMarks) * 100;
 //     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
 
-//     // 🔍 Check for existing score for same topic + same session + same user
 //     const existingScore = await TopicScore.findOne({
 //       userId,
 //       topicId,
@@ -1041,7 +1037,8 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //         scorePercent: roundedScorePercent,
 //         scoreDate: new Date(),
 //         strickStatus: true,
-//         session: userSession // ✅ Store session from user model
+//         session: userSession,     // ✅ session from user
+//         classId: userClassId      // ✅ className saved as classId
 //       });
 //     }
 
@@ -1062,6 +1059,7 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //       testTime: topic.testTime || 0,
 //       strickStatus: true,
 //       session: userSession,
+//       classId: userClassId,           // ✅ return classId in response too (optional)
 //       scoreUpdatedAt: new Date()
 //     });
 
@@ -1070,8 +1068,6 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
-
-
 
 exports.calculateQuizScore = async (req, res) => {
   try {
@@ -1090,6 +1086,8 @@ exports.calculateQuizScore = async (req, res) => {
     const user = await User.findById(userId).lean();
     const userSession = user?.session || null;
     const userClassId = user?.className || null;
+    const userStartDate = user?.startDate || null;  
+    const userEndDate = user?.endDate || null;      
 
     const allQuizzes = await Quiz.find({ topicId }).lean();
     const totalQuestions = allQuizzes.length;
@@ -1160,8 +1158,10 @@ exports.calculateQuizScore = async (req, res) => {
         scorePercent: roundedScorePercent,
         scoreDate: new Date(),
         strickStatus: true,
-        session: userSession,     // ✅ session from user
-        classId: userClassId      // ✅ className saved as classId
+        session: userSession,       
+        classId: userClassId,       
+        startDate: userStartDate,   
+        endDate: userEndDate       
       });
     }
 
@@ -1182,7 +1182,7 @@ exports.calculateQuizScore = async (req, res) => {
       testTime: topic.testTime || 0,
       strickStatus: true,
       session: userSession,
-      classId: userClassId,           // ✅ return classId in response too (optional)
+      classId: userClassId,
       scoreUpdatedAt: new Date()
     });
 
@@ -1191,7 +1191,6 @@ exports.calculateQuizScore = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 exports.updateTopicWithQuiz = async (req, res) => {
   try {
