@@ -443,12 +443,148 @@ exports.TopicWithLeaning = async (req, res) => {
 };
 
 
+// exports.getTopicById = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { isvideo, isdescription } = req.query;
+//     const userId = req.user._id;
+//     const userSession = req.user.session;
+
+//     const topic = await Topic.findById(id)
+//       .populate('learningId')
+//       .populate('createdBy', 'email');
+
+//     if (!topic) {
+//       return res.status(404).json({ message: 'Topic not found.' });
+//     }
+
+//     const learningId = topic.learningId?._id || null;
+
+//     // 🔍 Find DescriptionVideo for current session
+//     let currentSessionRecord = await DescriptionVideo.findOne({
+//       userId,
+//       topicId: topic._id,
+//       learningId,
+//       session: userSession,
+//     });
+
+//     // 🆕 If not found and isdescription=true, create new record
+//     if (!currentSessionRecord && isdescription === 'true') {
+//       currentSessionRecord = await DescriptionVideo.create({
+//         userId,
+//         topicId: topic._id,
+//         learningId,
+//         isvideo: false,
+//         isdescription: true,
+//         session: userSession,
+//         scoreDate: new Date(),
+//       });
+//     }
+
+//     // ✅ Update isvideo = true only if session matches
+//     if (
+//       currentSessionRecord &&
+//       isvideo === 'true' &&
+//       !currentSessionRecord.isvideo
+//     ) {
+//       currentSessionRecord.isvideo = true;
+//       await currentSessionRecord.save();
+//     }
+
+//     // ✅ Score for current session only
+//     const topicScoreData = await TopicScore.findOne({
+//       userId,
+//       topicId: topic._id,
+//       session: userSession,
+//     }).select(
+//       'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
+//     ).lean();
+
+//     const topicObj = topic.toObject();
+//     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
+
+//     // ✅ Add full image URL
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+//     if (topicObj.image) {
+//       topicObj.image = `${baseUrl}/uploads/${path.basename(topicObj.image)}`;
+//     }
+
+//     // Class info (school or college)
+//     let classInfo = await School.findById(topic.classId).lean();
+//     if (!classInfo) {
+//       classInfo = await College.findById(topic.classId).lean();
+//     }
+//     topicObj.classInfo = classInfo || null;
+
+//     // Quizzes
+//     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
+//     topicObj.quizzes = quizzes || [];
+
+//     // ✅ Set flags from session-specific record
+//     topicObj.isvideo = currentSessionRecord?.isvideo === true;
+//     topicObj.isdescription = currentSessionRecord?.isdescription === true;
+
+//     // ✅ Set score fields only if session matches
+//     topicObj.score = topicScoreData?.score || null;
+//     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
+//     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
+//     topicObj.correctAnswers = topicScoreData?.correctAnswers || 0;
+//     topicObj.incorrectAnswers = topicScoreData?.incorrectAnswers || 0;
+//     topicObj.skippedQuestions = topicScoreData?.skippedQuestions || 0;
+//     topicObj.marksObtained = topicScoreData?.marksObtained || 0;
+//     topicObj.totalMarks = topicScoreData?.totalMarks || 0;
+//     topicObj.negativeMarking = topicScoreData?.negativeMarking || 0;
+//     topicObj.scorePercent = topicScoreData?.scorePercent || 0;
+//     topicObj.strickStatus = topicScoreData?.strickStatus || false;
+//     topicObj.scoreDate = topicScoreData?.scoreDate || null;
+//     topicObj.createdAt = topicScoreData?.createdAt || null;
+//     topicObj.updatedAt = topicScoreData?.updatedAt || null;
+
+//     res.status(200).json({
+//       message: 'Topic fetched successfully.',
+//       data: topicObj,
+//     });
+
+//   } catch (error) {
+//     console.error('Error fetching topic by ID:', error);
+//     res.status(500).json({
+//       message: 'Error fetching topic.',
+//       error: error.message,
+//     });
+//   }
+// };
+
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
     const { isvideo, isdescription } = req.query;
     const userId = req.user._id;
     const userSession = req.user.session;
+    const userStartDate = req.user.startDate;
+    const userEndDate = req.user.endDate;
+
+    // ✅ Validate access date range (startDate & endDate)
+    const today = moment().startOf('day');
+
+    if (userStartDate) {
+      const startDate = moment(userStartDate, 'DD-MM-YYYY', true).startOf('day');
+      if (!startDate.isValid()) {
+        return res.status(400).json({ message: 'Invalid startDate format. Must be DD-MM-YYYY.' });
+      }
+      if (today.isBefore(startDate)) {
+        return res.status(403).json({ message: 'Your access has not started yet. Please wait until your start date.' });
+      }
+    }
+
+    if (userEndDate) {
+      const endDate = moment(userEndDate, 'DD-MM-YYYY', true).endOf('day');
+      if (!endDate.isValid()) {
+        return res.status(400).json({ message: 'Invalid endDate format. Must be DD-MM-YYYY.' });
+      }
+      if (today.isAfter(endDate)) {
+        return res.status(403).json({ message: 'Your access has expired. Please renew your subscription.' });
+      }
+    }
 
     const topic = await Topic.findById(id)
       .populate('learningId')
@@ -468,7 +604,7 @@ exports.getTopicById = async (req, res) => {
       session: userSession,
     });
 
-    // 🆕 If not found and isdescription=true, create new record
+    // 🆕 Create if not found and isdescription is true
     if (!currentSessionRecord && isdescription === 'true') {
       currentSessionRecord = await DescriptionVideo.create({
         userId,
@@ -481,7 +617,7 @@ exports.getTopicById = async (req, res) => {
       });
     }
 
-    // ✅ Update isvideo = true only if session matches
+    // ✅ Update isvideo if needed
     if (
       currentSessionRecord &&
       isvideo === 'true' &&
@@ -491,7 +627,7 @@ exports.getTopicById = async (req, res) => {
       await currentSessionRecord.save();
     }
 
-    // ✅ Score for current session only
+    // ✅ Fetch TopicScore for current session
     const topicScoreData = await TopicScore.findOne({
       userId,
       topicId: topic._id,
@@ -503,28 +639,28 @@ exports.getTopicById = async (req, res) => {
     const topicObj = topic.toObject();
     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
 
-    // ✅ Add full image URL
+    // ✅ Add image URL
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     if (topicObj.image) {
       topicObj.image = `${baseUrl}/uploads/${path.basename(topicObj.image)}`;
     }
 
-    // Class info (school or college)
+    // ✅ Class info (School/College)
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
     topicObj.classInfo = classInfo || null;
 
-    // Quizzes
+    // ✅ Get Quizzes
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
-    // ✅ Set flags from session-specific record
+    // ✅ Flags from session record
     topicObj.isvideo = currentSessionRecord?.isvideo === true;
     topicObj.isdescription = currentSessionRecord?.isdescription === true;
 
-    // ✅ Set score fields only if session matches
+    // ✅ Score fields from session score
     topicObj.score = topicScoreData?.score || null;
     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
@@ -553,113 +689,6 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
-
-
-
-
-
-// exports.getTopicById = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { isvideo, isdescription } = req.query;
-//     const userId = req.user._id;
-
-//     const topic = await Topic.findById(id)
-//       .populate('learningId')
-//       .populate('createdBy', 'email');
-
-//     if (!topic) {
-//       return res.status(404).json({ message: 'Topic not found.' });
-//     }
-
-//     const learningId = topic.learningId?._id || null;
-
-//     // Find or update DescriptionVideo
-//     let existingRecord = await DescriptionVideo.findOne({
-//       userId,
-//       topicId: topic._id,
-//       learningId
-//     });
-
-//     if (!existingRecord && isdescription === 'true') {
-//       existingRecord = await DescriptionVideo.create({
-//         userId,
-//         topicId: topic._id,
-//         learningId,
-//         isvideo: false,
-//         isdescription: true,
-//         scoreDate: new Date()
-//       });
-//     }
-
-//     if (existingRecord && isvideo === 'true' && !existingRecord.isvideo) {
-//       existingRecord.isvideo = true;
-//       await existingRecord.save();
-//     }
-
-//     const latestDescription = await DescriptionVideo.findOne({
-//       userId,
-//       topicId: topic._id,
-//       learningId
-//     }).sort({ createdAt: -1 }).select('isvideo isdescription');
-
-//     // ✅ Fetch topicScore with only required fields
-//     const topicScoreData = await TopicScore.findOne({
-//       userId,
-//       topicId: topic._id
-//     }).select(
-//       'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
-//     ).lean();
-
-//     const topicObj = topic.toObject();
-//     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
-
-//     // Add class info
-//     let classInfo = await School.findById(topic.classId).lean();
-//     if (!classInfo) {
-//       classInfo = await College.findById(topic.classId).lean();
-//     }
-//     topicObj.classInfo = classInfo || null;
-
-//     // Add quizzes
-//     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
-//     topicObj.quizzes = quizzes || [];
-
-//     // Add video/description flags
-//     topicObj.isvideo = latestDescription?.isvideo || false;
-//     topicObj.isdescription = latestDescription?.isdescription || false;
-
-//     // 🔥 Add filtered topicScore data directly (flattened)
-//     topicObj.score = topicScoreData?.score || null;
-//     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
-//     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
-//     topicObj.correctAnswers = topicScoreData?.correctAnswers || 0;
-//     topicObj.incorrectAnswers = topicScoreData?.incorrectAnswers || 0;
-//     topicObj.skippedQuestions = topicScoreData?.skippedQuestions || 0;
-//     topicObj.marksObtained = topicScoreData?.marksObtained || 0;
-//     topicObj.totalMarks = topicScoreData?.totalMarks || 0;
-//     topicObj.negativeMarking = topicScoreData?.negativeMarking || 0;
-//     topicObj.scorePercent = topicScoreData?.scorePercent || 0;
-//     topicObj.strickStatus = topicScoreData?.strickStatus || false;
-//     topicObj.scoreDate = topicScoreData?.scoreDate || null;
-//     topicObj.createdAt = topicScoreData?.createdAt || null;
-//     topicObj.updatedAt = topicScoreData?.updatedAt || null;
-
-//     // Send response
-//     res.status(200).json({
-//       message: 'Topic fetched successfully.',
-//       data: topicObj
-//     });
-
-//   } catch (error) {
-//     console.error('Error fetching topic by ID:', error);
-//     res.status(500).json({
-//       message: 'Error fetching topic.',
-//       error: error.message
-//     });
-//   }
-// };
-
 
 
 exports.submitQuiz = async (req, res) => {

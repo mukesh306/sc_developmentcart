@@ -8,6 +8,12 @@ const descriptionvideoSchema = new mongoose.Schema({
   isdescription: { type: Boolean, default: false },
   isvideo: { type: Boolean, default: false },
   session:{type:String},
+    startDate: {
+    type: String, 
+  },
+  endDate: {
+    type: String, 
+  },
   createdAt: {
         type: Date,
         default: Date.now
