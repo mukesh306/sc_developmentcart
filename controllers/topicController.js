@@ -600,11 +600,11 @@ exports.TopicWithLeaning = async (req, res) => {
 //   }
 // };
 
-
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
     const { isvideo, isdescription } = req.query;
+
     const userId = req.user._id;
     const userSession = req.user.session;
     const userStartDate = req.user.startDate;
@@ -620,7 +620,9 @@ exports.getTopicById = async (req, res) => {
         return res.status(400).json({ message: 'Invalid startDate format. Must be DD-MM-YYYY.' });
       }
       if (today.isBefore(startDate)) {
-        return res.status(403).json({ message: 'Your access has not started yet. Please wait until your start date.' });
+        return res.status(403).json({
+          message: 'Your access has not started yet. Please wait until your start date.',
+        });
       }
     }
 
@@ -645,7 +647,7 @@ exports.getTopicById = async (req, res) => {
 
     const learningId = topic.learningId?._id || null;
 
-    // 🔍 Find DescriptionVideo for current session + classId
+    // 🔍 Find DescriptionVideo for session + classId
     let currentSessionRecord = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
@@ -664,21 +666,19 @@ exports.getTopicById = async (req, res) => {
         isdescription: true,
         session: userSession,
         classId: userClassId,
+        startDate: userStartDate || null,
+        endDate: userEndDate || null,
         scoreDate: new Date(),
       });
     }
 
-    // ✅ Update isvideo if required
-    if (
-      currentSessionRecord &&
-      isvideo === 'true' &&
-      !currentSessionRecord.isvideo
-    ) {
+    // ✅ Update isvideo if not already true
+    if (currentSessionRecord && isvideo === 'true' && !currentSessionRecord.isvideo) {
       currentSessionRecord.isvideo = true;
       await currentSessionRecord.save();
     }
 
-    // ✅ Fetch TopicScore for current session + classId
+    // ✅ Fetch TopicScore for session + classId
     const topicScoreData = await TopicScore.findOne({
       userId,
       topicId: topic._id,
@@ -697,14 +697,14 @@ exports.getTopicById = async (req, res) => {
       topicObj.image = `${baseUrl}/uploads/${path.basename(topicObj.image)}`;
     }
 
-    // ✅ Class info (School/College)
+    // ✅ Class info (School or College)
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
     topicObj.classInfo = classInfo || null;
 
-    // ✅ Get Quizzes
+    // ✅ Get quizzes
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
@@ -739,9 +739,8 @@ exports.getTopicById = async (req, res) => {
       message: 'Error fetching topic.',
       error: error.message,
     });
-  } 
+  }
 };
-
 
 
 // exports.getTopicById = async (req, res) => {
