@@ -19,6 +19,12 @@ const userSchema = new mongoose.Schema({
   instituteName: { type: String },
   className: { type: mongoose.Schema.Types.ObjectId, ref: 'Adminschool' },
   session: { type: String },
+   startDate: {
+    type: String, 
+  },
+  endDate: {
+    type: String, 
+  },
   aadharCard: { type: String },
   marksheet: { type: String },
   resetPasswordOTP: { type: String },

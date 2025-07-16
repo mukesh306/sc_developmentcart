@@ -200,68 +200,6 @@ exports.completeProfile = async (req, res) => {
 };
 
 
-// exports.getUserProfile = async (req, res) => {
-//   try {
-//     const userId = req.user.id;
-
-//     const user = await User.findById(userId)
-//       .populate('countryId', 'name')
-//       .populate('stateId', 'name')
-//       .populate('cityId', 'name')
-//       .lean(); // Add `.lean()` to simplify processing
-
-//     if (!user) {
-//       return res.status(404).json({ message: 'User not found.' });
-//     }
-
-//     const classId = user.className;
-//     let classDetails = '';
-//     let validClassName = classId;
-
-//     if (mongoose.Types.ObjectId.isValid(classId)) {
-//       const adminSchool = await AdminSchool.findById(classId).populate('className', 'name').lean();
-//       const adminCollege = await AdminCollege.findById(classId).populate('className', 'name').lean();
-//       const entry = adminSchool || adminCollege;
-
-//       if (entry && entry.className && typeof entry.className === 'object') {
-//         classDetails = entry.className.name;
-//         validClassName = entry.className._id;
-//       } else {
-//         // className reference is invalid (e.g., deleted), so ignore it
-//         validClassName = null;
-//       }
-//     }
-
-//     // Add base URL to Aadhar & Marksheet if available
-//     const baseUrl = `${req.protocol}://${req.get('host')}`;
-//     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
-//     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
-
-//     const formattedUser = {
-//       ...user,
-//       country: user.countryId?.name || '',
-//       state: user.stateId?.name || '',
-//       city: user.cityId?.name || '',
-//       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-//       institutionType: user.studentType || '',
-//       classOrYear: classDetails || '',
-//     };
-
-//     // Clean up invalid className from response
-//     if (!validClassName) {
-//       formattedUser.className = null;
-//     }
-
-//     res.status(200).json({
-//       message: 'User profile fetched successfully.',
-//       user: formattedUser,
-//     });
-//   } catch (error) {
-//     console.error('Get User Profile Error:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -318,12 +256,30 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Auto update session if changed from updatedBy
+    // ✅ Auto update session, startDate, endDate if changed from updatedBy
     if (user.updatedBy?.session) {
+      const updates = {};
+
       if (!user.session || user.session !== user.updatedBy.session) {
-        await User.findByIdAndUpdate(userId, { session: user.updatedBy.session });
+        updates.session = user.updatedBy.session;
         user.session = user.updatedBy.session;
         console.log(`🟢 User session updated to "${user.session}"`);
+      }
+
+      if (user.updatedBy.startDate && (!user.startDate || user.startDate !== user.updatedBy.startDate)) {
+        updates.startDate = user.updatedBy.startDate;
+        user.startDate = user.updatedBy.startDate;
+        console.log(`📅 User startDate updated to "${user.startDate}"`);
+      }
+
+      if (user.updatedBy.endDate && (!user.endDate || user.endDate !== user.updatedBy.endDate)) {
+        updates.endDate = user.updatedBy.endDate;
+        user.endDate = user.updatedBy.endDate;
+        console.log(`📅 User endDate updated to "${user.endDate}"`);
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await User.findByIdAndUpdate(userId, updates);
       }
     }
 
@@ -373,68 +329,6 @@ exports.getUserProfile = async (req, res) => {
   }
 };
 
-// exports.getUserProfile = async (req, res) => {
-//   try {
-//     const userId = req.user.id;
-//     let user = await User.findById(userId)
-//       .populate('countryId', 'name')
-//       .populate('stateId', 'name')
-//       .populate('cityId', 'name');
-
-//     if (!user) {
-//       return res.status(404).json({ message: 'User not found.' });
-//     }
-
-//     let classId = user.className;
-//     let classDetails = null;
-
-//     if (mongoose.Types.ObjectId.isValid(classId)) {
-//       classDetails =
-//         (await School.findById(classId)) ||
-//         (await College.findById(classId));
-//         // (await Institute.findById(classId));
-//     }
-
-//     const baseUrl = `${req.protocol}://${req.get('host')}`;
-//     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
-//     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
-
-//     // ❗ If price is null, remove className from both response and DB
-//     if (!classDetails || classDetails.price == null) {
-//       classId = null;
-
-//       // update in DB as well
-//       await User.findByIdAndUpdate(userId, { className: null });
-//       user.className = null; // update current object for response
-//     }
-
-//     const formattedUser = {
-//       ...user._doc,
-//       className: classId,
-//       country: user.countryId?.name || '',
-//       state: user.stateId?.name || '',
-//       city: user.cityId?.name || '',
-//       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-//       institutionType: user.studentType || '',
-//     };
-
-//     if (classDetails && classDetails.price != null) {
-//       formattedUser.classOrYear = classDetails.name;
-//     }
-
-//     res.status(200).json({
-//       message: 'User profile fetched successfully.',
-//       user: formattedUser
-//     });
-//   } catch (error) {
-//     console.error('Get User Profile Error:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-
-
-// second last
 
 // exports.getUserProfile = async (req, res) => {
 //   try {
@@ -454,14 +348,11 @@ exports.getUserProfile = async (req, res) => {
 //     let classDetails = null;
 
 //     if (mongoose.Types.ObjectId.isValid(classId)) {
-//       classDetails =
-//         (await School.findById(classId)) ||
-//         (await College.findById(classId));
+//       classDetails = await School.findById(classId) || await College.findById(classId);
 //     }
 
 //     const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-   
 //     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
 //       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
 //     }
@@ -474,15 +365,18 @@ exports.getUserProfile = async (req, res) => {
 //       await User.findByIdAndUpdate(userId, { className: null });
 //       user.className = null;
 //     } else {
-//       let institutionUpdatedBy = classDetails?.updatedBy || null;
+//       const institutionUpdatedBy = classDetails?.updatedBy || null;
 //       if (institutionUpdatedBy) {
 //         await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+
+//         // Refetch updated user
 //         user = await User.findById(userId)
 //           .populate('countryId', 'name')
 //           .populate('stateId', 'name')
 //           .populate('cityId', 'name')
 //           .populate('updatedBy', 'email session startDate endDate');
 
+//         // Re-resolve image URLs again
 //         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
 //           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
 //         }
@@ -492,8 +386,37 @@ exports.getUserProfile = async (req, res) => {
 //       }
 //     }
 
+//     // ✅ Auto update session if changed from updatedBy
+//     if (user.updatedBy?.session) {
+//       if (!user.session || user.session !== user.updatedBy.session) {
+//         await User.findByIdAndUpdate(userId, { session: user.updatedBy.session });
+//         user.session = user.updatedBy.session;
+//         console.log(`🟢 User session updated to "${user.session}"`);
+//       }
+//     }
+
+//     // ✅ Session expiry logic
+//     if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
+//       const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY', true).startOf('day');
+//       const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY', true).endOf('day');
+//       const currentDate = moment();
+
+//       if (!startDate.isValid() || !endDate.isValid()) {
+//         console.warn("⚠️ Invalid date format. Must be DD-MM-YYYY.");
+//       } else if (currentDate.isAfter(endDate)) {
+//         if (user.status !== 'no') {
+//           await User.findByIdAndUpdate(userId, { status: 'no' });
+//           user.status = 'no';
+//           console.log("⛔ Session expired. User status updated to 'no'.");
+//         }
+//       } else {
+//         console.log("✅ Session active. No change in status.");
+//       }
+//     }
+
 //     const formattedUser = {
 //       ...user._doc,
+//       status: user.status,
 //       className: classId,
 //       country: user.countryId?.name || '',
 //       state: user.stateId?.name || '',
@@ -511,6 +434,7 @@ exports.getUserProfile = async (req, res) => {
 //       message: 'User profile fetched successfully.',
 //       user: formattedUser
 //     });
+
 //   } catch (error) {
 //     console.error('Get User Profile Error:', error);
 //     res.status(500).json({ message: error.message });
