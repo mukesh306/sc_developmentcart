@@ -209,6 +209,11 @@ exports.getAllTopicNames = async (req, res) => {
 //       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
 //     }
 
+//     if (!user.session) {
+//       return res.status(400).json({ message: 'User session not found.' });
+//     }
+
+//     const session = user.session;
 //     const registrationDate = moment(user.createdAt).startOf('day');
 //     const today = moment().startOf('day');
 //     const daysPassed = today.diff(registrationDate, 'days') + 1;
@@ -236,7 +241,8 @@ exports.getAllTopicNames = async (req, res) => {
 
 //     const userDescriptionVideos = await DescriptionVideo.find({
 //       userId: user._id,
-//       learningId: id
+//       learningId: id,
+//       session
 //     }).select('topicId isvideo isdescription').lean();
 
 //     const descriptionMap = {};
@@ -247,9 +253,11 @@ exports.getAllTopicNames = async (req, res) => {
 //       };
 //     });
 
+//     // ✅ Fetch only session-matching TopicScore entries
 //     const topicScores = await TopicScore.find({
 //       userId: user._id,
-//       learningId: id
+//       learningId: id,
+//       session
 //     }).select('topicId score').lean();
 
 //     const scoreMap = {};
@@ -257,7 +265,6 @@ exports.getAllTopicNames = async (req, res) => {
 //       scoreMap[entry.topicId.toString()] = entry.score;
 //     });
 
-   
 //     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
 //       const topicIdStr = topic._id.toString();
 //       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
@@ -275,12 +282,11 @@ exports.getAllTopicNames = async (req, res) => {
 
 //     const validScores = unlockedTopics
 //       .map(t => t.score)
-//       .filter(score => score !== null && score !== undefined)
-//       .map(score => Number(score));
+//       .filter(score => typeof score === 'number' && score >= 0);
 
 //     const averageScore = validScores.length > 0
 //       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-//       : null;
+//       : 0;
 
 //     const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
 //     if (assignedRecord) {
@@ -308,8 +314,6 @@ exports.getAllTopicNames = async (req, res) => {
 //   }
 // };
 
-
-
 exports.TopicWithLeaning = async (req, res) => {
   try {
     const { id } = req.params;
@@ -322,6 +326,20 @@ exports.TopicWithLeaning = async (req, res) => {
 
     if (!user.session) {
       return res.status(400).json({ message: 'User session not found.' });
+    }
+
+    // ✅ Check endDate validity (same as session logic)
+    if (user.endDate) {
+      const today = moment().startOf('day');
+      const endDate = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
+
+      if (!endDate.isValid()) {
+        return res.status(400).json({ message: 'Invalid endDate format. Must be DD-MM-YYYY.' });
+      }
+
+      if (today.isAfter(endDate)) {
+        return res.status(403).json({ message: 'Your session has expired. Please renew your access.' });
+      }
     }
 
     const session = user.session;
@@ -364,7 +382,6 @@ exports.TopicWithLeaning = async (req, res) => {
       };
     });
 
-    // ✅ Fetch only session-matching TopicScore entries
     const topicScores = await TopicScore.find({
       userId: user._id,
       learningId: id,
@@ -424,121 +441,6 @@ exports.TopicWithLeaning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-// exports.TopicWithLeaning = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { classId: queryClassId } = req.query;
-//     const user = req.user;
-
-//     if (!user || user.status !== 'yes') {
-//       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
-//     }
-
-//     if (!user.session) {
-//       return res.status(400).json({ message: 'Session not found for user.' });
-//     }
-
-//     const registrationDate = moment(user.createdAt).startOf('day');
-//     const today = moment().startOf('day');
-//     const daysPassed = today.diff(registrationDate, 'days') + 1;
-
-//     const query = { learningId: new mongoose.Types.ObjectId(id) };
-//     if (queryClassId) {
-//       query.classId = new mongoose.Types.ObjectId(queryClassId);
-//     } else if (user.className) {
-//       query.classId = new mongoose.Types.ObjectId(user.className);
-//     }
-
-//     const learningData = await Learning.findById(id).select('name').lean();
-//     if (!learningData) {
-//       return res.status(404).json({ message: 'Learning not found.' });
-//     }
-
-//     const allTopics = await Topic.find(query)
-//       .sort({ createdAt: 1 })
-//       .select('topic createdAt')
-//       .lean();
-
-//     if (!allTopics || allTopics.length === 0) {
-//       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
-//     }
-
-//     const userDescriptionVideos = await DescriptionVideo.find({
-//       userId: user._id,
-//       learningId: id
-//     }).select('topicId isvideo isdescription').lean();
-
-//     const descriptionMap = {};
-//     userDescriptionVideos.forEach(entry => {
-//       descriptionMap[entry.topicId.toString()] = {
-//         isvideo: entry.isvideo,
-//         isdescription: entry.isdescription
-//       };
-//     });
-
-//     // ✅ Filter TopicScores based on user.session
-//     const topicScores = await TopicScore.find({
-//       userId: user._id,
-//       learningId: id,
-//       session: user.session
-//     }).select('topicId score').lean();
-
-//     const scoreMap = {};
-//     topicScores.forEach(entry => {
-//       scoreMap[entry.topicId.toString()] = entry.score;
-//     });
-
-//     // ✅ Limit to daysPassed and attach scores or 0 if no match
-//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
-//       const topicIdStr = topic._id.toString();
-//       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
-//       const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : 0;
-
-//       return {
-//         _id: topic._id,
-//         topic: topic.topic,
-//         createdAt: topic.createdAt,
-//         isvideo: extra.isvideo,
-//         isdescription: extra.isdescription,
-//         score: topicScoreValue
-//       };
-//     });
-
-//     const validScores = unlockedTopics
-//       .map(t => t.score)
-//       .filter(score => score !== null && score !== undefined)
-//       .map(score => Number(score));
-
-//     const averageScore = validScores.length > 0
-//       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-//       : 0;
-
-//     const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
-//     if (assignedRecord) {
-//       if (assignedRecord.learning?.toString() === id) {
-//         assignedRecord.learningAverage = averageScore;
-//       } else if (assignedRecord.learning2?.toString() === id) {
-//         assignedRecord.learning2Average = averageScore;
-//       } else if (assignedRecord.learning3?.toString() === id) {
-//         assignedRecord.learning3Average = averageScore;
-//       } else if (assignedRecord.learning4?.toString() === id) {
-//         assignedRecord.learning4Average = averageScore;
-//       }
-//       await assignedRecord.save();
-//     }
-
-//     res.status(200).json({
-//       learningName: learningData.name,
-//       averageScore,
-//       topics: unlockedTopics
-//     });
-
-//   } catch (error) {
-//     console.error('Error fetching topics with learningId:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 exports.getTopicById = async (req, res) => {
