@@ -368,10 +368,12 @@ exports.TopicWithLeaning = async (req, res) => {
       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
     }
 
+    // ✅ Added classId check in DescriptionVideo query
     const userDescriptionVideos = await DescriptionVideo.find({
       userId: user._id,
       learningId: id,
-      session
+      session,
+      classId: user.className  // ✅ classId added here
     }).select('topicId isvideo isdescription').lean();
 
     const descriptionMap = {};
@@ -441,6 +443,7 @@ exports.TopicWithLeaning = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.getTopicById = async (req, res) => {
