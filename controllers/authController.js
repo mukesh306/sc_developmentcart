@@ -51,8 +51,8 @@ exports.register = async (req, res) => {
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'mukeshkumarbst33@gmail.com', 
-    pass: 'xdiw vbqx uckh asip' 
+    user: 'noreply@shikshacart.com', 
+    pass: 'xyrx ryad ondf jaum' 
   }
 });
 
@@ -78,7 +78,7 @@ exports.login = async (req, res) => {
     await user.save();
 
     await transporter.sendMail({
-      from: 'mukeshkumarbst33@gmail.com',  
+      from: 'noreply@shikshacart.com',  
       to: user.email,
       subject: 'Your One-Time Password (OTP) Code',
       text: `Your OTP is ${otp}. It will expire in 5 minutes.`,

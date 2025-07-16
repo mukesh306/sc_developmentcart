@@ -1413,11 +1413,8 @@ exports.deleteTopicWithQuiz = async (req, res) => {
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found.' });
     }
-    
     await Quiz.deleteMany({ topicId });
-
     await Topic.findByIdAndDelete(topicId);
-
     res.status(200).json({ message: 'Topic and related quiz deleted successfully.' });
   } catch (error) {
     console.error('Error deleting topic and quiz:', error);
