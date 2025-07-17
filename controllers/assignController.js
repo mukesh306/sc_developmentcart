@@ -153,41 +153,36 @@ exports.getAssignedList = async (req, res) => {
 //   }
 // };
 
-function parseDDMMYYYY(dateStr) {
-  const [dd, mm, yyyy] = dateStr.split("-");
-  return new Date(`${yyyy}-${mm}-${dd}T23:59:59.999Z`);
-}
 
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
     const user = await User.findById(userId).lean();
 
-    // ✅ Step 1: Session check (unchanged)
     if (!user?.session) {
       return res.status(200).json({ data: [] });
     }
 
-    // ✅ Step 2: Get endDate either from query or user
-    let requestedEndDate = null;
-    if (req.query.endDate) {
-      requestedEndDate = parseDDMMYYYY(req.query.endDate);
-    } else if (user?.endDate) {
-      requestedEndDate = parseDDMMYYYY(user.endDate);
-    }
+    const userStartDate = user?.startDate ? new Date(user.startDate) : null;
+    const userEndDate = user?.endDate ? new Date(user.endDate) : null;
 
-    // ✅ Step 3: Build match query for TopicScore
+    // ✅ Build match query for TopicScore
     const matchQuery = {
       userId: new mongoose.Types.ObjectId(userId),
-      session: user.session, // ✅ unchanged
-      classId: user.className?.toString() // ✅ unchanged
+      session: user.session,
+      classId: user.className?.toString()
     };
 
-    if (requestedEndDate) {
-      matchQuery.scoreDate = { $lte: requestedEndDate };
+    // ✅ Add scoreDate filter based on user.startDate and user.endDate
+    if (userStartDate && userEndDate) {
+      matchQuery.scoreDate = { $gte: userStartDate, $lte: userEndDate };
+    } else if (userStartDate) {
+      matchQuery.scoreDate = { $gte: userStartDate };
+    } else if (userEndDate) {
+      matchQuery.scoreDate = { $lte: userEndDate };
     }
 
-    // ✅ Step 4: Get only first score of each day
+    // ✅ Step 1: Get only first score of each day
     const dailyFirstScores = await TopicScore.aggregate([
       { $match: matchQuery },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -202,7 +197,7 @@ exports.getAssignedListUser = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } }
     ]);
 
-    // ✅ Step 5: Group scores by learningId and average
+    // ✅ Step 2: Group by learningId and calculate average
     const grouped = {};
     for (let s of dailyFirstScores) {
       if (!s.learningId) continue;
@@ -218,7 +213,7 @@ exports.getAssignedListUser = async (req, res) => {
       averageScoreMap[lid] = parseFloat(avg.toFixed(2));
     }
 
-    // ✅ Step 6: Get assigned list
+    // ✅ Step 3: Get assigned list
     const assignedQuery = user.className ? { classId: user.className } : {};
     const assignedList = await Assigned.find(assignedQuery)
       .populate('learning')
@@ -227,7 +222,6 @@ exports.getAssignedListUser = async (req, res) => {
       .populate('learning4')
       .lean();
 
-    // ✅ Step 7: Map scores and populate class info
     for (let item of assignedList) {
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
@@ -257,7 +251,6 @@ exports.getAssignedListUser = async (req, res) => {
       item.learning4Average = getAverage(item.learning4);
     }
 
-    // ✅ Final Response
     res.status(200).json({ data: assignedList });
 
   } catch (error) {
