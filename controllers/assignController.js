@@ -162,32 +162,23 @@ exports.getAssignedListUser = async (req, res) => {
       return res.status(200).json({ data: [] });
     }
 
-    // ✅ Get optional startDate and endDate from query
-    const startDate = req.query.startDate
-      ? new Date(req.query.startDate)
-      : user.startDate
-      ? new Date(user.startDate)
-      : null;
-
-    const endDate = req.query.endDate
+    // ✅ Determine endDate
+    const requestedEndDate = req.query.endDate
       ? new Date(req.query.endDate)
-      : user.endDate
+      : user?.endDate
       ? new Date(user.endDate)
       : null;
 
-    // ✅ Build dynamic match query
+    // ✅ Build match query
     const matchQuery = {
       userId: new mongoose.Types.ObjectId(userId),
       session: user.session,
       classId: user.className?.toString()
     };
 
-    if (startDate && endDate) {
-      matchQuery.scoreDate = { $gte: startDate, $lte: endDate };
-    } else if (startDate) {
-      matchQuery.scoreDate = { $gte: startDate };
-    } else if (endDate) {
-      matchQuery.scoreDate = { $lte: endDate };
+    // ✅ Apply endDate filter if available
+    if (requestedEndDate) {
+      matchQuery.scoreDate = { $lte: requestedEndDate };
     }
 
     // Step 1: Get only first score of each day
@@ -266,6 +257,7 @@ exports.getAssignedListUser = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 
 
 exports.deleteAssigned = async (req, res) => {
