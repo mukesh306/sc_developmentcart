@@ -601,42 +601,14 @@ exports.TopicWithLeaning = async (req, res) => {
 // };
 
 
+
+
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
     const { isvideo, isdescription } = req.query;
-
     const userId = req.user._id;
     const userSession = req.user.session;
-    const userStartDate = req.user.startDate;
-    const userEndDate = req.user.endDate;
-    const userClassId = req.user.className;
-
-    const today = moment().startOf('day');
-
-    // ✅ Validate startDate
-    if (userStartDate) {
-      const startDate = moment(userStartDate, 'DD-MM-YYYY', true).startOf('day');
-      if (!startDate.isValid()) {
-        return res.status(400).json({ message: 'Invalid startDate format. Must be DD-MM-YYYY.' });
-      }
-      if (today.isBefore(startDate)) {
-        return res.status(403).json({
-          message: 'Your access has not started yet. Please wait until your start date.',
-        });
-      }
-    }
-
-    // ✅ Validate endDate
-    if (userEndDate) {
-      const endDate = moment(userEndDate, 'DD-MM-YYYY', true).endOf('day');
-      if (!endDate.isValid()) {
-        return res.status(400).json({ message: 'Invalid endDate format. Must be DD-MM-YYYY.' });
-      }
-      if (today.isAfter(endDate)) {
-        return res.status(403).json({ message: 'Your access has expired. Please renew your subscription.' });
-      }
-    }
 
     const topic = await Topic.findById(id)
       .populate('learningId')
@@ -648,18 +620,15 @@ exports.getTopicById = async (req, res) => {
 
     const learningId = topic.learningId?._id || null;
 
-    // 🔍 Find DescriptionVideo for session + classId + startDate + endDate
+    // 🔍 Find DescriptionVideo for current session
     let currentSessionRecord = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
       learningId,
       session: userSession,
-      classId: userClassId,
-      startDate: userStartDate || null,
-      endDate: userEndDate || null,
     });
 
-    // 🆕 Create DescriptionVideo if not found and isdescription = true
+    // 🆕 If not found and isdescription=true, create new record
     if (!currentSessionRecord && isdescription === 'true') {
       currentSessionRecord = await DescriptionVideo.create({
         userId,
@@ -668,27 +637,25 @@ exports.getTopicById = async (req, res) => {
         isvideo: false,
         isdescription: true,
         session: userSession,
-        classId: userClassId,
-        startDate: userStartDate || null,
-        endDate: userEndDate || null,
         scoreDate: new Date(),
       });
     }
 
-    // ✅ Update isvideo if not already true
-    if (currentSessionRecord && isvideo === 'true' && !currentSessionRecord.isvideo) {
+    // ✅ Update isvideo = true only if session matches
+    if (
+      currentSessionRecord &&
+      isvideo === 'true' &&
+      !currentSessionRecord.isvideo
+    ) {
       currentSessionRecord.isvideo = true;
       await currentSessionRecord.save();
     }
 
-    // ✅ Fetch TopicScore for session + classId + startDate + endDate
+    // ✅ Score for current session only
     const topicScoreData = await TopicScore.findOne({
       userId,
       topicId: topic._id,
       session: userSession,
-      classId: userClassId,
-      startDate: userStartDate || null,
-      endDate: userEndDate || null,
     }).select(
       'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
     ).lean();
@@ -702,22 +669,22 @@ exports.getTopicById = async (req, res) => {
       topicObj.image = `${baseUrl}/uploads/${path.basename(topicObj.image)}`;
     }
 
-    // ✅ Class info (School or College)
+    // Class info (school or college)
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
     topicObj.classInfo = classInfo || null;
 
-    // ✅ Get quizzes
+    // Quizzes
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
-    // ✅ Flags from session+class+date record
+    // ✅ Set flags from session-specific record
     topicObj.isvideo = currentSessionRecord?.isvideo === true;
     topicObj.isdescription = currentSessionRecord?.isdescription === true;
 
-    // ✅ Score fields from session+class+date score
+    // ✅ Set score fields only if session matches
     topicObj.score = topicScoreData?.score || null;
     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
@@ -746,118 +713,6 @@ exports.getTopicById = async (req, res) => {
     });
   }
 };
-
-
-// exports.getTopicById = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { isvideo, isdescription } = req.query;
-//     const userId = req.user._id;
-//     const userSession = req.user.session;
-
-//     const topic = await Topic.findById(id)
-//       .populate('learningId')
-//       .populate('createdBy', 'email');
-
-//     if (!topic) {
-//       return res.status(404).json({ message: 'Topic not found.' });
-//     }
-
-//     const learningId = topic.learningId?._id || null;
-
-//     // 🔍 Find DescriptionVideo for current session
-//     let currentSessionRecord = await DescriptionVideo.findOne({
-//       userId,
-//       topicId: topic._id,
-//       learningId,
-//       session: userSession,
-//     });
-
-//     // 🆕 If not found and isdescription=true, create new record
-//     if (!currentSessionRecord && isdescription === 'true') {
-//       currentSessionRecord = await DescriptionVideo.create({
-//         userId,
-//         topicId: topic._id,
-//         learningId,
-//         isvideo: false,
-//         isdescription: true,
-//         session: userSession,
-//         scoreDate: new Date(),
-//       });
-//     }
-
-//     // ✅ Update isvideo = true only if session matches
-//     if (
-//       currentSessionRecord &&
-//       isvideo === 'true' &&
-//       !currentSessionRecord.isvideo
-//     ) {
-//       currentSessionRecord.isvideo = true;
-//       await currentSessionRecord.save();
-//     }
-
-//     // ✅ Score for current session only
-//     const topicScoreData = await TopicScore.findOne({
-//       userId,
-//       topicId: topic._id,
-//       session: userSession,
-//     }).select(
-//       'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
-//     ).lean();
-
-//     const topicObj = topic.toObject();
-//     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
-
-//     // ✅ Add full image URL
-//     const baseUrl = `${req.protocol}://${req.get('host')}`;
-//     if (topicObj.image) {
-//       topicObj.image = `${baseUrl}/uploads/${path.basename(topicObj.image)}`;
-//     }
-
-//     // Class info (school or college)
-//     let classInfo = await School.findById(topic.classId).lean();
-//     if (!classInfo) {
-//       classInfo = await College.findById(topic.classId).lean();
-//     }
-//     topicObj.classInfo = classInfo || null;
-
-//     // Quizzes
-//     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
-//     topicObj.quizzes = quizzes || [];
-
-//     // ✅ Set flags from session-specific record
-//     topicObj.isvideo = currentSessionRecord?.isvideo === true;
-//     topicObj.isdescription = currentSessionRecord?.isdescription === true;
-
-//     // ✅ Set score fields only if session matches
-//     topicObj.score = topicScoreData?.score || null;
-//     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
-//     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
-//     topicObj.correctAnswers = topicScoreData?.correctAnswers || 0;
-//     topicObj.incorrectAnswers = topicScoreData?.incorrectAnswers || 0;
-//     topicObj.skippedQuestions = topicScoreData?.skippedQuestions || 0;
-//     topicObj.marksObtained = topicScoreData?.marksObtained || 0;
-//     topicObj.totalMarks = topicScoreData?.totalMarks || 0;
-//     topicObj.negativeMarking = topicScoreData?.negativeMarking || 0;
-//     topicObj.scorePercent = topicScoreData?.scorePercent || 0;
-//     topicObj.strickStatus = topicScoreData?.strickStatus || false;
-//     topicObj.scoreDate = topicScoreData?.scoreDate || null;
-//     topicObj.createdAt = topicScoreData?.createdAt || null;
-//     topicObj.updatedAt = topicScoreData?.updatedAt || null;
-
-//     res.status(200).json({
-//       message: 'Topic fetched successfully.',
-//       data: topicObj,
-//     });
-
-//   } catch (error) {
-//     console.error('Error fetching topic by ID:', error);
-//     res.status(500).json({
-//       message: 'Error fetching topic.',
-//       error: error.message,
-//     });
-//   }
-// };
 
 
 exports.submitQuiz = async (req, res) => {

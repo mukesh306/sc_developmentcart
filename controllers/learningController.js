@@ -99,157 +99,6 @@ exports.updateLearning = async (req, res) => {
 };
 
 
-// exports.scoreCard = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-
-//     const user = await User.findById(userId).lean();
-//     const userSession = user?.session;
-//     const userClassId = user?.className;
-
-//     if (!userSession || !userClassId) {
-//       return res.status(400).json({ message: 'User session or className not found.' });
-//     }
-
-//     // ✅ Step 1: Get first score per day — with proper ObjectId usage
-//     const rawScores = await TopicScore.aggregate([
-//       {
-//         $match: {
-//           userId: new mongoose.Types.ObjectId(userId), // ✅ FIXED: using `new`
-//           session: userSession,
-//           classId: userClassId.toString() // ✅ Match as string
-//         }
-//       },
-//       { $sort: { scoreDate: 1, createdAt: 1 } },
-//       {
-//         $group: {
-//           _id: {
-//             date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
-//           },
-//           doc: { $first: "$$ROOT" }
-//         }
-//       },
-//       { $replaceRoot: { newRoot: "$doc" } }
-//     ]);
-
-//     // Step 2: Populate learning & topic
-//     const populatedScores = await TopicScore.populate(rawScores, [
-//       { path: 'topicId', select: 'topic' },
-//       { path: 'learningId', select: 'name' }
-//     ]);
-
-//     // Step 3: Normalize scores
-//     const scoreMap = new Map();
-//     let minDate = null;
-//     let maxDate = moment().startOf('day');
-//     const todayStr = moment().format('YYYY-MM-DD');
-
-//     for (const score of populatedScores) {
-//       const scoreDate = moment(score.scoreDate).startOf('day');
-//       const dateStr = scoreDate.format('YYYY-MM-DD');
-
-//       scoreMap.set(dateStr, {
-//         ...score.toObject?.() || score,
-//         date: dateStr,
-//         isToday: dateStr === todayStr
-//       });
-
-//       if (!minDate || scoreDate.isBefore(minDate)) minDate = scoreDate;
-//       if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
-//     }
-
-//     if (!minDate) minDate = moment().startOf('day');
-
-//     // Step 4: Fill missing dates
-//     const fullResult = [];
-//     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
-//       const dateStr = m.format('YYYY-MM-DD');
-//       if (scoreMap.has(dateStr)) {
-//         fullResult.push(scoreMap.get(dateStr));
-//       } else {
-//         fullResult.push({
-//           date: dateStr,
-//           score: null,
-//           isToday: dateStr === todayStr
-//         });
-//       }
-//     }
-
-//     // Step 5: Today's first, then ascending
-//     const sortedFinal = fullResult.sort((a, b) => {
-//       if (a.date === todayStr) return -1;
-//       if (b.date === todayStr) return 1;
-//       return new Date(a.date) - new Date(b.date);
-//     });
-
-//     // Step 6: Learning-wise average
-//     const learningScores = {};
-//     for (const entry of fullResult) {
-//       if (entry.score !== null && entry.learningId?._id) {
-//         const lid = entry.learningId._id.toString();
-//         const lname = entry.learningId.name || "Unknown";
-//         if (!learningScores[lid]) {
-//           learningScores[lid] = { learningId: lid, name: lname, scores: [] };
-//         }
-//         learningScores[lid].scores.push(entry.score);
-//       }
-//     }
-
-//     const learningWiseAverage = Object.values(learningScores).map(item => {
-//       const total = item.scores.reduce((sum, s) => sum + s, 0);
-//       const average = parseFloat((total / item.scores.length).toFixed(2));
-//       return {
-//         learningId: item.learningId,
-//         name: item.name,
-//         averageScore: average
-//       };
-//     });
-
-//     // Step 7: Update Assigned averages
-//     try {
-//       const assignedList = await Assigned.find({
-//         session: userSession,
-//         classId: userClassId
-//       });
-
-//       for (let assign of assignedList) {
-//         const update = {};
-
-//         const mapAvg = (learningField, avgField) => {
-//           const learningId = assign[learningField]?.toString();
-//           if (learningId) {
-//             const found = learningWiseAverage.find(l => l.learningId === learningId);
-//             if (found) {
-//               update[avgField] = found.averageScore;
-//             }
-//           }
-//         };
-
-//         mapAvg('learning', 'learningAverage');
-//         mapAvg('learning2', 'learning2Average');
-//         mapAvg('learning3', 'learning3Average');
-//         mapAvg('learning4', 'learning4Average');
-
-//         if (Object.keys(update).length > 0) {
-//           await Assigned.updateOne({ _id: assign._id }, { $set: update });
-//         }
-//       }
-//     } catch (err) {
-//       console.error('Error updating Assigned averages:', err.message);
-//     }
-
-//     // Step 8: Final Response
-//     res.status(200).json({
-//       scores: sortedFinal,
-//       learningWiseAverage
-//     });
-
-//   } catch (error) {
-//     console.error('Error in scoreCard:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -257,20 +106,18 @@ exports.scoreCard = async (req, res) => {
     const user = await User.findById(userId).lean();
     const userSession = user?.session;
     const userClassId = user?.className;
-    const userEndDate = user?.endDate ? new Date(user.endDate) : null;
 
-    if (!userSession || !userClassId || !userEndDate) {
-      return res.status(400).json({ message: 'User session, className, or endDate not found.' });
+    if (!userSession || !userClassId) {
+      return res.status(400).json({ message: 'User session or className not found.' });
     }
 
-    // ✅ Step 1: Get first score per day — with endDate filter
+    // ✅ Step 1: Get first score per day — with proper ObjectId usage
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
-          userId: new mongoose.Types.ObjectId(userId),
+          userId: new mongoose.Types.ObjectId(userId), // ✅ FIXED: using `new`
           session: userSession,
-          classId: userClassId.toString(),
-          scoreDate: { $lte: userEndDate } // ✅ filter by endDate
+          classId: userClassId.toString() // ✅ Match as string
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -285,13 +132,13 @@ exports.scoreCard = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } }
     ]);
 
-    // ✅ Step 2: Populate learning & topic
+    // Step 2: Populate learning & topic
     const populatedScores = await TopicScore.populate(rawScores, [
       { path: 'topicId', select: 'topic' },
       { path: 'learningId', select: 'name' }
     ]);
 
-    // ✅ Step 3 onwards — untouched logic
+    // Step 3: Normalize scores
     const scoreMap = new Map();
     let minDate = null;
     let maxDate = moment().startOf('day');
@@ -313,6 +160,7 @@ exports.scoreCard = async (req, res) => {
 
     if (!minDate) minDate = moment().startOf('day');
 
+    // Step 4: Fill missing dates
     const fullResult = [];
     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
       const dateStr = m.format('YYYY-MM-DD');
@@ -327,12 +175,14 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
+    // Step 5: Today's first, then ascending
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
+    // Step 6: Learning-wise average
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -355,6 +205,7 @@ exports.scoreCard = async (req, res) => {
       };
     });
 
+    // Step 7: Update Assigned averages
     try {
       const assignedList = await Assigned.find({
         session: userSession,
@@ -387,6 +238,7 @@ exports.scoreCard = async (req, res) => {
       console.error('Error updating Assigned averages:', err.message);
     }
 
+    // Step 8: Final Response
     res.status(200).json({
       scores: sortedFinal,
       learningWiseAverage
@@ -397,6 +249,7 @@ exports.scoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 exports.Practicestrike = async (req, res) => {
