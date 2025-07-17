@@ -70,21 +70,14 @@ exports.getAssignedListUser = async (req, res) => {
       return res.status(200).json({ data: [] });
     }
 
-    const userEndDate = moment(user.endDate).format("YYYY-MM-DD");
-
-    // Step 1: Get only first score of each day with classId, session and endDate match
+    // Step 1: Get only first score of each day with endDate (string), session, classId match
     const dailyFirstScores = await TopicScore.aggregate([
-      {
-        $addFields: {
-          formattedEndDate: { $dateToString: { format: "%Y-%m-%d", date: "$endDate" } }
-        }
-      },
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
           classId: user.className.toString(),
           session: user.session,
-          formattedEndDate: userEndDate
+          endDate: user.endDate // direct string match
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -115,7 +108,7 @@ exports.getAssignedListUser = async (req, res) => {
       averageScoreMap[lid] = parseFloat(avg.toFixed(2));
     }
 
-    // Step 3: Get assigned list (based on className if available)
+    // Step 3: Get assigned list
     const assignedQuery = { classId: user.className };
     const assignedList = await Assigned.find(assignedQuery)
       .populate('learning')
