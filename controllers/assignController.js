@@ -152,29 +152,33 @@ exports.getAssignedList = async (req, res) => {
 //     res.status(500).json({ message: 'Internal server error', error: error.message });
 //   }
 // };
-
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
     const user = await User.findById(userId).lean();
 
-    // If no session or endDate, return empty array
-    if (!user?.session || !user?.endDate) {
+    if (!user?.session) {
       return res.status(200).json({ data: [] });
     }
 
-    const userEndDate = new Date(user.endDate);
+    // ✅ Get optional endDate from client query
+    const requestedEndDate = req.query.endDate ? new Date(req.query.endDate) : null;
 
-    // Step 1: Get only first score of each day with session, class match, and endDate filter
+    // ✅ Build match query
+    const matchQuery = {
+      userId: new mongoose.Types.ObjectId(userId),
+      session: user.session,
+      classId: user.className?.toString()
+    };
+
+    // ✅ Apply endDate filter only if client provides it explicitly
+    if (requestedEndDate) {
+      matchQuery.scoreDate = { $lte: requestedEndDate };
+    }
+
+    // Step 1: Get only first score of each day
     const dailyFirstScores = await TopicScore.aggregate([
-      {
-        $match: {
-          userId: new mongoose.Types.ObjectId(userId),
-          session: user.session,
-          classId: user.className?.toString(),
-          scoreDate: { $lte: userEndDate }  // ✅ filter by endDate
-        }
-      },
+      { $match: matchQuery },
       { $sort: { scoreDate: 1, createdAt: 1 } },
       {
         $group: {
@@ -203,7 +207,7 @@ exports.getAssignedListUser = async (req, res) => {
       averageScoreMap[lid] = parseFloat(avg.toFixed(2));
     }
 
-    // Step 3: Get assigned list (based on className if available)
+    // Step 3: Get assigned list
     const assignedQuery = user.className ? { classId: user.className } : {};
     const assignedList = await Assigned.find(assignedQuery)
       .populate('learning')
