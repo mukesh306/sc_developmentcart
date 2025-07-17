@@ -600,6 +600,7 @@ exports.TopicWithLeaning = async (req, res) => {
 //   }
 // };
 
+
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -647,13 +648,15 @@ exports.getTopicById = async (req, res) => {
 
     const learningId = topic.learningId?._id || null;
 
-    // 🔍 Find DescriptionVideo for session + classId
+    // 🔍 Find DescriptionVideo for session + classId + startDate + endDate
     let currentSessionRecord = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
       learningId,
       session: userSession,
       classId: userClassId,
+      startDate: userStartDate || null,
+      endDate: userEndDate || null,
     });
 
     // 🆕 Create DescriptionVideo if not found and isdescription = true
@@ -678,12 +681,14 @@ exports.getTopicById = async (req, res) => {
       await currentSessionRecord.save();
     }
 
-    // ✅ Fetch TopicScore for session + classId
+    // ✅ Fetch TopicScore for session + classId + startDate + endDate
     const topicScoreData = await TopicScore.findOne({
       userId,
       topicId: topic._id,
       session: userSession,
       classId: userClassId,
+      startDate: userStartDate || null,
+      endDate: userEndDate || null,
     }).select(
       'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
     ).lean();
@@ -708,11 +713,11 @@ exports.getTopicById = async (req, res) => {
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
-    // ✅ Flags from session+class record
+    // ✅ Flags from session+class+date record
     topicObj.isvideo = currentSessionRecord?.isvideo === true;
     topicObj.isdescription = currentSessionRecord?.isdescription === true;
 
-    // ✅ Score fields from session+classId score
+    // ✅ Score fields from session+class+date score
     topicObj.score = topicScoreData?.score || null;
     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;

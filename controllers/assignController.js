@@ -159,9 +159,6 @@ exports.getAssignedListUser = async (req, res) => {
 };
 
 
-
-
-
 exports.deleteAssigned = async (req, res) => {
   try {
     const { id } = req.params;
