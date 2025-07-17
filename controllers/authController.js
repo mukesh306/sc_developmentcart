@@ -7,7 +7,6 @@ const axios = require('axios');
 
 require('dotenv').config();
 
-
 exports.register = async (req, res) => {
   try {
     const { email, password } = req.body;

@@ -456,17 +456,17 @@ exports.sendResetOTP = async (req, res) => {
     user.resetPasswordExpires = expiry;
     await user.save();
 
-    
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'mukeshkumarbst33@gmail.com', 
-    pass: 'xdiw vbqx uckh asip' 
-      },
-    });
+   
+   const transporter = nodemailer.createTransport({
+     service: 'gmail',
+     auth: {
+       user: 'noreply@shikshacart.com', 
+       pass: 'xyrx ryad ondf jaum' 
+     }
+   });
 
     await transporter.sendMail({
-      from: 'mukeshkumarbst33@gmail.com',
+      from: 'noreply@shikshacart.com',
       to: email,
       subject: 'Login OTP',
       text: `Your OTP is: ${otp}`,
@@ -537,16 +537,17 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
 
     const user = await User.findByIdAndUpdate(userId, { password: hashedPassword }, { new: true });
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'mukeshkumarbst33@gmail.com',
-        pass: 'xdiw vbqx uckh asip',
-      },
-    });
+   
+   const transporter = nodemailer.createTransport({
+     service: 'gmail',
+     auth: {
+       user: 'noreply@shikshacart.com', 
+       pass: 'xyrx ryad ondf jaum' 
+     }
+   });
 
     await transporter.sendMail({
-      from: 'mukeshkumarbst33@gmail.com',
+      from: 'noreply@shikshacart.com',
       to: user.email,
       subject: 'Password Changed Successfully',
       text: `Hi ${user.firstName || 'User'},\n\nYour password has been successfully changed. You can now login with your new password.\n\nIf you did not perform this action, please contact support immediately.`,
@@ -574,16 +575,16 @@ exports.SendEmailverifyOTP = async (req, res) => {
     await user.save();
 
     // Email setup
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'mukeshkumarbst33@gmail.com', 
-    pass: 'xdiw vbqx uckh asip' 
-      },
-    });
+   const transporter = nodemailer.createTransport({
+     service: 'gmail',
+     auth: {
+       user: 'noreply@shikshacart.com', 
+       pass: 'xyrx ryad ondf jaum' 
+     }
+   });
 
     await transporter.sendMail({
-      from: 'mukeshkumarbst33@gmail.com',
+      from: 'noreply@shikshacart.com',
       to: email,
       subject: 'Email Verify OTP',
       text: `Your OTP is: ${otp}`,
