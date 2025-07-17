@@ -177,7 +177,7 @@ exports.getAssignedListUser = async (req, res) => {
           userId: new mongoose.Types.ObjectId(userId),
           session: user.session,
           classId: user.className?.toString(),
-          scoreDate: { $lte: userEndDate }
+          endDate: { $lte: userEndDate }
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
