@@ -61,7 +61,6 @@ exports.getAssignedList = async (req, res) => {
   }
 };
 
-
 // exports.getAssignedListUser = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -71,12 +70,13 @@ exports.getAssignedList = async (req, res) => {
 //       return res.status(200).json({ data: [] });
 //     }
 
-//     // Step 1: Get only first score of each day
+//     // Step 1: Get only first score of each day with session and class match
 //     const dailyFirstScores = await TopicScore.aggregate([
 //       {
 //         $match: {
 //           userId: new mongoose.Types.ObjectId(userId),
-//           session: user.session
+//           session: user.session,
+//           classId: user.className?.toString() // ✅ match classId in TopicScore with user.className
 //         }
 //       },
 //       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -158,17 +158,21 @@ exports.getAssignedListUser = async (req, res) => {
     const userId = req.user._id;
     const user = await User.findById(userId).lean();
 
-    if (!user?.session) {
+    // If no session or endDate, return empty array
+    if (!user?.session || !user?.endDate) {
       return res.status(200).json({ data: [] });
     }
 
-    // Step 1: Get only first score of each day with session and class match
+    const userEndDate = new Date(user.endDate);
+
+    // Step 1: Get only first score of each day with session, class match, and endDate filter
     const dailyFirstScores = await TopicScore.aggregate([
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
           session: user.session,
-          classId: user.className?.toString() // ✅ match classId in TopicScore with user.className
+          classId: user.className?.toString(),
+          scoreDate: { $lte: userEndDate }  // ✅ filter by endDate
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -244,6 +248,7 @@ exports.getAssignedListUser = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 
 exports.deleteAssigned = async (req, res) => {
   try {
