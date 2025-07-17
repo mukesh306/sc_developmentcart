@@ -60,23 +60,26 @@ exports.getAssignedList = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
-
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
     const user = await User.findById(userId).lean();
 
-    if (!user?.session) {
+    if (!user?.session || !user?.endDate) {
       return res.status(200).json({ data: [] });
     }
 
-    // Step 1: Get only first score of each day with session and class match
+    // Step 1: Get only first score of each day with session, class match, and within user's date range
     const dailyFirstScores = await TopicScore.aggregate([
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
           session: user.session,
-          classId: user.className?.toString() // ✅ match classId in TopicScore with user.className
+          classId: user.className?.toString(),
+          scoreDate: {
+            $gte: new Date(user.startDate), // Start from user's startDate
+            $lte: new Date(user.endDate)    // Only include scores up to user's endDate
+          }
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -152,6 +155,7 @@ exports.getAssignedListUser = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
 
 
 
