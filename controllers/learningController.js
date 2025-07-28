@@ -1342,7 +1342,6 @@ exports.getUserLevelData = async (req, res) => {
 //   }
 // };
 
-
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1367,7 +1366,7 @@ exports.genraliqAverage = async (req, res) => {
       strickStatus: true,
       learningId: learningIdFilter
     })
-      .sort({ createdAt: 1 }) // get earliest entry per day
+      .sort({ createdAt: 1 }) // earliest per day
       .populate('learningId', 'name')
       .lean();
 
@@ -1378,7 +1377,7 @@ exports.genraliqAverage = async (req, res) => {
       strickStatus: true,
       learningId: learningIdFilter
     })
-      .sort({ createdAt: 1 }) // get earliest entry per day
+      .sort({ createdAt: 1 }) // earliest per day
       .populate('learningId', 'name')
       .lean();
 
@@ -1388,7 +1387,8 @@ exports.genraliqAverage = async (req, res) => {
       const date = moment(score.scoreDate || score.createdAt).format('YYYY-MM-DD');
       if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
       const record = finalMap.get(date);
-      if (!record.practice) {
+
+      if (!record.practice || record.practice.score === null) {
         record.practice = {
           type: 'practice',
           score: score.score,
@@ -1403,7 +1403,8 @@ exports.genraliqAverage = async (req, res) => {
       const date = moment(score.createdAt).format('YYYY-MM-DD');
       if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
       const record = finalMap.get(date);
-      if (!record.topic) {
+
+      if (!record.topic || record.topic.score === null) {
         record.topic = {
           type: 'topic',
           score: score.score,
