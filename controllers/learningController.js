@@ -1342,7 +1342,6 @@ exports.getUserLevelData = async (req, res) => {
 //   }
 // };
 
-
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1360,14 +1359,14 @@ exports.genraliqAverage = async (req, res) => {
     const session = user.session;
     const classId = user.className.toString();
 
+    // ✅ Remove learningId filter to get all scores
     const learningScores = await LearningScore.find({
       userId,
       session,
       classId,
-      strickStatus: true,
-      learningId: learningIdFilter
+      strickStatus: true
     })
-      .sort({ createdAt: 1 }) // earliest per day
+      .sort({ createdAt: 1 }) // earliest first
       .populate('learningId', 'name')
       .lean();
 
@@ -1375,18 +1374,21 @@ exports.genraliqAverage = async (req, res) => {
       userId,
       session,
       classId,
-      strickStatus: true,
-      learningId: learningIdFilter
+      strickStatus: true
     })
-      .sort({ createdAt: 1 }) // earliest per day
+      .sort({ createdAt: 1 })
       .populate('learningId', 'name')
       .lean();
 
     const finalMap = new Map(); // Map<date, { practice, topic }>
 
+    // ✅ Process Learning Scores
     for (let score of learningScores) {
+      if (!score.learningId || score.learningId._id.toString() !== learningIdFilter) continue;
+
       const date = moment(score.scoreDate || score.createdAt).format('YYYY-MM-DD');
       if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
+
       const record = finalMap.get(date);
 
       if (!record.practice || record.practice.score === null) {
@@ -1400,9 +1402,13 @@ exports.genraliqAverage = async (req, res) => {
       }
     }
 
+    // ✅ Process Topic Scores
     for (let score of topicScores) {
+      if (!score.learningId || score.learningId._id.toString() !== learningIdFilter) continue;
+
       const date = moment(score.createdAt).format('YYYY-MM-DD');
       if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
+
       const record = finalMap.get(date);
 
       if (!record.topic || record.topic.score === null) {
