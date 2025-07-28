@@ -154,6 +154,7 @@ exports.getAssignedList = async (req, res) => {
 //   }
 // };
 
+
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -230,13 +231,11 @@ exports.getAssignedListUser = async (req, res) => {
         }
         return 0;
       };
-
       ['learning', 'learning2', 'learning3', 'learning4'].forEach(field => {
         if (!item[field] || Object.keys(item[field]).length === 0) {
           item[field] = null;
         }
       });
-
       item.learningAverage = getAverage(item.learning);
       item.learning2Average = getAverage(item.learning2);
       item.learning3Average = getAverage(item.learning3);
