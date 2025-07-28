@@ -14,6 +14,7 @@ const LearningScore = require('../models/learningScore');
 const User = require('../models/User');
 
 
+
 // exports.PracticeTest = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -23,6 +24,14 @@ const User = require('../models/User');
 //       return res.status(400).json({ message: 'topicId, questionId, and learningId are required.' });
 //     }
 
+//     // ✅ Get user's session
+//     const user = await User.findById(userId).lean();
+//     const userSession = user?.session;
+//     if (!userSession) {
+//       return res.status(400).json({ message: 'User session not found.' });
+//     }
+
+//     // ✅ Verify quiz question exists
 //     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
 //     if (!quiz) {
 //       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
@@ -30,7 +39,6 @@ const User = require('../models/User');
 
 //     const answerToSave = selectedAnswer ? selectedAnswer : null;
 
-   
 //     const startOfDay = moment().startOf('day').toDate();
 //     const endOfDay = moment().endOf('day').toDate();
 
@@ -45,6 +53,7 @@ const User = require('../models/User');
 //       await PracticesQuizAnswer.findByIdAndUpdate(existingAnswer._id, {
 //         selectedAnswer: answerToSave,
 //         learningId,
+//         session: userSession,           
 //         isSkipped: !selectedAnswer
 //       });
 //     } else {
@@ -54,6 +63,7 @@ const User = require('../models/User');
 //         questionId,
 //         selectedAnswer: answerToSave,
 //         learningId,
+//         session: userSession,              // ✅ Save session on insert
 //         isSkipped: !selectedAnswer
 //       });
 //       await newAnswer.save();
@@ -68,7 +78,6 @@ const User = require('../models/User');
 //   }
 // };
 
-
 exports.PracticeTest = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -78,9 +87,11 @@ exports.PracticeTest = async (req, res) => {
       return res.status(400).json({ message: 'topicId, questionId, and learningId are required.' });
     }
 
-    // ✅ Get user's session
+    // ✅ Get user's session and endDate
     const user = await User.findById(userId).lean();
     const userSession = user?.session;
+    const endDate = user?.endDate || null;
+
     if (!userSession) {
       return res.status(400).json({ message: 'User session not found.' });
     }
@@ -107,7 +118,8 @@ exports.PracticeTest = async (req, res) => {
       await PracticesQuizAnswer.findByIdAndUpdate(existingAnswer._id, {
         selectedAnswer: answerToSave,
         learningId,
-        session: userSession,           
+        session: userSession,
+        endDate,                         // ✅ Save endDate on update
         isSkipped: !selectedAnswer
       });
     } else {
@@ -117,7 +129,8 @@ exports.PracticeTest = async (req, res) => {
         questionId,
         selectedAnswer: answerToSave,
         learningId,
-        session: userSession,              // ✅ Save session on insert
+        session: userSession,
+        endDate,                         // ✅ Save endDate on insert
         isSkipped: !selectedAnswer
       });
       await newAnswer.save();
@@ -264,7 +277,6 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 
 
 
-
 // exports.getAssignedListUserpractice = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -279,7 +291,8 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 //       {
 //         $match: {
 //           userId: new mongoose.Types.ObjectId(userId),
-//           session: user.session
+//           session: user.session,
+//           classId: user.className.toString() // ✅ Match classId with user.className
 //         }
 //       },
 //       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -328,7 +341,6 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 //       const getAverage = (learningObj) => {
 //         if (learningObj && learningObj._id) {
 //           const lid = learningObj._id.toString();
-//           // ✅ Return only if learningId exists in FIRST-of-day scores
 //           return Object.prototype.hasOwnProperty.call(averageScoreMap, lid)
 //             ? averageScoreMap[lid]
 //             : 0;
@@ -357,13 +369,14 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 //   }
 // };
 
+
 exports.getAssignedListUserpractice = async (req, res) => {
   try {
     const userId = req.user._id;
 
     const user = await User.findById(userId).lean();
-    if (!user || !user.className || !user.session) {
-      return res.status(400).json({ message: 'User className or session not found.' });
+    if (!user || !user.className) {
+      return res.status(400).json({ message: 'User className not found.' });
     }
 
     // STEP 1: Get only first score of each day (for all learningIds together)
@@ -371,7 +384,6 @@ exports.getAssignedListUserpractice = async (req, res) => {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          session: user.session,
           classId: user.className.toString() // ✅ Match classId with user.className
         }
       },
@@ -403,14 +415,23 @@ exports.getAssignedListUserpractice = async (req, res) => {
       averageScoreMap[lid] = parseFloat(avg.toFixed(2));
     }
 
-    // STEP 3: Get assigned list and attach calculated averages
-    const assignedList = await Assigned.find({ classId: user.className })
+    // STEP 3: Get assigned list and filter out expired by endDate
+    const today = new Date();
+    const allAssigned = await Assigned.find({ classId: user.className })
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
       .populate('learning4')
       .lean();
 
+    const assignedList = allAssigned.filter(item => {
+      if (!item.endDate) return true; // keep if no endDate
+      const [day, month, year] = item.endDate.split('-');
+      const endDate = new Date(`${year}-${month}-${day}T23:59:59`);
+      return endDate >= today;
+    });
+
+    // STEP 4: Attach average scores
     for (let item of assignedList) {
       let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {

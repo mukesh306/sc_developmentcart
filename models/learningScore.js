@@ -16,6 +16,12 @@ const LearningScoreSchema = new mongoose.Schema({
  strickStatus: { type: Boolean, default: false },
  session: { type: String },
  classId: { type: String },
+  startDate: {
+    type: String, 
+  },
+  endDate: {
+    type: String, 
+  },
   createdAt: {
         type: Date,
         default: Date.now
