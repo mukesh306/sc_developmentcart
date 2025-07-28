@@ -1341,7 +1341,6 @@ exports.getUserLevelData = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
-
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1359,18 +1358,8 @@ exports.genraliqAverage = async (req, res) => {
     const session = user.session;
     const classId = user.className.toString();
 
-    // ✅ Remove learningId filter to get all scores
-    const learningScores = await LearningScore.find({
-      userId,
-      session,
-      classId,
-      strickStatus: true
-    })
-      .sort({ createdAt: 1 }) // earliest first
-      .populate('learningId', 'name')
-      .lean();
-
-    const topicScores = await TopicScore.find({
+    // Fetch all practice and topic scores sorted by createdAt (earliest first)
+    const allPractice = await LearningScore.find({
       userId,
       session,
       classId,
@@ -1380,44 +1369,37 @@ exports.genraliqAverage = async (req, res) => {
       .populate('learningId', 'name')
       .lean();
 
-    const finalMap = new Map(); // Map<date, { practice, topic }>
+    const allTopic = await TopicScore.find({
+      userId,
+      session,
+      classId,
+      strickStatus: true
+    })
+      .sort({ createdAt: 1 })
+      .populate('learningId', 'name')
+      .lean();
 
-    // ✅ Process Learning Scores
-    for (let score of learningScores) {
-      if (!score.learningId || score.learningId._id.toString() !== learningIdFilter) continue;
+    const dateWiseMap = new Map(); // Map<YYYY-MM-DD, { practice: scoreObj, topic: scoreObj }>
 
+    // Collect earliest practice for each date
+    for (const score of allPractice) {
       const date = moment(score.scoreDate || score.createdAt).format('YYYY-MM-DD');
-      if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
+      if (!dateWiseMap.has(date)) dateWiseMap.set(date, {});
 
-      const record = finalMap.get(date);
-
-      if (!record.practice || record.practice.score === null) {
-        record.practice = {
-          type: 'practice',
-          score: score.score,
-          updatedAt: score.updatedAt,
-          scoreDate: score.scoreDate,
-          learningId: score.learningId
-        };
+      const record = dateWiseMap.get(date);
+      if (!record.practice) {
+        record.practice = score;
       }
     }
 
-    // ✅ Process Topic Scores
-    for (let score of topicScores) {
-      if (!score.learningId || score.learningId._id.toString() !== learningIdFilter) continue;
-
+    // Collect earliest topic for each date
+    for (const score of allTopic) {
       const date = moment(score.createdAt).format('YYYY-MM-DD');
-      if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
+      if (!dateWiseMap.has(date)) dateWiseMap.set(date, {});
 
-      const record = finalMap.get(date);
-
-      if (!record.topic || record.topic.score === null) {
-        record.topic = {
-          type: 'topic',
-          score: score.score,
-          updatedAt: score.updatedAt,
-          learningId: score.learningId
-        };
+      const record = dateWiseMap.get(date);
+      if (!record.topic) {
+        record.topic = score;
       }
     }
 
@@ -1425,27 +1407,56 @@ exports.genraliqAverage = async (req, res) => {
     let total = 0;
     let count = 0;
 
-    for (let [date, record] of finalMap.entries()) {
-      const practice = record.practice || {
-        type: 'practice',
-        score: null,
-        updatedAt: null,
-        scoreDate: null,
-        learningId: { _id: learningIdFilter, name: '' }
-      };
+    for (let [date, record] of dateWiseMap.entries()) {
+      const { practice, topic } = record;
 
-      const topic = record.topic || {
-        type: 'topic',
-        score: null,
-        updatedAt: null,
-        learningId: { _id: learningIdFilter, name: '' }
-      };
+      // Skip this date if neither score belongs to the requested learningId
+      const isValidPractice = practice?.learningId?._id?.toString() === learningIdFilter;
+      const isValidTopic = topic?.learningId?._id?.toString() === learningIdFilter;
+
+      // Only include this date if either practice or topic (whichever exists) is of matching learningId
+      if (
+        (practice && !isValidPractice && (!topic || !isValidTopic)) ||
+        (topic && !isValidTopic && (!practice || !isValidPractice))
+      ) {
+        continue;
+      }
+
+      const practiceObj = isValidPractice
+        ? {
+            type: 'practice',
+            score: practice.score,
+            updatedAt: practice.updatedAt,
+            scoreDate: practice.scoreDate,
+            learningId: practice.learningId
+          }
+        : {
+            type: 'practice',
+            score: null,
+            updatedAt: null,
+            scoreDate: null,
+            learningId: { _id: learningIdFilter, name: '' }
+          };
+
+      const topicObj = isValidTopic
+        ? {
+            type: 'topic',
+            score: topic.score,
+            updatedAt: topic.updatedAt,
+            learningId: topic.learningId
+          }
+        : {
+            type: 'topic',
+            score: null,
+            updatedAt: null,
+            learningId: { _id: learningIdFilter, name: '' }
+          };
 
       let avg = 0;
-      if (practice.score !== null && topic.score !== null) {
-        avg = (practice.score + topic.score) / 2;
-      } else if (practice.score !== null || topic.score !== null) {
-        avg = practice.score ?? topic.score;
+      if (practiceObj.score !== null && topicObj.score !== null) {
+        avg = (practiceObj.score + topicObj.score) / 2;
+      } else if (practiceObj.score !== null || topicObj.score !== null) {
+        avg = practiceObj.score ?? topicObj.score;
       }
 
       total += avg;
@@ -1453,7 +1464,7 @@ exports.genraliqAverage = async (req, res) => {
 
       results.push({
         date,
-        data: [practice, topic],
+        data: [practiceObj, topicObj],
         average: Math.round(avg * 100) / 100
       });
     }
@@ -1472,7 +1483,6 @@ exports.genraliqAverage = async (req, res) => {
       overallAverage,
       results
     });
-
   } catch (error) {
     console.error('Error in genraliqAverage:', error);
     return res.status(500).json({ message: error.message });
