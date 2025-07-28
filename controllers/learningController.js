@@ -1475,66 +1475,66 @@ exports.genraliqAverage = async (req, res) => {
 
 
 
-// exports.getGenrelIq = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
+exports.getGenrelIq = async (req, res) => {
+  try {
+    const userId = req.user._id;
 
-//     const user = await User.findById(userId).lean();
-//     if (!user || !user.className || !user.session) {
-//       return res.status(400).json({ message: 'User className or session not found.' });
-//     }
+    const user = await User.findById(userId).lean();
+    if (!user || !user.className || !user.session) {
+      return res.status(400).json({ message: 'User className or session not found.' });
+    }
 
-//     const session = user.session;
-//     const classId = user.className.toString();
+    const session = user.session;
+    const classId = user.className.toString();
 
-//     const assignedList = await Assigned.find({ classId })
-//       .populate('learning')
-//       .populate('learning2')
-//       .populate('learning3')
-//       .populate('learning4')
-//       .lean();
+    const assignedList = await Assigned.find({ classId })
+      .populate('learning')
+      .populate('learning2')
+      .populate('learning3')
+      .populate('learning4')
+      .lean();
 
-//     for (let item of assignedList) {
-//       // Get school or college info
-//       let classInfo = await School.findById(item.classId).lean();
-//       if (!classInfo) {
-//         classInfo = await College.findById(item.classId).lean();
-//       }
-//       item.classInfo = classInfo || null;
+    for (let item of assignedList) {
+      // Get school or college info
+      let classInfo = await School.findById(item.classId).lean();
+      if (!classInfo) {
+        classInfo = await College.findById(item.classId).lean();
+      }
+      item.classInfo = classInfo || null;
 
-//       const getIQScore = async (learningField) => {
-//         if (item[learningField]?._id) {
-//           const iqRecord = await GenralIQ.findOne({
-//             userId,
-//             session,
-//             classId,
-//             learningId: item[learningField]._id,
-//           }).lean();
+      const getIQScore = async (learningField) => {
+        if (item[learningField]?._id) {
+          const iqRecord = await GenralIQ.findOne({
+            userId,
+            session,
+            classId,
+            learningId: item[learningField]._id,
+          }).lean();
 
-//           return iqRecord?.overallAverage ?? 0;
-//         }
-//         return 0;
-//       };
+          return iqRecord?.overallAverage ?? 0;
+        }
+        return 0;
+      };
 
-//       // Nullify empty learning fields
-//       if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
-//       if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
-//       if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
-//       if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
+      // Nullify empty learning fields
+      if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
+      if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
+      if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
+      if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
 
-//       // Attach averages
-//       item.learningAverage = await getIQScore('learning');
-//       item.learning2Average = await getIQScore('learning2');
-//       item.learning3Average = await getIQScore('learning3');
-//       item.learning4Average = await getIQScore('learning4');
-//     }
+      // Attach averages
+      item.learningAverage = await getIQScore('learning');
+      item.learning2Average = await getIQScore('learning2');
+      item.learning3Average = await getIQScore('learning3');
+      item.learning4Average = await getIQScore('learning4');
+    }
 
-//     res.status(200).json({ data: assignedList });
-//   } catch (error) {
-//     console.error('Get GenrelIQ Error:', error);
-//     res.status(500).json({ message: 'Internal server error', error: error.message });
-//   }
-// };
+    res.status(200).json({ data: assignedList });
+  } catch (error) {
+    console.error('Get GenrelIQ Error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
 
 
 
@@ -1722,71 +1722,6 @@ exports.genraliqAverage = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
-
-exports.getGenrelIq = async (req, res) => {
-  try {
-    const userId = req.user._id;
-
-    const user = await User.findById(userId).lean();
-    if (!user || !user.className) {
-      return res.status(400).json({ message: 'User className not found.' });
-    }
-
-    const classId = user.className.toString();
-    const today = new Date();
-
-    const assignedList = await Assigned.find({
-      classId,
-      startDate: { $lte: today },
-      endDate: { $gte: today },
-    })
-      .populate('learning')
-      .populate('learning2')
-      .populate('learning3')
-      .populate('learning4')
-      .lean();
-
-    for (let item of assignedList) {
-      // Get school or college info
-      let classInfo = await School.findById(item.classId).lean();
-      if (!classInfo) {
-        classInfo = await College.findById(item.classId).lean();
-      }
-      item.classInfo = classInfo || null;
-
-      const getIQScore = async (learningField) => {
-        if (item[learningField]?._id) {
-          const iqRecord = await GenralIQ.findOne({
-            userId,
-            classId,
-            learningId: item[learningField]._id,
-          }).lean();
-
-          return iqRecord?.overallAverage ?? 0;
-        }
-        return 0;
-      };
-
-      // Nullify empty learning fields
-      if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
-      if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
-      if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
-      if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
-
-      // Attach averages
-      item.learningAverage = await getIQScore('learning');
-      item.learning2Average = await getIQScore('learning2');
-      item.learning3Average = await getIQScore('learning3');
-      item.learning4Average = await getIQScore('learning4');
-    }
-
-    res.status(200).json({ data: assignedList });
-  } catch (error) {
-    console.error('Get GenrelIQ Error:', error);
-    res.status(500).json({ message: 'Internal server error', error: error.message });
-  }
-};
-
 
 exports.Dashboard = async (req, res) => {
   try {
