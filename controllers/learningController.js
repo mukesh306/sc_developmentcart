@@ -1342,6 +1342,7 @@ exports.getUserLevelData = async (req, res) => {
 //   }
 // };
 
+
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1359,14 +1360,14 @@ exports.genraliqAverage = async (req, res) => {
     const session = user.session;
     const classId = user.className.toString();
 
-    // ⚠️ Fetching all scores of the user for that session and class
     const learningScores = await LearningScore.find({
       userId,
       session,
       classId,
-      strickStatus: true
+      strickStatus: true,
+      learningId: learningIdFilter
     })
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: 1 }) // earliest per day
       .populate('learningId', 'name')
       .lean();
 
@@ -1374,9 +1375,10 @@ exports.genraliqAverage = async (req, res) => {
       userId,
       session,
       classId,
-      strickStatus: true
+      strickStatus: true,
+      learningId: learningIdFilter
     })
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: 1 }) // earliest per day
       .populate('learningId', 'name')
       .lean();
 
@@ -1387,8 +1389,7 @@ exports.genraliqAverage = async (req, res) => {
       if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
       const record = finalMap.get(date);
 
-      // Only if practice for this date is not yet set
-      if (!record.practice) {
+      if (!record.practice || record.practice.score === null) {
         record.practice = {
           type: 'practice',
           score: score.score,
@@ -1404,8 +1405,7 @@ exports.genraliqAverage = async (req, res) => {
       if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
       const record = finalMap.get(date);
 
-      // Only if topic for this date is not yet set
-      if (!record.topic) {
+      if (!record.topic || record.topic.score === null) {
         record.topic = {
           type: 'topic',
           score: score.score,
