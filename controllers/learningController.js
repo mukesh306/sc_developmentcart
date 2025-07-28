@@ -1359,14 +1359,14 @@ exports.genraliqAverage = async (req, res) => {
     const session = user.session;
     const classId = user.className.toString();
 
+    // ⚠️ Fetching all scores of the user for that session and class
     const learningScores = await LearningScore.find({
       userId,
       session,
       classId,
-      strickStatus: true,
-      learningId: learningIdFilter
+      strickStatus: true
     })
-      .sort({ createdAt: 1 }) // earliest per day
+      .sort({ createdAt: 1 })
       .populate('learningId', 'name')
       .lean();
 
@@ -1374,10 +1374,9 @@ exports.genraliqAverage = async (req, res) => {
       userId,
       session,
       classId,
-      strickStatus: true,
-      learningId: learningIdFilter
+      strickStatus: true
     })
-      .sort({ createdAt: 1 }) // earliest per day
+      .sort({ createdAt: 1 })
       .populate('learningId', 'name')
       .lean();
 
@@ -1388,7 +1387,8 @@ exports.genraliqAverage = async (req, res) => {
       if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
       const record = finalMap.get(date);
 
-      if (!record.practice || record.practice.score === null) {
+      // Only if practice for this date is not yet set
+      if (!record.practice) {
         record.practice = {
           type: 'practice',
           score: score.score,
@@ -1404,7 +1404,8 @@ exports.genraliqAverage = async (req, res) => {
       if (!finalMap.has(date)) finalMap.set(date, { practice: null, topic: null });
       const record = finalMap.get(date);
 
-      if (!record.topic || record.topic.score === null) {
+      // Only if topic for this date is not yet set
+      if (!record.topic) {
         record.topic = {
           type: 'topic',
           score: score.score,
