@@ -288,7 +288,6 @@ exports.getUserProfile = async (req, res) => {
       const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY', true).startOf('day');
       const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY', true).endOf('day');
       const currentDate = moment();
-
       if (!startDate.isValid() || !endDate.isValid()) {
         console.warn("⚠️ Invalid date format. Must be DD-MM-YYYY.");
       } else if (currentDate.isAfter(endDate)) {
