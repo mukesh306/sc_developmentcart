@@ -988,24 +988,19 @@ exports.getActiveSessionUsers = async (req, res) => {
     if (!startDate || !endDate) {
       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
     }
-
     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
     if (!start.isValid() || !end.isValid()) {
       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
     }
-
     const selectedFields = fields ? fields.split(',') : null;
-
     const users = await User.find({
       startDate: { $exists: true, $ne: '' },
       endDate: { $exists: true, $ne: '' }
     }).lean();
-
     const filteredUsers = users.filter(user => {
       const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
       const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
-
       return userStart.isValid() && userEnd.isValid() &&
         userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
     });
