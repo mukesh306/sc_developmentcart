@@ -11,7 +11,6 @@ videoTime:{ type: String},
 testTime:{ type: String},
 testTimeInSeconds:{ type: Number, default: 0 },
   strickStatus: { type: Boolean, default: false },
-
     createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
    createdAt: {
         type: Date,

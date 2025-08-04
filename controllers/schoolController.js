@@ -405,11 +405,52 @@ exports.deleteAdminCollege = async (req, res) => {
 };
 
 
+// exports.setInstitutionPrice = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { price, type } = req.body;
+//     const updatedBy = req.user?._id; 
+
+//     if (!id || !type) {
+//       return res.status(400).json({ message: 'ID and type are required.' });
+//     }
+
+//     if (typeof price !== 'number' || price < 0) {
+//       return res.status(400).json({ message: 'Price must be a positive number.' });
+//     }
+
+//     if (!['college', 'school'].includes(type.toLowerCase())) {
+//       return res.status(400).json({ message: 'Invalid type. Must be either "college" or "school".' });
+//     }
+
+//     const Model = type.toLowerCase() === 'college' ? College : School;
+//     const institution = await Model.findById(id);
+
+//     if (!institution) {
+//       return res.status(404).json({ message: `${type} not found.` });
+//     }
+
+//     institution.price = price;
+//     institution.updatedBy = updatedBy; 
+//     await institution.save();
+
+//     res.status(200).json({
+//       message: `Price set successfully for ${type}.`,
+//       data: institution
+//     });
+
+//   } catch (error) {
+//     console.error('Error setting price:', error);
+//     res.status(500).json({ message: 'Server error while setting price.' });
+//   }
+// };
+
+
 exports.setInstitutionPrice = async (req, res) => {
   try {
     const { id } = req.params;
     const { price, type } = req.body;
-    const updatedBy = req.user?._id; 
+    const updatedBy = req.user?._id;
 
     if (!id || !type) {
       return res.status(400).json({ message: 'ID and type are required.' });
@@ -431,7 +472,7 @@ exports.setInstitutionPrice = async (req, res) => {
     }
 
     institution.price = price;
-    institution.updatedBy = updatedBy; 
+    institution.updatedBy = updatedBy;
     await institution.save();
 
     res.status(200).json({
@@ -444,45 +485,6 @@ exports.setInstitutionPrice = async (req, res) => {
     res.status(500).json({ message: 'Server error while setting price.' });
   }
 };
-
-
-
-// exports.setInstitutionPrice = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const { price, type } = req.body;
-
-//     if (!id || !type) {
-//       return res.status(400).json({ message: 'ID and type are required.' });
-//     }
-
-//     if (typeof price !== 'number' || price < 0) {
-//       return res.status(400).json({ message: 'Price must be a positive number.' });
-//     }
-
-//     if (!['college', 'school'].includes(type.toLowerCase())) {
-//       return res.status(400).json({ message: 'Invalid type. Must be either "college" or "school".' });
-//     }
-
-//     const Model = type.toLowerCase() === 'college' ? College : School;
-//     const institution = await Model.findById(id);
-//     if (!institution) {
-//       return res.status(404).json({ message: `${type} not found.` });
-//     }
-
-//     institution.price = price;
-//     await institution.save();
-
-//     res.status(200).json({
-//       message: `Price set successfully for ${type}.`,
-//       data: institution
-//     });
-
-//   } catch (error) {
-//     console.error('Error setting price:', error);
-//     res.status(500).json({ message: 'Server error while setting price.' });
-//   }
-// };
 
 
 exports.deleteSchoolPrice = async (req, res) => {

@@ -9,6 +9,7 @@ const Admin1 = require('../models/admin1');
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment');
+
 exports.signup = async (req, res) => {
   try {
     const {
@@ -976,5 +977,55 @@ exports.UserSessionDetails = async (req, res) => {
   } catch (error) {
     console.error('Get User Session Details Error:', error);
     res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+
+exports.getActiveSessionUsers = async (req, res) => {
+  try {
+    const { startDate, endDate, fields } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
+    }
+    const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
+    const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
+    if (!start.isValid() || !end.isValid()) {
+      return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
+    }
+    const selectedFields = fields ? fields.split(',') : null;
+    const users = await User.find({
+      startDate: { $exists: true, $ne: '' },
+      endDate: { $exists: true, $ne: '' }
+    }).lean();
+    const filteredUsers = users.filter(user => {
+      const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
+      const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
+      return userStart.isValid() && userEnd.isValid() &&
+        userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
+    });
+
+    const resultUsers = selectedFields
+      ? filteredUsers.map(user => {
+          const filtered = {};
+          selectedFields.forEach(field => {
+            if (user.hasOwnProperty(field)) {
+              filtered[field] = user[field];
+            }
+          });
+          return filtered;
+        })
+      : filteredUsers;
+
+    // Response
+    res.status(200).json({
+      message: 'Filtered users by session range.',
+      count: resultUsers.length,
+      users: resultUsers
+    });
+
+  } catch (error) {
+    console.error('Error filtering users by session range:', error);
+    res.status(500).json({ message: error.message });
   }
 };
