@@ -980,7 +980,6 @@ exports.UserSessionDetails = async (req, res) => {
   }
 };
 
-
 exports.getActiveSessionUsers = async (req, res) => {
   try {
     const { startDate, endDate, fields } = req.query;
@@ -988,36 +987,83 @@ exports.getActiveSessionUsers = async (req, res) => {
     if (!startDate || !endDate) {
       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
     }
+
     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
+
     if (!start.isValid() || !end.isValid()) {
       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
     }
-    const selectedFields = fields ? fields.split(',') : null;
+
+    // Fetch users with basic population
     const users = await User.find({
       startDate: { $exists: true, $ne: '' },
       endDate: { $exists: true, $ne: '' }
-    }).lean();
-    const filteredUsers = users.filter(user => {
+    })
+      .populate('cityId', 'name')
+      .populate('stateId', 'name')
+      .populate('countryId', 'name')
+      .lean();
+
+    // Filter & enrich
+    const enrichedUsers = await Promise.all(users.map(async (user) => {
       const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
       const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
-      return userStart.isValid() && userEnd.isValid() &&
-        userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
-    });
 
-    const resultUsers = selectedFields
-      ? filteredUsers.map(user => {
-          const filtered = {};
-          selectedFields.forEach(field => {
-            if (user.hasOwnProperty(field)) {
-              filtered[field] = user[field];
-            }
-          });
-          return filtered;
-        })
-      : filteredUsers;
+      // Skip invalid or out-of-range users
+      if (
+        !userStart.isValid() || !userEnd.isValid() ||
+        userStart.isBefore(start) || userEnd.isAfter(end)
+      ) {
+        return null;
+      }
 
-    // Response
+      let classData = null;
+      let classId = user.className;
+
+      if (mongoose.Types.ObjectId.isValid(classId)) {
+        const school = await School.findById(classId);
+        const college = school ? null : await College.findById(classId);
+        const institution = school || college;
+
+        if (institution && institution.price != null) {
+          classData = {
+            id: classId,
+            name: institution.name
+          };
+        } else {
+          // Invalid or no price
+          classId = null;
+        }
+      }
+
+      const formatted = {
+        ...user,
+        className: classData ? classData.id : null,
+        classOrYear: classData ? classData.name : null,
+        country: user.countryId?.name || '',
+        state: user.stateId?.name || '',
+        city: user.cityId?.name || '',
+      };
+
+      // Filter fields if needed
+      if (fields) {
+        const requestedFields = fields.split(',');
+        const limited = {};
+        requestedFields.forEach(f => {
+          if (formatted.hasOwnProperty(f)) {
+            limited[f] = formatted[f];
+          }
+        });
+        return limited;
+      }
+
+      return formatted;
+    }));
+
+    // Remove nulls (those excluded by date)
+    const resultUsers = enrichedUsers.filter(Boolean);
+
     res.status(200).json({
       message: 'Filtered users by session range.',
       count: resultUsers.length,
