@@ -980,6 +980,7 @@ exports.UserSessionDetails = async (req, res) => {
   }
 };
 
+
 exports.getActiveSessionUsers = async (req, res) => {
   try {
     const { startDate, endDate, fields } = req.query;
@@ -995,7 +996,8 @@ exports.getActiveSessionUsers = async (req, res) => {
       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
     }
 
-    // Fetch users with basic population
+    const baseUrl = req.protocol + '://' + req.get('host');
+
     const users = await User.find({
       startDate: { $exists: true, $ne: '' },
       endDate: { $exists: true, $ne: '' }
@@ -1005,16 +1007,11 @@ exports.getActiveSessionUsers = async (req, res) => {
       .populate('countryId', 'name')
       .lean();
 
-    // Filter & enrich
     const enrichedUsers = await Promise.all(users.map(async (user) => {
       const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
       const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
 
-      // Skip invalid or out-of-range users
-      if (
-        !userStart.isValid() || !userEnd.isValid() ||
-        userStart.isBefore(start) || userEnd.isAfter(end)
-      ) {
+      if (!userStart.isValid() || !userEnd.isValid() || userStart.isBefore(start) || userEnd.isAfter(end)) {
         return null;
       }
 
@@ -1032,10 +1029,20 @@ exports.getActiveSessionUsers = async (req, res) => {
             name: institution.name
           };
         } else {
-          // Invalid or no price
           classId = null;
         }
       }
+
+      // Fix file paths to clean URLs
+      const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
+      fileFields.forEach(field => {
+        if (user[field]) {
+          const match = user[field].match(/uploads\/(.+)$/);
+          if (match && match[1]) {
+            user[field] = `${baseUrl}/uploads/${match[1]}`;
+          }
+        }
+      });
 
       const formatted = {
         ...user,
@@ -1046,7 +1053,6 @@ exports.getActiveSessionUsers = async (req, res) => {
         city: user.cityId?.name || '',
       };
 
-      // Filter fields if needed
       if (fields) {
         const requestedFields = fields.split(',');
         const limited = {};
@@ -1061,7 +1067,6 @@ exports.getActiveSessionUsers = async (req, res) => {
       return formatted;
     }));
 
-    // Remove nulls (those excluded by date)
     const resultUsers = enrichedUsers.filter(Boolean);
 
     res.status(200).json({
