@@ -152,7 +152,6 @@ exports.PracticeTest = async (req, res) => {
 };
 
 
-
 // exports.calculateQuizScoreByLearning = async (req, res) => {
 //   try { 
 //     const userId = req.user._id;
@@ -612,9 +611,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
 
 
 
-
-
-exports.userView = async (req, res) => {
+exports.platformDetails = async (req, res) => {
   try {
     const userId = req.user._id;
     const requestedLevel = parseInt(req.query.level || 0);
