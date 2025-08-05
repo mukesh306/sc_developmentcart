@@ -78,13 +78,19 @@ exports.getAllAdmins = async (req, res) => {
     const admins = await Admin1.find()
       .populate('createdBy', 'email')
       .sort({ createdAt: -1 })
-      .lean(); // use lean to manipulate data directly
+      .lean(); // allow direct object manipulation
 
-    const currentDate = new Date();
+    const today = moment().startOf('day'); // current date without time
 
-    // Dynamically evaluate status based on endDate
+    // Loop through admins and calculate status based on endDate
     const updatedAdmins = admins.map(admin => {
-      const isActive = new Date(admin.endDate) >= currentDate;
+      let isActive = false;
+
+      if (admin.endDate) {
+        const end = moment(admin.endDate, 'DD-MM-YYYY');
+        isActive = end.isSameOrAfter(today);
+      }
+
       return {
         ...admin,
         status: isActive
