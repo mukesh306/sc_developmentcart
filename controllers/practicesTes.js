@@ -612,8 +612,8 @@ exports.getAssignedListUserpractice = async (req, res) => {
 
 exports.platformDetails = async (req, res) => {
   try {
-    const userId = req.params.id; // get userId from route
-    const requestedLevel = parseInt(req.query.level || 0); // optional query param
+    const userId = req.params.id; 
+    const requestedLevel = parseInt(req.query.level || 0); 
 
     if (!userId) {
       return res.status(400).json({ message: 'userId is required.' });
@@ -720,7 +720,6 @@ exports.platformDetails = async (req, res) => {
         const types = item.data.map(d => d.type);
         const hasPractice = types.includes('practice');
         const hasTopic = types.includes('topic');
-
         if (hasPractice && hasTopic && baseDailyExp > 0) {
           const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
           const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
