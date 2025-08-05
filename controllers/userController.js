@@ -9,7 +9,7 @@ const Admin1 = require('../models/admin1');
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment');
-
+ 
 exports.signup = async (req, res) => {
   try {
     const {
