@@ -610,12 +610,14 @@ exports.getAssignedListUserpractice = async (req, res) => {
 //   }
 // };
 
-
-
 exports.platformDetails = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const requestedLevel = parseInt(req.query.level || 0);
+    const userId = req.params.id; // get userId from route
+    const requestedLevel = parseInt(req.query.level || 0); // optional query param
+
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required.' });
+    }
 
     const user = await User.findById(userId).lean();
     if (!user?.session || !user?.className) {
@@ -624,13 +626,13 @@ exports.platformDetails = async (req, res) => {
 
     const session = user.session;
     const classId = user.className.toString();
+
     const scores = await LearningScore.find({
       userId,
       session,
       classId,
       strickStatus: true
-    })
-      .populate('learningId', 'name')
+    }).populate('learningId', 'name')
       .sort({ scoreDate: 1 })
       .lean();
 
@@ -639,8 +641,7 @@ exports.platformDetails = async (req, res) => {
       session,
       classId,
       strickStatus: true
-    })
-      .populate('learningId', 'name')
+    }).populate('learningId', 'name')
       .sort({ updatedAt: 1 })
       .lean();
 
@@ -710,10 +711,12 @@ exports.platformDetails = async (req, res) => {
 
     for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
       const currentDate = m.format('YYYY-MM-DD');
+      const isToday = currentDate === moment().format('YYYY-MM-DD');
       const item = { date: currentDate, data: [] };
 
       if (scoreMap.has(currentDate)) {
         item.data = scoreMap.get(currentDate);
+
         const types = item.data.map(d => d.type);
         const hasPractice = types.includes('practice');
         const hasTopic = types.includes('topic');
@@ -730,15 +733,18 @@ exports.platformDetails = async (req, res) => {
             datesToAddBonus.push(currentDate);
           }
         }
+
+        result.push(item);
       } else {
-        item.deduction = deductions;
-        if (!existingDeductedDates.includes(currentDate)) {
-          deductionToSubtract += deductions;
-          datesToDeduct.push(currentDate);
+        if (!isToday) {
+          item.deduction = deductions;
+          if (!existingDeductedDates.includes(currentDate)) {
+            deductionToSubtract += deductions;
+            datesToDeduct.push(currentDate);
+          }
+          result.push(item);
         }
       }
-
-      result.push(item);
     }
 
     for (let i = 6; i < result.length; i++) {
@@ -821,7 +827,6 @@ exports.platformDetails = async (req, res) => {
       }
     });
 
-    // ✅ Save or Update in Experienceleavel collection
     const existingExp = await Experienceleavel.findOne({ userId, session, classId });
     if (existingExp) {
       await Experienceleavel.findByIdAndUpdate(existingExp._id, {
@@ -856,6 +861,7 @@ exports.platformDetails = async (req, res) => {
       level: newLevel,
       dates: matched
     });
+
   } catch (error) {
     console.error('StrikePath error:', error);
     return res.status(500).json({ message: error.message });
