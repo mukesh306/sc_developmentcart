@@ -55,14 +55,45 @@ exports.registerAdmin = async (req, res) => {
   }
 };
 
+
+// exports.getAllAdmins = async (req, res) => {
+//   try {
+//     const admins = await Admin1.find()
+//       .populate('createdBy', 'email') 
+//       .sort({ createdAt: -1 });
+//     res.status(200).json({
+//       message: 'Admins fetched successfully.',
+//       data: admins
+//     });
+//   } catch (error) {
+//     res.status(500).json({
+//       message: 'Server error.',
+//       error: error.message
+//     });
+//   }
+// };
+
 exports.getAllAdmins = async (req, res) => {
   try {
     const admins = await Admin1.find()
-      .populate('createdBy', 'email') 
-      .sort({ createdAt: -1 });
+      .populate('createdBy', 'email')
+      .sort({ createdAt: -1 })
+      .lean(); // use lean to manipulate data directly
+
+    const currentDate = new Date();
+
+    // Dynamically evaluate status based on endDate
+    const updatedAdmins = admins.map(admin => {
+      const isActive = new Date(admin.endDate) >= currentDate;
+      return {
+        ...admin,
+        status: isActive
+      };
+    });
+
     res.status(200).json({
       message: 'Admins fetched successfully.',
-      data: admins
+      data: updatedAdmins
     });
   } catch (error) {
     res.status(500).json({
@@ -71,7 +102,6 @@ exports.getAllAdmins = async (req, res) => {
     });
   }
 };
-
 
 exports.deleteAdmin = async (req, res) => {
   try {
