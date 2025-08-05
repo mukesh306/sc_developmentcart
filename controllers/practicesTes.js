@@ -14,7 +14,6 @@ const LearningScore = require('../models/learningScore');
 const User = require('../models/User');
 
 
-
 // exports.PracticeTest = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -24,9 +23,11 @@ const User = require('../models/User');
 //       return res.status(400).json({ message: 'topicId, questionId, and learningId are required.' });
 //     }
 
-//     // ✅ Get user's session
+//     // ✅ Get user's session and endDate
 //     const user = await User.findById(userId).lean();
 //     const userSession = user?.session;
+//     const endDate = user?.endDate || null;
+
 //     if (!userSession) {
 //       return res.status(400).json({ message: 'User session not found.' });
 //     }
@@ -53,7 +54,8 @@ const User = require('../models/User');
 //       await PracticesQuizAnswer.findByIdAndUpdate(existingAnswer._id, {
 //         selectedAnswer: answerToSave,
 //         learningId,
-//         session: userSession,           
+//         session: userSession,
+//         endDate,                         // ✅ Save endDate on update
 //         isSkipped: !selectedAnswer
 //       });
 //     } else {
@@ -63,7 +65,8 @@ const User = require('../models/User');
 //         questionId,
 //         selectedAnswer: answerToSave,
 //         learningId,
-//         session: userSession,              // ✅ Save session on insert
+//         session: userSession,
+//         endDate,                         // ✅ Save endDate on insert
 //         isSkipped: !selectedAnswer
 //       });
 //       await newAnswer.save();
@@ -79,8 +82,6 @@ const User = require('../models/User');
 // };
 
 
-
-
 exports.PracticeTest = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -90,10 +91,12 @@ exports.PracticeTest = async (req, res) => {
       return res.status(400).json({ message: 'topicId, questionId, and learningId are required.' });
     }
 
-    // ✅ Get user's session and endDate
+    // ✅ Get user data
     const user = await User.findById(userId).lean();
     const userSession = user?.session;
+    const startDate = user?.startDate || null;
     const endDate = user?.endDate || null;
+    const classId = user?.className || null;
 
     if (!userSession) {
       return res.status(400).json({ message: 'User session not found.' });
@@ -117,24 +120,24 @@ exports.PracticeTest = async (req, res) => {
       createdAt: { $gte: startOfDay, $lte: endOfDay }
     });
 
+    const answerPayload = {
+      selectedAnswer: answerToSave,
+      learningId,
+      session: userSession,
+      startDate,       // ✅ Save startDate from user
+      endDate,         // ✅ Save endDate from user
+      classId,         // ✅ Save className from user as classId
+      isSkipped: !selectedAnswer
+    };
+
     if (existingAnswer) {
-      await PracticesQuizAnswer.findByIdAndUpdate(existingAnswer._id, {
-        selectedAnswer: answerToSave,
-        learningId,
-        session: userSession,
-        endDate,                         // ✅ Save endDate on update
-        isSkipped: !selectedAnswer
-      });
+      await PracticesQuizAnswer.findByIdAndUpdate(existingAnswer._id, answerPayload);
     } else {
       const newAnswer = new PracticesQuizAnswer({
         userId,
         topicId,
         questionId,
-        selectedAnswer: answerToSave,
-        learningId,
-        session: userSession,
-        endDate,                         // ✅ Save endDate on insert
-        isSkipped: !selectedAnswer
+        ...answerPayload
       });
       await newAnswer.save();
     }
@@ -147,6 +150,7 @@ exports.PracticeTest = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 // exports.calculateQuizScoreByLearning = async (req, res) => {
