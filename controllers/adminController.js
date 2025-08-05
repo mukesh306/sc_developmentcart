@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const Admin = require('../models/admin');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer'); 
-
+const moment = require('moment');
 
 exports.registerAdmin = async (req, res) => {
   try {
