@@ -11,6 +11,7 @@ const PracticesQuizAnswer = require('../models/practicestest');
 const MarkingSetting = require('../models/markingSetting'); 
 const Learning = require('../models/learning'); 
 const LearningScore = require('../models/learningScore');
+const TopicScore = require('../models/topicScore');
 const User = require('../models/User');
 
 
