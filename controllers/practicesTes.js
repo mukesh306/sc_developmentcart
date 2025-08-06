@@ -721,6 +721,7 @@ exports.platformDetails = async (req, res) => {
         const types = item.data.map(d => d.type);
         const hasPractice = types.includes('practice');
         const hasTopic = types.includes('topic');
+
         if (hasPractice && hasTopic && baseDailyExp > 0) {
           const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
           const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;

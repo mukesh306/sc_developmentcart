@@ -1,6 +1,6 @@
 
 const mongoose = require('mongoose');
-const { platformDetails } = require('../controllers/practicesTes');
+
 const userSchema = new mongoose.Schema({
   firstName: { type: String, required: true },
   middleName: { type: String },
