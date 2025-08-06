@@ -329,7 +329,6 @@ exports.completeProfile = async (req, res) => {
 // };
 
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -387,32 +386,26 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Session Expiry Check — based on startDate, endDate, endTime
-    if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
-      let sessionExpired = false;
-
+    // ✅ Session Expiry Check (24-hour format for endTime)
+    if (user.updatedBy?.startDate && user.updatedBy?.endDate && user.updatedBy?.endTime) {
       const format = 'DD-MM-YYYY';
+      const now = moment().utcOffset("+05:30"); // IST
+
       const startDateTime = moment(user.updatedBy.startDate, format).startOf('day');
-      const endDateTime = user.updatedBy.endTime
-        ? moment(`${user.updatedBy.endDate} ${user.updatedBy.endTime}`, 'DD-MM-YYYY HH:mm')
-        : moment(user.updatedBy.endDate, format).endOf('day');
+      const endDateTime = moment(`${user.updatedBy.endDate} ${user.updatedBy.endTime}`, 'DD-MM-YYYY HH:mm', true); // strict parse
 
-      const now = moment().utcOffset("+05:30"); // Indian Time
-
-      console.log("🕐 Server current time:", now.format('DD-MM-YYYY HH:mm'));
+      console.log("🕐 Current time:", now.format('DD-MM-YYYY HH:mm'));
       console.log("🔓 Start time:", startDateTime.format('DD-MM-YYYY HH:mm'));
       console.log("⏳ End time:", endDateTime.format('DD-MM-YYYY HH:mm'));
 
       if (!startDateTime.isValid() || !endDateTime.isValid()) {
         console.warn("⚠️ Invalid startDate or endDate format.");
       } else if (now.isBefore(startDateTime) || now.isAfter(endDateTime)) {
-        sessionExpired = true;
-      }
-
-      if (sessionExpired && user.status !== 'no') {
-        await User.findByIdAndUpdate(userId, { status: 'no' });
-        user.status = 'no';
-        console.log("⛔ Session expired. User status updated to 'no'.");
+        if (user.status !== 'no') {
+          await User.findByIdAndUpdate(userId, { status: 'no' });
+          user.status = 'no';
+          console.log("⛔ Session expired. User status updated to 'no'.");
+        }
       }
     }
 
