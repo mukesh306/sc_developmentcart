@@ -1116,106 +1116,6 @@ exports.UserSessionDetails = async (req, res) => {
 };
 
 
-// exports.getActiveSessionUsers = async (req, res) => {
-//   try {
-//     const { startDate, endDate, fields } = req.query;
-
-//     if (!startDate || !endDate) {
-//       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
-//     }
-
-//     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
-//     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
-
-//     if (!start.isValid() || !end.isValid()) {
-//       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
-//     }
-
-//     const baseUrl = req.protocol + '://' + req.get('host');
-
-//     const users = await User.find({
-//       startDate: { $exists: true, $ne: '' },
-//       endDate: { $exists: true, $ne: '' }
-//     })
-//       .populate('cityId', 'name')
-//       .populate('stateId', 'name')
-//       .populate('countryId', 'name')
-//       .lean();
-
-//     const enrichedUsers = await Promise.all(users.map(async (user) => {
-//       const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
-//       const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
-
-//       if (!userStart.isValid() || !userEnd.isValid() || userStart.isBefore(start) || userEnd.isAfter(end)) {
-//         return null;
-//       }
-
-//       let classData = null;
-//       let classId = user.className;
-
-//       if (mongoose.Types.ObjectId.isValid(classId)) {
-//         const school = await School.findById(classId);
-//         const college = school ? null : await College.findById(classId);
-//         const institution = school || college;
-
-//         if (institution && institution.price != null) {
-//           classData = {
-//             id: classId,
-//             name: institution.name
-//           };
-//         } else {
-//           classId = null;
-//         }
-//       }
-
-//       // Fix file paths to clean URLs
-//       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
-//       fileFields.forEach(field => {
-//         if (user[field]) {
-//           const match = user[field].match(/uploads\/(.+)$/);
-//           if (match && match[1]) {
-//             user[field] = `${baseUrl}/uploads/${match[1]}`;
-//           }
-//         }
-//       });
-
-//       const formatted = {
-//         ...user,
-//         className: classData ? classData.id : null,
-//         classOrYear: classData ? classData.name : null,
-//         country: user.countryId?.name || '',
-//         state: user.stateId?.name || '',
-//         city: user.cityId?.name || '',
-//       };
-
-//       if (fields) {
-//         const requestedFields = fields.split(',');
-//         const limited = {};
-//         requestedFields.forEach(f => {
-//           if (formatted.hasOwnProperty(f)) {
-//             limited[f] = formatted[f];
-//           }
-//         });
-//         return limited;
-//       }
-
-//       return formatted;
-//     }));
-
-//     const resultUsers = enrichedUsers.filter(Boolean);
-
-//     res.status(200).json({
-//       message: 'Filtered users by session range.',
-//       count: resultUsers.length,
-//       users: resultUsers
-//     });
-
-//   } catch (error) {
-//     console.error('Error filtering users by session range:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
 exports.getActiveSessionUsers = async (req, res) => {
   try {
     const { startDate, endDate, fields } = req.query;
@@ -1268,6 +1168,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         }
       }
 
+      // Fix file paths to clean URLs
       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
       fileFields.forEach(field => {
         if (user[field]) {
@@ -1285,7 +1186,6 @@ exports.getActiveSessionUsers = async (req, res) => {
         country: user.countryId?.name || '',
         state: user.stateId?.name || '',
         city: user.cityId?.name || '',
-        platformDetails: user._id?.toString() || null // ✅ Only this line is added
       };
 
       if (fields) {
@@ -1315,3 +1215,104 @@ exports.getActiveSessionUsers = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+// exports.getActiveSessionUsers = async (req, res) => {
+//   try {
+//     const { startDate, endDate, fields } = req.query;
+
+//     if (!startDate || !endDate) {
+//       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
+//     }
+
+//     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
+//     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
+
+//     if (!start.isValid() || !end.isValid()) {
+//       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
+//     }
+
+//     const baseUrl = req.protocol + '://' + req.get('host');
+
+//     const users = await User.find({
+//       startDate: { $exists: true, $ne: '' },
+//       endDate: { $exists: true, $ne: '' }
+//     })
+//       .populate('cityId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('countryId', 'name')
+//       .lean();
+
+//     const enrichedUsers = await Promise.all(users.map(async (user) => {
+//       const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
+//       const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
+
+//       if (!userStart.isValid() || !userEnd.isValid() || userStart.isBefore(start) || userEnd.isAfter(end)) {
+//         return null;
+//       }
+
+//       let classData = null;
+//       let classId = user.className;
+
+//       if (mongoose.Types.ObjectId.isValid(classId)) {
+//         const school = await School.findById(classId);
+//         const college = school ? null : await College.findById(classId);
+//         const institution = school || college;
+
+//         if (institution && institution.price != null) {
+//           classData = {
+//             id: classId,
+//             name: institution.name
+//           };
+//         } else {
+//           classId = null;
+//         }
+//       }
+
+//       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
+//       fileFields.forEach(field => {
+//         if (user[field]) {
+//           const match = user[field].match(/uploads\/(.+)$/);
+//           if (match && match[1]) {
+//             user[field] = `${baseUrl}/uploads/${match[1]}`;
+//           }
+//         }
+//       });
+
+//       const formatted = {
+//         ...user,
+//         className: classData ? classData.id : null,
+//         classOrYear: classData ? classData.name : null,
+//         country: user.countryId?.name || '',
+//         state: user.stateId?.name || '',
+//         city: user.cityId?.name || '',
+//         platformDetails: user._id?.toString() || null // ✅ Only this line is added
+//       };
+
+//       if (fields) {
+//         const requestedFields = fields.split(',');
+//         const limited = {};
+//         requestedFields.forEach(f => {
+//           if (formatted.hasOwnProperty(f)) {
+//             limited[f] = formatted[f];
+//           }
+//         });
+//         return limited;
+//       }
+
+//       return formatted;
+//     }));
+
+//     const resultUsers = enrichedUsers.filter(Boolean);
+
+//     res.status(200).json({
+//       message: 'Filtered users by session range.',
+//       count: resultUsers.length,
+//       users: resultUsers
+//     });
+
+//   } catch (error) {
+//     console.error('Error filtering users by session range:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
