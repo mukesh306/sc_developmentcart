@@ -364,17 +364,14 @@ exports.getUserProfile = async (req, res) => {
     } else {
       const institutionUpdatedBy = classDetails?.updatedBy || null;
       if (institutionUpdatedBy) {
-        // Update user's updatedBy field
         await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
 
-        // Refetch user after updatedBy change
         user = await User.findById(userId)
           .populate('countryId', 'name')
           .populate('stateId', 'name')
           .populate('cityId', 'name')
           .populate('updatedBy', 'email session startDate endDate endTime');
 
-        // Resolve image URLs again
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
         }
@@ -384,32 +381,27 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Sync fields from updatedBy to user if they differ
     if (user.updatedBy?.session) {
       const updates = {};
 
       if (!user.session || user.session !== user.updatedBy.session) {
         updates.session = user.updatedBy.session;
         user.session = user.updatedBy.session;
-        console.log(`🟢 User session updated to "${user.session}"`);
       }
 
       if (user.updatedBy.startDate && (!user.startDate || user.startDate !== user.updatedBy.startDate)) {
         updates.startDate = user.updatedBy.startDate;
         user.startDate = user.updatedBy.startDate;
-        console.log(`📅 User startDate updated to "${user.startDate}"`);
       }
 
       if (user.updatedBy.endDate && (!user.endDate || user.endDate !== user.updatedBy.endDate)) {
         updates.endDate = user.updatedBy.endDate;
         user.endDate = user.updatedBy.endDate;
-        console.log(`📅 User endDate updated to "${user.endDate}"`);
       }
 
       if (user.updatedBy.endTime && (!user.endTime || user.endTime !== user.updatedBy.endTime)) {
         updates.endTime = user.updatedBy.endTime;
         user.endTime = user.updatedBy.endTime;
-        console.log(`⏰ User endTime updated to "${user.endTime}"`);
       }
 
       if (Object.keys(updates).length > 0) {
@@ -417,26 +409,37 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Session expiry check
-    if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
-      const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY', true).startOf('day');
-      const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY', true).endOf('day');
-      const currentDate = moment();
+    // ✅ Updated session expiry check
+    if (user.updatedBy?.endDate) {
+      let sessionExpired = false;
 
-      if (!startDate.isValid() || !endDate.isValid()) {
-        console.warn("⚠️ Invalid date format. Must be DD-MM-YYYY.");
-      } else if (currentDate.isAfter(endDate)) {
-        if (user.status !== 'no') {
-          await User.findByIdAndUpdate(userId, { status: 'no' });
-          user.status = 'no';
-          console.log("⛔ Session expired. User status updated to 'no'.");
+      if (user.updatedBy.endTime) {
+        const endDateTime = moment(`${user.updatedBy.endDate} ${user.updatedBy.endTime}`, 'DD-MM-YYYY HH:mm', true);
+        const currentDateTime = moment();
+
+        if (!endDateTime.isValid()) {
+          console.warn("⚠️ Invalid endDate or endTime format.");
+        } else if (currentDateTime.isAfter(endDateTime)) {
+          sessionExpired = true;
         }
       } else {
-        console.log("✅ Session active. No change in status.");
+        const endDateOnly = moment(user.updatedBy.endDate, 'DD-MM-YYYY', true).endOf('day');
+        const currentDateTime = moment();
+
+        if (!endDateOnly.isValid()) {
+          console.warn("⚠️ Invalid endDate format.");
+        } else if (currentDateTime.isAfter(endDateOnly)) {
+          sessionExpired = true;
+        }
+      }
+
+      if (sessionExpired && user.status !== 'no') {
+        await User.findByIdAndUpdate(userId, { status: 'no' });
+        user.status = 'no';
+        console.log("⛔ Session expired. User status updated to 'no'.");
       }
     }
 
-    // ✅ Build response object
     const formattedUser = {
       ...user._doc,
       status: user.status,
@@ -447,8 +450,6 @@ exports.getUserProfile = async (req, res) => {
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
       updatedBy: user.updatedBy || null,
-
-      // ✅ Add these from updated values
       session: user.session || '',
       startDate: user.startDate || '',
       endDate: user.endDate || '',
