@@ -1,5 +1,6 @@
 
 const mongoose = require('mongoose');
+const { platformDetails } = require('../controllers/practicesTes');
 const userSchema = new mongoose.Schema({
   firstName: { type: String, required: true },
   middleName: { type: String },
@@ -27,6 +28,9 @@ const userSchema = new mongoose.Schema({
   },
    endTime: {
   type: String,
+},
+platformDetails:{
+ type: String,
 },
   aadharCard: { type: String },
   marksheet: { type: String },
