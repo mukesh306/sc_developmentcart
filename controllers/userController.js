@@ -328,6 +328,8 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
+
+
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -347,6 +349,7 @@ exports.getUserProfile = async (req, res) => {
     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
     }
+
     if (user.marksheet && fs.existsSync(user.marksheet)) {
       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }
@@ -377,13 +380,14 @@ exports.getUserProfile = async (req, res) => {
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
         }
+
         if (user.marksheet && fs.existsSync(user.marksheet)) {
           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
         }
       }
     }
 
-    // ✅ Session Expiry Check — based on startDate, endDate, and endTime
+    // ✅ Session Expiry Check — based on startDate, endDate, endTime
     if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
       let sessionExpired = false;
 
@@ -393,11 +397,11 @@ exports.getUserProfile = async (req, res) => {
         ? moment(`${user.updatedBy.endDate} ${user.updatedBy.endTime}`, 'DD-MM-YYYY HH:mm')
         : moment(user.updatedBy.endDate, format).endOf('day');
 
-      const now = moment();
+      const now = moment().utcOffset("+05:30"); // Indian Time
 
-      console.log("📅 Current:", now.format('DD-MM-YYYY HH:mm'));
-      console.log("🔓 Start:", startDateTime.format('DD-MM-YYYY HH:mm'));
-      console.log("⏳ End:", endDateTime.format('DD-MM-YYYY HH:mm'));
+      console.log("🕐 Server current time:", now.format('DD-MM-YYYY HH:mm'));
+      console.log("🔓 Start time:", startDateTime.format('DD-MM-YYYY HH:mm'));
+      console.log("⏳ End time:", endDateTime.format('DD-MM-YYYY HH:mm'));
 
       if (!startDateTime.isValid() || !endDateTime.isValid()) {
         console.warn("⚠️ Invalid startDate or endDate format.");
