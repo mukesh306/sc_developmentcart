@@ -5,6 +5,7 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer'); 
 const moment = require('moment');
 
+
 exports.registerAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'superadmin') {
@@ -13,29 +14,18 @@ exports.registerAdmin = async (req, res) => {
 
     const { email, password, session, startDate, endDate, endTime } = req.body;
 
-    if (!startDate || !endDate || !endTime) {
-      return res.status(400).json({ message: 'startDate, endDate, and endTime are required.' });
-    }
+    // Combine endDate and endTime into one datetime
+    const formattedStartDate = moment(startDate, 'DD-MM-YYYY').toDate();
+    const formattedEndDate = moment(`${endDate} ${endTime}`, 'DD-MM-YYYY HH:mm').toDate();
 
-    // Parse startDate as date-only
-    const parsedStartDate = moment(startDate, 'DD-MM-YYYY').toDate();
-
-    // Combine endDate and endTime into one Date
-    const parsedEndDate = moment(`${endDate} ${endTime}`, 'DD-MM-YYYY HH:mm').toDate();
-
-    if (!parsedStartDate || !parsedEndDate || isNaN(parsedStartDate) || isNaN(parsedEndDate)) {
-      return res.status(400).json({ message: 'Invalid date or time format.' });
-    }
-
-    // Check if overlapping session or dates
     const existing = await Admin1.findOne({
       email,
       $or: [
         { session },
         {
           $and: [
-            { startDate: { $lte: parsedEndDate } },
-            { endDate: { $gte: parsedStartDate } }
+            { startDate: { $lte: formattedEndDate } },
+            { endDate: { $gte: formattedStartDate } }
           ]
         }
       ]
@@ -53,9 +43,8 @@ exports.registerAdmin = async (req, res) => {
       email,
       password: hashedPassword,
       session,
-      startDate: parsedStartDate,
-      endDate: parsedEndDate,
-      endTime, // Save endTime separately as string
+      startDate: formattedStartDate,
+      endDate: formattedEndDate,
       createdBy: req.user._id,
     });
 
