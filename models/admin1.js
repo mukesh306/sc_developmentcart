@@ -35,7 +35,6 @@ const AdminSchema = new mongoose.Schema({
   },
   endTime: {
   type: String,
-  required: true
 },
   otp: {
     type: String
