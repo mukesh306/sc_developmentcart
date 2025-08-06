@@ -33,6 +33,10 @@ const AdminSchema = new mongoose.Schema({
     type: Boolean,
     default: true
   },
+  endTime: {
+  type: String,
+  required: true
+},
   otp: {
     type: String
   },

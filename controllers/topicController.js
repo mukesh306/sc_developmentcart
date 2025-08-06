@@ -905,7 +905,6 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 };
 
 
-
 // exports.calculateQuizScore = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
