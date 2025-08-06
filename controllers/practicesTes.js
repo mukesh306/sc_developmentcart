@@ -324,6 +324,7 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
     const userClassId = user?.className || null;
     const startDate = user?.startDate || null; // ✅ Added
     const endDate = user?.endDate || null;     // ✅ Added
+    const endTime = user?.endTime || null;     // ✅ Added
 
     const answeredQuestionIds = answers.map(ans => ans.questionId.toString());
     const answeredQuizzes = await Quiz.find({ _id: { $in: answeredQuestionIds } }).lean();
@@ -390,7 +391,8 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
       session: userSession,
       classId: userClassId,
       startDate,  // ✅ Added
-      endDate     // ✅ Added
+      endDate,    // ✅ Added
+      endTime     // ✅ Added
     };
 
     if (!existingScore) {
