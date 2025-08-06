@@ -13,7 +13,7 @@ router.post('/verify-otp', authController.verifyOtp);
 
 //admin
 
-router.post('/admincreate',adminController.registerAdmin);
+router.post('/admincreate', auth,adminController.registerAdmin);
 router.post('/adminlogin', adminController.loginAdmin);
 router.get('/getAllAdmins', adminController.getAllAdmins);
 router.delete('/deleteAdmins/:id', adminController.deleteAdmin);
