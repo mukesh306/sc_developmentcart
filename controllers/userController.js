@@ -384,25 +384,29 @@ exports.getUserProfile = async (req, res) => {
 
     // ✅ SESSION EXPIRY LOGIC
     const format = 'DD-MM-YYYY';
-    const now = moment().utcOffset("+05:30"); // current IST time
+    const now = moment().utcOffset("+05:30");
 
-    // Try to use updatedBy if available, else fallback to user's own fields
     const sessionStart = user.updatedBy?.startDate || user.startDate;
     const sessionEnd = user.updatedBy?.endDate || user.endDate;
     const sessionEndTime = user.updatedBy?.endTime || user.endTime;
 
     const startDateTime = moment(sessionStart, format).startOf('day');
-    const endDateTime = moment(`${sessionEnd} ${sessionEndTime}`, 'DD-MM-YYYY HH:mm', true);
+
+    // Safely parse end time
+    let endDateTime = null;
+    if (moment(sessionEnd, format, true).isValid() && /^\d{2}:\d{2}$/.test(sessionEndTime)) {
+      const [hour, minute] = sessionEndTime.split(':').map(Number);
+      endDateTime = moment(sessionEnd, format, true).hour(hour).minute(minute).second(0);
+    }
 
     console.log("🕐 Now:", now.format('DD-MM-YYYY HH:mm'));
     console.log("🔓 Session Start:", startDateTime.format('DD-MM-YYYY HH:mm'));
-    console.log("⏳ Session End:", endDateTime.format('DD-MM-YYYY HH:mm'));
+    console.log("⏳ Session End:", endDateTime ? endDateTime.format('DD-MM-YYYY HH:mm') : 'Invalid');
 
-    if (!startDateTime.isValid() || !endDateTime.isValid()) {
-      console.warn("⚠️ Invalid session dates");
+    if (!startDateTime.isValid() || !endDateTime || !endDateTime.isValid()) {
+      console.warn("⚠️ Invalid session dates or time format.");
     } else {
       const isSessionExpired = now.isBefore(startDateTime) || now.isAfter(endDateTime);
-
       const newStatus = isSessionExpired ? 'no' : 'yes';
       if (user.status !== newStatus) {
         await User.findByIdAndUpdate(userId, { status: newStatus });
@@ -441,7 +445,6 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 // exports.getUserProfile = async (req, res) => {
