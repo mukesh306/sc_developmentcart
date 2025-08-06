@@ -364,16 +364,17 @@ exports.getUserProfile = async (req, res) => {
     } else {
       const institutionUpdatedBy = classDetails?.updatedBy || null;
       if (institutionUpdatedBy) {
+        // Update user's updatedBy field
         await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
 
-        // Refetch updated user
+        // Refetch user after updatedBy change
         user = await User.findById(userId)
           .populate('countryId', 'name')
           .populate('stateId', 'name')
           .populate('cityId', 'name')
           .populate('updatedBy', 'email session startDate endDate endTime');
 
-        // Re-resolve image URLs again
+        // Resolve image URLs again
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
         }
@@ -383,7 +384,7 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Auto update session, startDate, endDate, endTime if changed from updatedBy
+    // ✅ Sync fields from updatedBy to user if they differ
     if (user.updatedBy?.session) {
       const updates = {};
 
@@ -416,11 +417,12 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Session expiry logic
+    // ✅ Session expiry check
     if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
       const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY', true).startOf('day');
       const endDate = moment(user.updatedBy.endDate, 'DD-MM-YYYY', true).endOf('day');
       const currentDate = moment();
+
       if (!startDate.isValid() || !endDate.isValid()) {
         console.warn("⚠️ Invalid date format. Must be DD-MM-YYYY.");
       } else if (currentDate.isAfter(endDate)) {
@@ -434,6 +436,7 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
+    // ✅ Build response object
     const formattedUser = {
       ...user._doc,
       status: user.status,
@@ -443,7 +446,13 @@ exports.getUserProfile = async (req, res) => {
       city: user.cityId?.name || '',
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
-      updatedBy: user.updatedBy || null
+      updatedBy: user.updatedBy || null,
+
+      // ✅ Add these from updated values
+      session: user.session || '',
+      startDate: user.startDate || '',
+      endDate: user.endDate || '',
+      endTime: user.endTime || ''
     };
 
     if (classDetails && classDetails.price != null) {
@@ -460,6 +469,7 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
