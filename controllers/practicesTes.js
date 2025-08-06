@@ -610,6 +610,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
 //   }
 // };
 
+
 exports.platformDetails = async (req, res) => {
   try {
     const userId = req.params.id; 
