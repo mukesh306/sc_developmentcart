@@ -23,6 +23,9 @@ const GenralIQSchema = new mongoose.Schema(
   endDate: {
     type: String, 
   },
+   endTime: {
+  type: String,
+},
     session:{type:String},
     classId:{type:String},
   },

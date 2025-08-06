@@ -25,6 +25,9 @@ const userSchema = new mongoose.Schema({
   endDate: {
     type: String, 
   },
+   endTime: {
+  type: String,
+},
   aadharCard: { type: String },
   marksheet: { type: String },
   resetPasswordOTP: { type: String },
