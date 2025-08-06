@@ -11,17 +11,31 @@ exports.registerAdmin = async (req, res) => {
       return res.status(403).json({ message: 'Only superadmin can create admins.' });
     }
 
-    const { email, password, session, startDate, endDate } = req.body;
+    const { email, password, session, startDate, endDate, endTime } = req.body;
 
-   
+    if (!startDate || !endDate || !endTime) {
+      return res.status(400).json({ message: 'startDate, endDate, and endTime are required.' });
+    }
+
+    // Parse startDate as date-only
+    const parsedStartDate = moment(startDate, 'DD-MM-YYYY').toDate();
+
+    // Combine endDate and endTime into one Date
+    const parsedEndDate = moment(`${endDate} ${endTime}`, 'DD-MM-YYYY HH:mm').toDate();
+
+    if (!parsedStartDate || !parsedEndDate || isNaN(parsedStartDate) || isNaN(parsedEndDate)) {
+      return res.status(400).json({ message: 'Invalid date or time format.' });
+    }
+
+    // Check if overlapping session or dates
     const existing = await Admin1.findOne({
       email,
       $or: [
         { session },
         {
           $and: [
-            { startDate: { $lte: new Date(endDate) } },
-            { endDate: { $gte: new Date(startDate) } }
+            { startDate: { $lte: parsedEndDate } },
+            { endDate: { $gte: parsedStartDate } }
           ]
         }
       ]
@@ -34,12 +48,14 @@ exports.registerAdmin = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const newAdmin = new Admin1({
       email,
       password: hashedPassword,
       session,
-      startDate,
-      endDate,
+      startDate: parsedStartDate,
+      endDate: parsedEndDate,
+      endTime, // Save endTime separately as string
       createdBy: req.user._id,
     });
 
@@ -73,30 +89,25 @@ exports.registerAdmin = async (req, res) => {
 //   }
 // };
 
+
 exports.getAllAdmins = async (req, res) => {
   try {
     const admins = await Admin1.find()
       .populate('createdBy', 'email')
       .sort({ createdAt: -1 })
-      .lean(); // allow direct object manipulation
-
-    const today = moment().startOf('day'); // current date without time
-
-    // Loop through admins and calculate status based on endDate
+      .lean(); 
+    const today = moment().startOf('day');   
     const updatedAdmins = admins.map(admin => {
       let isActive = false;
-
       if (admin.endDate) {
         const end = moment(admin.endDate, 'DD-MM-YYYY');
         isActive = end.isSameOrAfter(today);
       }
-
       return {
         ...admin,
         status: isActive
       };
     });
-
     res.status(200).json({
       message: 'Admins fetched successfully.',
       data: updatedAdmins
