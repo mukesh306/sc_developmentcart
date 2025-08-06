@@ -14,18 +14,14 @@ exports.registerAdmin = async (req, res) => {
 
     const { email, password, session, startDate, endDate, endTime } = req.body;
 
-    // Combine endDate and endTime into one datetime
-    const formattedStartDate = moment(startDate, 'DD-MM-YYYY').toDate();
-    const formattedEndDate = moment(`${endDate} ${endTime}`, 'DD-MM-YYYY HH:mm').toDate();
-
     const existing = await Admin1.findOne({
       email,
       $or: [
         { session },
         {
           $and: [
-            { startDate: { $lte: formattedEndDate } },
-            { endDate: { $gte: formattedStartDate } }
+            { startDate: { $lte: new Date(endDate) } },
+            { endDate: { $gte: new Date(startDate) } }
           ]
         }
       ]
@@ -38,13 +34,13 @@ exports.registerAdmin = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
     const newAdmin = new Admin1({
       email,
       password: hashedPassword,
       session,
-      startDate: formattedStartDate,
-      endDate: formattedEndDate,
+      startDate,
+      endDate,
+      endTime, 
       createdBy: req.user._id,
     });
 
