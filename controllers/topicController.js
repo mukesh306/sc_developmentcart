@@ -1072,7 +1072,8 @@ exports.calculateQuizScore = async (req, res) => {
     const userSession = user?.session || null;
     const userClassId = user?.className || null;
     const userStartDate = user?.startDate || null;  
-    const userEndDate = user?.endDate || null;      
+    const userEndDate = user?.endDate || null;  
+    const userEndTime = user?.endTime || null;    
 
     const allQuizzes = await Quiz.find({ topicId }).lean();
     const totalQuestions = allQuizzes.length;
@@ -1145,7 +1146,8 @@ exports.calculateQuizScore = async (req, res) => {
         session: userSession,       
         classId: userClassId,       
         startDate: userStartDate,   
-        endDate: userEndDate       
+        endDate: userEndDate,
+        endTime: userEndTime,     
       });
     }
 
