@@ -328,7 +328,6 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -337,7 +336,7 @@ exports.getUserProfile = async (req, res) => {
       .populate('countryId', 'name')
       .populate('stateId', 'name')
       .populate('cityId', 'name')
-      .populate('updatedBy', 'email endDate endTime');
+      .populate('updatedBy', 'email startDate endDate endTime');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
@@ -373,7 +372,7 @@ exports.getUserProfile = async (req, res) => {
           .populate('countryId', 'name')
           .populate('stateId', 'name')
           .populate('cityId', 'name')
-          .populate('updatedBy', 'email endDate endTime');
+          .populate('updatedBy', 'email startDate endDate endTime');
 
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
@@ -384,31 +383,26 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Session Expiry Check — only using endDate + endTime (ignore session field)
-    if (user.updatedBy?.endDate) {
+    // ✅ Session Expiry Check — based on startDate, endDate, and endTime
+    if (user.updatedBy?.startDate && user.updatedBy?.endDate) {
       let sessionExpired = false;
 
-      if (user.updatedBy.endTime) {
-        const endDateTime = moment(`${user.updatedBy.endDate} ${user.updatedBy.endTime}`, 'DD-MM-YYYY HH:mm', true);
-        const currentDateTime = moment();
+      const format = 'DD-MM-YYYY';
+      const startDateTime = moment(user.updatedBy.startDate, format).startOf('day');
+      const endDateTime = user.updatedBy.endTime
+        ? moment(`${user.updatedBy.endDate} ${user.updatedBy.endTime}`, 'DD-MM-YYYY HH:mm')
+        : moment(user.updatedBy.endDate, format).endOf('day');
 
-        console.log("📅 Current Time:", currentDateTime.format('DD-MM-YYYY HH:mm'));
-        console.log("⏳ End Time:", endDateTime.format('DD-MM-YYYY HH:mm'));
+      const now = moment();
 
-        if (!endDateTime.isValid()) {
-          console.warn("⚠️ Invalid endDate or endTime format.");
-        } else if (currentDateTime.isAfter(endDateTime)) {
-          sessionExpired = true;
-        }
-      } else {
-        const endDateOnly = moment(user.updatedBy.endDate, 'DD-MM-YYYY', true).endOf('day');
-        const currentDateTime = moment();
+      console.log("📅 Current:", now.format('DD-MM-YYYY HH:mm'));
+      console.log("🔓 Start:", startDateTime.format('DD-MM-YYYY HH:mm'));
+      console.log("⏳ End:", endDateTime.format('DD-MM-YYYY HH:mm'));
 
-        if (!endDateOnly.isValid()) {
-          console.warn("⚠️ Invalid endDate format.");
-        } else if (currentDateTime.isAfter(endDateOnly)) {
-          sessionExpired = true;
-        }
+      if (!startDateTime.isValid() || !endDateTime.isValid()) {
+        console.warn("⚠️ Invalid startDate or endDate format.");
+      } else if (now.isBefore(startDateTime) || now.isAfter(endDateTime)) {
+        sessionExpired = true;
       }
 
       if (sessionExpired && user.status !== 'no') {
@@ -429,6 +423,7 @@ exports.getUserProfile = async (req, res) => {
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
       updatedBy: user.updatedBy || null,
+      startDate: user.updatedBy?.startDate || '',
       endDate: user.updatedBy?.endDate || '',
       endTime: user.updatedBy?.endTime || ''
     };
