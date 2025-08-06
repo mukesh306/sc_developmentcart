@@ -328,7 +328,6 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -386,7 +385,7 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Session Expiry Check (24-hour format for endTime)
+    // ✅ Session Expiry Logic — sets status = 'no' if session expired, or 'yes' if within session
     if (user.updatedBy?.startDate && user.updatedBy?.endDate && user.updatedBy?.endTime) {
       const format = 'DD-MM-YYYY';
       const now = moment().utcOffset("+05:30"); // IST
@@ -406,10 +405,16 @@ exports.getUserProfile = async (req, res) => {
           user.status = 'no';
           console.log("⛔ Session expired. User status updated to 'no'.");
         }
+      } else {
+        if (user.status !== 'yes') {
+          await User.findByIdAndUpdate(userId, { status: 'yes' });
+          user.status = 'yes';
+          console.log("✅ Session active. User status updated to 'yes'.");
+        }
       }
     }
 
-    // Construct final user response
+    // Final user object for frontend
     const formattedUser = {
       ...user._doc,
       status: user.status,
