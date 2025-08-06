@@ -1118,8 +1118,7 @@ exports.calculateQuizScore = async (req, res) => {
         session: userSession,       
         classId: userClassId,       
         startDate: userStartDate,   
-        endDate: userEndDate,
-        endTime: userEndTime,     
+        endDate: userEndDate       
       });
     }
 
