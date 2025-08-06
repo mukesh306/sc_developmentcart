@@ -25,6 +25,9 @@ const topicScoreSchema = new mongoose.Schema({
   endDate: {
     type: String, 
   },
+   endTime: {
+  type: String,
+},
  strickStatus: { type: Boolean, default: false },
   createdAt: {
         type: Date,

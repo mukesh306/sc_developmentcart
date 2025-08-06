@@ -12,9 +12,17 @@ const ExperienceleavelSchema = new mongoose.Schema(
     levelBonusPoint: {
       type: Number,
      
-    },
+    }, startDate: {
+    type: String, 
+  },
+  endDate: {
+    type: String, 
+  },
     session:{type:String},
     classId:{type:String},
+     endTime: {
+  type: String,
+},
   },
   { timestamps: true }
 );

@@ -22,6 +22,9 @@ const LearningScoreSchema = new mongoose.Schema({
   endDate: {
     type: String, 
   },
+   endTime: {
+  type: String,
+},
   createdAt: {
         type: Date,
         default: Date.now

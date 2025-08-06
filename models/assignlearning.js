@@ -14,6 +14,17 @@ const AssignSchema = new mongoose.Schema({
 
   learning4: { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings' },
   learning4Average: { type: Number, default: null },
+   startDate: {
+    type: String,
+    default: ''
+  },
+  endDate: {
+    type: String,
+    default: ''
+  },
+  endTime: {
+  type: String,
+},
    session: {
     type: String
   },

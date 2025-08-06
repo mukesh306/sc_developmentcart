@@ -6,6 +6,7 @@ const PracticesQuizAnswerSchema = new mongoose.Schema({
   learningId: { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings' },
   questionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Quiz', required: true },
   selectedAnswer: { type: String,  },
+  
   session: { type: String,  },
   classId: { type: String },
    startDate: {
@@ -14,6 +15,9 @@ const PracticesQuizAnswerSchema = new mongoose.Schema({
   endDate: {
     type: String, 
   },
+   endTime: {
+  type: String,
+},
   strickStatus: { type: Boolean, default: false },
 }, { timestamps: true });
 
