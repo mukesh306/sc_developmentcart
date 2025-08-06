@@ -332,21 +332,15 @@ exports.completeProfile = async (req, res) => {
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
+
     let user = await User.findById(userId)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
       .populate('cityId', 'name')
-      .populate('updatedBy', 'email session startDate endDate endTime');
+      .populate('updatedBy', 'email endDate endTime');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
-    }
-
-    let classId = user.className;
-    let classDetails = null;
-
-    if (mongoose.Types.ObjectId.isValid(classId)) {
-      classDetails = await School.findById(classId) || await College.findById(classId);
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
@@ -356,6 +350,14 @@ exports.getUserProfile = async (req, res) => {
     }
     if (user.marksheet && fs.existsSync(user.marksheet)) {
       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+    }
+
+    // Check institution and update updatedBy if needed
+    let classId = user.className;
+    let classDetails = null;
+
+    if (mongoose.Types.ObjectId.isValid(classId)) {
+      classDetails = await School.findById(classId) || await College.findById(classId);
     }
 
     if (!classDetails || classDetails.price == null) {
@@ -371,7 +373,7 @@ exports.getUserProfile = async (req, res) => {
           .populate('countryId', 'name')
           .populate('stateId', 'name')
           .populate('cityId', 'name')
-          .populate('updatedBy', 'email session startDate endDate endTime');
+          .populate('updatedBy', 'email endDate endTime');
 
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
@@ -382,41 +384,16 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    if (user.updatedBy?.session) {
-      const updates = {};
-
-      if (!user.session || user.session !== user.updatedBy.session) {
-        updates.session = user.updatedBy.session;
-        user.session = user.updatedBy.session;
-      }
-
-      if (user.updatedBy.startDate && (!user.startDate || user.startDate !== user.updatedBy.startDate)) {
-        updates.startDate = user.updatedBy.startDate;
-        user.startDate = user.updatedBy.startDate;
-      }
-
-      if (user.updatedBy.endDate && (!user.endDate || user.endDate !== user.updatedBy.endDate)) {
-        updates.endDate = user.updatedBy.endDate;
-        user.endDate = user.updatedBy.endDate;
-      }
-
-      if (user.updatedBy.endTime && (!user.endTime || user.endTime !== user.updatedBy.endTime)) {
-        updates.endTime = user.updatedBy.endTime;
-        user.endTime = user.updatedBy.endTime;
-      }
-
-      if (Object.keys(updates).length > 0) {
-        await User.findByIdAndUpdate(userId, updates);
-      }
-    }
-
-    // ✅ Updated session expiry check
+    // ✅ Session Expiry Check — only using endDate + endTime (ignore session field)
     if (user.updatedBy?.endDate) {
       let sessionExpired = false;
 
       if (user.updatedBy.endTime) {
         const endDateTime = moment(`${user.updatedBy.endDate} ${user.updatedBy.endTime}`, 'DD-MM-YYYY HH:mm', true);
         const currentDateTime = moment();
+
+        console.log("📅 Current Time:", currentDateTime.format('DD-MM-YYYY HH:mm'));
+        console.log("⏳ End Time:", endDateTime.format('DD-MM-YYYY HH:mm'));
 
         if (!endDateTime.isValid()) {
           console.warn("⚠️ Invalid endDate or endTime format.");
@@ -441,6 +418,7 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
+    // Construct final user response
     const formattedUser = {
       ...user._doc,
       status: user.status,
@@ -451,10 +429,8 @@ exports.getUserProfile = async (req, res) => {
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
       updatedBy: user.updatedBy || null,
-      session: user.session || '',
-      startDate: user.startDate || '',
-      endDate: user.endDate || '',
-      endTime: user.endTime || ''
+      endDate: user.updatedBy?.endDate || '',
+      endTime: user.updatedBy?.endTime || ''
     };
 
     if (classDetails && classDetails.price != null) {
@@ -471,7 +447,6 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
