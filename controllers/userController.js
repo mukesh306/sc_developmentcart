@@ -328,9 +328,11 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
+
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
+
     let user = await User.findById(userId)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
@@ -406,8 +408,8 @@ exports.getUserProfile = async (req, res) => {
       }
 
       if (user.updatedBy.endTime && (!user.endTime || user.endTime !== user.updatedBy.endTime)) {
-        updates.endTime = user.updatedBy.endTime;
-        user.endTime = user.updatedBy.endTime;
+        updates.endTime = user.updatedBy.endTime.trim();
+        user.endTime = user.updatedBy.endTime.trim();
         console.log(`⏰ User endTime updated to "${user.endTime}"`);
       }
 
@@ -419,15 +421,16 @@ exports.getUserProfile = async (req, res) => {
     // ✅ Session expiry logic with endTime
     if (user.updatedBy?.startDate && user.updatedBy?.endDate && user.updatedBy?.endTime) {
       const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY', true).startOf('day');
-      const endDateTime = moment(
-        `${user.updatedBy.endDate} ${user.updatedBy.endTime}`,
-        'DD-MM-YYYY HH:mm',
-        true
-      );
+      const endDateTimeStr = `${user.updatedBy.endDate.trim()} ${user.updatedBy.endTime.trim()}`;
+      const endDateTime = moment(endDateTimeStr, 'DD-MM-YYYY HH:mm', true);
       const currentDateTime = moment();
 
+      console.log(`🕓 Checking session expiry:`);
+      console.log(`▶️ Current:     ${currentDateTime.format('DD-MM-YYYY HH:mm')}`);
+      console.log(`⏳ Session End: ${endDateTime.format('DD-MM-YYYY HH:mm')}`);
+
       if (!startDate.isValid() || !endDateTime.isValid()) {
-        console.warn("⚠️ Invalid date or time format. Date must be DD-MM-YYYY and time must be HH:mm.");
+        console.warn("⚠️ Invalid date or time format. Expected DD-MM-YYYY and HH:mm (24-hour).");
       } else if (currentDateTime.isAfter(endDateTime)) {
         if (user.status !== 'no') {
           await User.findByIdAndUpdate(userId, { status: 'no' });
