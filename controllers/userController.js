@@ -435,7 +435,7 @@ exports.getUserProfile = async (req, res) => {
       const currentDateTime = moment();
 
       console.log("🧪 Checking session expiry");
-      console.log("→ Now:", currentDateTime.format('DD-MM-YYYY HH:mm:ss'));
+      console.log("→ Now:", currentDateTime.utc().format('DD-MM-YYYY HH:mm:ss'));
       console.log("→ End:", endDateTime.format('DD-MM-YYYY HH:mm:ss'));
       console.log("→ isExpired:", currentDateTime.isSameOrAfter(endDateTime));
 
