@@ -97,44 +97,39 @@ exports.updateLearning = async (req, res) => {
     res.status(500).json({ message: 'Error updating Learning.', error: error.message });
   }
 };
+
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
-    const user = await User.findById(userId).lean();
 
-    const userSession = user?.session;
+    const user = await User.findById(userId).lean();
     const userClassId = user?.className;
     const endDate = user?.endDate;
     const endTime = user?.endTime;
 
-    // ✅ Step 1: Check if endDate and endTime are present
-    if (!endDate || !endTime) {
-      return res.status(200).json({ scores: [], learningWiseAverage: [] });
+    if (!endDate || !endTime || !userClassId) {
+      return res.status(400).json({ message: 'User endDate, endTime, or className not found.' });
     }
 
-    // ✅ Step 2: Combine endDate and endTime and convert to IST moment
-    const endDateTimeStr = `${endDate} ${endTime}`; // Assuming endDate = '07/08/2025', endTime = '11:24'
-    const sessionExpiry = moment.tz(endDateTimeStr, 'DD/MM/YYYY HH:mm', 'Asia/Kolkata');
+    // ✅ Check if session is expired based on Indian Time
+    const nowIndia = moment().tz('Asia/Kolkata');
+    const endDateTimeIndia = moment.tz(`${moment(endDate).format('YYYY-MM-DD')} ${endTime}`, 'YYYY-MM-DD HH:mm', 'Asia/Kolkata');
 
-    // ✅ Step 3: Get current IST time
-    const nowIST = moment().tz('Asia/Kolkata');
+    const isExpired = nowIndia.isAfter(endDateTimeIndia);
 
-    // ✅ Step 4: Check if session is expired
-    const isExpired = nowIST.isAfter(sessionExpiry);
     if (isExpired) {
-      return res.status(200).json({ scores: [], learningWiseAverage: [] });
+      // ✅ Return blank data like a new user
+      return res.status(200).json({
+        scores: [],
+        learningWiseAverage: []
+      });
     }
 
-    // ✅ Step 5: Proceed only if session is valid
-    if (!userSession || !userClassId) {
-      return res.status(200).json({ scores: [], learningWiseAverage: [] });
-    }
-
+    // ✅ Get scores
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          session: userSession,
           classId: userClassId.toString()
         }
       },
@@ -220,7 +215,6 @@ exports.scoreCard = async (req, res) => {
 
     try {
       const assignedList = await Assigned.find({
-        session: userSession,
         classId: userClassId
       });
 
@@ -260,6 +254,8 @@ exports.scoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
 
 // exports.scoreCard = async (req, res) => {
 //   try {
