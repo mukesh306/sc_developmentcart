@@ -5,7 +5,6 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer'); 
 const moment = require('moment');
 
-
 exports.registerAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'superadmin') {
@@ -14,14 +13,18 @@ exports.registerAdmin = async (req, res) => {
 
     const { email, password, session, startDate, endDate, endTime } = req.body;
 
+    const formattedStartDate = moment(startDate, 'YYYY-MM-DD').toDate();
+    const formattedEndDate = moment(endDate, 'YYYY-MM-DD').toDate();
+    const formattedEndTime = moment(endTime, 'HH:mm').format('HH:mm'); // Ensures 24-hour format
+
     const existing = await Admin1.findOne({
       email,
       $or: [
         { session },
         {
           $and: [
-            { startDate: { $lte: new Date(endDate) } },
-            { endDate: { $gte: new Date(startDate) } }
+            { startDate: { $lte: formattedEndDate } },
+            { endDate: { $gte: formattedStartDate } }
           ]
         }
       ]
@@ -34,13 +37,14 @@ exports.registerAdmin = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const newAdmin = new Admin1({
       email,
       password: hashedPassword,
       session,
-      startDate,
-      endDate,
-      endTime, 
+      startDate: formattedStartDate,
+      endDate: formattedEndDate,
+      endTime: formattedEndTime,
       createdBy: req.user._id,
     });
 
