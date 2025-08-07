@@ -4,6 +4,7 @@ const Admin = require('../models/admin');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer'); 
 const moment = require('moment');
+
 exports.registerAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'superadmin') {
@@ -212,7 +213,6 @@ exports.verifyOtp = async (req, res) => {
 }; 
 
 
-
 exports.updateAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'superadmin') {
@@ -220,14 +220,14 @@ exports.updateAdmin = async (req, res) => {
     }
 
     const { id } = req.params;
-    const { email, password, session, startDate, endDate } = req.body;
+    const { email, password, session, startDate, endDate, endTime } = req.body;
 
     const existingAdmin = await Admin1.findById(id);
     if (!existingAdmin) {
       return res.status(404).json({ message: 'Admin not found.' });
     }
 
-    // Check for duplicate session or overlapping dates (excluding self)
+    // Check for duplicate session or overlapping dates (excluding current admin)
     const duplicate = await Admin1.findOne({
       _id: { $ne: id },
       email,
@@ -235,8 +235,8 @@ exports.updateAdmin = async (req, res) => {
         { session },
         {
           $and: [
-            { startDate: { $lte: new Date(endDate) } },
-            { endDate: { $gte: new Date(startDate) } }
+            { startDate: { $lte: endDate } },
+            { endDate: { $gte: startDate } }
           ]
         }
       ]
@@ -248,11 +248,15 @@ exports.updateAdmin = async (req, res) => {
       });
     }
 
+    // Format endTime into 24-hour format
+    const formattedEndTime = moment(endTime, 'HH:mm').format('HH:mm');
+
     // Update fields
     existingAdmin.email = email;
     existingAdmin.session = session;
-    existingAdmin.startDate = startDate;
-    existingAdmin.endDate = endDate;
+    existingAdmin.startDate = startDate;  // Keep as string
+    existingAdmin.endDate = endDate;      // Keep as string
+    existingAdmin.endTime = formattedEndTime;
 
     if (password) {
       const hashedPassword = await bcrypt.hash(password, 10);
