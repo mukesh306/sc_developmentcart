@@ -107,26 +107,25 @@ exports.scoreCard = async (req, res) => {
     const endDateStr = user?.endDate?.trim();
     const endTimeStr = user?.endTime?.trim();
 
-    if (!endDateStr || !endTimeStr || !userClassId) {
-      return res.status(400).json({ message: 'End date, end time or className missing for user.' });
+    if (!userClassId || !endDateStr || !endTimeStr) {
+      return res.status(400).json({ message: 'Missing className, endDate or endTime for user.' });
     }
 
-    // ✅ Convert to IST datetime
+    // ✅ Combine endDate and endTime to form IST-based datetime
     const endDateTime = moment.tz(`${endDateStr} ${endTimeStr}`, 'DD-MM-YYYY HH:mm', 'Asia/Kolkata');
     if (!endDateTime.isValid()) {
       return res.status(400).json({ message: 'Invalid endDate or endTime format.' });
     }
 
-    const nowIST = moment.tz('Asia/Kolkata');
-    const isSessionExpired = nowIST.isSameOrAfter(endDateTime);
+    const todayStr = moment.tz('Asia/Kolkata').format('YYYY-MM-DD');
 
-    // ✅ Filter TopicScore by endDateTime instead of session
+    // ✅ Step 1: Get first score per day up to user's endDateTime (IST)
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
           classId: userClassId.toString(),
-          scoreDate: { $lte: endDateTime.toDate() } // ✅ compare with IST datetime
+          scoreDate: { $lte: endDateTime.toDate() } // Only scores before or on endDateTime
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -141,20 +140,19 @@ exports.scoreCard = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } }
     ]);
 
-    // ✅ Populate topic and learning
+    // ✅ Step 2: Populate topic and learning info
     const populatedScores = await TopicScore.populate(rawScores, [
       { path: 'topicId', select: 'topic' },
       { path: 'learningId', select: 'name' }
     ]);
 
-    // ✅ Build daily map
+    // ✅ Step 3: Prepare scores per day
     const scoreMap = new Map();
     let minDate = null;
-    let maxDate = moment().startOf('day');
-    const todayStr = moment().format('YYYY-MM-DD');
+    let maxDate = moment().tz('Asia/Kolkata').startOf('day');
 
     for (const score of populatedScores) {
-      const scoreDate = moment(score.scoreDate).startOf('day');
+      const scoreDate = moment(score.scoreDate).tz('Asia/Kolkata').startOf('day');
       const dateStr = scoreDate.format('YYYY-MM-DD');
 
       scoreMap.set(dateStr, {
@@ -167,8 +165,9 @@ exports.scoreCard = async (req, res) => {
       if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
     }
 
-    if (!minDate) minDate = moment().startOf('day');
+    if (!minDate) minDate = moment().tz('Asia/Kolkata').startOf('day');
 
+    // ✅ Step 4: Fill missing days with null scores
     const fullResult = [];
     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
       const dateStr = m.format('YYYY-MM-DD');
@@ -183,12 +182,14 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
+    // ✅ Step 5: Sort with today first
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
+    // ✅ Step 6: Learning-wise average calculation
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -211,9 +212,11 @@ exports.scoreCard = async (req, res) => {
       };
     });
 
-    // ✅ Update Assigned document with averages
+    // ✅ Step 7: Update Assigned averages
     try {
-      const assignedList = await Assigned.find({ classId: userClassId });
+      const assignedList = await Assigned.find({
+        classId: userClassId
+      });
 
       for (let assign of assignedList) {
         const update = {};
@@ -241,6 +244,7 @@ exports.scoreCard = async (req, res) => {
       console.error('Error updating Assigned averages:', err.message);
     }
 
+    // ✅ Step 8: Send Response
     res.status(200).json({
       scores: sortedFinal,
       learningWiseAverage
