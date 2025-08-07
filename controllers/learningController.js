@@ -97,7 +97,6 @@ exports.updateLearning = async (req, res) => {
     res.status(500).json({ message: 'Error updating Learning.', error: error.message });
   }
 };
-
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -111,21 +110,19 @@ exports.scoreCard = async (req, res) => {
       return res.status(400).json({ message: 'User endDate, endTime, or className not found.' });
     }
 
-    // ✅ Check if session is expired based on Indian Time
+    // ✅ Indian Time Check
     const nowIndia = moment().tz('Asia/Kolkata');
     const endDateTimeIndia = moment.tz(`${moment(endDate).format('YYYY-MM-DD')} ${endTime}`, 'YYYY-MM-DD HH:mm', 'Asia/Kolkata');
 
-    const isExpired = nowIndia.isAfter(endDateTimeIndia);
-
-    if (isExpired) {
-      // ✅ Return blank data like a new user
+    if (nowIndia.isAfter(endDateTimeIndia)) {
+      // ✅ Session expired, return blank data
       return res.status(200).json({
         scores: [],
         learningWiseAverage: []
       });
     }
 
-    // ✅ Get scores
+    // ✅ Get Scores
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
@@ -214,9 +211,7 @@ exports.scoreCard = async (req, res) => {
     });
 
     try {
-      const assignedList = await Assigned.find({
-        classId: userClassId
-      });
+      const assignedList = await Assigned.find({ classId: userClassId });
 
       for (let assign of assignedList) {
         const update = {};
