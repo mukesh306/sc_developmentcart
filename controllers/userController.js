@@ -426,17 +426,17 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ⏰ Check if session expired
+    // ⏰ Check if session expired based on IST
     if (user.updatedBy?.endDate && user.updatedBy?.endTime) {
-      const rawEndDate = user.updatedBy.endDate.trim();  // Format: "DD-MM-YYYY"
-      const rawEndTime = user.updatedBy.endTime.trim();  // Format: "HH:mm"
+      const rawEndDate = user.updatedBy.endDate.trim();
+      const rawEndTime = user.updatedBy.endTime.trim();
 
-      const endDateTime = moment(`${rawEndDate} ${rawEndTime}`, 'DD-MM-YYYY HH:mm');
-      const currentDateTime = moment();
+      const endDateTime = moment.tz(`${rawEndDate} ${rawEndTime}`, 'DD-MM-YYYY HH:mm', 'Asia/Kolkata');
+      const currentDateTime = moment.tz('Asia/Kolkata');
 
       console.log("🧪 Checking session expiry");
-      console.log("→ Now:", currentDateTime.utc().format('DD-MM-YYYY HH:mm:ss'));
-      console.log("→ End:", endDateTime.format('DD-MM-YYYY HH:mm:ss'));
+      console.log("→ Now (IST):", currentDateTime.format('DD-MM-YYYY HH:mm:ss'));
+      console.log("→ End (IST):", endDateTime.format('DD-MM-YYYY HH:mm:ss'));
       console.log("→ isExpired:", currentDateTime.isSameOrAfter(endDateTime));
 
       if (!endDateTime.isValid()) {
