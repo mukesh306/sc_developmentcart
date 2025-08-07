@@ -5,7 +5,6 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer'); 
 const moment = require('moment');
 
-
 exports.registerAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'superadmin') {
@@ -14,14 +13,19 @@ exports.registerAdmin = async (req, res) => {
 
     const { email, password, session, startDate, endDate, endTime } = req.body;
 
+    // Keep startDate and endDate as-is (e.g., '07-08-2025')
+    // Format endTime into 24-hour format like '10:55'
+    const formattedEndTime = moment(endTime, 'HH:mm').format('HH:mm');
+
+    // Check for existing admin with same session or overlapping date ranges
     const existing = await Admin1.findOne({
       email,
       $or: [
         { session },
         {
           $and: [
-            { startDate: { $lte: new Date(endDate) } },
-            { endDate: { $gte: new Date(startDate) } }
+            { startDate: { $lte: endDate } },
+            { endDate: { $gte: startDate } }
           ]
         }
       ]
@@ -34,13 +38,14 @@ exports.registerAdmin = async (req, res) => {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
+
     const newAdmin = new Admin1({
       email,
       password: hashedPassword,
       session,
-      startDate,
-      endDate,
-      endTime, 
+      startDate, // Keep as string: '07-08-2025'
+      endDate,   // Keep as string: '07-08-2025'
+      endTime: formattedEndTime, // '10:55'
       createdBy: req.user._id,
     });
 
@@ -55,7 +60,6 @@ exports.registerAdmin = async (req, res) => {
     res.status(500).json({ message: 'Server error.', error: error.message });
   }
 };
-
 
 // exports.getAllAdmins = async (req, res) => {
 //   try {
@@ -209,7 +213,6 @@ exports.verifyOtp = async (req, res) => {
 }; 
 
 
-
 exports.updateAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'superadmin') {
@@ -217,14 +220,14 @@ exports.updateAdmin = async (req, res) => {
     }
 
     const { id } = req.params;
-    const { email, password, session, startDate, endDate } = req.body;
+    const { email, password, session, startDate, endDate, endTime } = req.body;
 
     const existingAdmin = await Admin1.findById(id);
     if (!existingAdmin) {
       return res.status(404).json({ message: 'Admin not found.' });
     }
 
-    // Check for duplicate session or overlapping dates (excluding self)
+    // Check for duplicate session or overlapping dates (excluding current admin)
     const duplicate = await Admin1.findOne({
       _id: { $ne: id },
       email,
@@ -232,8 +235,8 @@ exports.updateAdmin = async (req, res) => {
         { session },
         {
           $and: [
-            { startDate: { $lte: new Date(endDate) } },
-            { endDate: { $gte: new Date(startDate) } }
+            { startDate: { $lte: endDate } },
+            { endDate: { $gte: startDate } }
           ]
         }
       ]
@@ -245,11 +248,15 @@ exports.updateAdmin = async (req, res) => {
       });
     }
 
+    // Format endTime into 24-hour format
+    const formattedEndTime = moment(endTime, 'HH:mm').format('HH:mm');
+
     // Update fields
     existingAdmin.email = email;
     existingAdmin.session = session;
-    existingAdmin.startDate = startDate;
-    existingAdmin.endDate = endDate;
+    existingAdmin.startDate = startDate;  // Keep as string
+    existingAdmin.endDate = endDate;      // Keep as string
+    existingAdmin.endTime = formattedEndTime;
 
     if (password) {
       const hashedPassword = await bcrypt.hash(password, 10);
