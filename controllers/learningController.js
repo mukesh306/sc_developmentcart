@@ -98,27 +98,26 @@ exports.updateLearning = async (req, res) => {
   }
 };
 
+
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
     const user = await User.findById(userId).lean();
-    const userEndDate = user?.endDate;
-    const userEndTime = user?.endTime;
+    const userSession = user?.session;
     const userClassId = user?.className;
 
-    if (!userEndDate || !userEndTime || !userClassId) {
-      return res.status(400).json({ message: 'User endDate, endTime or className not found.' });
+    if (!userSession || !userClassId) {
+      return res.status(400).json({ message: 'User session or className not found.' });
     }
 
-    // ✅ Step 1: Get first score per day — based on endDate and endTime
+    // ✅ Step 1: Get first score per day — with proper ObjectId usage
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
-          userId: new mongoose.Types.ObjectId(userId),
-          endDate: userEndDate,
-          endTime: userEndTime,
-          classId: userClassId.toString()
+          userId: new mongoose.Types.ObjectId(userId), // ✅ FIXED: using `new`
+          session: userSession,
+          classId: userClassId.toString() // ✅ Match as string
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -209,8 +208,7 @@ exports.scoreCard = async (req, res) => {
     // Step 7: Update Assigned averages
     try {
       const assignedList = await Assigned.find({
-        endDate: userEndDate,
-        endTime: userEndTime,
+        session: userSession,
         classId: userClassId
       });
 
@@ -251,6 +249,7 @@ exports.scoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // exports.scoreCard = async (req, res) => {
 //   try {
