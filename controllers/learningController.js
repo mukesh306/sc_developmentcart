@@ -97,28 +97,34 @@ exports.updateLearning = async (req, res) => {
     res.status(500).json({ message: 'Error updating Learning.', error: error.message });
   }
 };
+
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
     const user = await User.findById(userId).lean();
+    console.log("✅ User:", user);
+
     const userClassId = user?.className;
     const endDateStr = user?.endDate?.trim();
     const endTimeStr = user?.endTime?.trim();
 
     if (!userClassId || !endDateStr || !endTimeStr) {
+      console.log("❌ Missing className, endDate, or endTime");
       return res.status(400).json({ message: 'Missing className, endDate or endTime for user.' });
     }
 
-    // ✅ Combine endDate and endTime to form IST-based datetime
     const endDateTime = moment.tz(`${endDateStr} ${endTimeStr}`, 'DD-MM-YYYY HH:mm', 'Asia/Kolkata');
+    console.log("🕒 Computed endDateTime:", endDateTime.format());
+
     if (!endDateTime.isValid()) {
       return res.status(400).json({ message: 'Invalid endDate or endTime format.' });
     }
 
     const todayStr = moment.tz('Asia/Kolkata').format('YYYY-MM-DD');
+    console.log("📅 Today's date (IST):", todayStr);
 
-    // ✅ Step 1: Match only current session scores using exact endDate and endTime
+    // ✅ Get scores only for current session
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
@@ -140,13 +146,15 @@ exports.scoreCard = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } }
     ]);
 
-    // ✅ Step 2: Populate topic and learning info
+    console.log("📊 Raw scores from DB (filtered by session):", rawScores);
+
     const populatedScores = await TopicScore.populate(rawScores, [
       { path: 'topicId', select: 'topic' },
       { path: 'learningId', select: 'name' }
     ]);
 
-    // ✅ Step 3: Prepare scores per day
+    console.log("📚 Populated scores with topic and learning:", populatedScores);
+
     const scoreMap = new Map();
     let minDate = null;
     let maxDate = moment().tz('Asia/Kolkata').startOf('day');
@@ -167,7 +175,11 @@ exports.scoreCard = async (req, res) => {
 
     if (!minDate) minDate = moment().tz('Asia/Kolkata').startOf('day');
 
-    // ✅ Step 4: Fill missing days with null scores
+    console.log("📅 Score date range:", {
+      from: minDate.format('YYYY-MM-DD'),
+      to: maxDate.format('YYYY-MM-DD')
+    });
+
     const fullResult = [];
     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
       const dateStr = m.format('YYYY-MM-DD');
@@ -182,14 +194,14 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
-    // ✅ Step 5: Sort with today first
+    console.log("📈 Final score result (with gaps filled):", fullResult);
+
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
-    // ✅ Step 6: Learning-wise average calculation
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -212,9 +224,12 @@ exports.scoreCard = async (req, res) => {
       };
     });
 
-    // ✅ Step 7: Update Assigned averages
+    console.log("📚 Learning-wise averages:", learningWiseAverage);
+
+    // ✅ Update assigned documents
     try {
       const assignedList = await Assigned.find({ classId: userClassId });
+      console.log("📝 Assigned list:", assignedList);
 
       for (let assign of assignedList) {
         const update = {};
@@ -235,25 +250,29 @@ exports.scoreCard = async (req, res) => {
         mapAvg('learning4', 'learning4Average');
 
         if (Object.keys(update).length > 0) {
+          console.log(`🔄 Updating Assigned ${assign._id} with:`, update);
           await Assigned.updateOne({ _id: assign._id }, { $set: update });
         }
       }
     } catch (err) {
-      console.error('Error updating Assigned averages:', err.message);
+      console.error('❌ Error updating Assigned averages:', err.message);
     }
 
-    // ✅ Step 8: Send Response
+    // ✅ Final response
+    console.log("✅ Sending response:");
+    console.log("Scores:", sortedFinal);
+    console.log("Learning-wise Averages:", learningWiseAverage);
+
     res.status(200).json({
       scores: sortedFinal,
       learningWiseAverage
     });
 
   } catch (error) {
-    console.error('Error in scoreCard:', error);
+    console.error('❌ Error in scoreCard:', error);
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // exports.scoreCard = async (req, res) => {
 //   try {
