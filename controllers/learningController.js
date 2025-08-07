@@ -1960,6 +1960,7 @@ exports.genraliqAverage = async (req, res) => {
 //   }
 // };
 
+
 exports.getGenrelIq = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1990,7 +1991,7 @@ exports.getGenrelIq = async (req, res) => {
         if (item[learningField]?._id) {
           const iqRecord = await GenralIQ.findOne({
             userId,
-            endDate: user.endDate, // ✅ session removed, endDate added
+            endDate: user.endDate,
             classId,
             learningId: item[learningField]._id,
           }).lean();
