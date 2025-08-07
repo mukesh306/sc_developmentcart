@@ -97,7 +97,6 @@ exports.updateLearning = async (req, res) => {
     res.status(500).json({ message: 'Error updating Learning.', error: error.message });
   }
 };
-
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -119,13 +118,14 @@ exports.scoreCard = async (req, res) => {
 
     const todayStr = moment.tz('Asia/Kolkata').format('YYYY-MM-DD');
 
-    // ✅ Step 1: Get first score per day up to user's endDateTime (IST)
+    // ✅ Step 1: Match only current session scores using exact endDate and endTime
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
           classId: userClassId.toString(),
-          scoreDate: { $lte: endDateTime.toDate() } // Only scores before or on endDateTime
+          endDate: endDateStr,
+          endTime: endTimeStr
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -214,9 +214,7 @@ exports.scoreCard = async (req, res) => {
 
     // ✅ Step 7: Update Assigned averages
     try {
-      const assignedList = await Assigned.find({
-        classId: userClassId
-      });
+      const assignedList = await Assigned.find({ classId: userClassId });
 
       for (let assign of assignedList) {
         const update = {};
