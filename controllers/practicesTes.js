@@ -390,9 +390,9 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
       scoreDate: startOfDay,
       session: userSession,
       classId: userClassId,
-      startDate,  // ✅ Added
-      endDate,    // ✅ Added
-      endTime     // ✅ Added
+      startDate,  
+      endDate,  
+      endTime 
     };
 
     if (!existingScore) {
