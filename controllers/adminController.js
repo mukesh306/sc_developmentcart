@@ -4,7 +4,6 @@ const Admin = require('../models/admin');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer'); 
 const moment = require('moment');
-
 exports.registerAdmin = async (req, res) => {
   try {
     if (req.user.role !== 'superadmin') {
@@ -13,18 +12,19 @@ exports.registerAdmin = async (req, res) => {
 
     const { email, password, session, startDate, endDate, endTime } = req.body;
 
-    const formattedStartDate = moment(startDate, 'YYYY-MM-DD').toDate();
-    const formattedEndDate = moment(endDate, 'YYYY-MM-DD').toDate();
-    const formattedEndTime = moment(endTime, 'HH:mm').format('HH:mm'); // Ensures 24-hour format
+    // Keep startDate and endDate as-is (e.g., '07-08-2025')
+    // Format endTime into 24-hour format like '10:55'
+    const formattedEndTime = moment(endTime, 'HH:mm').format('HH:mm');
 
+    // Check for existing admin with same session or overlapping date ranges
     const existing = await Admin1.findOne({
       email,
       $or: [
         { session },
         {
           $and: [
-            { startDate: { $lte: formattedEndDate } },
-            { endDate: { $gte: formattedStartDate } }
+            { startDate: { $lte: endDate } },
+            { endDate: { $gte: startDate } }
           ]
         }
       ]
@@ -42,9 +42,9 @@ exports.registerAdmin = async (req, res) => {
       email,
       password: hashedPassword,
       session,
-      startDate: formattedStartDate,
-      endDate: formattedEndDate,
-      endTime: formattedEndTime,
+      startDate, // Keep as string: '07-08-2025'
+      endDate,   // Keep as string: '07-08-2025'
+      endTime: formattedEndTime, // '10:55'
       createdBy: req.user._id,
     });
 
@@ -59,7 +59,6 @@ exports.registerAdmin = async (req, res) => {
     res.status(500).json({ message: 'Server error.', error: error.message });
   }
 };
-
 
 // exports.getAllAdmins = async (req, res) => {
 //   try {
