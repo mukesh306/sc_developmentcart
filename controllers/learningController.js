@@ -98,26 +98,34 @@ exports.updateLearning = async (req, res) => {
   }
 };
 
-
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
     const user = await User.findById(userId).lean();
-    const userSession = user?.session;
     const userClassId = user?.className;
+    const endDate = user?.endDate;
+    const endTime = user?.endTime;
 
-    if (!userSession || !userClassId) {
-      return res.status(400).json({ message: 'User session or className not found.' });
+    if (!endDate || !endTime || !userClassId) {
+      return res.status(400).json({ message: 'User endDate, endTime, or className not found.' });
     }
 
-    // ✅ Step 1: Get first score per day — with proper ObjectId usage
+    // ✅ Check if session is expired based on Indian Time
+    const nowIndia = moment().tz('Asia/Kolkata');
+    const endDateTimeIndia = moment.tz(`${moment(endDate).format('YYYY-MM-DD')} ${endTime}`, 'YYYY-MM-DD HH:mm', 'Asia/Kolkata');
+
+    const isExpired = nowIndia.isAfter(endDateTimeIndia);
+    if (isExpired) {
+      return res.status(403).json({ message: 'Session expired. Please contact support.' });
+    }
+
+    // ✅ Get scores
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
-          userId: new mongoose.Types.ObjectId(userId), // ✅ FIXED: using `new`
-          session: userSession,
-          classId: userClassId.toString() // ✅ Match as string
+          userId: new mongoose.Types.ObjectId(userId),
+          classId: userClassId.toString()
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -132,13 +140,11 @@ exports.scoreCard = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } }
     ]);
 
-    // Step 2: Populate learning & topic
     const populatedScores = await TopicScore.populate(rawScores, [
       { path: 'topicId', select: 'topic' },
       { path: 'learningId', select: 'name' }
     ]);
 
-    // Step 3: Normalize scores
     const scoreMap = new Map();
     let minDate = null;
     let maxDate = moment().startOf('day');
@@ -160,7 +166,6 @@ exports.scoreCard = async (req, res) => {
 
     if (!minDate) minDate = moment().startOf('day');
 
-    // Step 4: Fill missing dates
     const fullResult = [];
     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
       const dateStr = m.format('YYYY-MM-DD');
@@ -175,14 +180,12 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
-    // Step 5: Today's first, then ascending
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
-    // Step 6: Learning-wise average
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -205,10 +208,8 @@ exports.scoreCard = async (req, res) => {
       };
     });
 
-    // Step 7: Update Assigned averages
     try {
       const assignedList = await Assigned.find({
-        session: userSession,
         classId: userClassId
       });
 
@@ -238,7 +239,6 @@ exports.scoreCard = async (req, res) => {
       console.error('Error updating Assigned averages:', err.message);
     }
 
-    // Step 8: Final Response
     res.status(200).json({
       scores: sortedFinal,
       learningWiseAverage
