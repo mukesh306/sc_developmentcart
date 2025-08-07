@@ -504,6 +504,8 @@ exports.updateAssigned = async (req, res) => {
 //   }
 // };
 
+
+
 exports.assignBonusPoint = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -617,8 +619,8 @@ exports.assignBonusPoint = async (req, res) => {
         startDate: monthlyCount === 30 ? currentStreak.startDate : null,
         endDate: monthlyCount === 30 ? currentStreak.endDate : null
       },
-      weeklyBonus: markingSetting.weeklyBonus || 0,   // 👈 DO NOT CHANGE
-      monthlyBonus: markingSetting.monthlyBonus || 0  // 👈 DO NOT CHANGE
+      weeklyBonus: markingSetting.weeklyBonus || 0,  
+      monthlyBonus: markingSetting.monthlyBonus || 0  
     });
 
   } catch (error) {
