@@ -342,7 +342,6 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -373,12 +372,13 @@ exports.getUserProfile = async (req, res) => {
       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }
 
+    // Handle invalid class
     if (!classDetails || classDetails.price == null) {
       classId = null;
       await User.findByIdAndUpdate(userId, { className: null });
       user.className = null;
     } else {
-      const institutionUpdatedBy = classDetails?.updatedBy || null;
+      const institutionUpdatedBy = classDetails.updatedBy || null;
       if (institutionUpdatedBy) {
         await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
 
@@ -397,7 +397,7 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Auto update from updatedBy
+    // ✅ Auto update session-related fields from updatedBy
     if (user.updatedBy) {
       const updates = {};
 
@@ -426,29 +426,30 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Session expiry check (no timezone logic, just moment)
+    // ✅ Session Expiry Check
     if (user.updatedBy?.endDate && user.updatedBy?.endTime) {
-      const rawEndDate = user.updatedBy.endDate.trim();   // "07-08-2025"
-      const rawEndTime = user.updatedBy.endTime.trim();   // "10:42"
-      const endDateTimeStr = `${rawEndDate} ${rawEndTime}`; // "07-08-2025 10:42"
+      const rawEndDate = user.updatedBy.endDate.trim(); // e.g. "07-08-2025"
+      const rawEndTime = user.updatedBy.endTime.trim(); // e.g. "11:24"
 
+      const endDateTimeStr = `${rawEndDate} ${rawEndTime}`; // "07-08-2025 11:24"
       const endDateTime = moment(endDateTimeStr, 'DD-MM-YYYY HH:mm', true);
       const currentDateTime = moment();
 
-      console.log("🧪 Debug: Expiry Check");
-      console.log(`→ Parsed End DateTime: ${endDateTime.format('DD-MM-YYYY HH:mm')} (valid: ${endDateTime.isValid()})`);
-      console.log(`→ Current Time:         ${currentDateTime.format('DD-MM-YYYY HH:mm')}`);
+      console.log("🧪 Checking session expiry");
+      console.log("→ Now:", currentDateTime.format('DD-MM-YYYY HH:mm:ss'));
+      console.log("→ End:", endDateTime.format('DD-MM-YYYY HH:mm:ss'));
+      console.log("→ isExpired:", currentDateTime.isSameOrAfter(endDateTime));
 
       if (!endDateTime.isValid()) {
-        console.warn("⚠️ Invalid endDateTime format. Expected: DD-MM-YYYY HH:mm");
-      } else if (currentDateTime.isAfter(endDateTime)) {
+        console.warn("⚠️ Invalid endDateTime. Format must be DD-MM-YYYY HH:mm");
+      } else if (currentDateTime.isSameOrAfter(endDateTime)) {
         if (user.status !== 'no') {
           await User.findByIdAndUpdate(userId, { status: 'no' });
           user.status = 'no';
-          console.log("⛔ Session expired. User status updated to 'no'.");
+          console.log("⛔ Session expired. User status set to 'no'");
         }
       } else {
-        console.log("✅ Session is still active.");
+        console.log("✅ Session is still valid");
       }
     }
 
