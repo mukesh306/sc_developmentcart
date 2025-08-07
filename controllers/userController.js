@@ -8,7 +8,8 @@ const nodemailer = require('nodemailer');
 const Admin1 = require('../models/admin1'); 
 const fs = require('fs');
 const path = require('path');
-const moment = require('moment');
+// const moment = require('moment');
+const moment = require('moment-timezone');
 
 exports.signup = async (req, res) => {
   try {
@@ -372,7 +373,6 @@ exports.getUserProfile = async (req, res) => {
       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }
 
-    // Handle invalid class
     if (!classDetails || classDetails.price == null) {
       classId = null;
       await User.findByIdAndUpdate(userId, { className: null });
@@ -397,7 +397,7 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Auto update session-related fields from updatedBy
+    // 🔄 Sync session-related fields from updatedBy to user
     if (user.updatedBy) {
       const updates = {};
 
@@ -426,13 +426,12 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ✅ Session Expiry Check
+    // ⏰ Check if session expired
     if (user.updatedBy?.endDate && user.updatedBy?.endTime) {
-      const rawEndDate = user.updatedBy.endDate.trim(); // e.g. "07-08-2025"
-      const rawEndTime = user.updatedBy.endTime.trim(); // e.g. "11:24"
+      const rawEndDate = user.updatedBy.endDate.trim();  // Format: "DD-MM-YYYY"
+      const rawEndTime = user.updatedBy.endTime.trim();  // Format: "HH:mm"
 
-      const endDateTimeStr = `${rawEndDate} ${rawEndTime}`; // "07-08-2025 11:24"
-      const endDateTime = moment(endDateTimeStr, 'DD-MM-YYYY HH:mm', true);
+      const endDateTime = moment(`${rawEndDate} ${rawEndTime}`, 'DD-MM-YYYY HH:mm');
       const currentDateTime = moment();
 
       console.log("🧪 Checking session expiry");
@@ -453,6 +452,7 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
+    // 🎯 Final formatted response
     const formattedUser = {
       ...user._doc,
       status: user.status,
