@@ -708,48 +708,44 @@ exports.getAssignedListUserpractice = async (req, res) => {
 //   }
 // };
 
+
 exports.platformDetails = async (req, res) => {
   try {
-    const userId = req.params.id;
-    const requestedLevel = parseInt(req.query.level || 0);
-    const classId = req.query.classId; // classId request se le rahe hain
+    const userId = req.params.id; 
+    const requestedLevel = parseInt(req.query.level || 0); 
 
-    if (!userId || !classId) {
-      return res.status(400).json({ message: 'userId and classId are required.' });
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required.' });
     }
 
     const user = await User.findById(userId).lean();
-    if (!user?.session) {
-      return res.status(400).json({ message: 'User session not found.' });
+    if (!user?.session || !user?.className) {
+      return res.status(400).json({ message: 'User session or className not found.' });
     }
 
     const session = user.session;
+    const classId = user.className.toString();
 
-    // LearningScore fetch
     const scores = await LearningScore.find({
       userId,
       session,
       classId,
       strickStatus: true
-    })
-      .populate('learningId', 'name')
+    }).populate('learningId', 'name')
       .sort({ scoreDate: 1 })
       .lean();
 
-    // TopicScore fetch
     const topicScores = await TopicScore.find({
       userId,
       session,
       classId,
       strickStatus: true
-    })
-      .populate('learningId', 'name')
+    }).populate('learningId', 'name')
       .sort({ updatedAt: 1 })
       .lean();
 
     const scoreMap = new Map();
 
-    // Practice scores
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
@@ -766,7 +762,6 @@ exports.platformDetails = async (req, res) => {
       }
     });
 
-    // Topic scores
     topicScores.forEach(score => {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
@@ -813,7 +808,6 @@ exports.platformDetails = async (req, res) => {
     let weeklyBonusToAdd = 0, monthlyBonusToAdd = 0;
     let datesToAddBonus = [], datesToDeduct = [], weeklyBonusDatesToAdd = [], monthlyBonusDatesToAdd = [];
 
-    // Daily experience and deductions
     for (let m = moment(startDate); m.diff(endDate, 'days') <= 0; m.add(1, 'days')) {
       const currentDate = m.format('YYYY-MM-DD');
       const isToday = currentDate === moment().format('YYYY-MM-DD');
@@ -852,7 +846,6 @@ exports.platformDetails = async (req, res) => {
       }
     }
 
-    // Weekly bonus
     for (let i = 6; i < result.length; i++) {
       const streak = result.slice(i - 6, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -869,7 +862,6 @@ exports.platformDetails = async (req, res) => {
       }
     }
 
-    // Monthly bonus
     for (let i = 29; i < result.length; i++) {
       const streak = result.slice(i - 29, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -886,7 +878,6 @@ exports.platformDetails = async (req, res) => {
       }
     }
 
-    // Update user bonus points
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -915,7 +906,6 @@ exports.platformDetails = async (req, res) => {
       await User.findByIdAndUpdate(userId, updateData);
     }
 
-    // Level calculation
     const updatedUser = await User.findById(userId).select('bonuspoint userLevelData session className').lean();
     const newLevel = await getLevelFromPoints(updatedUser.bonuspoint);
 
@@ -936,7 +926,6 @@ exports.platformDetails = async (req, res) => {
       }
     });
 
-    // Save to Experienceleavel
     const existingExp = await Experienceleavel.findOne({ userId, session, classId });
     if (existingExp) {
       await Experienceleavel.findByIdAndUpdate(existingExp._id, {
@@ -951,7 +940,6 @@ exports.platformDetails = async (req, res) => {
       });
     }
 
-    // Level filter
     let matched = requestedLevel && requestedLevel !== newLevel
       ? updatedUser.userLevelData.find(l => l.level === requestedLevel)?.data || []
       : result;
