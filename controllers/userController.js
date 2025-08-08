@@ -1151,6 +1151,7 @@ exports.UserSessionDetails = async (req, res) => {
   }
 };
 
+
 exports.getActiveSessionUsers = async (req, res) => {
   try {
     const { startDate, endDate, fields } = req.query;
@@ -1159,6 +1160,7 @@ exports.getActiveSessionUsers = async (req, res) => {
       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
     }
 
+    // Parse input dates
     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
 
@@ -1166,9 +1168,9 @@ exports.getActiveSessionUsers = async (req, res) => {
       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
     }
 
-    const baseUrl = req.protocol + '://' + req.get('host');
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-    // Helper function to get users from a collection
+    // Helper function to get filtered users from any model
     async function getUsersFromCollection(Model) {
       const users = await Model.find({
         startDate: { $exists: true, $ne: '' },
@@ -1179,35 +1181,30 @@ exports.getActiveSessionUsers = async (req, res) => {
         .populate('countryId', 'name')
         .lean();
 
-      // Filter users whose session overlaps with the given date range
-      const filtered = users.filter(user => {
+      return users.filter(user => {
         const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
         const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
         if (!userStart.isValid() || !userEnd.isValid()) return false;
 
-        // Check if user's session overlaps with requested date range
+        // Check if user session overlaps with input range
         return !(userEnd.isBefore(start) || userStart.isAfter(end));
       });
-
-      return filtered;
     }
 
-    // Get users from both collections
+    // Fetch users from both collections in parallel
     const [usersFromUser, usersFromUserHistory] = await Promise.all([
       getUsersFromCollection(User),
       getUsersFromCollection(UserHistory)
     ]);
 
-    // Combine and deduplicate by _id (convert to string)
+    // Combine users and deduplicate by _id
     const combinedMap = new Map();
-
     [...usersFromUser, ...usersFromUserHistory].forEach(user => {
       combinedMap.set(user._id.toString(), user);
     });
-
     const combinedUsers = Array.from(combinedMap.values());
 
-    // Enrich users with class data, file URL fixing, and formatting
+    // Enrich each user with class data and fix file URLs
     const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
       let classData = null;
       let classId = user.className;
