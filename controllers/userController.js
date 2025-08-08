@@ -1274,7 +1274,6 @@ exports.UserSessionDetails = async (req, res) => {
 //   }
 // };
 
-
 exports.getActiveSessionUsers = async (req, res) => {
   try {
     const { startDate, endDate, fields } = req.query;
@@ -1296,6 +1295,7 @@ exports.getActiveSessionUsers = async (req, res) => {
 
     const baseUrl = req.protocol + '://' + req.get('host');
 
+    // Fetch only users that have at least one date set in either updatedBy or previousUpdatedBy
     const users = await User.find({
       $or: [
         { "updatedBy.startDate": { $exists: true, $ne: '' }, "updatedBy.endDate": { $exists: true, $ne: '' } },
@@ -1307,27 +1307,20 @@ exports.getActiveSessionUsers = async (req, res) => {
       .populate('countryId', 'name')
       .lean();
 
-    // Helper to parse dates from object
-    const getValidDates = (obj) => {
-      if (!obj?.startDate || !obj?.endDate) return null;
+    // Helper function to check if a date range is inside the filter
+    const dateInRange = (obj, start, end) => {
+      if (!obj?.startDate || !obj?.endDate) return false;
       const s = moment(obj.startDate, 'DD-MM-YYYY', true).startOf('day');
       const e = moment(obj.endDate, 'DD-MM-YYYY', true).endOf('day');
-      if (!s.isValid() || !e.isValid()) return null;
-      return { start: s, end: e };
+      if (!s.isValid() || !e.isValid()) return false;
+      return !s.isBefore(start) && !e.isAfter(end);
     };
 
     const enrichedUsers = await Promise.all(users.map(async (user) => {
-      const updatedByDates = getValidDates(user.updatedBy);
-      const prevUpdatedByDates = getValidDates(user.previousUpdatedBy);
-
-      // Pass filter if either updatedBy or previousUpdatedBy is inside the given range
+      // ✅ Pass if updatedBy OR previousUpdatedBy matches the filter
       const passesFilter =
-        (updatedByDates &&
-          !updatedByDates.start.isBefore(start) &&
-          !updatedByDates.end.isAfter(end)) ||
-        (prevUpdatedByDates &&
-          !prevUpdatedByDates.start.isBefore(start) &&
-          !prevUpdatedByDates.end.isAfter(end));
+        dateInRange(user.updatedBy, start, end) ||
+        dateInRange(user.previousUpdatedBy, start, end);
 
       if (!passesFilter) return null;
 
@@ -1347,7 +1340,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         }
       }
 
-      // Convert file paths to URLs
+      // Convert file paths to full URLs
       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
       fileFields.forEach(field => {
         if (user[field]) {
