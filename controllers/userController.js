@@ -1301,8 +1301,8 @@ exports.getActiveSessionUsers = async (req, res) => {
       .populate('stateId', 'name')
       .populate('countryId', 'name')
        .populate('updatedBy', 'startDate endDate') // ✅ populate only required fields
-  .populate('previousUpdatedBy', 'startDate endDate') // ✅
-  .populate('previousUpdatedBy', 'startDate endDate') // ✅
+  .populate('previousUpdatedBy', 'email startDate endDate') // ✅
+  .populate('previousUpdatedBy', 'email startDate endDate') // ✅
       .lean();
 
     // Helper function for checking date overlap
