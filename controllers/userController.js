@@ -1173,6 +1173,7 @@ exports.UserSessionDetails = async (req, res) => {
 };
 
 
+
 // exports.getActiveSessionUsers = async (req, res) => {
 //   try {
 //     const { startDate, endDate, fields } = req.query;
@@ -1225,7 +1226,6 @@ exports.UserSessionDetails = async (req, res) => {
 //         }
 //       }
 
-//       // Fix file paths to clean URLs
 //       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
 //       fileFields.forEach(field => {
 //         if (user[field]) {
@@ -1243,6 +1243,7 @@ exports.UserSessionDetails = async (req, res) => {
 //         country: user.countryId?.name || '',
 //         state: user.stateId?.name || '',
 //         city: user.cityId?.name || '',
+//         platformDetails: user._id?.toString() || null // ✅ Only this line is added
 //       };
 
 //       if (fields) {
@@ -1279,35 +1280,58 @@ exports.getActiveSessionUsers = async (req, res) => {
     const { startDate, endDate, fields } = req.query;
 
     if (!startDate || !endDate) {
-      return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
+      return res.status(400).json({
+        message: 'Both startDate and endDate are required in DD-MM-YYYY format.'
+      });
     }
 
     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
 
     if (!start.isValid() || !end.isValid()) {
-      return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
+      return res.status(400).json({
+        message: 'Invalid date format. Use DD-MM-YYYY.'
+      });
     }
 
     const baseUrl = req.protocol + '://' + req.get('host');
 
     const users = await User.find({
-      startDate: { $exists: true, $ne: '' },
-      endDate: { $exists: true, $ne: '' }
+      $or: [
+        { "updatedBy.startDate": { $exists: true, $ne: '' }, "updatedBy.endDate": { $exists: true, $ne: '' } },
+        { "previousUpdatedBy.startDate": { $exists: true, $ne: '' }, "previousUpdatedBy.endDate": { $exists: true, $ne: '' } }
+      ]
     })
       .populate('cityId', 'name')
       .populate('stateId', 'name')
       .populate('countryId', 'name')
       .lean();
 
+    // Helper to parse dates from object
+    const getValidDates = (obj) => {
+      if (!obj?.startDate || !obj?.endDate) return null;
+      const s = moment(obj.startDate, 'DD-MM-YYYY', true).startOf('day');
+      const e = moment(obj.endDate, 'DD-MM-YYYY', true).endOf('day');
+      if (!s.isValid() || !e.isValid()) return null;
+      return { start: s, end: e };
+    };
+
     const enrichedUsers = await Promise.all(users.map(async (user) => {
-      const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
-      const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
+      const updatedByDates = getValidDates(user.updatedBy);
+      const prevUpdatedByDates = getValidDates(user.previousUpdatedBy);
 
-      if (!userStart.isValid() || !userEnd.isValid() || userStart.isBefore(start) || userEnd.isAfter(end)) {
-        return null;
-      }
+      // Pass filter if either updatedBy or previousUpdatedBy is inside the given range
+      const passesFilter =
+        (updatedByDates &&
+          !updatedByDates.start.isBefore(start) &&
+          !updatedByDates.end.isAfter(end)) ||
+        (prevUpdatedByDates &&
+          !prevUpdatedByDates.start.isBefore(start) &&
+          !prevUpdatedByDates.end.isAfter(end));
 
+      if (!passesFilter) return null;
+
+      // Class / institution lookup
       let classData = null;
       let classId = user.className;
 
@@ -1317,15 +1341,13 @@ exports.getActiveSessionUsers = async (req, res) => {
         const institution = school || college;
 
         if (institution && institution.price != null) {
-          classData = {
-            id: classId,
-            name: institution.name
-          };
+          classData = { id: classId, name: institution.name };
         } else {
           classId = null;
         }
       }
 
+      // Convert file paths to URLs
       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
       fileFields.forEach(field => {
         if (user[field]) {
@@ -1343,7 +1365,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         country: user.countryId?.name || '',
         state: user.stateId?.name || '',
         city: user.cityId?.name || '',
-        platformDetails: user._id?.toString() || null // ✅ Only this line is added
+        platformDetails: user._id?.toString() || null
       };
 
       if (fields) {
@@ -1363,7 +1385,7 @@ exports.getActiveSessionUsers = async (req, res) => {
     const resultUsers = enrichedUsers.filter(Boolean);
 
     res.status(200).json({
-      message: 'Filtered users by session range.',
+      message: 'Filtered users by session range (updatedBy or previousUpdatedBy).',
       count: resultUsers.length,
       users: resultUsers
     });
