@@ -1367,20 +1367,48 @@ exports.getActiveSessionUsers = async (req, res) => {
   }
 };
 
+
 exports.getUserHistories = async (req, res) => {
   try {
-    const { originalUserId } = req.query; // optional filter by user
+    const { originalUserId } = req.query; // optional filter
 
     let filter = {};
     if (originalUserId && mongoose.Types.ObjectId.isValid(originalUserId)) {
       filter.originalUserId = originalUserId;
     }
 
-    // Fetch histories with optional filter, latest first
-    const histories = await UserHistory.find(filter)
-      .sort({ clonedAt: -1 })  // newest first
-      .populate('originalUserId', 'firstName lastName email')  // populate basic user info
+    let histories = await UserHistory.find(filter)
+      .populate('updatedBy', 'email session startDate endDate endTime name role')
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
+      .sort({ clonedAt: -1 })
       .lean();
+
+    // Add computed fields like institutionName, classOrYear for each history
+    for (const hist of histories) {
+      // Fetch class details from School or College
+      let classDetails = null;
+      if (hist.className && mongoose.Types.ObjectId.isValid(hist.className)) {
+        classDetails = (await School.findById(hist.className).lean()) || (await College.findById(hist.className).lean());
+      }
+
+      // institutionName priority: schoolName > collegeName > instituteName (from hist)
+      hist.institutionName = hist.schoolName || hist.collegeName || hist.instituteName || '';
+      hist.institutionType = hist.studentType || '';
+
+      hist.classOrYear = (classDetails && classDetails.price != null) ? classDetails.name : null;
+
+      // Attach readable country/state/city names
+      hist.country = hist.countryId?.name || '';
+      hist.state = hist.stateId?.name || '';
+      hist.city = hist.cityId?.name || '';
+
+      // Clean up to keep only useful fields (optional)
+      delete hist.countryId;
+      delete hist.stateId;
+      delete hist.cityId;
+    }
 
     res.status(200).json({
       message: 'User histories fetched successfully',
@@ -1390,6 +1418,6 @@ exports.getUserHistories = async (req, res) => {
 
   } catch (error) {
     console.error('Error fetching User Histories:', error);
-    res.status(500).json({ message: 'Server error', error: error.message });
+    res.status(500).json({ message: error.message });
   }
 };
