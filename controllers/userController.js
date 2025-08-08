@@ -1274,6 +1274,7 @@ exports.UserSessionDetails = async (req, res) => {
 //   }
 // };
 
+
 exports.getActiveSessionUsers = async (req, res) => {
   try {
     const { startDate, endDate, fields } = req.query;
@@ -1295,81 +1296,80 @@ exports.getActiveSessionUsers = async (req, res) => {
 
     const baseUrl = req.protocol + '://' + req.get('host');
 
-    // Fetch all users (filter in JS for flexibility)
     const users = await User.find({})
       .populate('cityId', 'name')
       .populate('stateId', 'name')
       .populate('countryId', 'name')
       .lean();
 
-    // Helper: check if user’s range overlaps with filter range
+    // Helper function for checking date overlap
     const dateOverlaps = (obj, filterStart, filterEnd) => {
       if (!obj?.startDate || !obj?.endDate) return false;
       const s = moment(obj.startDate, 'DD-MM-YYYY', true).startOf('day');
       const e = moment(obj.endDate, 'DD-MM-YYYY', true).endOf('day');
       if (!s.isValid() || !e.isValid()) return false;
-      // Overlaps if start <= filterEnd AND end >= filterStart
       return s.isSameOrBefore(filterEnd) && e.isSameOrAfter(filterStart);
     };
 
-    const enrichedUsers = await Promise.all(users.map(async (user) => {
-      // ✅ Include if updatedBy OR previousUpdatedBy overlaps with filter
-      const passesFilter =
-        dateOverlaps(user.updatedBy, start, end) ||
-        dateOverlaps(user.previousUpdatedBy, start, end);
+    const enrichedUsers = await Promise.all(
+      users.map(async (user) => {
+        const hasOverlap =
+          dateOverlaps(user.updatedBy, start, end) ||
+          dateOverlaps(user.previousUpdatedBy, start, end);
 
-      if (!passesFilter) return null;
+        if (!hasOverlap) return null;
 
-      // Class / institution lookup
-      let classData = null;
-      let classId = user.className;
+        // Class / institution lookup
+        let classData = null;
+        let classId = user.className;
 
-      if (mongoose.Types.ObjectId.isValid(classId)) {
-        const school = await School.findById(classId);
-        const college = school ? null : await College.findById(classId);
-        const institution = school || college;
+        if (mongoose.Types.ObjectId.isValid(classId)) {
+          const school = await School.findById(classId);
+          const college = school ? null : await College.findById(classId);
+          const institution = school || college;
 
-        if (institution && institution.price != null) {
-          classData = { id: classId, name: institution.name };
-        } else {
-          classId = null;
-        }
-      }
-
-      // Convert file paths to full URLs
-      const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
-      fileFields.forEach(field => {
-        if (user[field]) {
-          const match = user[field].match(/uploads\/(.+)$/);
-          if (match && match[1]) {
-            user[field] = `${baseUrl}/uploads/${match[1]}`;
+          if (institution && institution.price != null) {
+            classData = { id: classId, name: institution.name };
+          } else {
+            classId = null;
           }
         }
-      });
 
-      const formatted = {
-        ...user,
-        className: classData ? classData.id : null,
-        classOrYear: classData ? classData.name : null,
-        country: user.countryId?.name || '',
-        state: user.stateId?.name || '',
-        city: user.cityId?.name || '',
-        platformDetails: user._id?.toString() || null
-      };
-
-      if (fields) {
-        const requestedFields = fields.split(',');
-        const limited = {};
-        requestedFields.forEach(f => {
-          if (formatted.hasOwnProperty(f)) {
-            limited[f] = formatted[f];
+        // File paths to full URLs
+        const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
+        fileFields.forEach((field) => {
+          if (user[field]) {
+            const match = user[field].match(/uploads\/(.+)$/);
+            if (match && match[1]) {
+              user[field] = `${baseUrl}/uploads/${match[1]}`;
+            }
           }
         });
-        return limited;
-      }
 
-      return formatted;
-    }));
+        const formatted = {
+          ...user,
+          className: classData ? classData.id : null,
+          classOrYear: classData ? classData.name : null,
+          country: user.countryId?.name || '',
+          state: user.stateId?.name || '',
+          city: user.cityId?.name || '',
+          platformDetails: user._id?.toString() || null
+        };
+
+        if (fields) {
+          const requestedFields = fields.split(',');
+          const limited = {};
+          requestedFields.forEach((f) => {
+            if (formatted.hasOwnProperty(f)) {
+              limited[f] = formatted[f];
+            }
+          });
+          return limited;
+        }
+
+        return formatted;
+      })
+    );
 
     const resultUsers = enrichedUsers.filter(Boolean);
 
