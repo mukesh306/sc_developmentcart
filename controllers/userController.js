@@ -351,8 +351,14 @@ exports.getUserProfile = async (req, res) => {
       .populate('countryId', 'name')
       .populate('stateId', 'name')
       .populate('cityId', 'name')
-      .populate('updatedBy', 'email session startDate endDate endTime')
-      .populate('previousUpdatedBy', 'email session startDate endDate endTime');
+       .populate({
+    path: 'updatedBy',
+    select: 'email session startDate endDate endTime name role' // jitne fields chahiye add karein
+  })
+  .populate({
+    path: 'previousUpdatedBy',
+    select: 'email session startDate endDate endTime name role'
+  });
 
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
@@ -401,8 +407,15 @@ exports.getUserProfile = async (req, res) => {
           .populate('countryId', 'name')
           .populate('stateId', 'name')
           .populate('cityId', 'name')
-          .populate('updatedBy', 'email session startDate endDate endTime')
-          .populate('previousUpdatedBy', 'email session startDate endDate endTime');
+         .populate({
+    path: 'updatedBy',
+    select: 'email session startDate endDate endTime name role' // jitne fields chahiye add karein
+  })
+  .populate({
+    path: 'previousUpdatedBy',
+    select: 'email session startDate endDate endTime name role'
+  });
+
 
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
