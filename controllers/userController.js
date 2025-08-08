@@ -6,6 +6,8 @@ const School = require('../models/school');
 const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 const Admin1 = require('../models/admin1'); 
+const UserHistory = require('../models/UserHistory');
+
 const fs = require('fs');
 const path = require('path');
 // const moment = require('moment');
@@ -343,6 +345,7 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
+
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -351,14 +354,10 @@ exports.getUserProfile = async (req, res) => {
       .populate('countryId', 'name')
       .populate('stateId', 'name')
       .populate('cityId', 'name')
-       .populate({
-    path: 'updatedBy',
-    select: 'email session startDate endDate endTime name role' // jitne fields chahiye add karein
-  })
-  .populate({
-    path: 'previousUpdatedBy',
-    select: 'email session startDate endDate endTime name role'
-  });
+      .populate({
+        path: 'updatedBy',
+        select: 'email session startDate endDate endTime name role'
+      });
 
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
@@ -388,46 +387,27 @@ exports.getUserProfile = async (req, res) => {
       const institutionUpdatedBy = classDetails.updatedBy || null;
 
       if (institutionUpdatedBy) {
-        const existingUser = await User.findById(userId).select('updatedBy previousUpdatedBy');
+        const existingUser = await User.findById(userId).select('updatedBy');
 
-        // Agar updatedBy alag hai
         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
-          const updates = { updatedBy: institutionUpdatedBy };
+          
+          // 📝 Clone current user data to UserHistory before updating
+          const userData = user.toObject();
+          delete userData._id; // Optional: keep _id or remove depending on your schema
+          await UserHistory.create({
+            ...user.toObject(),
+            originalUserId: user._id // Link history to main user
+          });
 
-          // Purana updatedBy ko previousUpdatedBy me save karo
-          if (existingUser.updatedBy) {
-            updates.previousUpdatedBy = existingUser.updatedBy;
-          }
-
-          await User.findByIdAndUpdate(userId, updates);
-        }
-
-        // Re-fetch user
-        user = await User.findById(userId)
-          .populate('countryId', 'name')
-          .populate('stateId', 'name')
-          .populate('cityId', 'name')
-         .populate({
-    path: 'updatedBy',
-    select: 'email session startDate endDate endTime name role' // jitne fields chahiye add karein
-  })
-  .populate({
-    path: 'previousUpdatedBy',
-    select: 'email session startDate endDate endTime name role'
-  });
-
-
-        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-        }
-        if (user.marksheet && fs.existsSync(user.marksheet)) {
-          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+          // Update updatedBy in main user
+          await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+          user.updatedBy = institutionUpdatedBy;
         }
       }
     }
 
     // 🔄 Sync session-related fields from updatedBy to user
-    if (user.updatedBy) {
+    if (user.updatedBy && typeof user.updatedBy === 'object') {
       const updates = {};
 
       if (user.updatedBy.session && user.session !== user.updatedBy.session) {
@@ -450,7 +430,7 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ⏰ Check if session expired based on endDate only
+    // ⏰ Check if session expired based on endDate
     if (user.updatedBy?.endDate) {
       const rawEndDate = user.updatedBy.endDate.trim();
       const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
@@ -476,8 +456,7 @@ exports.getUserProfile = async (req, res) => {
       city: user.cityId?.name || '',
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
-      updatedBy: user.updatedBy || null,
-      previousUpdatedBy: user.previousUpdatedBy || null
+      updatedBy: user.updatedBy || null
     };
 
     if (classDetails && classDetails.price != null) {
@@ -494,7 +473,6 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // exports.getUserProfile = async (req, res) => {
 //   try {
