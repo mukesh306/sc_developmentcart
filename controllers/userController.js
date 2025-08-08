@@ -345,7 +345,6 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -392,12 +391,14 @@ exports.getUserProfile = async (req, res) => {
         const existingUser = await User.findById(userId).select('updatedBy');
 
         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
-
-          // 📝 Clone current user data into UserHistory
+          // 📝 Clone current user into UserHistory
           const userData = user.toObject();
-          userData._id = new mongoose.Types.ObjectId(); // new ID for history
-          userData.originalUserId = user._id; // link history to main user
-          await UserHistory.create(userData);
+          delete userData._id; // remove old id
+          await UserHistory.create({
+            ...userData,
+            _id: new mongoose.Types.ObjectId(), // unique id for history
+            originalUserId: user._id
+          });
 
           // Update updatedBy in main user
           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
@@ -1369,8 +1370,7 @@ exports.getActiveSessionUsers = async (req, res) => {
 
 exports.getUserHistory = async (req, res) => {
   try {
-    const userId = req.params.id; // Pass original user ID in URL
-
+    const userId = req.params.id; 
     const history = await UserHistory.find({ originalUserId: userId })
       .populate('countryId', 'name')
       .populate('stateId', 'name')
