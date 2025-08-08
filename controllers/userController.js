@@ -1367,23 +1367,29 @@ exports.getActiveSessionUsers = async (req, res) => {
   }
 };
 
-
-exports.getUserHistory = async (req, res) => {
+exports.getUserHistories = async (req, res) => {
   try {
-    const userId = req.params.id; 
-    const history = await UserHistory.find({ originalUserId: userId })
-      .populate('countryId', 'name')
-      .populate('stateId', 'name')
-      .populate('cityId', 'name')
-      .populate('updatedBy', 'name email')
-      .sort({ createdAt: -1 }); // Latest first
+    const { originalUserId } = req.query; // optional filter by user
+
+    let filter = {};
+    if (originalUserId && mongoose.Types.ObjectId.isValid(originalUserId)) {
+      filter.originalUserId = originalUserId;
+    }
+
+    // Fetch histories with optional filter, latest first
+    const histories = await UserHistory.find(filter)
+      .sort({ clonedAt: -1 })  // newest first
+      .populate('originalUserId', 'firstName lastName email')  // populate basic user info
+      .lean();
 
     res.status(200).json({
-      message: 'User history fetched successfully',
-      history
+      message: 'User histories fetched successfully',
+      count: histories.length,
+      data: histories
     });
+
   } catch (error) {
-    console.error('Get User History Error:', error);
-    res.status(500).json({ message: error.message });
+    console.error('Error fetching User Histories:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
