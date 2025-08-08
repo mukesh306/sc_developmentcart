@@ -345,7 +345,6 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -367,7 +366,9 @@ exports.getUserProfile = async (req, res) => {
     let classDetails = null;
 
     if (mongoose.Types.ObjectId.isValid(classId)) {
-      classDetails = await School.findById(classId) || await College.findById(classId);
+      classDetails =
+        (await School.findById(classId)) ||
+        (await College.findById(classId));
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
@@ -390,14 +391,12 @@ exports.getUserProfile = async (req, res) => {
         const existingUser = await User.findById(userId).select('updatedBy');
 
         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
-          
-          // 📝 Clone current user data to UserHistory before updating
+
+          // 📝 Clone current user data into UserHistory
           const userData = user.toObject();
-          delete userData._id; // Optional: keep _id or remove depending on your schema
-          await UserHistory.create({
-            ...user.toObject(),
-            originalUserId: user._id // Link history to main user
-          });
+          userData._id = new mongoose.Types.ObjectId(); // new ID for history
+          userData.originalUserId = user._id; // link history to main user
+          await UserHistory.create(userData);
 
           // Update updatedBy in main user
           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
@@ -430,7 +429,7 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ⏰ Check if session expired based on endDate
+    // ⏰ Check if session expired
     if (user.updatedBy?.endDate) {
       const rawEndDate = user.updatedBy.endDate.trim();
       const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
