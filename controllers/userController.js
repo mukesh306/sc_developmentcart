@@ -1274,7 +1274,6 @@ exports.UserSessionDetails = async (req, res) => {
 //   }
 // };
 
-
 exports.getActiveSessionUsers = async (req, res) => {
   try {
     const { startDate, endDate, fields } = req.query;
@@ -1296,38 +1295,28 @@ exports.getActiveSessionUsers = async (req, res) => {
 
     const baseUrl = req.protocol + '://' + req.get('host');
 
-    const users = await User.find({
-      $or: [
-        { "updatedBy.startDate": { $exists: true, $ne: '' }, "updatedBy.endDate": { $exists: true, $ne: '' } },
-        { "previousUpdatedBy.startDate": { $exists: true, $ne: '' }, "previousUpdatedBy.endDate": { $exists: true, $ne: '' } }
-      ]
-    })
+    // Fetch all users (filter in JS for flexibility)
+    const users = await User.find({})
       .populate('cityId', 'name')
       .populate('stateId', 'name')
       .populate('countryId', 'name')
       .lean();
 
-    // Helper to parse dates from object
-    const getValidDates = (obj) => {
-      if (!obj?.startDate || !obj?.endDate) return null;
+    // Helper: check if user’s range overlaps with filter range
+    const dateOverlaps = (obj, filterStart, filterEnd) => {
+      if (!obj?.startDate || !obj?.endDate) return false;
       const s = moment(obj.startDate, 'DD-MM-YYYY', true).startOf('day');
       const e = moment(obj.endDate, 'DD-MM-YYYY', true).endOf('day');
-      if (!s.isValid() || !e.isValid()) return null;
-      return { start: s, end: e };
+      if (!s.isValid() || !e.isValid()) return false;
+      // Overlaps if start <= filterEnd AND end >= filterStart
+      return s.isSameOrBefore(filterEnd) && e.isSameOrAfter(filterStart);
     };
 
     const enrichedUsers = await Promise.all(users.map(async (user) => {
-      const updatedByDates = getValidDates(user.updatedBy);
-      const prevUpdatedByDates = getValidDates(user.previousUpdatedBy);
-
-      // Pass filter if either updatedBy or previousUpdatedBy is inside the given range
+      // ✅ Include if updatedBy OR previousUpdatedBy overlaps with filter
       const passesFilter =
-        (updatedByDates &&
-          !updatedByDates.start.isBefore(start) &&
-          !updatedByDates.end.isAfter(end)) ||
-        (prevUpdatedByDates &&
-          !prevUpdatedByDates.start.isBefore(start) &&
-          !prevUpdatedByDates.end.isAfter(end));
+        dateOverlaps(user.updatedBy, start, end) ||
+        dateOverlaps(user.previousUpdatedBy, start, end);
 
       if (!passesFilter) return null;
 
@@ -1347,7 +1336,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         }
       }
 
-      // Convert file paths to URLs
+      // Convert file paths to full URLs
       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
       fileFields.forEach(field => {
         if (user[field]) {
@@ -1385,7 +1374,7 @@ exports.getActiveSessionUsers = async (req, res) => {
     const resultUsers = enrichedUsers.filter(Boolean);
 
     res.status(200).json({
-      message: 'Filtered users by session range (updatedBy or previousUpdatedBy).',
+      message: 'Filtered users by overlapping session range (updatedBy or previousUpdatedBy).',
       count: resultUsers.length,
       users: resultUsers
     });
