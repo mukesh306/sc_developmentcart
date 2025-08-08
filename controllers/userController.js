@@ -1367,23 +1367,21 @@ exports.getActiveSessionUsers = async (req, res) => {
 };
 
 
-
 exports.getUserHistory = async (req, res) => {
   try {
-    const userId = req.params.userId;
+    const userId = req.params.id; // Pass original user ID in URL
 
     const history = await UserHistory.find({ originalUserId: userId })
       .populate('countryId', 'name')
       .populate('stateId', 'name')
       .populate('cityId', 'name')
-      .populate('updatedBy', 'email session startDate endDate endTime name role')
-      .sort({ createdAt: -1 }); // latest first
+      .populate('updatedBy', 'name email')
+      .sort({ createdAt: -1 }); // Latest first
 
     res.status(200).json({
       message: 'User history fetched successfully',
       history
     });
-
   } catch (error) {
     console.error('Get User History Error:', error);
     res.status(500).json({ message: error.message });
