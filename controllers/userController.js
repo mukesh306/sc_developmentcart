@@ -6,6 +6,8 @@ const School = require('../models/school');
 const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 const Admin1 = require('../models/admin1'); 
+const UserHistory = require('../models/UserHistory');
+
 const fs = require('fs');
 const path = require('path');
 // const moment = require('moment');
@@ -343,7 +345,6 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -352,7 +353,10 @@ exports.getUserProfile = async (req, res) => {
       .populate('countryId', 'name')
       .populate('stateId', 'name')
       .populate('cityId', 'name')
-      .populate('updatedBy', 'email session startDate endDate endTime');
+      .populate({
+        path: 'updatedBy',
+        select: 'email session startDate endDate endTime name role'
+      });
 
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
@@ -362,7 +366,9 @@ exports.getUserProfile = async (req, res) => {
     let classDetails = null;
 
     if (mongoose.Types.ObjectId.isValid(classId)) {
-      classDetails = await School.findById(classId) || await College.findById(classId);
+      classDetails =
+        (await School.findById(classId)) ||
+        (await College.findById(classId));
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
@@ -380,26 +386,29 @@ exports.getUserProfile = async (req, res) => {
       user.className = null;
     } else {
       const institutionUpdatedBy = classDetails.updatedBy || null;
+
       if (institutionUpdatedBy) {
-        await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+        const existingUser = await User.findById(userId).select('updatedBy');
 
-        user = await User.findById(userId)
-          .populate('countryId', 'name')
-          .populate('stateId', 'name')
-          .populate('cityId', 'name')
-          .populate('updatedBy', 'email session startDate endDate endTime');
+        if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
+          // 📝 Clone current user into UserHistory
+          const userData = user.toObject();
+          delete userData._id; // remove old id
+          await UserHistory.create({
+            ...userData,
+            _id: new mongoose.Types.ObjectId(), // unique id for history
+            originalUserId: user._id
+          });
 
-        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-        }
-        if (user.marksheet && fs.existsSync(user.marksheet)) {
-          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+          // Update updatedBy in main user
+          await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+          user.updatedBy = institutionUpdatedBy;
         }
       }
     }
 
     // 🔄 Sync session-related fields from updatedBy to user
-    if (user.updatedBy) {
+    if (user.updatedBy && typeof user.updatedBy === 'object') {
       const updates = {};
 
       if (user.updatedBy.session && user.session !== user.updatedBy.session) {
@@ -422,17 +431,11 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ⏰ Check if session expired based on endDate only (not endTime)
+    // ⏰ Check if session expired
     if (user.updatedBy?.endDate) {
       const rawEndDate = user.updatedBy.endDate.trim();
-
       const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
       const currentDate = moment.tz('Asia/Kolkata');
-
-      console.log("🧪 Checking session expiry based on endDate only");
-      console.log("→ Now (IST):", currentDate.format('DD-MM-YYYY HH:mm:ss'));
-      console.log("→ End of endDate (IST):", endDate.format('DD-MM-YYYY HH:mm:ss'));
-      console.log("→ isExpired:", currentDate.isSameOrAfter(endDate));
 
       if (!endDate.isValid()) {
         console.warn("⚠️ Invalid endDate. Format must be DD-MM-YYYY");
@@ -440,10 +443,7 @@ exports.getUserProfile = async (req, res) => {
         if (user.status !== 'no') {
           await User.findByIdAndUpdate(userId, { status: 'no' });
           user.status = 'no';
-          console.log("⛔ Session expired. User status set to 'no'");
         }
-      } else {
-        console.log("✅ Session is still valid");
       }
     }
 
@@ -1152,107 +1152,6 @@ exports.UserSessionDetails = async (req, res) => {
 };
 
 
-// exports.getActiveSessionUsers = async (req, res) => {
-//   try {
-//     const { startDate, endDate, fields } = req.query;
-
-//     if (!startDate || !endDate) {
-//       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
-//     }
-
-//     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
-//     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
-
-//     if (!start.isValid() || !end.isValid()) {
-//       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
-//     }
-
-//     const baseUrl = req.protocol + '://' + req.get('host');
-
-//     const users = await User.find({
-//       startDate: { $exists: true, $ne: '' },
-//       endDate: { $exists: true, $ne: '' }
-//     })
-//       .populate('cityId', 'name')
-//       .populate('stateId', 'name')
-//       .populate('countryId', 'name')
-//       .lean();
-
-//     const enrichedUsers = await Promise.all(users.map(async (user) => {
-//       const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
-//       const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
-
-//       if (!userStart.isValid() || !userEnd.isValid() || userStart.isBefore(start) || userEnd.isAfter(end)) {
-//         return null;
-//       }
-
-//       let classData = null;
-//       let classId = user.className;
-
-//       if (mongoose.Types.ObjectId.isValid(classId)) {
-//         const school = await School.findById(classId);
-//         const college = school ? null : await College.findById(classId);
-//         const institution = school || college;
-
-//         if (institution && institution.price != null) {
-//           classData = {
-//             id: classId,
-//             name: institution.name
-//           };
-//         } else {
-//           classId = null;
-//         }
-//       }
-
-//       // Fix file paths to clean URLs
-//       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
-//       fileFields.forEach(field => {
-//         if (user[field]) {
-//           const match = user[field].match(/uploads\/(.+)$/);
-//           if (match && match[1]) {
-//             user[field] = `${baseUrl}/uploads/${match[1]}`;
-//           }
-//         }
-//       });
-
-//       const formatted = {
-//         ...user,
-//         className: classData ? classData.id : null,
-//         classOrYear: classData ? classData.name : null,
-//         country: user.countryId?.name || '',
-//         state: user.stateId?.name || '',
-//         city: user.cityId?.name || '',
-//       };
-
-//       if (fields) {
-//         const requestedFields = fields.split(',');
-//         const limited = {};
-//         requestedFields.forEach(f => {
-//           if (formatted.hasOwnProperty(f)) {
-//             limited[f] = formatted[f];
-//           }
-//         });
-//         return limited;
-//       }
-
-//       return formatted;
-//     }));
-
-//     const resultUsers = enrichedUsers.filter(Boolean);
-
-//     res.status(200).json({
-//       message: 'Filtered users by session range.',
-//       count: resultUsers.length,
-//       users: resultUsers
-//     });
-
-//   } catch (error) {
-//     console.error('Error filtering users by session range:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-
 exports.getActiveSessionUsers = async (req, res) => {
   try {
     const { startDate, endDate, fields } = req.query;
@@ -1261,6 +1160,7 @@ exports.getActiveSessionUsers = async (req, res) => {
       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
     }
 
+    // Parse input dates
     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
 
@@ -1268,25 +1168,44 @@ exports.getActiveSessionUsers = async (req, res) => {
       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
     }
 
-    const baseUrl = req.protocol + '://' + req.get('host');
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-    const users = await User.find({
-      startDate: { $exists: true, $ne: '' },
-      endDate: { $exists: true, $ne: '' }
-    })
-      .populate('cityId', 'name')
-      .populate('stateId', 'name')
-      .populate('countryId', 'name')
-      .lean();
+    // Helper function to get filtered users from any model
+    async function getUsersFromCollection(Model) {
+      const users = await Model.find({
+        startDate: { $exists: true, $ne: '' },
+        endDate: { $exists: true, $ne: '' }
+      })
+        .populate('cityId', 'name')
+        .populate('stateId', 'name')
+        .populate('countryId', 'name')
+        .lean();
 
-    const enrichedUsers = await Promise.all(users.map(async (user) => {
-      const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
-      const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
+      return users.filter(user => {
+        const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
+        const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
+        if (!userStart.isValid() || !userEnd.isValid()) return false;
 
-      if (!userStart.isValid() || !userEnd.isValid() || userStart.isBefore(start) || userEnd.isAfter(end)) {
-        return null;
-      }
+        // Check if user session overlaps with input range
+        return !(userEnd.isBefore(start) || userStart.isAfter(end));
+      });
+    }
 
+    // Fetch users from both collections in parallel
+    const [usersFromUser, usersFromUserHistory] = await Promise.all([
+      getUsersFromCollection(User),
+      getUsersFromCollection(UserHistory)
+    ]);
+
+    // Combine users and deduplicate by _id
+    const combinedMap = new Map();
+    [...usersFromUser, ...usersFromUserHistory].forEach(user => {
+      combinedMap.set(user._id.toString(), user);
+    });
+    const combinedUsers = Array.from(combinedMap.values());
+
+    // Enrich each user with class data and fix file URLs
+    const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
       let classData = null;
       let classId = user.className;
 
@@ -1322,7 +1241,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         country: user.countryId?.name || '',
         state: user.stateId?.name || '',
         city: user.cityId?.name || '',
-        platformDetails: user._id?.toString() || null // ✅ Only this line is added
+        platformDetails: user._id?.toString() || null
       };
 
       if (fields) {
@@ -1339,16 +1258,183 @@ exports.getActiveSessionUsers = async (req, res) => {
       return formatted;
     }));
 
-    const resultUsers = enrichedUsers.filter(Boolean);
-
     res.status(200).json({
-      message: 'Filtered users by session range.',
-      count: resultUsers.length,
-      users: resultUsers
+      message: 'Filtered users by session range from User and UserHistory collections.',
+      count: enrichedUsers.length,
+      users: enrichedUsers
     });
 
   } catch (error) {
     console.error('Error filtering users by session range:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+// exports.getActiveSessionUsers = async (req, res) => {
+//   try {
+//     const { startDate, endDate, fields } = req.query;
+
+//     if (!startDate || !endDate) {
+//       return res.status(400).json({
+//         message: 'Both startDate and endDate are required in DD-MM-YYYY format.'
+//       });
+//     }
+
+//     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
+//     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
+
+//     if (!start.isValid() || !end.isValid()) {
+//       return res.status(400).json({
+//         message: 'Invalid date format. Use DD-MM-YYYY.'
+//       });
+//     }
+
+//     const baseUrl = req.protocol + '://' + req.get('host');
+
+//     const users = await User.find({})
+//       .populate('cityId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('countryId', 'name')
+//        .populate('updatedBy', 'startDate endDate') // ✅ populate only required fields
+//   .populate('previousUpdatedBy', 'email startDate endDate') // ✅
+//   .populate('previousUpdatedBy', 'email startDate endDate') // ✅
+//       .lean();
+
+//     // Helper function for checking date overlap
+//     const dateOverlaps = (obj, filterStart, filterEnd) => {
+//       if (!obj?.startDate || !obj?.endDate) return false;
+//       const s = moment(obj.startDate, 'DD-MM-YYYY', true).startOf('day');
+//       const e = moment(obj.endDate, 'DD-MM-YYYY', true).endOf('day');
+//       if (!s.isValid() || !e.isValid()) return false;
+//       return s.isSameOrBefore(filterEnd) && e.isSameOrAfter(filterStart);
+//     };
+
+//     const enrichedUsers = await Promise.all(
+//       users.map(async (user) => {
+//         const hasOverlap =
+//           dateOverlaps(user.updatedBy, start, end) ||
+//           dateOverlaps(user.previousUpdatedBy, start, end);
+
+//         if (!hasOverlap) return null;
+
+//         // Class / institution lookup
+//         let classData = null;
+//         let classId = user.className;
+
+//         if (mongoose.Types.ObjectId.isValid(classId)) {
+//           const school = await School.findById(classId);
+//           const college = school ? null : await College.findById(classId);
+//           const institution = school || college;
+
+//           if (institution && institution.price != null) {
+//             classData = { id: classId, name: institution.name };
+//           } else {
+//             classId = null;
+//           }
+//         }
+
+//         // File paths to full URLs
+//         const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
+//         fileFields.forEach((field) => {
+//           if (user[field]) {
+//             const match = user[field].match(/uploads\/(.+)$/);
+//             if (match && match[1]) {
+//               user[field] = `${baseUrl}/uploads/${match[1]}`;
+//             }
+//           }
+//         });
+
+//         const formatted = {
+//           ...user,
+//           className: classData ? classData.id : null,
+//           classOrYear: classData ? classData.name : null,
+//           country: user.countryId?.name || '',
+//           state: user.stateId?.name || '',
+//           city: user.cityId?.name || '',
+//           platformDetails: user._id?.toString() || null
+//         };
+
+//         if (fields) {
+//           const requestedFields = fields.split(',');
+//           const limited = {};
+//           requestedFields.forEach((f) => {
+//             if (formatted.hasOwnProperty(f)) {
+//               limited[f] = formatted[f];
+//             }
+//           });
+//           return limited;
+//         }
+
+//         return formatted;
+//       })
+//     );
+
+//     const resultUsers = enrichedUsers.filter(Boolean);
+
+//     res.status(200).json({
+//       message: 'Filtered users by overlapping session range (updatedBy or previousUpdatedBy).',
+//       count: resultUsers.length,
+//       users: resultUsers
+//     });
+
+//   } catch (error) {
+//     console.error('Error filtering users by session range:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
+exports.getUserHistories = async (req, res) => {
+  try {
+    const { originalUserId } = req.query; // optional filter
+
+    let filter = {};
+    if (originalUserId && mongoose.Types.ObjectId.isValid(originalUserId)) {
+      filter.originalUserId = originalUserId;
+    }
+
+    let histories = await UserHistory.find(filter)
+      .populate('updatedBy', 'email session startDate endDate endTime name role')
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
+      .sort({ clonedAt: -1 })
+      .lean();
+
+    // Add computed fields like institutionName, classOrYear for each history
+    for (const hist of histories) {
+      // Fetch class details from School or College
+      let classDetails = null;
+      if (hist.className && mongoose.Types.ObjectId.isValid(hist.className)) {
+        classDetails = (await School.findById(hist.className).lean()) || (await College.findById(hist.className).lean());
+      }
+
+      // institutionName priority: schoolName > collegeName > instituteName (from hist)
+      hist.institutionName = hist.schoolName || hist.collegeName || hist.instituteName || '';
+      hist.institutionType = hist.studentType || '';
+
+      hist.classOrYear = (classDetails && classDetails.price != null) ? classDetails.name : null;
+
+      // Attach readable country/state/city names
+      hist.country = hist.countryId?.name || '';
+      hist.state = hist.stateId?.name || '';
+      hist.city = hist.cityId?.name || '';
+
+      // Clean up to keep only useful fields (optional)
+      delete hist.countryId;
+      delete hist.stateId;
+      delete hist.cityId;
+    }
+
+    res.status(200).json({
+      message: 'User histories fetched successfully',
+      count: histories.length,
+      data: histories
+    });
+
+  } catch (error) {
+    console.error('Error fetching User Histories:', error);
     res.status(500).json({ message: error.message });
   }
 };

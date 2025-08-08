@@ -67,6 +67,7 @@ platformDetails:{
     default: 'no'
   },
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
+ 
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
