@@ -1160,7 +1160,6 @@ exports.getActiveSessionUsers = async (req, res) => {
       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
     }
 
-    // Parse input dates
     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
 
@@ -1170,7 +1169,7 @@ exports.getActiveSessionUsers = async (req, res) => {
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-    // Helper function to get filtered users from any model
+    // Fetch users from a collection and strictly filter those fully inside date range
     async function getUsersFromCollection(Model) {
       const users = await Model.find({
         startDate: { $exists: true, $ne: '' },
@@ -1186,8 +1185,8 @@ exports.getActiveSessionUsers = async (req, res) => {
         const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
         if (!userStart.isValid() || !userEnd.isValid()) return false;
 
-        // Check if user session overlaps with input range
-        return !(userEnd.isBefore(start) || userStart.isAfter(end));
+        // Strictly inside the given range (inclusive)
+        return userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
       });
     }
 
@@ -1197,14 +1196,14 @@ exports.getActiveSessionUsers = async (req, res) => {
       getUsersFromCollection(UserHistory)
     ]);
 
-    // Combine users and deduplicate by _id
+    // Combine and remove duplicates by _id
     const combinedMap = new Map();
     [...usersFromUser, ...usersFromUserHistory].forEach(user => {
       combinedMap.set(user._id.toString(), user);
     });
     const combinedUsers = Array.from(combinedMap.values());
 
-    // Enrich each user with class data and fix file URLs
+    // Enrich users with class data, fix file URLs, and filter fields if requested
     const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
       let classData = null;
       let classId = user.className;
@@ -1259,7 +1258,7 @@ exports.getActiveSessionUsers = async (req, res) => {
     }));
 
     res.status(200).json({
-      message: 'Filtered users by session range from User and UserHistory collections.',
+      message: 'Filtered users fully inside session range from User and UserHistory.',
       count: enrichedUsers.length,
       users: enrichedUsers
     });
@@ -1269,7 +1268,6 @@ exports.getActiveSessionUsers = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // exports.getActiveSessionUsers = async (req, res) => {
 //   try {
