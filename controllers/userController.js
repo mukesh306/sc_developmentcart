@@ -1151,6 +1151,127 @@ exports.UserSessionDetails = async (req, res) => {
   }
 };
 
+exports.getActiveSessionUsers = async (req, res) => {
+  try {
+    const { startDate, endDate, fields } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
+    }
+
+    const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
+    const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
+
+    if (!start.isValid() || !end.isValid()) {
+      return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
+    }
+
+    const baseUrl = req.protocol + '://' + req.get('host');
+
+    // Helper function to get users from a collection
+    async function getUsersFromCollection(Model) {
+      const users = await Model.find({
+        startDate: { $exists: true, $ne: '' },
+        endDate: { $exists: true, $ne: '' }
+      })
+        .populate('cityId', 'name')
+        .populate('stateId', 'name')
+        .populate('countryId', 'name')
+        .lean();
+
+      // Filter users whose session overlaps with the given date range
+      const filtered = users.filter(user => {
+        const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
+        const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
+        if (!userStart.isValid() || !userEnd.isValid()) return false;
+
+        // Check if user's session overlaps with requested date range
+        return !(userEnd.isBefore(start) || userStart.isAfter(end));
+      });
+
+      return filtered;
+    }
+
+    // Get users from both collections
+    const [usersFromUser, usersFromUserHistory] = await Promise.all([
+      getUsersFromCollection(User),
+      getUsersFromCollection(UserHistory)
+    ]);
+
+    // Combine and deduplicate by _id (convert to string)
+    const combinedMap = new Map();
+
+    [...usersFromUser, ...usersFromUserHistory].forEach(user => {
+      combinedMap.set(user._id.toString(), user);
+    });
+
+    const combinedUsers = Array.from(combinedMap.values());
+
+    // Enrich users with class data, file URL fixing, and formatting
+    const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
+      let classData = null;
+      let classId = user.className;
+
+      if (mongoose.Types.ObjectId.isValid(classId)) {
+        const school = await School.findById(classId);
+        const college = school ? null : await College.findById(classId);
+        const institution = school || college;
+
+        if (institution && institution.price != null) {
+          classData = {
+            id: classId,
+            name: institution.name
+          };
+        } else {
+          classId = null;
+        }
+      }
+
+      const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
+      fileFields.forEach(field => {
+        if (user[field]) {
+          const match = user[field].match(/uploads\/(.+)$/);
+          if (match && match[1]) {
+            user[field] = `${baseUrl}/uploads/${match[1]}`;
+          }
+        }
+      });
+
+      const formatted = {
+        ...user,
+        className: classData ? classData.id : null,
+        classOrYear: classData ? classData.name : null,
+        country: user.countryId?.name || '',
+        state: user.stateId?.name || '',
+        city: user.cityId?.name || '',
+        platformDetails: user._id?.toString() || null
+      };
+
+      if (fields) {
+        const requestedFields = fields.split(',');
+        const limited = {};
+        requestedFields.forEach(f => {
+          if (formatted.hasOwnProperty(f)) {
+            limited[f] = formatted[f];
+          }
+        });
+        return limited;
+      }
+
+      return formatted;
+    }));
+
+    res.status(200).json({
+      message: 'Filtered users by session range from User and UserHistory collections.',
+      count: enrichedUsers.length,
+      users: enrichedUsers
+    });
+
+  } catch (error) {
+    console.error('Error filtering users by session range:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
 
 // exports.getActiveSessionUsers = async (req, res) => {
@@ -1158,91 +1279,104 @@ exports.UserSessionDetails = async (req, res) => {
 //     const { startDate, endDate, fields } = req.query;
 
 //     if (!startDate || !endDate) {
-//       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
+//       return res.status(400).json({
+//         message: 'Both startDate and endDate are required in DD-MM-YYYY format.'
+//       });
 //     }
 
 //     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
 //     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
 
 //     if (!start.isValid() || !end.isValid()) {
-//       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
+//       return res.status(400).json({
+//         message: 'Invalid date format. Use DD-MM-YYYY.'
+//       });
 //     }
 
 //     const baseUrl = req.protocol + '://' + req.get('host');
 
-//     const users = await User.find({
-//       startDate: { $exists: true, $ne: '' },
-//       endDate: { $exists: true, $ne: '' }
-//     })
+//     const users = await User.find({})
 //       .populate('cityId', 'name')
 //       .populate('stateId', 'name')
 //       .populate('countryId', 'name')
+//        .populate('updatedBy', 'startDate endDate') // ✅ populate only required fields
+//   .populate('previousUpdatedBy', 'email startDate endDate') // ✅
+//   .populate('previousUpdatedBy', 'email startDate endDate') // ✅
 //       .lean();
 
-//     const enrichedUsers = await Promise.all(users.map(async (user) => {
-//       const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
-//       const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
+//     // Helper function for checking date overlap
+//     const dateOverlaps = (obj, filterStart, filterEnd) => {
+//       if (!obj?.startDate || !obj?.endDate) return false;
+//       const s = moment(obj.startDate, 'DD-MM-YYYY', true).startOf('day');
+//       const e = moment(obj.endDate, 'DD-MM-YYYY', true).endOf('day');
+//       if (!s.isValid() || !e.isValid()) return false;
+//       return s.isSameOrBefore(filterEnd) && e.isSameOrAfter(filterStart);
+//     };
 
-//       if (!userStart.isValid() || !userEnd.isValid() || userStart.isBefore(start) || userEnd.isAfter(end)) {
-//         return null;
-//       }
+//     const enrichedUsers = await Promise.all(
+//       users.map(async (user) => {
+//         const hasOverlap =
+//           dateOverlaps(user.updatedBy, start, end) ||
+//           dateOverlaps(user.previousUpdatedBy, start, end);
 
-//       let classData = null;
-//       let classId = user.className;
+//         if (!hasOverlap) return null;
 
-//       if (mongoose.Types.ObjectId.isValid(classId)) {
-//         const school = await School.findById(classId);
-//         const college = school ? null : await College.findById(classId);
-//         const institution = school || college;
+//         // Class / institution lookup
+//         let classData = null;
+//         let classId = user.className;
 
-//         if (institution && institution.price != null) {
-//           classData = {
-//             id: classId,
-//             name: institution.name
-//           };
-//         } else {
-//           classId = null;
-//         }
-//       }
+//         if (mongoose.Types.ObjectId.isValid(classId)) {
+//           const school = await School.findById(classId);
+//           const college = school ? null : await College.findById(classId);
+//           const institution = school || college;
 
-//       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
-//       fileFields.forEach(field => {
-//         if (user[field]) {
-//           const match = user[field].match(/uploads\/(.+)$/);
-//           if (match && match[1]) {
-//             user[field] = `${baseUrl}/uploads/${match[1]}`;
+//           if (institution && institution.price != null) {
+//             classData = { id: classId, name: institution.name };
+//           } else {
+//             classId = null;
 //           }
 //         }
-//       });
 
-//       const formatted = {
-//         ...user,
-//         className: classData ? classData.id : null,
-//         classOrYear: classData ? classData.name : null,
-//         country: user.countryId?.name || '',
-//         state: user.stateId?.name || '',
-//         city: user.cityId?.name || '',
-//         platformDetails: user._id?.toString() || null // ✅ Only this line is added
-//       };
-
-//       if (fields) {
-//         const requestedFields = fields.split(',');
-//         const limited = {};
-//         requestedFields.forEach(f => {
-//           if (formatted.hasOwnProperty(f)) {
-//             limited[f] = formatted[f];
+//         // File paths to full URLs
+//         const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
+//         fileFields.forEach((field) => {
+//           if (user[field]) {
+//             const match = user[field].match(/uploads\/(.+)$/);
+//             if (match && match[1]) {
+//               user[field] = `${baseUrl}/uploads/${match[1]}`;
+//             }
 //           }
 //         });
-//         return limited;
-//       }
 
-//       return formatted;
-//     }));
+//         const formatted = {
+//           ...user,
+//           className: classData ? classData.id : null,
+//           classOrYear: classData ? classData.name : null,
+//           country: user.countryId?.name || '',
+//           state: user.stateId?.name || '',
+//           city: user.cityId?.name || '',
+//           platformDetails: user._id?.toString() || null
+//         };
+
+//         if (fields) {
+//           const requestedFields = fields.split(',');
+//           const limited = {};
+//           requestedFields.forEach((f) => {
+//             if (formatted.hasOwnProperty(f)) {
+//               limited[f] = formatted[f];
+//             }
+//           });
+//           return limited;
+//         }
+
+//         return formatted;
+//       })
+//     );
 
 //     const resultUsers = enrichedUsers.filter(Boolean);
 
 //     res.status(200).json({
-//       message: 'Filtered users by session range.',
+//       message: 'Filtered users by overlapping session range (updatedBy or previousUpdatedBy).',
 //       count: resultUsers.length,
 //       users: resultUsers
 //     });
@@ -1252,120 +1386,6 @@ exports.UserSessionDetails = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
-
-
-exports.getActiveSessionUsers = async (req, res) => {
-  try {
-    const { startDate, endDate, fields } = req.query;
-
-    if (!startDate || !endDate) {
-      return res.status(400).json({
-        message: 'Both startDate and endDate are required in DD-MM-YYYY format.'
-      });
-    }
-
-    const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
-    const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
-
-    if (!start.isValid() || !end.isValid()) {
-      return res.status(400).json({
-        message: 'Invalid date format. Use DD-MM-YYYY.'
-      });
-    }
-
-    const baseUrl = req.protocol + '://' + req.get('host');
-
-    const users = await User.find({})
-      .populate('cityId', 'name')
-      .populate('stateId', 'name')
-      .populate('countryId', 'name')
-       .populate('updatedBy', 'startDate endDate') // ✅ populate only required fields
-  .populate('previousUpdatedBy', 'email startDate endDate') // ✅
-  .populate('previousUpdatedBy', 'email startDate endDate') // ✅
-      .lean();
-
-    // Helper function for checking date overlap
-    const dateOverlaps = (obj, filterStart, filterEnd) => {
-      if (!obj?.startDate || !obj?.endDate) return false;
-      const s = moment(obj.startDate, 'DD-MM-YYYY', true).startOf('day');
-      const e = moment(obj.endDate, 'DD-MM-YYYY', true).endOf('day');
-      if (!s.isValid() || !e.isValid()) return false;
-      return s.isSameOrBefore(filterEnd) && e.isSameOrAfter(filterStart);
-    };
-
-    const enrichedUsers = await Promise.all(
-      users.map(async (user) => {
-        const hasOverlap =
-          dateOverlaps(user.updatedBy, start, end) ||
-          dateOverlaps(user.previousUpdatedBy, start, end);
-
-        if (!hasOverlap) return null;
-
-        // Class / institution lookup
-        let classData = null;
-        let classId = user.className;
-
-        if (mongoose.Types.ObjectId.isValid(classId)) {
-          const school = await School.findById(classId);
-          const college = school ? null : await College.findById(classId);
-          const institution = school || college;
-
-          if (institution && institution.price != null) {
-            classData = { id: classId, name: institution.name };
-          } else {
-            classId = null;
-          }
-        }
-
-        // File paths to full URLs
-        const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
-        fileFields.forEach((field) => {
-          if (user[field]) {
-            const match = user[field].match(/uploads\/(.+)$/);
-            if (match && match[1]) {
-              user[field] = `${baseUrl}/uploads/${match[1]}`;
-            }
-          }
-        });
-
-        const formatted = {
-          ...user,
-          className: classData ? classData.id : null,
-          classOrYear: classData ? classData.name : null,
-          country: user.countryId?.name || '',
-          state: user.stateId?.name || '',
-          city: user.cityId?.name || '',
-          platformDetails: user._id?.toString() || null
-        };
-
-        if (fields) {
-          const requestedFields = fields.split(',');
-          const limited = {};
-          requestedFields.forEach((f) => {
-            if (formatted.hasOwnProperty(f)) {
-              limited[f] = formatted[f];
-            }
-          });
-          return limited;
-        }
-
-        return formatted;
-      })
-    );
-
-    const resultUsers = enrichedUsers.filter(Boolean);
-
-    res.status(200).json({
-      message: 'Filtered users by overlapping session range (updatedBy or previousUpdatedBy).',
-      count: resultUsers.length,
-      users: resultUsers
-    });
-
-  } catch (error) {
-    console.error('Error filtering users by session range:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
 
 
 exports.getUserHistories = async (req, res) => {
