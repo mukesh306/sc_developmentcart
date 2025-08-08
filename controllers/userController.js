@@ -343,7 +343,6 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -352,7 +351,8 @@ exports.getUserProfile = async (req, res) => {
       .populate('countryId', 'name')
       .populate('stateId', 'name')
       .populate('cityId', 'name')
-      .populate('updatedBy', 'email session startDate endDate endTime');
+      .populate('updatedBy', 'email session startDate endDate endTime')
+      .populate('previousUpdatedBy', 'email session startDate endDate endTime');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
@@ -380,14 +380,29 @@ exports.getUserProfile = async (req, res) => {
       user.className = null;
     } else {
       const institutionUpdatedBy = classDetails.updatedBy || null;
-      if (institutionUpdatedBy) {
-        await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
 
+      if (institutionUpdatedBy) {
+        const existingUser = await User.findById(userId).select('updatedBy previousUpdatedBy');
+
+        // Agar updatedBy alag hai
+        if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
+          const updates = { updatedBy: institutionUpdatedBy };
+
+          // Purana updatedBy ko previousUpdatedBy me save karo
+          if (existingUser.updatedBy) {
+            updates.previousUpdatedBy = existingUser.updatedBy;
+          }
+
+          await User.findByIdAndUpdate(userId, updates);
+        }
+
+        // Re-fetch user
         user = await User.findById(userId)
           .populate('countryId', 'name')
           .populate('stateId', 'name')
           .populate('cityId', 'name')
-          .populate('updatedBy', 'email session startDate endDate endTime');
+          .populate('updatedBy', 'email session startDate endDate endTime')
+          .populate('previousUpdatedBy', 'email session startDate endDate endTime');
 
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
@@ -422,17 +437,11 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ⏰ Check if session expired based on endDate only (not endTime)
+    // ⏰ Check if session expired based on endDate only
     if (user.updatedBy?.endDate) {
       const rawEndDate = user.updatedBy.endDate.trim();
-
       const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
       const currentDate = moment.tz('Asia/Kolkata');
-
-      console.log("🧪 Checking session expiry based on endDate only");
-      console.log("→ Now (IST):", currentDate.format('DD-MM-YYYY HH:mm:ss'));
-      console.log("→ End of endDate (IST):", endDate.format('DD-MM-YYYY HH:mm:ss'));
-      console.log("→ isExpired:", currentDate.isSameOrAfter(endDate));
 
       if (!endDate.isValid()) {
         console.warn("⚠️ Invalid endDate. Format must be DD-MM-YYYY");
@@ -440,10 +449,7 @@ exports.getUserProfile = async (req, res) => {
         if (user.status !== 'no') {
           await User.findByIdAndUpdate(userId, { status: 'no' });
           user.status = 'no';
-          console.log("⛔ Session expired. User status set to 'no'");
         }
-      } else {
-        console.log("✅ Session is still valid");
       }
     }
 
@@ -457,7 +463,8 @@ exports.getUserProfile = async (req, res) => {
       city: user.cityId?.name || '',
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
-      updatedBy: user.updatedBy || null
+      updatedBy: user.updatedBy || null,
+      previousUpdatedBy: user.previousUpdatedBy || null
     };
 
     if (classDetails && classDetails.price != null) {
@@ -474,6 +481,7 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // exports.getUserProfile = async (req, res) => {
 //   try {

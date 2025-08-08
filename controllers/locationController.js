@@ -1,6 +1,7 @@
 
 const location = require('../models/location');
 
+
 exports.createLocation = async (req, res) => {
   try {
     const { name, type, parentId } = req.body;
