@@ -345,6 +345,7 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
+
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -1361,6 +1362,30 @@ exports.getActiveSessionUsers = async (req, res) => {
 
   } catch (error) {
     console.error('Error filtering users by session range:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+exports.getUserHistory = async (req, res) => {
+  try {
+    const userId = req.params.userId;
+
+    const history = await UserHistory.find({ originalUserId: userId })
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
+      .populate('updatedBy', 'email session startDate endDate endTime name role')
+      .sort({ createdAt: -1 }); // latest first
+
+    res.status(200).json({
+      message: 'User history fetched successfully',
+      history
+    });
+
+  } catch (error) {
+    console.error('Get User History Error:', error);
     res.status(500).json({ message: error.message });
   }
 };

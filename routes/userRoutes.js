@@ -42,6 +42,7 @@ router.post(
   router.post('/emailverifyotp', userController.EmailVerifyOtp);
   router.get('/UserSessionDetails',auth, userController.UserSessionDetails);
   router.get('/active-session-users', userController.getActiveSessionUsers);
+  router.get('/getUserHistory ', userController.getUserHistory );
 
 router.get('/verify-token', (req, res) => {
   const authHeader = req.headers.authorization;
