@@ -1,7 +1,8 @@
 const mongoose = require('mongoose');
 
 const userHistorySchema = new mongoose.Schema({
-  originalUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  _id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, 
+  originalUserId: { type: mongoose.Schema.Types.ObjectId, required: true }, 
   clonedAt: { type: Date, default: Date.now },
   
   // Copy of all fields from User
@@ -53,6 +54,6 @@ const userHistorySchema = new mongoose.Schema({
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
-});
+}, { _id: false }); // <-- important: default MongoDB _id disable किया
 
 module.exports = mongoose.model('UserHistory', userHistorySchema);

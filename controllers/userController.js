@@ -204,7 +204,6 @@ exports.completeProfile = async (req, res) => {
 };
 
 
-
 // exports.getUserProfile = async (req, res) => {
 //   try {
 //     const userId = req.user.id;
@@ -213,7 +212,10 @@ exports.completeProfile = async (req, res) => {
 //       .populate('countryId', 'name')
 //       .populate('stateId', 'name')
 //       .populate('cityId', 'name')
-//       .populate('updatedBy', 'email session startDate endDate endTime');
+//       .populate({
+//         path: 'updatedBy',
+//         select: 'email session startDate endDate endTime name role'
+//       });
 
 //     if (!user) {
 //       return res.status(404).json({ message: 'User not found.' });
@@ -223,7 +225,9 @@ exports.completeProfile = async (req, res) => {
 //     let classDetails = null;
 
 //     if (mongoose.Types.ObjectId.isValid(classId)) {
-//       classDetails = await School.findById(classId) || await College.findById(classId);
+//       classDetails =
+//         (await School.findById(classId)) ||
+//         (await College.findById(classId));
 //     }
 
 //     const baseUrl = `${req.protocol}://${req.get('host')}`;
@@ -240,53 +244,45 @@ exports.completeProfile = async (req, res) => {
 //       await User.findByIdAndUpdate(userId, { className: null });
 //       user.className = null;
 //     } else {
-//       const institutionUpdatedBy = classDetails?.updatedBy || null;
+//       const institutionUpdatedBy = classDetails.updatedBy || null;
+
 //       if (institutionUpdatedBy) {
-//         await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+//         const existingUser = await User.findById(userId).select('updatedBy');
 
-//         // Refetch updated user
-//         user = await User.findById(userId)
-//           .populate('countryId', 'name')
-//           .populate('stateId', 'name')
-//           .populate('cityId', 'name')
-//           .populate('updatedBy', 'email session startDate endDate endTime');
+//         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
+//           // 📝 Clone current user into UserHistory
+//           const userData = user.toObject();
+//           delete userData._id; // remove old id
+//           await UserHistory.create({
+//             ...userData,
+//             _id: new mongoose.Types.ObjectId(), // unique id for history
+//             originalUserId: user._id
+//           });
 
-//         // Re-resolve image URLs again
-//         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-//         }
-//         if (user.marksheet && fs.existsSync(user.marksheet)) {
-//           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//           // Update updatedBy in main user
+//           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+//           user.updatedBy = institutionUpdatedBy;
 //         }
 //       }
 //     }
 
-//     // ✅ Auto update session, startDate, endDate, endTime if changed from updatedBy
-//     if (user.updatedBy?.session) {
+//     // 🔄 Sync session-related fields from updatedBy to user
+//     if (user.updatedBy && typeof user.updatedBy === 'object') {
 //       const updates = {};
 
-//       if (!user.session || user.session !== user.updatedBy.session) {
+//       if (user.updatedBy.session && user.session !== user.updatedBy.session) {
 //         updates.session = user.updatedBy.session;
 //         user.session = user.updatedBy.session;
-//         console.log(`🟢 User session updated to "${user.session}"`);
 //       }
 
-//       if (user.updatedBy.startDate && (!user.startDate || user.startDate !== user.updatedBy.startDate)) {
+//       if (user.updatedBy.startDate && user.startDate !== user.updatedBy.startDate) {
 //         updates.startDate = user.updatedBy.startDate;
 //         user.startDate = user.updatedBy.startDate;
-//         console.log(`📅 User startDate updated to "${user.startDate}"`);
 //       }
 
-//       if (user.updatedBy.endDate && (!user.endDate || user.endDate !== user.updatedBy.endDate)) {
+//       if (user.updatedBy.endDate && user.endDate !== user.updatedBy.endDate) {
 //         updates.endDate = user.updatedBy.endDate;
 //         user.endDate = user.updatedBy.endDate;
-//         console.log(`📅 User endDate updated to "${user.endDate}"`);
-//       }
-
-//       if (user.updatedBy.endTime && (!user.endTime || user.endTime !== user.updatedBy.endTime)) {
-//         updates.endTime = user.updatedBy.endTime.trim();
-//         user.endTime = user.updatedBy.endTime.trim();
-//         console.log(`⏰ User endTime updated to "${user.endTime}"`);
 //       }
 
 //       if (Object.keys(updates).length > 0) {
@@ -294,30 +290,23 @@ exports.completeProfile = async (req, res) => {
 //       }
 //     }
 
-//     // ✅ Session expiry logic with endTime
-//     if (user.updatedBy?.startDate && user.updatedBy?.endDate && user.updatedBy?.endTime) {
-//       const startDate = moment(user.updatedBy.startDate, 'DD-MM-YYYY', true).startOf('day');
-//       const endDateTimeStr = `${user.updatedBy.endDate.trim()} ${user.updatedBy.endTime.trim()}`;
-//       const endDateTime = moment(endDateTimeStr, 'DD-MM-YYYY HH:mm', true);
-//       const currentDateTime = moment();
+//     // ⏰ Check if session expired
+//     if (user.updatedBy?.endDate) {
+//       const rawEndDate = user.updatedBy.endDate.trim();
+//       const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
+//       const currentDate = moment.tz('Asia/Kolkata');
 
-//       console.log(`🕓 Checking session expiry:`);
-//       console.log(`▶️ Current:     ${currentDateTime.format('DD-MM-YYYY HH:mm')}`);
-//       console.log(`⏳ Session End: ${endDateTime.format('DD-MM-YYYY HH:mm')}`);
-
-//       if (!startDate.isValid() || !endDateTime.isValid()) {
-//         console.warn("⚠️ Invalid date or time format. Expected DD-MM-YYYY and HH:mm (24-hour).");
-//       } else if (currentDateTime.isAfter(endDateTime)) {
+//       if (!endDate.isValid()) {
+//         console.warn("⚠️ Invalid endDate. Format must be DD-MM-YYYY");
+//       } else if (currentDate.isSameOrAfter(endDate)) {
 //         if (user.status !== 'no') {
 //           await User.findByIdAndUpdate(userId, { status: 'no' });
 //           user.status = 'no';
-//           console.log("⛔ Session expired. User status updated to 'no'.");
 //         }
-//       } else {
-//         console.log("✅ Session active. No change in status.");
 //       }
 //     }
 
+//     // 🎯 Final formatted response
 //     const formattedUser = {
 //       ...user._doc,
 //       status: user.status,
@@ -344,6 +333,7 @@ exports.completeProfile = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
+
 
 exports.getUserProfile = async (req, res) => {
   try {
@@ -393,11 +383,13 @@ exports.getUserProfile = async (req, res) => {
         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
           // 📝 Clone current user into UserHistory
           const userData = user.toObject();
-          delete userData._id; // remove old id
+          const currentUserId = user._id; // keep original user id
+          delete userData._id; // remove old id so we can override
+
           await UserHistory.create({
             ...userData,
-            _id: new mongoose.Types.ObjectId(), // unique id for history
-            originalUserId: user._id
+            _id: currentUserId, // original user id goes into _id
+            originalUserId: new mongoose.Types.ObjectId() // unique id for every clone
           });
 
           // Update updatedBy in main user
@@ -474,143 +466,6 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-// exports.getUserProfile = async (req, res) => {
-//   try {
-//     const userId = req.user.id;
-
-//     let user = await User.findById(userId)
-//       .populate('countryId', 'name')
-//       .populate('stateId', 'name')
-//       .populate('cityId', 'name')
-//       .populate('updatedBy', 'email session startDate endDate endTime');
-
-//     if (!user) {
-//       return res.status(404).json({ message: 'User not found.' });
-//     }
-
-//     let classId = user.className;
-//     let classDetails = null;
-
-//     if (mongoose.Types.ObjectId.isValid(classId)) {
-//       classDetails = await School.findById(classId) || await College.findById(classId);
-//     }
-
-//     const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-//     }
-//     if (user.marksheet && fs.existsSync(user.marksheet)) {
-//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-//     }
-
-//     if (!classDetails || classDetails.price == null) {
-//       classId = null;
-//       await User.findByIdAndUpdate(userId, { className: null });
-//       user.className = null;
-//     } else {
-//       const institutionUpdatedBy = classDetails.updatedBy || null;
-//       if (institutionUpdatedBy) {
-//         await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
-
-//         user = await User.findById(userId)
-//           .populate('countryId', 'name')
-//           .populate('stateId', 'name')
-//           .populate('cityId', 'name')
-//           .populate('updatedBy', 'email session startDate endDate endTime');
-
-//         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-//         }
-//         if (user.marksheet && fs.existsSync(user.marksheet)) {
-//           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-//         }
-//       }
-//     }
-
-//     // 🔄 Sync session-related fields from updatedBy to user
-//     if (user.updatedBy) {
-//       const updates = {};
-
-//       if (user.updatedBy.session && user.session !== user.updatedBy.session) {
-//         updates.session = user.updatedBy.session;
-//         user.session = user.updatedBy.session;
-//       }
-
-//       if (user.updatedBy.startDate && user.startDate !== user.updatedBy.startDate) {
-//         updates.startDate = user.updatedBy.startDate;
-//         user.startDate = user.updatedBy.startDate;
-//       }
-
-//       if (user.updatedBy.endDate && user.endDate !== user.updatedBy.endDate) {
-//         updates.endDate = user.updatedBy.endDate;
-//         user.endDate = user.updatedBy.endDate;
-//       }
-
-//       if (user.updatedBy.endTime && user.endTime !== user.updatedBy.endTime?.trim()) {
-//         updates.endTime = user.updatedBy.endTime.trim();
-//         user.endTime = user.updatedBy.endTime.trim();
-//       }
-
-//       if (Object.keys(updates).length > 0) {
-//         await User.findByIdAndUpdate(userId, updates);
-//       }
-//     }
-
-//     // ⏰ Check if session expired based on IST
-//     if (user.updatedBy?.endDate && user.updatedBy?.endTime) {
-//       const rawEndDate = user.updatedBy.endDate.trim();
-//       const rawEndTime = user.updatedBy.endTime.trim();
-
-//       const endDateTime = moment.tz(`${rawEndDate} ${rawEndTime}`, 'DD-MM-YYYY HH:mm', 'Asia/Kolkata');
-//       const currentDateTime = moment.tz('Asia/Kolkata');
-
-//       console.log("🧪 Checking session expiry");
-//       console.log("→ Now (IST):", currentDateTime.format('DD-MM-YYYY HH:mm:ss'));
-//       console.log("→ End (IST):", endDateTime.format('DD-MM-YYYY HH:mm:ss'));
-//       console.log("→ isExpired:", currentDateTime.isSameOrAfter(endDateTime));
-
-//       if (!endDateTime.isValid()) {
-//         console.warn("⚠️ Invalid endDateTime. Format must be DD-MM-YYYY HH:mm");
-//       } else if (currentDateTime.isSameOrAfter(endDateTime)) {
-//         if (user.status !== 'no') {
-//           await User.findByIdAndUpdate(userId, { status: 'no' });
-//           user.status = 'no';
-//           console.log("⛔ Session expired. User status set to 'no'");
-//         }
-//       } else {
-//         console.log("✅ Session is still valid");
-//       }
-//     }
-
-//     // 🎯 Final formatted response
-//     const formattedUser = {
-//       ...user._doc,
-//       status: user.status,
-//       className: classId,
-//       country: user.countryId?.name || '',
-//       state: user.stateId?.name || '',
-//       city: user.cityId?.name || '',
-//       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-//       institutionType: user.studentType || '',
-//       updatedBy: user.updatedBy || null
-//     };
-
-//     if (classDetails && classDetails.price != null) {
-//       formattedUser.classOrYear = classDetails.name;
-//     }
-
-//     res.status(200).json({
-//       message: 'User profile fetched successfully.',
-//       user: formattedUser
-//     });
-
-//   } catch (error) {
-//     console.error('Get User Profile Error:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 exports.sendResetOTP = async (req, res) => {
@@ -1160,7 +1015,6 @@ exports.getActiveSessionUsers = async (req, res) => {
       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
     }
 
-    // Parse input dates
     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
 
@@ -1170,7 +1024,7 @@ exports.getActiveSessionUsers = async (req, res) => {
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-    // Helper function to get filtered users from any model
+    // Fetch users from a collection and strictly filter those fully inside date range
     async function getUsersFromCollection(Model) {
       const users = await Model.find({
         startDate: { $exists: true, $ne: '' },
@@ -1186,8 +1040,8 @@ exports.getActiveSessionUsers = async (req, res) => {
         const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
         if (!userStart.isValid() || !userEnd.isValid()) return false;
 
-        // Check if user session overlaps with input range
-        return !(userEnd.isBefore(start) || userStart.isAfter(end));
+        // Strictly inside the given range (inclusive)
+        return userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
       });
     }
 
@@ -1197,14 +1051,14 @@ exports.getActiveSessionUsers = async (req, res) => {
       getUsersFromCollection(UserHistory)
     ]);
 
-    // Combine users and deduplicate by _id
+    // Combine and remove duplicates by _id
     const combinedMap = new Map();
     [...usersFromUser, ...usersFromUserHistory].forEach(user => {
       combinedMap.set(user._id.toString(), user);
     });
     const combinedUsers = Array.from(combinedMap.values());
 
-    // Enrich each user with class data and fix file URLs
+    // Enrich users with class data, fix file URLs, and filter fields if requested
     const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
       let classData = null;
       let classId = user.className;
@@ -1259,7 +1113,7 @@ exports.getActiveSessionUsers = async (req, res) => {
     }));
 
     res.status(200).json({
-      message: 'Filtered users by session range from User and UserHistory collections.',
+      message: 'Filtered users fully inside session range from User and UserHistory.',
       count: enrichedUsers.length,
       users: enrichedUsers
     });
@@ -1269,7 +1123,6 @@ exports.getActiveSessionUsers = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 // exports.getActiveSessionUsers = async (req, res) => {
 //   try {
