@@ -334,11 +334,11 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
+    // 1) लाओ user (populate कुछ फील्ड्स के साथ)
     let user = await User.findById(userId)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
@@ -352,6 +352,7 @@ exports.getUserProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
+    // 2) className से classDetails ढूंढो (School या College)
     let classId = user.className;
     let classDetails = null;
 
@@ -361,6 +362,7 @@ exports.getUserProfile = async (req, res) => {
         (await College.findById(classId));
     }
 
+    // 3) file URLs (aadharCard / marksheet) को public URL बनाना (अगर local path है तो)
     const baseUrl = `${req.protocol}://${req.get('host')}`;
 
     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
@@ -370,36 +372,56 @@ exports.getUserProfile = async (req, res) => {
       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }
 
+    // 4) अगर classDetails invalid हो तो className हटाओ
     if (!classDetails || classDetails.price == null) {
       classId = null;
       await User.findByIdAndUpdate(userId, { className: null });
       user.className = null;
     } else {
+      // 5) अगर institution.updatedBy बदल गया है तो current user को History में clone करो
       const institutionUpdatedBy = classDetails.updatedBy || null;
 
       if (institutionUpdatedBy) {
         const existingUser = await User.findById(userId).select('updatedBy');
 
         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
-          // 📝 Clone current user into UserHistory
-          const userData = user.toObject();
-          const currentUserId = user._id; // keep original user id
-          delete userData._id; // remove old id so we can override
+          // --- Prepare user snapshot for history ---
+          const userData = user.toObject(); // Mongoose document -> plain object
+          const currentUserId = userData._id; // original user id
+          delete userData._id; // ताकि हम मैन्युअली _id सेट कर सकें
 
+          // अगर populated fields हैं (objects), उनमें से सिर्फ their ObjectId रखो
+          if (userData.countryId && typeof userData.countryId === 'object') {
+            userData.countryId = userData.countryId._id || userData.countryId;
+          }
+          if (userData.stateId && typeof userData.stateId === 'object') {
+            userData.stateId = userData.stateId._id || userData.stateId;
+          }
+          if (userData.cityId && typeof userData.cityId === 'object') {
+            userData.cityId = userData.cityId._id || userData.cityId;
+          }
+          if (userData.updatedBy && typeof userData.updatedBy === 'object') {
+            userData.updatedBy = userData.updatedBy._id || userData.updatedBy;
+          }
+
+          // (Optional) sanitize/strip any mongoose-specific props
+          delete userData.__v;
+
+          // Create history doc
           await UserHistory.create({
             ...userData,
-            _id: currentUserId, // original user id goes into _id
-            originalUserId: new mongoose.Types.ObjectId() // unique id for every clone
+            _id: currentUserId, // original user's id as _id field in UserHistory
+            originalUserId: new mongoose.Types.ObjectId() // every clone gets its own unique id
           });
 
-          // Update updatedBy in main user
+          // Update main user's updatedBy to institutionUpdatedBy
           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
-          user.updatedBy = institutionUpdatedBy;
+          user.updatedBy = institutionUpdatedBy; // reflect change in the in-memory object
         }
       }
     }
 
-    // 🔄 Sync session-related fields from updatedBy to user
+    // 6) Sync session-related fields from updatedBy (if populated object) to user
     if (user.updatedBy && typeof user.updatedBy === 'object') {
       const updates = {};
 
@@ -423,9 +445,9 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // ⏰ Check if session expired
+    // 7) Check session expiry (using moment-timezone)
     if (user.updatedBy?.endDate) {
-      const rawEndDate = user.updatedBy.endDate.trim();
+      const rawEndDate = String(user.updatedBy.endDate).trim();
       const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
       const currentDate = moment.tz('Asia/Kolkata');
 
@@ -439,7 +461,7 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // 🎯 Final formatted response
+    // 8) Final formatted response (same as पहले)
     const formattedUser = {
       ...user._doc,
       status: user.status,
@@ -456,14 +478,14 @@ exports.getUserProfile = async (req, res) => {
       formattedUser.classOrYear = classDetails.name;
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       message: 'User profile fetched successfully.',
       user: formattedUser
     });
 
   } catch (error) {
     console.error('Get User Profile Error:', error);
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
