@@ -1,10 +1,10 @@
 const mongoose = require('mongoose');
 
 const userHistorySchema = new mongoose.Schema({
-  _id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, 
-  originalUserId: { type: mongoose.Schema.Types.ObjectId, required: true }, 
+  _id: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }, // Reference to User
+  originalUserId: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true, index: true },
   clonedAt: { type: Date, default: Date.now },
-  
+
   // Copy of all fields from User
   firstName: { type: String, required: true },
   middleName: { type: String },
@@ -54,6 +54,11 @@ const userHistorySchema = new mongoose.Schema({
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
-}, { _id: false }); // <-- important: default MongoDB _id disable किया
+}, {
+  _id: false // Default _id disable किया ताकि हम manually _id set कर सकें
+});
+
+// अगर originalUserId + clonedAt को unique रखना है (duplicate avoid करने के लिए)
+userHistorySchema.index({ originalUserId: 1, clonedAt: 1 }, { unique: true });
 
 module.exports = mongoose.model('UserHistory', userHistorySchema);
