@@ -710,35 +710,35 @@ exports.getAssignedListUserpractice = async (req, res) => {
 // };
 
 
+
+
+
 exports.platformDetails = async (req, res) => {
   try {
-    const userId = req.params.id;
-    const requestedLevel = parseInt(req.query.level || 0);
-    const queryClassId = req.query.classId; // classId must be passed explicitly
+    const userId = req.params.id; 
+    const requestedLevel = parseInt(req.query.level || 0); 
+    const queryClassId = req.query.classId; // <-- added
 
     if (!userId) {
       return res.status(400).json({ message: 'userId is required.' });
     }
 
-    if (!queryClassId) {
-      return res.status(400).json({ message: 'classId query parameter is required.' });
-    }
-
     const user = await User.findById(userId).lean();
-    if (!user) {
-      return res.status(404).json({ message: 'User not found.' });
+    if (!user?.session && !queryClassId) { 
+      return res.status(400).json({ message: 'User session or classId not found.' });
     }
 
     const session = user.session;
-    if (!session) {
-      return res.status(400).json({ message: 'User session not found.' });
+    const classId = queryClassId || user.className?.toString(); // <-- priority to query param
+
+    if (!classId) {
+      return res.status(400).json({ message: 'classId is required.' });
     }
 
-    // Strict filtering: userId + classId + session
     const scores = await LearningScore.find({
       userId,
-      classId: queryClassId,
       session,
+      classId,
       strickStatus: true
     }).populate('learningId', 'name')
       .sort({ scoreDate: 1 })
@@ -746,8 +746,8 @@ exports.platformDetails = async (req, res) => {
 
     const topicScores = await TopicScore.find({
       userId,
-      classId: queryClassId,
       session,
+      classId,
       strickStatus: true
     }).populate('learningId', 'name')
       .sort({ updatedAt: 1 })
@@ -755,7 +755,6 @@ exports.platformDetails = async (req, res) => {
 
     const scoreMap = new Map();
 
-    // Map practice scores by date
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
@@ -772,7 +771,6 @@ exports.platformDetails = async (req, res) => {
       }
     });
 
-    // Map topic scores by date
     topicScores.forEach(score => {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
@@ -788,7 +786,6 @@ exports.platformDetails = async (req, res) => {
       }
     });
 
-    // Fetch marking settings
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
     const baseDailyExp = markingSetting?.dailyExperience || 0;
     const deductions = markingSetting?.deductions || 0;
@@ -811,7 +808,6 @@ exports.platformDetails = async (req, res) => {
     const endDate = moment(datesList[datesList.length - 1]);
     const result = [];
 
-    // Existing bonus/deduction arrays from user doc
     const existingBonusDates = user?.bonusDates || [];
     const existingDeductedDates = user?.deductedDates || [];
     const existingWeeklyBonusDates = user?.weeklyBonusDates || [];
@@ -859,7 +855,6 @@ exports.platformDetails = async (req, res) => {
       }
     }
 
-    // Weekly bonus for 7-day streak
     for (let i = 6; i < result.length; i++) {
       const streak = result.slice(i - 6, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -876,7 +871,6 @@ exports.platformDetails = async (req, res) => {
       }
     }
 
-    // Monthly bonus for 30-day streak
     for (let i = 29; i < result.length; i++) {
       const streak = result.slice(i - 29, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -893,7 +887,6 @@ exports.platformDetails = async (req, res) => {
       }
     }
 
-    // Prepare User update
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -922,7 +915,6 @@ exports.platformDetails = async (req, res) => {
       await User.findByIdAndUpdate(userId, updateData);
     }
 
-    // Get updated user and calculate level
     const updatedUser = await User.findById(userId).select('bonuspoint userLevelData session className').lean();
     const newLevel = await getLevelFromPoints(updatedUser.bonuspoint);
 
@@ -943,18 +935,17 @@ exports.platformDetails = async (req, res) => {
       }
     });
 
-    // Update Experienceleavel for this classId only
-    const existingExp = await Experienceleavel.findOne({ userId, session, classId: queryClassId });
+    const existingExp = await Experienceleavel.findOne({ userId, session, classId });
     if (existingExp) {
       await Experienceleavel.findByIdAndUpdate(existingExp._id, {
-        $set: { levelBonusPoint, session, classId: queryClassId }
+        $set: { levelBonusPoint, session, classId }
       });
     } else {
       await Experienceleavel.create({
         userId,
         levelBonusPoint,
         session,
-        classId: queryClassId
+        classId
       });
     }
 
@@ -968,16 +959,19 @@ exports.platformDetails = async (req, res) => {
       matched = [latest, ...rest];
     }
 
+    const roundedBonusPoint = Math.round(updatedUser?.bonuspoint || 0);
+    const roundedLevelBonusPoint = Math.round(levelBonusPoint);
+
     return res.status(200).json({
-      bonuspoint: Math.round(updatedUser?.bonuspoint || 0),
-      levelBonusPoint: Math.round(levelBonusPoint),
+      bonuspoint: roundedBonusPoint,
+      levelBonusPoint: roundedLevelBonusPoint,
       experiencePoint,
       level: newLevel,
       dates: matched
     });
 
   } catch (error) {
-    console.error('platformDetails error:', error);
+    console.error('StrikePath error:', error);
     return res.status(500).json({ message: error.message });
   }
 };
@@ -990,33 +984,35 @@ const getLevelFromPoints = async (points) => {
 };
 
 
-
 // exports.platformDetails = async (req, res) => {
 //   try {
-//     const userId = req.params.id; 
-//     const requestedLevel = parseInt(req.query.level || 0); 
-//     const queryClassId = req.query.classId; // <-- added
+//     const userId = req.params.id;
+//     const requestedLevel = parseInt(req.query.level || 0);
+//     const queryClassId = req.query.classId; // classId must be passed explicitly
 
 //     if (!userId) {
 //       return res.status(400).json({ message: 'userId is required.' });
 //     }
 
+//     if (!queryClassId) {
+//       return res.status(400).json({ message: 'classId query parameter is required.' });
+//     }
+
 //     const user = await User.findById(userId).lean();
-//     if (!user?.session && !queryClassId) { 
-//       return res.status(400).json({ message: 'User session or classId not found.' });
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found.' });
 //     }
 
 //     const session = user.session;
-//     const classId = queryClassId || user.className?.toString(); // <-- priority to query param
-
-//     if (!classId) {
-//       return res.status(400).json({ message: 'classId is required.' });
+//     if (!session) {
+//       return res.status(400).json({ message: 'User session not found.' });
 //     }
 
+//     // Strict filtering: userId + classId + session
 //     const scores = await LearningScore.find({
 //       userId,
+//       classId: queryClassId,
 //       session,
-//       classId,
 //       strickStatus: true
 //     }).populate('learningId', 'name')
 //       .sort({ scoreDate: 1 })
@@ -1024,8 +1020,8 @@ const getLevelFromPoints = async (points) => {
 
 //     const topicScores = await TopicScore.find({
 //       userId,
+//       classId: queryClassId,
 //       session,
-//       classId,
 //       strickStatus: true
 //     }).populate('learningId', 'name')
 //       .sort({ updatedAt: 1 })
@@ -1033,6 +1029,7 @@ const getLevelFromPoints = async (points) => {
 
 //     const scoreMap = new Map();
 
+//     // Map practice scores by date
 //     scores.forEach(score => {
 //       const date = moment(score.scoreDate).format('YYYY-MM-DD');
 //       if (!scoreMap.has(date)) scoreMap.set(date, []);
@@ -1049,6 +1046,7 @@ const getLevelFromPoints = async (points) => {
 //       }
 //     });
 
+//     // Map topic scores by date
 //     topicScores.forEach(score => {
 //       const date = moment(score.updatedAt).format('YYYY-MM-DD');
 //       if (!scoreMap.has(date)) scoreMap.set(date, []);
@@ -1064,6 +1062,7 @@ const getLevelFromPoints = async (points) => {
 //       }
 //     });
 
+//     // Fetch marking settings
 //     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
 //     const baseDailyExp = markingSetting?.dailyExperience || 0;
 //     const deductions = markingSetting?.deductions || 0;
@@ -1086,6 +1085,7 @@ const getLevelFromPoints = async (points) => {
 //     const endDate = moment(datesList[datesList.length - 1]);
 //     const result = [];
 
+//     // Existing bonus/deduction arrays from user doc
 //     const existingBonusDates = user?.bonusDates || [];
 //     const existingDeductedDates = user?.deductedDates || [];
 //     const existingWeeklyBonusDates = user?.weeklyBonusDates || [];
@@ -1133,6 +1133,7 @@ const getLevelFromPoints = async (points) => {
 //       }
 //     }
 
+//     // Weekly bonus for 7-day streak
 //     for (let i = 6; i < result.length; i++) {
 //       const streak = result.slice(i - 6, i + 1).every(r =>
 //         r.data.some(d => d.type === 'practice') &&
@@ -1149,6 +1150,7 @@ const getLevelFromPoints = async (points) => {
 //       }
 //     }
 
+//     // Monthly bonus for 30-day streak
 //     for (let i = 29; i < result.length; i++) {
 //       const streak = result.slice(i - 29, i + 1).every(r =>
 //         r.data.some(d => d.type === 'practice') &&
@@ -1165,6 +1167,7 @@ const getLevelFromPoints = async (points) => {
 //       }
 //     }
 
+//     // Prepare User update
 //     const updateData = {};
 //     if (bonusToAdd > 0) {
 //       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -1193,6 +1196,7 @@ const getLevelFromPoints = async (points) => {
 //       await User.findByIdAndUpdate(userId, updateData);
 //     }
 
+//     // Get updated user and calculate level
 //     const updatedUser = await User.findById(userId).select('bonuspoint userLevelData session className').lean();
 //     const newLevel = await getLevelFromPoints(updatedUser.bonuspoint);
 
@@ -1213,17 +1217,18 @@ const getLevelFromPoints = async (points) => {
 //       }
 //     });
 
-//     const existingExp = await Experienceleavel.findOne({ userId, session, classId });
+//     // Update Experienceleavel for this classId only
+//     const existingExp = await Experienceleavel.findOne({ userId, session, classId: queryClassId });
 //     if (existingExp) {
 //       await Experienceleavel.findByIdAndUpdate(existingExp._id, {
-//         $set: { levelBonusPoint, session, classId }
+//         $set: { levelBonusPoint, session, classId: queryClassId }
 //       });
 //     } else {
 //       await Experienceleavel.create({
 //         userId,
 //         levelBonusPoint,
 //         session,
-//         classId
+//         classId: queryClassId
 //       });
 //     }
 
@@ -1237,19 +1242,16 @@ const getLevelFromPoints = async (points) => {
 //       matched = [latest, ...rest];
 //     }
 
-//     const roundedBonusPoint = Math.round(updatedUser?.bonuspoint || 0);
-//     const roundedLevelBonusPoint = Math.round(levelBonusPoint);
-
 //     return res.status(200).json({
-//       bonuspoint: roundedBonusPoint,
-//       levelBonusPoint: roundedLevelBonusPoint,
+//       bonuspoint: Math.round(updatedUser?.bonuspoint || 0),
+//       levelBonusPoint: Math.round(levelBonusPoint),
 //       experiencePoint,
 //       level: newLevel,
 //       dates: matched
 //     });
 
 //   } catch (error) {
-//     console.error('StrikePath error:', error);
+//     console.error('platformDetails error:', error);
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
@@ -1260,4 +1262,3 @@ const getLevelFromPoints = async (points) => {
 //   if (points < experiencePoint) return 1;
 //   return Math.floor(points / experiencePoint) + 1;
 // };
-
