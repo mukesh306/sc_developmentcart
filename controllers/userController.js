@@ -1169,17 +1169,17 @@ exports.getActiveSessionUsers = async (req, res) => {
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    const today = moment().startOf('day'); // Current date without time
 
+    // Fetch users from a collection with source tag
     async function getUsersFromCollection(Model, source) {
       const users = await Model.find({
         startDate: { $exists: true, $ne: '' },
         endDate: { $exists: true, $ne: '' }
       })
-      .populate('cityId', 'name')
-      .populate('stateId', 'name')
-      .populate('countryId', 'name')
-      .lean();
+        .populate('cityId', 'name')
+        .populate('stateId', 'name')
+        .populate('countryId', 'name')
+        .lean();
 
       return users
         .filter(user => {
@@ -1188,21 +1188,23 @@ exports.getActiveSessionUsers = async (req, res) => {
           if (!userStart.isValid() || !userEnd.isValid()) return false;
           return userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
         })
-        .map(user => ({ ...user, _source: source })); 
+        .map(user => ({ ...user, _source: source }));  // Mark source
     }
 
+    // Get users from both collections with source marks
     const [usersFromUser, usersFromUserHistory] = await Promise.all([
       getUsersFromCollection(User, 'User'),
       getUsersFromCollection(UserHistory, 'UserHistory')
     ]);
 
-    // Combine and remove duplicates by _id
+    // Combine and remove duplicates by _id (original _id from collection)
     const combinedMap = new Map();
     [...usersFromUser, ...usersFromUserHistory].forEach(user => {
       combinedMap.set(user._id.toString(), user);
     });
     const combinedUsers = Array.from(combinedMap.values());
 
+    // Enrich users with class info, fix file URLs, replace _id if from UserHistory, and filter fields if requested
     const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
       let classData = null;
       let classId = user.className;
@@ -1238,31 +1240,6 @@ exports.getActiveSessionUsers = async (req, res) => {
         idToUse = user.originalUserId.toString();
       }
 
-      // Check endDate vs current date for status
-      const userEndDate = moment(user.endDate, 'DD-MM-YYYY', true).startOf('day');
-      let status = 'yes';
-      if (userEndDate.isAfter(today)) {
-        status = 'no';
-
-        // Update the status in DB if not already "no"
-        const updateData = { status: 'no' };
-        if (user._source === 'User') {
-          await User.updateOne({ _id: user._id }, updateData);
-        } else if (user._source === 'UserHistory') {
-          await UserHistory.updateOne({ _id: user._id }, updateData);
-        }
-      } else {
-        // For users with past or today endDate, if status is not 'yes', update it
-        if (user.status !== 'yes') {
-          const updateData = { status: 'yes' };
-          if (user._source === 'User') {
-            await User.updateOne({ _id: user._id }, updateData);
-          } else if (user._source === 'UserHistory') {
-            await UserHistory.updateOne({ _id: user._id }, updateData);
-          }
-        }
-      }
-
       const formatted = {
         ...user,
         _id: idToUse,
@@ -1271,8 +1248,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         country: user.countryId?.name || '',
         state: user.stateId?.name || '',
         city: user.cityId?.name || '',
-        platformDetails: idToUse,
-        status: status
+        platformDetails: idToUse
       };
 
       if (fields) {
@@ -1303,123 +1279,111 @@ exports.getActiveSessionUsers = async (req, res) => {
 
 
 
-
 // exports.getActiveSessionUsers = async (req, res) => {
 //   try {
 //     const { startDate, endDate, fields } = req.query;
 
 //     if (!startDate || !endDate) {
-//       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
+//       return res.status(400).json({
+//         message: 'Both startDate and endDate are required in DD-MM-YYYY format.'
+//       });
 //     }
 
 //     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
 //     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
 
 //     if (!start.isValid() || !end.isValid()) {
-//       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
+//       return res.status(400).json({
+//         message: 'Invalid date format. Use DD-MM-YYYY.'
+//       });
 //     }
 
-//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+//     const baseUrl = req.protocol + '://' + req.get('host');
 
-//     // Fetch users from a collection with source tag
-//     async function getUsersFromCollection(Model, source) {
-//       const users = await Model.find({
-//         startDate: { $exists: true, $ne: '' },
-//         endDate: { $exists: true, $ne: '' }
-//       })
-//         .populate('cityId', 'name')
-//         .populate('stateId', 'name')
-//         .populate('countryId', 'name')
-//         .lean();
+//     const users = await User.find({})
+//       .populate('cityId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('countryId', 'name')
+//        .populate('updatedBy', 'startDate endDate') // ✅ populate only required fields
+//   .populate('previousUpdatedBy', 'email startDate endDate') // ✅
+//   .populate('previousUpdatedBy', 'email startDate endDate') // ✅
+//       .lean();
 
-//       return users
-//         .filter(user => {
-//           const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
-//           const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
-//           if (!userStart.isValid() || !userEnd.isValid()) return false;
-//           return userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
-//         })
-//         .map(user => ({ ...user, _source: source }));  // Mark source
-//     }
+//     // Helper function for checking date overlap
+//     const dateOverlaps = (obj, filterStart, filterEnd) => {
+//       if (!obj?.startDate || !obj?.endDate) return false;
+//       const s = moment(obj.startDate, 'DD-MM-YYYY', true).startOf('day');
+//       const e = moment(obj.endDate, 'DD-MM-YYYY', true).endOf('day');
+//       if (!s.isValid() || !e.isValid()) return false;
+//       return s.isSameOrBefore(filterEnd) && e.isSameOrAfter(filterStart);
+//     };
 
-//     // Get users from both collections with source marks
-//     const [usersFromUser, usersFromUserHistory] = await Promise.all([
-//       getUsersFromCollection(User, 'User'),
-//       getUsersFromCollection(UserHistory, 'UserHistory')
-//     ]);
+//     const enrichedUsers = await Promise.all(
+//       users.map(async (user) => {
+//         const hasOverlap =
+//           dateOverlaps(user.updatedBy, start, end) ||
+//           dateOverlaps(user.previousUpdatedBy, start, end);
 
-//     // Combine and remove duplicates by _id (original _id from collection)
-//     const combinedMap = new Map();
-//     [...usersFromUser, ...usersFromUserHistory].forEach(user => {
-//       combinedMap.set(user._id.toString(), user);
-//     });
-//     const combinedUsers = Array.from(combinedMap.values());
+//         if (!hasOverlap) return null;
 
-//     // Enrich users with class info, fix file URLs, replace _id if from UserHistory, and filter fields if requested
-//     const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
-//       let classData = null;
-//       let classId = user.className;
+//         // Class / institution lookup
+//         let classData = null;
+//         let classId = user.className;
 
-//       if (mongoose.Types.ObjectId.isValid(classId)) {
-//         const school = await School.findById(classId);
-//         const college = school ? null : await College.findById(classId);
-//         const institution = school || college;
+//         if (mongoose.Types.ObjectId.isValid(classId)) {
+//           const school = await School.findById(classId);
+//           const college = school ? null : await College.findById(classId);
+//           const institution = school || college;
 
-//         if (institution && institution.price != null) {
-//           classData = {
-//             id: classId,
-//             name: institution.name
-//           };
-//         } else {
-//           classId = null;
-//         }
-//       }
-
-//       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
-//       fileFields.forEach(field => {
-//         if (user[field]) {
-//           const match = user[field].match(/uploads\/(.+)$/);
-//           if (match && match[1]) {
-//             user[field] = `${baseUrl}/uploads/${match[1]}`;
+//           if (institution && institution.price != null) {
+//             classData = { id: classId, name: institution.name };
+//           } else {
+//             classId = null;
 //           }
 //         }
-//       });
 
-//       // Replace _id with originalUserId only if user is from UserHistory
-//       let idToUse = user._id.toString();
-//       if (user._source === 'UserHistory' && user.originalUserId) {
-//         idToUse = user.originalUserId.toString();
-//       }
-
-//       const formatted = {
-//         ...user,
-//         _id: idToUse,
-//         className: classData ? classData.id : null,
-//         classOrYear: classData ? classData.name : null,
-//         country: user.countryId?.name || '',
-//         state: user.stateId?.name || '',
-//         city: user.cityId?.name || '',
-//         platformDetails: idToUse
-//       };
-
-//       if (fields) {
-//         const requestedFields = fields.split(',');
-//         const limited = {};
-//         requestedFields.forEach(f => {
-//           if (formatted.hasOwnProperty(f)) {
-//             limited[f] = formatted[f];
+//         // File paths to full URLs
+//         const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
+//         fileFields.forEach((field) => {
+//           if (user[field]) {
+//             const match = user[field].match(/uploads\/(.+)$/);
+//             if (match && match[1]) {
+//               user[field] = `${baseUrl}/uploads/${match[1]}`;
+//             }
 //           }
 //         });
-//         return limited;
-//       }
 
-//       return formatted;
-//     }));
+//         const formatted = {
+//           ...user,
+//           className: classData ? classData.id : null,
+//           classOrYear: classData ? classData.name : null,
+//           country: user.countryId?.name || '',
+//           state: user.stateId?.name || '',
+//           city: user.cityId?.name || '',
+//           platformDetails: user._id?.toString() || null
+//         };
+
+//         if (fields) {
+//           const requestedFields = fields.split(',');
+//           const limited = {};
+//           requestedFields.forEach((f) => {
+//             if (formatted.hasOwnProperty(f)) {
+//               limited[f] = formatted[f];
+//             }
+//           });
+//           return limited;
+//         }
+
+//         return formatted;
+//       })
+//     );
+
+//     const resultUsers = enrichedUsers.filter(Boolean);
 
 //     res.status(200).json({
-//       message: 'Filtered users fully inside session range from User and UserHistory.',
-//       count: enrichedUsers.length,
-//       users: enrichedUsers
+//       message: 'Filtered users by overlapping session range (updatedBy or previousUpdatedBy).',
+//       count: resultUsers.length,
+//       users: resultUsers
 //     });
 
 //   } catch (error) {
@@ -1427,7 +1391,6 @@ exports.getActiveSessionUsers = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
-
 
 
 exports.getUserHistories = async (req, res) => {
