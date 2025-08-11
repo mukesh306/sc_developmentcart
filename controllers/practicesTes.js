@@ -991,7 +991,6 @@ exports.platformDetails = async (req, res) => {
       return res.status(400).json({ message: 'userId and endDate are required.' });
     }
 
-    // 1. User ya UserHistory se data fetch karo
     let user = await User.findOne({ _id: userId, endDate }).lean();
 
     if (!user) {
@@ -1002,19 +1001,18 @@ exports.platformDetails = async (req, res) => {
       return res.status(404).json({ message: 'User with given endDate not found.' });
     }
 
-    // 2. Determine which level to use for fetching experiencePoint
+    // Level for fetching experiencePoint
     const levelForExperience = requestedLevel || user.level || 1;
 
-    // 3. Fetch experiencePoint from MarkingSetting for that level
+    // Fetch experiencePoint from MarkingSetting
     const markingSetting = await MarkingSetting.findOne({ userId, level: levelForExperience }).lean();
     const experiencePoint = markingSetting?.experiencePoint || 0;
 
-    // 4. Find matchedLevelData for requestedLevel or user.level
+    // Find matchedLevelData based on requestedLevel or user.level
     let matchedLevelData;
     if (requestedLevel) {
       matchedLevelData = user.userLevelData?.find(l => l.level === requestedLevel);
       if (!matchedLevelData) {
-        // Agar requested level ka data nahi mila to zero points aur empty dates bhej do
         return res.status(200).json({
           bonuspoint: 0,
           levelBonusPoint: 0,
@@ -1030,7 +1028,6 @@ exports.platformDetails = async (req, res) => {
       }
     }
 
-    // 5. Final response
     return res.status(200).json({
       bonuspoint: Math.round(user?.bonuspoint || 0),
       levelBonusPoint: Math.round(matchedLevelData?.levelBonusPoint || 0),
