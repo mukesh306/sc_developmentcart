@@ -1152,8 +1152,6 @@ exports.UserSessionDetails = async (req, res) => {
 // };
 
 
-const moment = require('moment');
-const mongoose = require('mongoose');
 
 exports.getActiveSessionUsers = async (req, res) => {
   try {
