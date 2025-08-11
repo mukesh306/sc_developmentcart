@@ -985,23 +985,32 @@ exports.getAssignedListUserpractice = async (req, res) => {
 
 
 
-
 exports.platformDetails = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { endDate } = req.query; // DD-MM-YYYY
+    const { endDate } = req.query; // expected format "DD-MM-YYYY"
     const requestedLevel = parseInt(req.query.level || 0);
 
     if (!userId || !endDate) {
       return res.status(400).json({ message: 'userId and endDate are required.' });
     }
 
-    // Try to find user in main User collection
-    let user = await User.findOne({ _id: userId, endDate }).lean();
+    // Convert endDate string to date range (start of day to end of day)
+    const startOfDay = moment(endDate, 'DD-MM-YYYY').startOf('day').toDate();
+    const endOfDay = moment(endDate, 'DD-MM-YYYY').endOf('day').toDate();
 
-    // If not found, try in UserHistory by originalUserId
+    // Find user in User collection with endDate in that day range
+    let user = await User.findOne({
+      _id: userId,
+      endDate: { $gte: startOfDay, $lte: endOfDay }
+    }).lean();
+
+    // If not found, try in UserHistory collection by originalUserId
     if (!user) {
-      user = await UserHistory.findOne({ originalUserId: userId, endDate }).lean();
+      user = await UserHistory.findOne({
+        originalUserId: userId,
+        endDate: { $gte: startOfDay, $lte: endOfDay }
+      }).lean();
     }
 
     if (!user) {
@@ -1015,26 +1024,29 @@ exports.platformDetails = async (req, res) => {
     const session = user.session;
     const classId = user.className.toString();
 
-    // Get Learning & Topic scores
+    // Fetch LearningScore data
     const scores = await LearningScore.find({
       userId: user._id,
       session,
       classId,
       strickStatus: true
-    }).populate('learningId', 'name')
+    })
+      .populate('learningId', 'name')
       .sort({ scoreDate: 1 })
       .lean();
 
+    // Fetch TopicScore data
     const topicScores = await TopicScore.find({
       userId: user._id,
       session,
       classId,
       strickStatus: true
-    }).populate('learningId', 'name')
+    })
+      .populate('learningId', 'name')
       .sort({ updatedAt: 1 })
       .lean();
 
-    // Map date -> scores
+    // Map scores by date
     const scoreMap = new Map();
 
     scores.forEach(score => {
@@ -1066,12 +1078,9 @@ exports.platformDetails = async (req, res) => {
       }
     });
 
-    // Latest marking settings
+    // Fetch marking settings
     const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
     const baseDailyExp = markingSetting?.dailyExperience || 0;
-    const deductions = markingSetting?.deductions || 0;
-    const weeklyBonus = markingSetting?.weeklyBonus || 0;
-    const monthlyBonus = markingSetting?.monthlyBonus || 0;
     const experiencePoint = markingSetting?.experiencePoint || 1000;
 
     const datesList = Array.from(scoreMap.keys()).sort();
@@ -1085,6 +1094,7 @@ exports.platformDetails = async (req, res) => {
       });
     }
 
+    // Prepare response data
     const result = [];
 
     for (let date of datesList) {
@@ -1112,12 +1122,9 @@ exports.platformDetails = async (req, res) => {
       ? user.userLevelData.find(l => l.level === requestedLevel)?.data || []
       : result;
 
-    const roundedBonusPoint = Math.round(user?.bonuspoint || 0);
-    const roundedLevelBonusPoint = Math.round(levelBonusPoint);
-
     return res.status(200).json({
-      bonuspoint: roundedBonusPoint,
-      levelBonusPoint: roundedLevelBonusPoint,
+      bonuspoint: Math.round(user?.bonuspoint || 0),
+      levelBonusPoint: Math.round(levelBonusPoint),
       experiencePoint,
       level: user.level || 1,
       dates: matched
