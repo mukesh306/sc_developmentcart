@@ -980,6 +980,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
 //   return Math.floor(points / experiencePoint) + 1;
 // };
 
+
 exports.platformDetails = async (req, res) => {
   try {
     const userId = req.params.id;
