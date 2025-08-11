@@ -984,17 +984,15 @@ exports.getAssignedListUserpractice = async (req, res) => {
 exports.platformDetails = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { endDate } = req.query; 
+    const { endDate } = req.query;
     const requestedLevel = parseInt(req.query.level || 0);
 
     if (!userId || !endDate) {
       return res.status(400).json({ message: 'userId and endDate are required.' });
     }
 
-    
     let user = await User.findOne({ _id: userId, endDate }).lean();
 
-   
     if (!user) {
       user = await UserHistory.findOne({ originalUserId: userId, endDate }).lean();
     }
@@ -1003,10 +1001,9 @@ exports.platformDetails = async (req, res) => {
       return res.status(404).json({ message: 'User with given endDate not found.' });
     }
 
-    // If userLevelData is missing or empty, return empty or fallback
     if (!user.userLevelData || !user.userLevelData.length) {
       return res.status(200).json({
-        bonuspoint: Math.round(user?.bonuspoint || 0),
+        bonuspoint: 0,
         levelBonusPoint: 0,
         experiencePoint: 0,
         level: user.level || 1,
@@ -1014,24 +1011,30 @@ exports.platformDetails = async (req, res) => {
       });
     }
 
-    // Find data for requestedLevel if given, else use user's current level
     let matchedLevelData;
-    if (requestedLevel && requestedLevel !== user.level) {
+    if (requestedLevel) {
       matchedLevelData = user.userLevelData.find(l => l.level === requestedLevel);
+      if (!matchedLevelData) {
+        // Agar level nahi mila, to blank data bhejein
+        return res.status(200).json({
+          bonuspoint: 0,
+          levelBonusPoint: 0,
+          experiencePoint: 0,
+          level: requestedLevel,
+          dates: []
+        });
+      }
     } else {
       matchedLevelData = user.userLevelData.find(l => l.level === user.level);
+      if (!matchedLevelData) {
+        matchedLevelData = user.userLevelData[0];
+      }
     }
 
-    if (!matchedLevelData) {
-      // If no matching level found, fallback to first level data
-      matchedLevelData = user.userLevelData[0];
-    }
-
-    // Prepare response with exact userLevelData (including _id and date)
     return res.status(200).json({
       bonuspoint: Math.round(user?.bonuspoint || 0),
       levelBonusPoint: Math.round(matchedLevelData?.levelBonusPoint || 0),
-      experiencePoint: 0, // or fetch from your MarkingSetting if needed
+      experiencePoint: 0,
       level: matchedLevelData?.level || user.level || 1,
       dates: matchedLevelData?.data || []
     });
