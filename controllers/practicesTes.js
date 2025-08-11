@@ -981,157 +981,59 @@ exports.getAssignedListUserpractice = async (req, res) => {
 // };
 
 
-
 exports.platformDetails = async (req, res) => {
   try {
     const userId = req.params.id;
-    const { endDate } = req.query; // string in format "DD-MM-YYYY"
+    const { endDate } = req.query; // "DD-MM-YYYY" string
     const requestedLevel = parseInt(req.query.level || 0);
 
     if (!userId || !endDate) {
       return res.status(400).json({ message: 'userId and endDate are required.' });
     }
 
-    // Since endDate is stored as string "DD-MM-YYYY" in DB, match exact string
-    let user = await User.findOne({
-      _id: userId,
-      endDate: endDate
-    }).lean();
+    // First try to find user from main User collection
+    let user = await User.findOne({ _id: userId, endDate }).lean();
 
+    // If not found, try UserHistory with originalUserId
     if (!user) {
-      user = await UserHistory.findOne({
-        originalUserId: userId,
-        endDate: endDate
-      }).lean();
+      user = await UserHistory.findOne({ originalUserId: userId, endDate }).lean();
     }
 
     if (!user) {
       return res.status(404).json({ message: 'User with given endDate not found.' });
     }
 
-    if (!user?.session || !user?.className) {
-      return res.status(400).json({ message: 'User session or className not found.' });
-    }
-
-    const session = user.session;
-    const classId = user.className.toString();
-
-    // Fetch LearningScore documents
-    const scores = await LearningScore.find({
-      userId: user._id,
-      session,
-      classId,
-      strickStatus: true
-    })
-      .populate('learningId', 'name')
-      .sort({ scoreDate: 1 })
-      .lean();
-
-    // Fetch TopicScore documents
-    const topicScores = await TopicScore.find({
-      userId: user._id,
-      session,
-      classId,
-      strickStatus: true
-    })
-      .populate('learningId', 'name')
-      .sort({ updatedAt: 1 })
-      .lean();
-
-    // Map scores by date (YYYY-MM-DD)
-    const scoreMap = new Map();
-
-    scores.forEach(score => {
-      const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      if (!scoreMap.has(date)) scoreMap.set(date, []);
-      if (!scoreMap.get(date).some(item => item.type === 'practice')) {
-        scoreMap.get(date).push({
-          type: 'practice',
-          score: score.score,
-          updatedAt: score.updatedAt,
-          scoreDate: score.scoreDate,
-          learningId: score.learningId,
-          strickStatus: score.strickStatus
-        });
-      }
-    });
-
-    topicScores.forEach(score => {
-      const date = moment(score.updatedAt).format('YYYY-MM-DD');
-      if (!scoreMap.has(date)) scoreMap.set(date, []);
-      if (!scoreMap.get(date).some(item => item.type === 'topic')) {
-        scoreMap.get(date).push({
-          type: 'topic',
-          score: score.score,
-          updatedAt: score.updatedAt,
-          learningId: score.learningId,
-          strickStatus: score.strickStatus
-        });
-      }
-    });
-
-    // Get marking settings
-    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-    const baseDailyExp = markingSetting?.dailyExperience || 0;
-    const experiencePoint = markingSetting?.experiencePoint || 1000;
-
-    const datesList = Array.from(scoreMap.keys()).sort();
-
-    // If no score data found, fallback to userLevelData filtered by requestedLevel
-    if (datesList.length === 0) {
-      let fallbackData = [];
-
-      if (requestedLevel && requestedLevel !== user.level) {
-        fallbackData = user.userLevelData?.find(l => l.level === requestedLevel)?.data || [];
-      } else {
-        fallbackData = user.userLevelData?.find(l => l.level === user.level)?.data || [];
-      }
-
+    // If userLevelData is missing or empty, return empty or fallback
+    if (!user.userLevelData || !user.userLevelData.length) {
       return res.status(200).json({
         bonuspoint: Math.round(user?.bonuspoint || 0),
         levelBonusPoint: 0,
-        experiencePoint,
+        experiencePoint: 0,
         level: user.level || 1,
-        dates: fallbackData
+        dates: []
       });
     }
 
-    // Prepare results from scoreMap
-    const result = [];
-
-    for (let date of datesList) {
-      const item = { date, data: scoreMap.get(date) || [] };
-
-      const hasPractice = item.data.some(d => d.type === 'practice');
-      const hasTopic = item.data.some(d => d.type === 'topic');
-
-      if (hasPractice && hasTopic && baseDailyExp > 0) {
-        const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
-        const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
-        const avgScore = (practiceScore + topicScore) / 2;
-        item.dailyExperience = Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
-      }
-
-      result.push(item);
-    }
-
-    const levelBonusPoint = result.reduce((acc, r) => acc + (r.dailyExperience || 0), 0);
-
-    // Filter userLevelData based on requestedLevel if provided and different
-    let matched;
-
+    // Find data for requestedLevel if given, else use user's current level
+    let matchedLevelData;
     if (requestedLevel && requestedLevel !== user.level) {
-      matched = user.userLevelData?.find(l => l.level === requestedLevel)?.data || [];
+      matchedLevelData = user.userLevelData.find(l => l.level === requestedLevel);
     } else {
-      matched = result;
+      matchedLevelData = user.userLevelData.find(l => l.level === user.level);
     }
 
+    if (!matchedLevelData) {
+      // If no matching level found, fallback to first level data
+      matchedLevelData = user.userLevelData[0];
+    }
+
+    // Prepare response with exact userLevelData (including _id and date)
     return res.status(200).json({
       bonuspoint: Math.round(user?.bonuspoint || 0),
-      levelBonusPoint: Math.round(levelBonusPoint),
-      experiencePoint,
-      level: user.level || 1,
-      dates: matched
+      levelBonusPoint: Math.round(matchedLevelData?.levelBonusPoint || 0),
+      experiencePoint: 0, // or fetch from your MarkingSetting if needed
+      level: matchedLevelData?.level || user.level || 1,
+      dates: matchedLevelData?.data || []
     });
 
   } catch (error) {
