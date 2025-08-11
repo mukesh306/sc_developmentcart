@@ -982,13 +982,6 @@ exports.getAssignedListUserpractice = async (req, res) => {
 
 
 
-const moment = require('moment');
-const User = require('../models/User');           // Adjust paths as per your project
-const UserHistory = require('../models/UserHistory');
-const LearningScore = require('../models/LearningScore');
-const TopicScore = require('../models/TopicScore');
-const MarkingSetting = require('../models/MarkingSetting');
-
 exports.platformDetails = async (req, res) => {
   try {
     const userId = req.params.id;
