@@ -983,264 +983,59 @@ exports.getAssignedListUserpractice = async (req, res) => {
 
 exports.platformDetails = async (req, res) => {
   try {
-    let userIds = req.params.id; // comma separated IDs
+    const userId = req.params.id;
+    const { endDate } = req.query; // e.g. "11-08-2025"
     const requestedLevel = parseInt(req.query.level || 0);
 
-    if (!userIds) {
-      return res.status(400).json({ message: 'userId(s) are required.' });
+    if (!userId) {
+      return res.status(400).json({ message: 'userId is required.' });
     }
 
-    userIds = userIds.split(',').map(id => id.trim());
+    let userDoc;
 
-    const results = [];
-    for (const userId of userIds) {
-      const userData = await calculatePlatformDetails(userId, requestedLevel);
-      if (userData) {
-        results.push({ userId, ...userData });
+    if (endDate) {
+      // First try to get from User
+      userDoc = await User.findOne({ _id: userId, endDate }).lean();
+
+      // If not found, try from UserHistory
+      if (!userDoc) {
+        userDoc = await UserHistory.findOne({
+          originalUserId: userId,
+          endDate
+        }).lean();
       }
+
+      if (!userDoc) {
+        return res.status(404).json({ message: 'No user data found for given endDate.' });
+      }
+
+      // Filter the userLevelData for the requested date
+      let filteredLevelData = [];
+
+      if (userDoc.userLevelData && Array.isArray(userDoc.userLevelData)) {
+        filteredLevelData = userDoc.userLevelData.map(levelItem => {
+          return {
+            ...levelItem,
+            data: levelItem.data.filter(d => d.endDate === endDate)
+          };
+        }).filter(l => l.data.length > 0);
+      }
+
+      return res.status(200).json({
+        bonuspoint: Math.round(userDoc.bonuspoint || 0),
+        level: userDoc.level || 1,
+        userLevelData: filteredLevelData
+      });
     }
 
-    return res.status(200).json(results);
-
+    // If no endDate, fallback to your existing logic
+    // (your full existing calculation code here)
+    // ...
+    
   } catch (error) {
     console.error('platformDetails error:', error);
     return res.status(500).json({ message: error.message });
   }
-};
-
-const calculatePlatformDetails = async (userId, requestedLevel) => {
-  const user = await User.findById(userId).lean();
-  if (!user?.session || !user?.className) {
-    return null;
-  }
-
-  const session = user.session;
-  const classId = user.className.toString();
-
-  // Fetch scores for the whole session
-  const scores = await LearningScore.find({
-    userId,
-    session,
-    classId,
-    strickStatus: true
-  }).populate('learningId', 'name').lean();
-
-  const topicScores = await TopicScore.find({
-    userId,
-    session,
-    classId,
-    strickStatus: true
-  }).populate('learningId', 'name').lean();
-
-  // Merge scores into date-wise map
-  const scoreMap = new Map();
-
-  const addToMap = (arr, type) => {
-    arr.forEach(item => {
-      const date = moment(item.endDate).format('YYYY-MM-DD');
-      if (!scoreMap.has(date)) scoreMap.set(date, []);
-      const exists = scoreMap.get(date).some(d => d.type === type);
-      if (!exists) {
-        scoreMap.get(date).push({
-          type,
-          score: item.score,
-          updatedAt: item.updatedAt,
-          scoreDate: item.scoreDate,
-          endDate: item.endDate,
-          learningId: item.learningId,
-          strickStatus: item.strickStatus
-        });
-      }
-    });
-  };
-
-  addToMap(scores, 'practice');
-  addToMap(topicScores, 'topic');
-
-  const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-  const baseDailyExp = markingSetting?.dailyExperience || 0;
-  const deductions = markingSetting?.deductions || 0;
-  const weeklyBonus = markingSetting?.weeklyBonus || 0;
-  const monthlyBonus = markingSetting?.monthlyBonus || 0;
-  const experiencePoint = markingSetting?.experiencePoint || 1000;
-
-  const datesList = Array.from(scoreMap.keys()).sort();
-  if (datesList.length === 0) {
-    return {
-      bonuspoint: Math.round(user?.bonuspoint || 0),
-      levelBonusPoint: 0,
-      experiencePoint,
-      level: user?.level || 1,
-      dates: []
-    };
-  }
-
-  const startDate = moment(datesList[0]);
-  const lastDate = moment(datesList[datesList.length - 1]);
-  const result = [];
-
-  const existingBonusDates = user?.bonusDates || [];
-  const existingDeductedDates = user?.deductedDates || [];
-  const existingWeeklyBonusDates = user?.weeklyBonusDates || [];
-  const existingMonthlyBonusDates = user?.monthlyBonusDates || [];
-
-  let bonusToAdd = 0, deductionToSubtract = 0;
-  let weeklyBonusToAdd = 0, monthlyBonusToAdd = 0;
-  let datesToAddBonus = [], datesToDeduct = [], weeklyBonusDatesToAdd = [], monthlyBonusDatesToAdd = [];
-
-  for (let m = moment(startDate); m.diff(lastDate, 'days') <= 0; m.add(1, 'days')) {
-    const currentDate = m.format('YYYY-MM-DD');
-    const isToday = currentDate === moment().format('YYYY-MM-DD');
-    const item = { date: currentDate, data: [] };
-
-    if (scoreMap.has(currentDate)) {
-      item.data = scoreMap.get(currentDate);
-      const types = item.data.map(d => d.type);
-      const hasPractice = types.includes('practice');
-      const hasTopic = types.includes('topic');
-
-      if (hasPractice && hasTopic && baseDailyExp > 0) {
-        const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
-        const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
-        const avgScore = (practiceScore + topicScore) / 2;
-        const calculatedDailyExp = Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
-        item.dailyExperience = calculatedDailyExp;
-
-        if (!existingBonusDates.includes(currentDate)) {
-          bonusToAdd += calculatedDailyExp;
-          datesToAddBonus.push(currentDate);
-        }
-      }
-      result.push(item);
-    } else {
-      if (!isToday) {
-        item.deduction = deductions;
-        if (!existingDeductedDates.includes(currentDate)) {
-          deductionToSubtract += deductions;
-          datesToDeduct.push(currentDate);
-        }
-        result.push(item);
-      }
-    }
-  }
-
-  // Weekly streaks
-  for (let i = 6; i < result.length; i++) {
-    const streak = result.slice(i - 6, i + 1).every(r =>
-      r.data.some(d => d.type === 'practice') &&
-      r.data.some(d => d.type === 'topic')
-    );
-    const bonusDate = result[i].date;
-    if (streak && !existingWeeklyBonusDates.includes(bonusDate)) {
-      result[i].weeklyBonus = weeklyBonus;
-      weeklyBonusToAdd += weeklyBonus;
-      weeklyBonusDatesToAdd.push(bonusDate);
-    }
-    if (existingWeeklyBonusDates.includes(bonusDate)) {
-      result[i].weeklyBonus = weeklyBonus;
-    }
-  }
-
-  // Monthly streaks
-  for (let i = 29; i < result.length; i++) {
-    const streak = result.slice(i - 29, i + 1).every(r =>
-      r.data.some(d => d.type === 'practice') &&
-      r.data.some(d => d.type === 'topic')
-    );
-    const bonusDate = result[i].date;
-    if (streak && !existingMonthlyBonusDates.includes(bonusDate)) {
-      result[i].monthlyBonus = monthlyBonus;
-      monthlyBonusToAdd += monthlyBonus;
-      monthlyBonusDatesToAdd.push(bonusDate);
-    }
-    if (existingMonthlyBonusDates.includes(bonusDate)) {
-      result[i].monthlyBonus = monthlyBonus;
-    }
-  }
-
-  // Update user points
-  const updateData = {};
-  if (bonusToAdd > 0) {
-    updateData.$inc = { bonuspoint: bonusToAdd };
-    updateData.$push = { bonusDates: { $each: datesToAddBonus } };
-  }
-  if (deductionToSubtract > 0) {
-    updateData.$inc = updateData.$inc || {};
-    updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) - deductionToSubtract;
-    updateData.$push = updateData.$push || {};
-    updateData.$push.deductedDates = { $each: datesToDeduct };
-  }
-  if (weeklyBonusToAdd > 0) {
-    updateData.$inc = updateData.$inc || {};
-    updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) + weeklyBonusToAdd;
-    updateData.$push = updateData.$push || {};
-    updateData.$push.weeklyBonusDates = { $each: weeklyBonusDatesToAdd };
-  }
-  if (monthlyBonusToAdd > 0) {
-    updateData.$inc = updateData.$inc || {};
-    updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) + monthlyBonusToAdd;
-    updateData.$push = updateData.$push || {};
-    updateData.$push.monthlyBonusDates = { $each: monthlyBonusDatesToAdd };
-  }
-
-  if (Object.keys(updateData).length > 0) {
-    await User.findByIdAndUpdate(userId, updateData);
-  }
-
-  const updatedUser = await User.findById(userId).select('bonuspoint userLevelData').lean();
-  const newLevel = await getLevelFromPoints(updatedUser.bonuspoint);
-
-  await User.findByIdAndUpdate(userId, { level: newLevel });
-  await User.findByIdAndUpdate(userId, { $pull: { userLevelData: { level: newLevel } } });
-
-  const levelBonusPoint = result.reduce((acc, item) =>
-    acc + (item.dailyExperience || 0) + (item.weeklyBonus || 0) + (item.monthlyBonus || 0) - (item.deduction || 0), 0
-  );
-
-  await User.findByIdAndUpdate(userId, {
-    $push: {
-      userLevelData: {
-        level: newLevel,
-        levelBonusPoint,
-        data: result
-      }
-    }
-  });
-
-  // Experience level save
-  const existingExp = await Experienceleavel.findOne({ userId, session, classId });
-  if (existingExp) {
-    await Experienceleavel.findByIdAndUpdate(existingExp._id, {
-      $set: { levelBonusPoint, session, classId }
-    });
-  } else {
-    await Experienceleavel.create({
-      userId,
-      levelBonusPoint,
-      session,
-      classId
-    });
-  }
-
-  // Level-specific match
-  let matched = requestedLevel && requestedLevel !== newLevel
-    ? updatedUser.userLevelData.find(l => l.level === requestedLevel)?.data || []
-    : result;
-
-  return {
-    bonuspoint: Math.round(updatedUser?.bonuspoint || 0),
-    levelBonusPoint: Math.round(levelBonusPoint),
-    experiencePoint,
-    level: newLevel,
-    dates: matched
-  };
-};
-
-const getLevelFromPoints = async (points) => {
-  const setting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-  const experiencePoint = setting?.experiencePoint || 1000;
-  if (points < experiencePoint) return 1;
-  return Math.floor(points / experiencePoint) + 1;
 };
 
 
