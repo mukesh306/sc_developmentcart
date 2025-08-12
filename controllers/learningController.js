@@ -2264,7 +2264,13 @@ exports.Dashboard = async (req, res) => {
           weeklyBonus: 0,
           monthlyBonus: 0
         },
-        levelBonusPoint: 0,
+        levelBonusPoint: (() => {
+          if (Array.isArray(user.userLevelData) && user.userLevelData.length > 0) {
+            const levelData = user.userLevelData.find(l => l.level === user.level);
+            return Math.round(levelData?.levelBonusPoint || 0);
+          }
+          return 0;
+        })(),
         experiencePoint: 0,
         totalNoOfQuestion: 0,
         totalQuiz: 0,
@@ -2273,7 +2279,7 @@ exports.Dashboard = async (req, res) => {
         assignedLearnings: [],
         practice: [],
         classInfo: null,
-        quotes // ✅ Always included here
+        quotes
       });
     }
 
@@ -2391,9 +2397,17 @@ exports.Dashboard = async (req, res) => {
       }
     }
 
+    // ✅ Fixed levelBonusPoint logic
     let levelBonusPoint = 0;
     const expData = await Experienceleavel.findOne({ userId, session, classId }).lean();
-    levelBonusPoint = Math.round(expData?.levelBonusPoint || 0);
+    if (expData?.levelBonusPoint != null) {
+      levelBonusPoint = Math.round(expData.levelBonusPoint);
+    } else if (Array.isArray(user.userLevelData) && user.userLevelData.length > 0) {
+      const levelData = user.userLevelData.find(l => l.level === user.level);
+      if (levelData?.levelBonusPoint != null) {
+        levelBonusPoint = Math.round(levelData.levelBonusPoint);
+      }
+    }
 
     return res.status(200).json({
       currentStreak,
@@ -2422,7 +2436,7 @@ exports.Dashboard = async (req, res) => {
       practice,
       totalQuiz,
       classInfo,
-      quotes // ✅ stays in normal response too
+      quotes
     });
 
   } catch (error) {
