@@ -1059,16 +1059,15 @@ exports.getActiveSessionUsers = async (req, res) => {
         }
       });
 
-      // === SESSION EXPIRED LOGIC ===
+      // === SESSION EXPIRED LOGIC (Only for User collection) ===
       if (user.endDate) {
         const rawEndDate = user.endDate.trim();
         const endDateMoment = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
         const currentDate = moment.tz('Asia/Kolkata');
 
         if (endDateMoment.isValid() && currentDate.isSameOrAfter(endDateMoment)) {
-          if (user.status !== 'no') {
-            const modelToUpdate = user._source === 'UserHistory' ? UserHistory : User;
-            await modelToUpdate.findByIdAndUpdate(user._id, { status: 'no' });
+          if (user._source === 'User' && user.status !== 'no') {
+            await User.findByIdAndUpdate(user._id, { status: 'no' });
             user.status = 'no';
           }
         }
@@ -1117,6 +1116,7 @@ exports.getActiveSessionUsers = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 exports.getUserHistories = async (req, res) => {
