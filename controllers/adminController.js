@@ -3,7 +3,7 @@ const bcrypt = require('bcryptjs');
 const Admin = require('../models/admin');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer'); 
-const moment = require('moment');
+const moment = require('moment-timezone');
 
 exports.registerAdmin = async (req, res) => {
   try {
@@ -84,12 +84,16 @@ exports.getAllAdmins = async (req, res) => {
     const admins = await Admin1.find()
       .populate('createdBy', 'email')
       .sort({ createdAt: -1 })
-      .lean(); 
-    const today = moment().startOf('day');   
+      .lean();
+
+    // IST me current din ki shuruat lelo
+    const today = moment.tz('Asia/Kolkata').startOf('day');
+
     const updatedAdmins = admins.map(admin => {
       let isActive = false;
       if (admin.endDate) {
-        const end = moment(admin.endDate, 'DD-MM-YYYY');
+        // yaha endDate ko bhi IST timezone me parse karo
+        const end = moment.tz(admin.endDate, 'DD-MM-YYYY', 'Asia/Kolkata');
         isActive = end.isSameOrAfter(today);
       }
       return {
@@ -97,6 +101,7 @@ exports.getAllAdmins = async (req, res) => {
         status: isActive
       };
     });
+
     res.status(200).json({
       message: 'Admins fetched successfully.',
       data: updatedAdmins
@@ -108,6 +113,7 @@ exports.getAllAdmins = async (req, res) => {
     });
   }
 };
+
 
 exports.deleteAdmin = async (req, res) => {
   try {
