@@ -1059,25 +1059,21 @@ exports.getActiveSessionUsers = async (req, res) => {
         }
       });
 
-      // === NEW SESSION EXPIRED LOGIC HERE ===
+      // === SESSION EXPIRED LOGIC ===
       if (user.endDate) {
         const rawEndDate = user.endDate.trim();
         const endDateMoment = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
         const currentDate = moment.tz('Asia/Kolkata');
 
         if (endDateMoment.isValid() && currentDate.isSameOrAfter(endDateMoment)) {
-          // Update user.status = 'no' in DB if needed
           if (user.status !== 'no') {
-            // Update in respective collection
             const modelToUpdate = user._source === 'UserHistory' ? UserHistory : User;
             await modelToUpdate.findByIdAndUpdate(user._id, { status: 'no' });
             user.status = 'no';
           }
-          // Override endDate in response with 'no'
-          user.endDate = 'no';
         }
       }
-      // === END NEW LOGIC ===
+      // === END SESSION EXPIRED LOGIC ===
 
       // Replace _id with originalUserId only if user is from UserHistory
       let idToUse = user._id.toString();
