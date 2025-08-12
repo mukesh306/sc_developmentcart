@@ -1881,7 +1881,7 @@ exports.genraliqAverage = async (req, res) => {
 
     await GenralIQ.findOneAndUpdate(
       { userId, learningId: learningIdFilter, endDate, classId },
-      { overallAverage },
+      { overallAverage }, 
       { upsert: true, new: true }
     );
 
@@ -1969,14 +1969,12 @@ exports.getGenrelIq = async (req, res) => {
       return res.status(400).json({ message: 'User className or endDate not found.' });
     }
     const classId = user.className.toString();
-
     const assignedList = await Assigned.find({ classId })
       .populate('learning')
       .populate('learning2')
       .populate('learning3')
       .populate('learning4')
       .lean();
-
     for (let item of assignedList) {
       // Get school or college info
       let classInfo = await School.findById(item.classId).lean();
