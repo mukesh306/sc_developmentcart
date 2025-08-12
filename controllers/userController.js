@@ -365,7 +365,8 @@ exports.getUserProfile = async (req, res) => {
         (await College.findById(classId));
     }
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    // const baseUrl = `${req.protocol}://${req.get('host')}`;
+      const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
 
     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
@@ -472,6 +473,7 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 // exports.getUserProfile = async (req, res) => {
 //   try {
