@@ -205,6 +205,140 @@ exports.completeProfile = async (req, res) => {
 
 
 
+// exports.getUserProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     let user = await User.findById(userId)
+//       .populate('countryId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('cityId', 'name')
+//       .populate({
+//         path: 'updatedBy',
+//         select: 'email session startDate endDate endTime name role'
+//       });
+
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found.' });
+//     }
+
+//     let classId = user.className;
+//     let classDetails = null;
+
+//     if (mongoose.Types.ObjectId.isValid(classId)) {
+//       classDetails =
+//         (await School.findById(classId)) ||
+//         (await College.findById(classId));
+//     }
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//     }
+//     if (user.marksheet && fs.existsSync(user.marksheet)) {
+//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//     }
+
+//     if (!classDetails || classDetails.price == null) {
+//       classId = null;
+//       await User.findByIdAndUpdate(userId, { className: null });
+//       user.className = null;
+//     } else {
+//       const institutionUpdatedBy = classDetails.updatedBy || null;
+
+//       if (institutionUpdatedBy) {
+//         const existingUser = await User.findById(userId).select('updatedBy');
+
+//         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
+//           // Clone current user into UserHistory
+//           const userData = user.toObject();
+
+//           // Original user id ko store karna hai originalUserId me
+//           const originalId = userData._id;
+//           delete userData._id; // Remove _id to avoid duplicate key error
+
+//           await UserHistory.create({
+//             ...userData,
+//             _id: new mongoose.Types.ObjectId(), // unique id for history
+//             originalUserId: originalId // original user id stored here
+//           });
+
+//           // Update updatedBy in main user
+//           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+//           user.updatedBy = institutionUpdatedBy;
+//         }
+//       }
+//     }
+
+//     // Sync session-related fields from updatedBy to user
+//     if (user.updatedBy && typeof user.updatedBy === 'object') {
+//       const updates = {};
+
+//       if (user.updatedBy.session && user.session !== user.updatedBy.session) {
+//         updates.session = user.updatedBy.session;
+//         user.session = user.updatedBy.session;
+//       }
+
+//       if (user.updatedBy.startDate && user.startDate !== user.updatedBy.startDate) {
+//         updates.startDate = user.updatedBy.startDate;
+//         user.startDate = user.updatedBy.startDate;
+//       }
+
+//       if (user.updatedBy.endDate && user.endDate !== user.updatedBy.endDate) {
+//         updates.endDate = user.updatedBy.endDate;
+//         user.endDate = user.updatedBy.endDate;
+//       }
+
+//       if (Object.keys(updates).length > 0) {
+//         await User.findByIdAndUpdate(userId, updates);
+//       }
+//     }
+
+//     // Check if session expired
+//     if (user.updatedBy?.endDate) {
+//       const rawEndDate = user.updatedBy.endDate.trim();
+//       const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
+//       const currentDate = moment.tz('Asia/Kolkata');
+
+//       if (!endDate.isValid()) {
+//         console.warn("⚠️ Invalid endDate. Format must be DD-MM-YYYY");
+//       } else if (currentDate.isSameOrAfter(endDate)) {
+//         if (user.status !== 'no') {
+//           await User.findByIdAndUpdate(userId, { status: 'no' });
+//           user.status = 'no';
+//         }
+//       }
+//     }
+
+//     // Final formatted response
+//     const formattedUser = {
+//       ...user._doc,
+//       status: user.status,
+//       className: classId,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+//       institutionType: user.studentType || '',
+//       updatedBy: user.updatedBy || null
+//     };
+
+//     if (classDetails && classDetails.price != null) {
+//       formattedUser.classOrYear = classDetails.name;
+//     }
+
+//     res.status(200).json({
+//       message: 'User profile fetched successfully.',
+//       user: formattedUser
+//     });
+//   } catch (error) {
+//     console.error('Get User Profile Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -250,21 +384,22 @@ exports.getUserProfile = async (req, res) => {
       if (institutionUpdatedBy) {
         const existingUser = await User.findById(userId).select('updatedBy');
 
-        if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
-          // Clone current user into UserHistory
+        // ✅ Pehli baar skip, dusri baar change hone par clone
+        if (
+          existingUser.updatedBy && 
+          existingUser.updatedBy.toString() !== institutionUpdatedBy?.toString()
+        ) {
           const userData = user.toObject();
-
-          // Original user id ko store karna hai originalUserId me
           const originalId = userData._id;
-          delete userData._id; // Remove _id to avoid duplicate key error
+          delete userData._id;
 
           await UserHistory.create({
             ...userData,
-            _id: new mongoose.Types.ObjectId(), // unique id for history
-            originalUserId: originalId // original user id stored here
+            _id: new mongoose.Types.ObjectId(),
+            originalUserId: originalId,
+            clonedAt: new Date()
           });
 
-          // Update updatedBy in main user
           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
           user.updatedBy = institutionUpdatedBy;
         }
@@ -337,8 +472,6 @@ exports.getUserProfile = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
 
 // exports.getUserProfile = async (req, res) => {
 //   try {
@@ -1116,7 +1249,6 @@ exports.getActiveSessionUsers = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 exports.getUserHistories = async (req, res) => {
