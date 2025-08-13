@@ -1501,13 +1501,15 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 //   }
 // };
 
+
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
     const user = await User.findById(userId).lean();
     if (!user?.endDate || !user?.className) {
-      return res.status(400).json({ message: 'User endDate or classId not found.' });
+      // return res.status(400).json({ message: 'User endDate or classId not found.' });
+      return res.status(400).json({ message: 'Please complete your profile.' });
     }
 
     const userEndDate = user.endDate;
@@ -1605,7 +1607,6 @@ exports.PracticescoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 // exports.PracticescoreCard = async (req, res) => {
