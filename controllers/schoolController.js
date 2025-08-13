@@ -7,7 +7,7 @@ const AdminSchool = require('../models/adminschool');
 const AdminCollege = require('../models/admincollege');
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/admin1');
-
+const moment = require('moment-timezone');
   exports.addInstitution = async (req, res) => {
     try {
       const { name, price, type } = req.body;
