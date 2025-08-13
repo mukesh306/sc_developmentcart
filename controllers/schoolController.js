@@ -44,21 +44,39 @@ const Admin = require('../models/admin1');
   };
   
 
+// exports.getSchools = async (req, res) => {
+//     try {
+//     const { price } = req.query; 
+//     const filter = {};
+//     if (price) {
+//       filter.price = { $ne: null }; 
+//     }
+//       const schools = await School.find(filter); 
+//       res.status(200).json(schools);
+//     } catch (error) {
+//       console.error('Error fetching schools:', error);
+//       res.status(500).json({ message: 'Server error while fetching schools' });
+//     }
+//   };
+  
 exports.getSchools = async (req, res) => {
-    try {
+  try {
     const { price } = req.query; 
     const filter = {};
+
     if (price) {
       filter.price = { $ne: null }; 
     }
-      const schools = await School.find(filter); 
-      res.status(200).json(schools);
-    } catch (error) {
-      console.error('Error fetching schools:', error);
-      res.status(500).json({ message: 'Server error while fetching schools' });
-    }
-  };
-  
+
+    const schools = await School.find(filter)
+      .populate('updatedBy'); 
+
+    res.status(200).json(schools);
+  } catch (error) {
+    console.error('Error fetching schools:', error);
+    res.status(500).json({ message: 'Server error while fetching schools' });
+  }
+};
 
 
 
