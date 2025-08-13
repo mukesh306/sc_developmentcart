@@ -205,6 +205,7 @@ exports.completeProfile = async (req, res) => {
 
 
 
+
 // exports.getUserProfile = async (req, res) => {
 //   try {
 //     const userId = req.user.id;
@@ -231,7 +232,8 @@ exports.completeProfile = async (req, res) => {
 //         (await College.findById(classId));
 //     }
 
-//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+//     // const baseUrl = `${req.protocol}://${req.get('host')}`;
+//       const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
 
 //     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
 //       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
@@ -250,21 +252,22 @@ exports.completeProfile = async (req, res) => {
 //       if (institutionUpdatedBy) {
 //         const existingUser = await User.findById(userId).select('updatedBy');
 
-//         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
-//           // Clone current user into UserHistory
+//         // ✅ Pehli baar skip, dusri baar change hone par clone
+//         if (
+//           existingUser.updatedBy && 
+//           existingUser.updatedBy.toString() !== institutionUpdatedBy?.toString()
+//         ) {
 //           const userData = user.toObject();
-
-//           // Original user id ko store karna hai originalUserId me
 //           const originalId = userData._id;
-//           delete userData._id; // Remove _id to avoid duplicate key error
+//           delete userData._id;
 
 //           await UserHistory.create({
 //             ...userData,
-//             _id: new mongoose.Types.ObjectId(), // unique id for history
-//             originalUserId: originalId // original user id stored here
+//             _id: new mongoose.Types.ObjectId(),
+//             originalUserId: originalId,
+//             clonedAt: new Date()
 //           });
 
-//           // Update updatedBy in main user
 //           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
 //           user.updatedBy = institutionUpdatedBy;
 //         }
@@ -338,10 +341,12 @@ exports.completeProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
+
+    // Get stored updatedBy from DB (raw, not populated) to compare later
+    const existingUserRaw = await User.findById(userId).select('updatedBy');
 
     let user = await User.findById(userId)
       .populate('countryId', 'name')
@@ -365,8 +370,8 @@ exports.getUserProfile = async (req, res) => {
         (await College.findById(classId));
     }
 
-    // const baseUrl = `${req.protocol}://${req.get('host')}`;
-      const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+    // Force HTTPS in URLs
+    const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
 
     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
@@ -383,12 +388,10 @@ exports.getUserProfile = async (req, res) => {
       const institutionUpdatedBy = classDetails.updatedBy || null;
 
       if (institutionUpdatedBy) {
-        const existingUser = await User.findById(userId).select('updatedBy');
-
-        // ✅ Pehli baar skip, dusri baar change hone par clone
+        // ✅ Only clone if existing DB updatedBy is different from institution updatedBy
         if (
-          existingUser.updatedBy && 
-          existingUser.updatedBy.toString() !== institutionUpdatedBy?.toString()
+          existingUserRaw.updatedBy && // skip if first time (null)
+          existingUserRaw.updatedBy.toString() !== institutionUpdatedBy.toString()
         ) {
           const userData = user.toObject();
           const originalId = userData._id;
