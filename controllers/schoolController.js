@@ -99,9 +99,6 @@ exports.getSchools = async (req, res) => {
 };
 
 
-
-
-
 exports.getCollege = async (req, res) => {
   try {
     const { price } = req.query; 
@@ -109,13 +106,52 @@ exports.getCollege = async (req, res) => {
     if (price) {
       filter.price = { $ne: null }; 
     }
-    const colleges = await College.find(filter);
+
+    let colleges = await College.find(filter)
+      .populate('updatedBy');
+
+    // Today's date in IST
+    const today = moment().tz('Asia/Kolkata').startOf('day');
+
+    for (let college of colleges) {
+      if (college.updatedBy && college.updatedBy.endDate) {
+        const endDate = moment(college.updatedBy.endDate, 'DD-MM-YYYY')
+          .tz('Asia/Kolkata')
+          .startOf('day');
+
+        // If endDate is strictly before today → price null
+        if (endDate.isBefore(today)) {
+          await College.updateOne(
+            { _id: college._id },
+            { $set: { price: null } }
+          );
+          college.price = null; // reflect in API response
+        }
+      }
+    }
+
     res.status(200).json(colleges);
   } catch (error) {
     console.error('Error fetching colleges:', error);
     res.status(500).json({ message: 'Server error while fetching colleges' });
   }
 };
+
+
+// exports.getCollege = async (req, res) => {
+//   try {
+//     const { price } = req.query; 
+//     const filter = {};
+//     if (price) {
+//       filter.price = { $ne: null }; 
+//     }
+//     const colleges = await College.find(filter);
+//     res.status(200).json(colleges);
+//   } catch (error) {
+//     console.error('Error fetching colleges:', error);
+//     res.status(500).json({ message: 'Server error while fetching colleges' });
+//   }
+// };
 
   exports.updateInstitution = async (req, res) => {
     try {
