@@ -515,10 +515,9 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 exports.getAssignedListUserpractice = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const user = await User.findById(userId).lean();
     if (!user || !user.className || !user.endDate) {
-      return res.status(400).json({ message: 'User className or endDate not found.' });
+      return res.status(400).json({ message: 'Please complete your profile.' });
     }
 
     const userEndDate = user.endDate;

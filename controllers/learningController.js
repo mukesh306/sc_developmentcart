@@ -259,7 +259,7 @@ exports.scoreCard = async (req, res) => {
     const userEndDate = user?.endDate;
     const userClassId = user?.className;
     if (!userEndDate || !userClassId) {
-      return res.status(400).json({ message: 'User endDate or className not found.' });
+      return res.status(400).json({ message: 'Please complete your profile.' });
     }
 
     // ✅ Step 1: Get first score per day
@@ -1097,7 +1097,7 @@ exports.StrikePath = async (req, res) => {
 
     const user = await User.findById(userId).lean();
     if (!user?.endDate || !user?.className) {
-      return res.status(400).json({ message: 'User endDate or className not found.' });
+      return res.status(400).json({ message: 'Please complete your profile.' });
     }
 
     const endDate = user.endDate;
@@ -1966,7 +1966,7 @@ exports.getGenrelIq = async (req, res) => {
     const userId = req.user._id;
     const user = await User.findById(userId).lean();
     if (!user || !user.className || !user.endDate) {
-      return res.status(400).json({ message: 'User className or endDate not found.' });
+      return res.status(400).json({ message: 'Please complete your profile.' });
     }
     const classId = user.className.toString();
     const assignedList = await Assigned.find({ classId })
