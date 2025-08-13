@@ -59,17 +59,37 @@ const Admin = require('../models/admin1');
 //     }
 //   };
   
+
 exports.getSchools = async (req, res) => {
   try {
-    const { price } = req.query; 
+    const { price } = req.query;
     const filter = {};
 
     if (price) {
-      filter.price = { $ne: null }; 
+      filter.price = { $ne: null }; // only where price is not null
     }
 
-    const schools = await School.find(filter)
-      .populate('updatedBy'); 
+    let schools = await School.find(filter)
+      .populate('updatedBy');
+
+    // Get today's date in IST
+    const today = moment().tz('Asia/Kolkata').startOf('day');
+
+    for (let school of schools) {
+      if (school.updatedBy && school.updatedBy.endDate) {
+        const endDate = moment(school.updatedBy.endDate, 'DD-MM-YYYY')
+          .tz('Asia/Kolkata')
+          .startOf('day');
+
+        if (endDate.isBefore(today)) {
+          await School.updateOne(
+            { _id: school._id },
+            { $set: { price: null } }
+          );
+          school.price = null;
+        }
+      }
+    }
 
     res.status(200).json(schools);
   } catch (error) {
