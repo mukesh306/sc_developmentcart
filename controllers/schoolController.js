@@ -8,6 +8,7 @@ const AdminCollege = require('../models/admincollege');
 const jwt = require('jsonwebtoken');
 const Admin = require('../models/admin1');
 const moment = require('moment-timezone');
+
   exports.addInstitution = async (req, res) => {
     try {
       const { name, price, type } = req.body;
@@ -44,20 +45,20 @@ const moment = require('moment-timezone');
   };
   
 
-// exports.getSchools = async (req, res) => {
-//     try {
-//     const { price } = req.query; 
-//     const filter = {};
-//     if (price) {
-//       filter.price = { $ne: null }; 
-//     }
-//       const schools = await School.find(filter); 
-//       res.status(200).json(schools);
-//     } catch (error) {
-//       console.error('Error fetching schools:', error);
-//       res.status(500).json({ message: 'Server error while fetching schools' });
-//     }
-//   };
+exports.getSchoolsuser = async (req, res) => {
+    try {
+    const { price } = req.query; 
+    const filter = {};
+    if (price) {
+      filter.price = { $ne: null }; 
+    }
+      const schools = await School.find(filter); 
+      res.status(200).json(schools);
+    } catch (error) {
+      console.error('Error fetching schools:', error);
+      res.status(500).json({ message: 'Server error while fetching schools' });
+    }
+  };
   
 
 exports.getSchools = async (req, res) => {
@@ -138,20 +139,20 @@ exports.getCollege = async (req, res) => {
 };
 
 
-// exports.getCollege = async (req, res) => {
-//   try {
-//     const { price } = req.query; 
-//     const filter = {};
-//     if (price) {
-//       filter.price = { $ne: null }; 
-//     }
-//     const colleges = await College.find(filter);
-//     res.status(200).json(colleges);
-//   } catch (error) {
-//     console.error('Error fetching colleges:', error);
-//     res.status(500).json({ message: 'Server error while fetching colleges' });
-//   }
-// };
+exports.getCollegeuser = async (req, res) => {
+  try {
+    const { price } = req.query; 
+    const filter = {};
+    if (price) {
+      filter.price = { $ne: null }; 
+    }
+    const colleges = await College.find(filter);
+    res.status(200).json(colleges);
+  } catch (error) {
+    console.error('Error fetching colleges:', error);
+    res.status(500).json({ message: 'Server error while fetching colleges' });
+  }
+};
 
   exports.updateInstitution = async (req, res) => {
     try {
