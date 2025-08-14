@@ -1790,7 +1790,7 @@ exports.genraliqAverage = async (req, res) => {
       .populate('learningId', 'name')
       .lean();
 
-    const dateWiseMap = new Map(); // Map<YYYY-MM-DD, { practice: scoreObj, topic: scoreObj }>
+    const dateWiseMap = new Map(); 
 
     for (const score of allPractice) {
       const date = moment(score.scoreDate || score.createdAt).format('YYYY-MM-DD');

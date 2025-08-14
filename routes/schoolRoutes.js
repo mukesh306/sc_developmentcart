@@ -8,6 +8,8 @@ router.post('/add', auth, schoolController.addInstitution);
 
 router.get('/School', schoolController.getSchools);
 router.get('/college', schoolController.getCollege);
+router.get('/Schooluser', schoolController.getSchoolsuser);
+router.get('/collegeuser', schoolController.getCollegeuser);
 router.get('/institute', schoolController.institute);
 router.delete('/School/:id', auth, schoolController.deleteSchool);
 router.delete('/college/:id', auth, schoolController.deleteCollege);
