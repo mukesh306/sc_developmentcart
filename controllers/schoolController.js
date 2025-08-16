@@ -67,7 +67,7 @@ exports.getSchools = async (req, res) => {
     const filter = {};
 
     if (price) {
-      filter.price = { $ne: null }; // only where price is not null
+      filter.price = { $ne: null }; 
     }
 
     let schools = await School.find(filter)
