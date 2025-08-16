@@ -371,8 +371,8 @@ exports.getUserProfile = async (req, res) => {
     }
 
     // 3) file URLs (aadharCard / marksheet) को public URL बनाना (अगर local path है तो)
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-
+    // const baseUrl = `${req.protocol}://${req.get('host')}`;
+const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
     }
