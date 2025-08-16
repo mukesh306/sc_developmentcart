@@ -342,8 +342,6 @@ exports.completeProfile = async (req, res) => {
 // };
 
 
-
-
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -388,45 +386,15 @@ exports.getUserProfile = async (req, res) => {
       await User.findByIdAndUpdate(userId, { className: null });
       user.className = null;
     } else {
-      // 5) अगर institution.updatedBy बदल गया है तो current user को History में clone करो
+      // 5) अगर institution.updatedBy बदल गया है तो सिर्फ updatedBy अपडेट करो (clone logic हटाया गया है)
       const institutionUpdatedBy = classDetails.updatedBy || null;
 
       if (institutionUpdatedBy) {
         const existingUser = await User.findById(userId).select('updatedBy');
 
         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
-          // --- Prepare user snapshot for history ---
-          const userData = user.toObject(); // Mongoose document -> plain object
-          const currentUserId = userData._id; // original user id
-          delete userData._id; // ताकि हम मैन्युअली _id सेट कर सकें
-
-          // अगर populated fields हैं (objects), उनमें से सिर्फ their ObjectId रखो
-          if (userData.countryId && typeof userData.countryId === 'object') {
-            userData.countryId = userData.countryId._id || userData.countryId;
-          }
-          if (userData.stateId && typeof userData.stateId === 'object') {
-            userData.stateId = userData.stateId._id || userData.stateId;
-          }
-          if (userData.cityId && typeof userData.cityId === 'object') {
-            userData.cityId = userData.cityId._id || userData.cityId;
-          }
-          if (userData.updatedBy && typeof userData.updatedBy === 'object') {
-            userData.updatedBy = userData.updatedBy._id || userData.updatedBy;
-          }
-
-          // (Optional) sanitize/strip any mongoose-specific props
-          delete userData.__v;
-
-          // Create history doc
-          await UserHistory.create({
-            ...userData,
-            _id: currentUserId, // original user's id as _id field in UserHistory
-            originalUserId: new mongoose.Types.ObjectId() // every clone gets its own unique id
-          });
-
-          // Update main user's updatedBy to institutionUpdatedBy
           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
-          user.updatedBy = institutionUpdatedBy; // reflect change in the in-memory object
+          user.updatedBy = institutionUpdatedBy;
         }
       }
     }
@@ -471,7 +439,7 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    // 8) Final formatted response (same as पहले)
+    // 8) Final formatted response
     const formattedUser = {
       ...user._doc,
       status: user.status,
