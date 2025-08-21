@@ -607,7 +607,6 @@ exports.getAssignedListUserpractice = async (req, res) => {
 };
 
 
-
 // exports.getAssignedListUserpractice = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -979,6 +978,8 @@ exports.getAssignedListUserpractice = async (req, res) => {
 //   return Math.floor(points / experiencePoint) + 1;
 // };
 
+
+
 exports.platformDetails = async (req, res) => {
   try {
     const userId = req.params.id;
@@ -1000,17 +1001,20 @@ exports.platformDetails = async (req, res) => {
       return res.status(404).json({ message: 'User with given endDate not found.' });
     }
 
-    // MarkingSetting se bina filter ke first record lo (sabke liye common experiencePoint)
+    // ❌ remove unwanted fields
+    const { level, bonuspoint, userLevelData, ...filteredUser } = user;
+
+    // MarkingSetting se bina filter ke first record lo
     const markingSetting = await MarkingSetting.findOne({}).lean();
     const experiencePoint = markingSetting?.experiencePoint || 0;
 
     // Requested level ke basis pe ya user.level ke basis pe matched level data dhundo
     let matchedLevelData;
     if (requestedLevel) {
-      matchedLevelData = user.userLevelData?.find(l => l.level === requestedLevel);
+      matchedLevelData = userLevelData?.find(l => l.level === requestedLevel);
       if (!matchedLevelData) {
-        // Requested level ka data nahi mila to empty response bhejo experiencePoint ke sath
         return res.status(200).json({
+          user: filteredUser, // ✅ cleaned user object
           bonuspoint: 0,
           levelBonusPoint: 0,
           experiencePoint,
@@ -1019,18 +1023,19 @@ exports.platformDetails = async (req, res) => {
         });
       }
     } else {
-      matchedLevelData = user.userLevelData?.find(l => l.level === user.level);
+      matchedLevelData = userLevelData?.find(l => l.level === level);
       if (!matchedLevelData) {
-        matchedLevelData = user.userLevelData?.[0];
+        matchedLevelData = userLevelData?.[0];
       }
     }
 
     // Final response bhejo
     return res.status(200).json({
-      bonuspoint: Math.round(user?.bonuspoint || 0),
+      user: filteredUser, // ✅ sirf required fields
+      bonuspoint: Math.round(bonuspoint || 0),
       levelBonusPoint: Math.round(matchedLevelData?.levelBonusPoint || 0),
       experiencePoint,
-      level: matchedLevelData?.level || user.level || 1,
+      level: matchedLevelData?.level || level || 1,
       dates: matchedLevelData?.data || []
     });
 
@@ -1039,6 +1044,8 @@ exports.platformDetails = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
 
 // exports.platformDetails = async (req, res) => {
 //   try {
@@ -1050,6 +1057,7 @@ exports.platformDetails = async (req, res) => {
 //       return res.status(400).json({ message: 'userId and endDate are required.' });
 //     }
 
+//     // User ya UserHistory se user data fetch karo
 //     let user = await User.findOne({ _id: userId, endDate }).lean();
 
 //     if (!user) {
@@ -1060,40 +1068,36 @@ exports.platformDetails = async (req, res) => {
 //       return res.status(404).json({ message: 'User with given endDate not found.' });
 //     }
 
-//     if (!user.userLevelData || !user.userLevelData.length) {
-//       return res.status(200).json({
-//         bonuspoint: 0,
-//         levelBonusPoint: 0,
-//         experiencePoint: 0,
-//         level: user.level || 1,
-//         dates: []
-//       });
-//     }
+//     // MarkingSetting se bina filter ke first record lo (sabke liye common experiencePoint)
+//     const markingSetting = await MarkingSetting.findOne({}).lean();
+//     const experiencePoint = markingSetting?.experiencePoint || 0;
 
+//     // Requested level ke basis pe ya user.level ke basis pe matched level data dhundo
 //     let matchedLevelData;
 //     if (requestedLevel) {
-//       matchedLevelData = user.userLevelData.find(l => l.level === requestedLevel);
+//       matchedLevelData = user.userLevelData?.find(l => l.level === requestedLevel);
 //       if (!matchedLevelData) {
-//         // Agar level nahi mila, to blank data bhejein
+//         // Requested level ka data nahi mila to empty response bhejo experiencePoint ke sath
 //         return res.status(200).json({
 //           bonuspoint: 0,
 //           levelBonusPoint: 0,
-//           experiencePoint: 0,
+//           experiencePoint,
 //           level: requestedLevel,
 //           dates: []
 //         });
 //       }
 //     } else {
-//       matchedLevelData = user.userLevelData.find(l => l.level === user.level);
+//       matchedLevelData = user.userLevelData?.find(l => l.level === user.level);
 //       if (!matchedLevelData) {
-//         matchedLevelData = user.userLevelData[0];
+//         matchedLevelData = user.userLevelData?.[0];
 //       }
 //     }
 
+//     // Final response bhejo
 //     return res.status(200).json({
 //       bonuspoint: Math.round(user?.bonuspoint || 0),
 //       levelBonusPoint: Math.round(matchedLevelData?.levelBonusPoint || 0),
-//       experiencePoint: 0,
+//       experiencePoint,
 //       level: matchedLevelData?.level || user.level || 1,
 //       dates: matchedLevelData?.data || []
 //     });
@@ -1103,3 +1107,4 @@ exports.platformDetails = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
+
