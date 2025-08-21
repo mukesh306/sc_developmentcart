@@ -979,7 +979,6 @@ exports.getAssignedListUserpractice = async (req, res) => {
 // };
 
 
-
 exports.platformDetails = async (req, res) => {
   try {
     const userId = req.params.id;
@@ -990,31 +989,64 @@ exports.platformDetails = async (req, res) => {
       return res.status(400).json({ message: 'userId and endDate are required.' });
     }
 
-    // User ya UserHistory se user data fetch karo
-    let user = await User.findOne({ _id: userId, endDate }).lean();
+    // User ya UserHistory se user data fetch karo + populate
+    let user = await User.findOne({ _id: userId, endDate })
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
+      .populate({
+        path: 'updatedBy',
+        select: 'email session startDate endDate endTime name role'
+      })
+      .lean();
 
     if (!user) {
-      user = await UserHistory.findOne({ originalUserId: userId, endDate }).lean();
+      user = await UserHistory.findOne({ originalUserId: userId, endDate })
+        .populate('countryId', 'name')
+        .populate('stateId', 'name')
+        .populate('cityId', 'name')
+        .populate({
+          path: 'updatedBy',
+          select: 'email session startDate endDate endTime name role'
+        })
+        .lean();
     }
 
     if (!user) {
       return res.status(404).json({ message: 'User with given endDate not found.' });
     }
 
-    // ❌ remove unwanted fields
+    // ❌ Remove unwanted fields from user
     const { level, bonuspoint, userLevelData, ...filteredUser } = user;
 
-    // MarkingSetting se bina filter ke first record lo
+    // Class details (School / College)
+    let classId = user.className;
+    let classDetails = null;
+    if (mongoose.Types.ObjectId.isValid(classId)) {
+      classDetails =
+        (await School.findById(classId)) ||
+        (await College.findById(classId));
+    }
+
+    // MarkingSetting
     const markingSetting = await MarkingSetting.findOne({}).lean();
     const experiencePoint = markingSetting?.experiencePoint || 0;
 
-    // Requested level ke basis pe ya user.level ke basis pe matched level data dhundo
+    // Requested level logic
     let matchedLevelData;
     if (requestedLevel) {
       matchedLevelData = userLevelData?.find(l => l.level === requestedLevel);
       if (!matchedLevelData) {
         return res.status(200).json({
-          user: filteredUser, // ✅ cleaned user object
+          user: {
+            ...filteredUser,
+            country: user.countryId?.name || '',
+            state: user.stateId?.name || '',
+            city: user.cityId?.name || '',
+            institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+            institutionType: user.studentType || '',
+            classOrYear: classDetails?.name || ''
+          },
           bonuspoint: 0,
           levelBonusPoint: 0,
           experiencePoint,
@@ -1029,9 +1061,17 @@ exports.platformDetails = async (req, res) => {
       }
     }
 
-    // Final response bhejo
+    // ✅ Final formatted response
     return res.status(200).json({
-      user: filteredUser, // ✅ sirf required fields
+      user: {
+        ...filteredUser,
+        country: user.countryId?.name || '',
+        state: user.stateId?.name || '',
+        city: user.cityId?.name || '',
+        institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+        institutionType: user.studentType || '',
+        classOrYear: classDetails?.name || ''
+      },
       bonuspoint: Math.round(bonuspoint || 0),
       levelBonusPoint: Math.round(matchedLevelData?.levelBonusPoint || 0),
       experiencePoint,
@@ -1044,6 +1084,7 @@ exports.platformDetails = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
