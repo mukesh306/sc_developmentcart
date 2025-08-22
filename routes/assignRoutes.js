@@ -18,4 +18,5 @@ router.put('/assigned/:id', assignedController.updateAssigned);
 router.get('/assignedwithClass/:classId', assignedController.getAssignedwithClass);
 
 router.get('/assign-bonus', auth, assignedController.assignBonusPoint);
+router.get('/WeeklyMonthlyCount', auth, assignedController.WeeklyMonthlyCount);
 module.exports = router;
