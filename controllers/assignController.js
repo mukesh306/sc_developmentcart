@@ -767,3 +767,101 @@ exports.assignBonusPoint = async (req, res) => {
     res.status(500).json({ message: 'Internal server error', error: error.message });
   }
 };
+
+
+
+exports.WeeklyMonthlyCount = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    const user = await User.findById(userId).lean();
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    const session = user.session;
+    const classId = user.className?.toString();
+
+    let weekCount = user.weekCount || 0;
+    let monthCount = user.monthCount || 0;
+    let currentStreak = { count: 0, startDate: null, endDate: null };
+
+    if (session && classId) {
+      const scores = await LearningScore.find({
+        userId,
+        session,
+        classId,
+        strickStatus: true,
+      }).lean();
+
+      const topicScores = await TopicScore.find({
+        userId,
+        session,
+        classId,
+        strickStatus: true,
+      }).lean();
+
+      if (scores.length > 0 && topicScores.length > 0) {
+        const allDatesSet = new Set();
+
+        scores.forEach((score) => {
+          allDatesSet.add(moment(score.scoreDate).format("YYYY-MM-DD"));
+        });
+        topicScores.forEach((score) => {
+          allDatesSet.add(moment(score.updatedAt).format("YYYY-MM-DD"));
+        });
+
+        const sortedDates = Array.from(allDatesSet).sort();
+        let streakStart = null;
+        let tempStreak = [];
+
+        for (let i = 0; i < sortedDates.length; i++) {
+          const curr = moment(sortedDates[i]);
+          const prev = i > 0 ? moment(sortedDates[i - 1]) : null;
+
+          if (!prev || curr.diff(prev, "days") === 1) {
+            if (!streakStart) streakStart = sortedDates[i];
+            tempStreak.push(sortedDates[i]);
+          } else {
+            tempStreak = [sortedDates[i]];
+            streakStart = sortedDates[i];
+          }
+        }
+
+        if (tempStreak.length > 0) {
+          currentStreak = {
+            count: tempStreak.length,
+            startDate: streakStart,
+            endDate: tempStreak[tempStreak.length - 1],
+          };
+        }
+
+        // ✅ Weekly check (increment only when exact multiple of 7)
+        if (currentStreak.count % 7 === 0) {
+          weekCount = weekCount + 1;
+        }
+
+        // ✅ Monthly check (increment only when exact multiple of 30)
+        if (currentStreak.count % 30 === 0) {
+          monthCount = monthCount + 1;
+        }
+
+        // Update user with new counts
+        await User.findByIdAndUpdate(userId, {
+          weekCount,
+          monthCount,
+        });
+      }
+    }
+
+    return res.status(200).json({
+      message: "Weekly/Monthly streak counter updated.",
+      currentStreak,
+      weekCount,
+      monthCount,
+    });
+  } catch (error) {
+    console.error("Error in assignWeeklyMonthlyCount:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
