@@ -769,10 +769,10 @@ exports.assignBonusPoint = async (req, res) => {
 };
 
 
-
 exports.WeeklyMonthlyCount = async (req, res) => {
   try {
-    const userId = req.user._id;
+    // 🔹 userId ab params se aayega
+    const userId = req.params.userId;
 
     const user = await User.findById(userId).lean();
     if (!user) {
@@ -861,7 +861,7 @@ exports.WeeklyMonthlyCount = async (req, res) => {
       monthCount,
     });
   } catch (error) {
-    console.error("Error in assignWeeklyMonthlyCount:", error);
+    console.error("Error in WeeklyMonthlyCount:", error);
     return res.status(500).json({ message: error.message });
   }
 };
