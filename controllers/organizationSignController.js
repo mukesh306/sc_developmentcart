@@ -287,7 +287,6 @@ exports.verifySignupOTP = async (req, res) => {
   }
 };
 
-
 exports.forgetPasswordRequest = async (req, res) => {
   try {
     const { email } = req.body;
@@ -312,12 +311,18 @@ exports.forgetPasswordRequest = async (req, res) => {
 
     await transporter.sendMail(mailOptions);
 
-    res.json({ message: "OTP sent to your email." });
+    // ✅ Response में OTP भी भेज रहे हैं
+    res.json({
+      message: "OTP sent to your email.",
+      otp
+    });
 
   } catch (err) {
+    console.error("Forget Password Request Error:", err);
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 exports.verifyForgetPasswordOTP = async (req, res) => {
@@ -351,12 +356,7 @@ exports.verifyForgetPasswordOTP = async (req, res) => {
     res.json({
       message: "OTP verified. Logged in successfully.",
       token,
-      user: {
-        id: user._id,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        email: user.email
-      }
+      
     });
 
   } catch (err) {
