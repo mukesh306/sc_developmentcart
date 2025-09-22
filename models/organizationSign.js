@@ -11,7 +11,7 @@ const OrganizationSignSchema = new mongoose.Schema({
     default: 'no'
   },
   password: { type: String, required: true },
-  studentType: { type: String, enum: ['school', 'college', 'institute'] }, 
+  studentType: { type: String, enum: ['school', 'college', 'institute','others'] }, 
   instituteName: { type: String },
   session: { type: String },
   otp: { type: String },

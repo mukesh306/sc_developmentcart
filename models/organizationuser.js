@@ -18,7 +18,17 @@ const organizationuserSchema = new mongoose.Schema({
   studentType: { type: String, enum: ['school', 'college', 'institute'] }, 
   instituteName: { type: String },
   className: { type: mongoose.Schema.Types.ObjectId, ref: 'Adminschool' },
+ 
+  updatedBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Admin1' 
+  },
+
+  
   session: { type: String },
+  startDate: { type: String },  
+  endDate: { type: String },    
+  endTime: { type: String },
    startDate: {
     type: String, 
   },

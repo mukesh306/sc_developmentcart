@@ -16,7 +16,7 @@ const experiencePoint = require('./routes/experiencePointRoutes');
 const MarkingSetting = require('./routes/markingSettingRoutes');
 const PracticesTest = require('./routes/practicesRoutes');
 const Organization = require('./routes/organizationSignRoutes');
-const OrganizationUser = require('./routes/organizationUserRoutes');
+
 connectDB();
 app.use(cors());
 app.use(express.json());
@@ -41,7 +41,6 @@ app.use('/api/v1', experiencePoint);
 app.use('/api/v1', MarkingSetting);
 app.use('/api/v1', PracticesTest);
 app.use('/api/v1', Organization);
-app.use('/api/v1', OrganizationUser);
 
 
 app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
