@@ -43,16 +43,16 @@ const organizationuserSchema = new mongoose.Schema({
   marksheet: { type: String },
   resetPasswordOTP: { type: String },
 
-
-
-
  status: {
     type: String,
     enum: ['no', 'yes'],
     default: 'no'
   },
 //   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
- 
+ createdBy: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'OrganizationSign' 
+  },
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });

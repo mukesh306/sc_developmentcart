@@ -381,6 +381,145 @@ exports.verifyForgetPasswordOTP = async (req, res) => {
 };
 
 
+exports.resetPassword = async (req, res) => {
+  try {
+    const { password, newPassword } = req.body;
+    const token = req.headers.authorization?.split(" ")[1]; // "Bearer <token>"
+
+    if (!token) {
+      return res.status(401).json({ message: "Authorization token required" });
+    }
+
+    // Verify token
+    let decoded;
+    try {
+      decoded = jwt.verify(token, process.env.JWT_SECRET || "SECRET_KEY");
+    } catch (err) {
+      return res.status(401).json({ message: "Invalid or expired token" });
+    }
+
+    // Find user
+    const user = await OrganizationSign.findById(decoded.id);
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    // ✅ Check if password and newPassword match
+    if (password !== newPassword) {
+      return res.status(400).json({ message: "Password and New Password must be same" });
+    }
+
+    // Hash new password
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    user.password = hashedPassword;
+
+    await user.save();
+
+    res.json({
+      message: "Password reset successfully. Please login with your new password."
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+
+// exports.organizationUser = async (req, res) => {
+//   try {
+//     const {
+//       firstName,
+//       middleName,
+//       lastName,
+//       mobileNumber,
+//       email,
+//       countryId,
+//       stateId,
+//       cityId,
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//       className
+//     } = req.body;
+
+//     // ✅ Only email is required
+//     if (!email) return res.status(400).json({ message: 'Email address can’t remain empty.' });
+
+//     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+//     if (!emailRegex.test(email)) return res.status(400).json({ message: 'Please enter a valid email address.' });
+
+//     // Check existing user
+//     let user = await Organizationuser.findOne({ email });
+
+//     const updatedFields = {
+//       firstName,
+//       middleName,
+//       lastName,
+//       mobileNumber,
+//       email,
+//       countryId: mongoose.Types.ObjectId.isValid(countryId) ? countryId : undefined,
+//       stateId: mongoose.Types.ObjectId.isValid(stateId) ? stateId : undefined,
+//       cityId: mongoose.Types.ObjectId.isValid(cityId) ? cityId : undefined,
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//       className: mongoose.Types.ObjectId.isValid(className) ? className : undefined
+//     };
+
+//     if (req.files?.aadharCard?.[0]) updatedFields.aadharCard = req.files.aadharCard[0].path;
+//     if (req.files?.marksheet?.[0]) updatedFields.marksheet = req.files.marksheet[0].path;
+
+//     if (user) {
+//       // Update existing user
+//       user = await Organizationuser.findByIdAndUpdate(user._id, updatedFields, { new: true });
+//     } else {
+//       // Create new user
+//       user = new Organizationuser(updatedFields);
+//       await user.save();
+//     }
+
+//     await user.populate('countryId stateId cityId');
+
+//     // Get class details
+//     let classDetails = null;
+//     if (mongoose.Types.ObjectId.isValid(className)) {
+//       classDetails =
+//         (await School.findById(className)) ||
+//         (await College.findById(className)) ||
+//         (await Institute.findById(className));
+//     }
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+//     if (user.aadharCard && fs.existsSync(user.aadharCard)) user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//     if (user.marksheet && fs.existsSync(user.marksheet)) user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+
+//     const formattedUser = {
+//       ...user._doc,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: schoolName || collegeName || instituteName || '',
+//       institutionType: studentType || '',
+//       classOrYear: classDetails?.name || ''
+//     };
+
+//     res.status(200).json({
+//       message: 'Signup/Profile completed successfully.',
+//       user: formattedUser
+//     });
+
+//   } catch (error) {
+//     console.error('Signup/Profile Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
+
 exports.organizationUser = async (req, res) => {
   try {
     const {
@@ -430,11 +569,15 @@ exports.organizationUser = async (req, res) => {
     if (req.files?.marksheet?.[0]) updatedFields.marksheet = req.files.marksheet[0].path;
 
     if (user) {
-      // Update existing user
+      // ✅ Update existing user (set updatedBy)
+      updatedFields.updatedBy = req.user._id;  // from token
       user = await Organizationuser.findByIdAndUpdate(user._id, updatedFields, { new: true });
     } else {
-      // Create new user
-      user = new Organizationuser(updatedFields);
+      // ✅ Create new user (set createdBy)
+      user = new Organizationuser({
+        ...updatedFields,
+        createdBy: req.user._id  // from token
+      });
       await user.save();
     }
 
@@ -460,7 +603,8 @@ exports.organizationUser = async (req, res) => {
       city: user.cityId?.name || '',
       institutionName: schoolName || collegeName || instituteName || '',
       institutionType: studentType || '',
-      classOrYear: classDetails?.name || ''
+      classOrYear: classDetails?.name || '',
+      createdBy: user.createdBy || null, 
     };
 
     res.status(200).json({
@@ -474,13 +618,12 @@ exports.organizationUser = async (req, res) => {
   }
 };
 
-
 exports.getOrganizationUserProfile = async (req, res) => {
   try {
     const { fields } = req.query;
 
-    // Fetch the first user in Organizationuser collection
-    let user = await Organizationuser.findOne()
+    // ✅ Fetch all users created by this token
+    let users = await Organizationuser.find({ createdBy: req.user._id })
       .populate('countryId', 'name')
       .populate('stateId', 'name')
       .populate('cityId', 'name')
@@ -489,66 +632,154 @@ exports.getOrganizationUserProfile = async (req, res) => {
         select: 'email session startDate endDate endTime name role'
       });
 
-    if (!user) {
-      return res.status(404).json({ message: 'No users found.' });
+    if (!users || users.length === 0) {
+      return res.status(404).json({ message: 'No users found for this token.' });
     }
 
-    // Fetch class details
-    let classId = user.className;
-    let classDetails = null;
-    if (mongoose.Types.ObjectId.isValid(classId)) {
-      classDetails =
-        (await School.findById(classId)) ||
-        (await College.findById(classId));
-    }
-
-    // Convert local paths to URLs
     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
-    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-    }
-    if (user.marksheet && fs.existsSync(user.marksheet)) {
-      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-    }
 
-    // Handle invalid classDetails
-    if (!classDetails || classDetails.price == null) {
-      classId = null;
-      user.className = null;
-    }
+    // Format each user
+    const formattedUsers = await Promise.all(
+      users.map(async (user) => {
+        // Fetch class details
+        let classId = user.className;
+        let classDetails = null;
+        if (mongoose.Types.ObjectId.isValid(classId)) {
+          classDetails =
+            (await School.findById(classId)) ||
+            (await College.findById(classId)) ||
+            (await Institute.findById(classId));
+        }
 
-    // Format response
-    const formattedUser = {
-      ...user._doc,
-      status: user.status,
-      className: classId,
-      country: user.countryId?.name || '',
-      state: user.stateId?.name || '',
-      city: user.cityId?.name || '',
-      institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-      institutionType: user.studentType || '',
-      updatedBy: user.updatedBy || null,
-      classOrYear: classDetails?.name || ''
-    };
+        // Convert file paths to URLs
+        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+        }
+        if (user.marksheet && fs.existsSync(user.marksheet)) {
+          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+        }
 
-    // Apply fields filter if requested
-    let responseUser = formattedUser;
-    if (fields) {
-      const requestedFields = fields.split(',');
-      const limited = {};
-      requestedFields.forEach(f => {
-        if (formattedUser.hasOwnProperty(f)) limited[f] = formattedUser[f];
-      });
-      responseUser = limited;
-    }
+        // Handle invalid classDetails
+        if (!classDetails || classDetails.price == null) {
+          classId = null;
+          user.className = null;
+        }
+
+        // Format single user
+        const formattedUser = {
+          ...user._doc,
+          status: user.status,
+          className: classId,
+          country: user.countryId?.name || '',
+          state: user.stateId?.name || '',
+          city: user.cityId?.name || '',
+          institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+          institutionType: user.studentType || '',
+          updatedBy: user.updatedBy || null,
+          createdBy: user.createdBy || null, // raw ObjectId
+          classOrYear: classDetails?.name || ''
+        };
+
+        // Apply fields filter if requested
+        if (fields) {
+          const requestedFields = fields.split(',');
+          const limited = {};
+          requestedFields.forEach(f => {
+            if (formattedUser.hasOwnProperty(f)) limited[f] = formattedUser[f];
+          });
+          return limited;
+        }
+
+        return formattedUser;
+      })
+    );
 
     return res.status(200).json({
-      message: 'Organization user profile fetched successfully.',
-      user: responseUser
+      message: 'Organization user profiles fetched successfully.',
+      users: formattedUsers
     });
 
   } catch (error) {
     console.error('Get OrganizationUser Profile Error:', error);
     return res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.updateOrganizationUser = async (req, res) => {
+  try {
+    const { userId } = req.params; // user _id to update
+    const {
+      firstName,
+      middleName,
+      lastName,
+      mobileNumber,
+      countryId,
+      stateId,
+      cityId,
+      pincode,
+      studentType,
+      schoolName,
+      instituteName,
+      collegeName,
+      className
+    } = req.body;
+
+    let user = await Organizationuser.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    const updatedFields = {
+      firstName,
+      middleName,
+      lastName,
+      mobileNumber,
+      countryId: mongoose.Types.ObjectId.isValid(countryId) ? countryId : undefined,
+      stateId: mongoose.Types.ObjectId.isValid(stateId) ? stateId : undefined,
+      cityId: mongoose.Types.ObjectId.isValid(cityId) ? cityId : undefined,
+      pincode,
+      studentType,
+      schoolName,
+      instituteName,
+      collegeName,
+      className: mongoose.Types.ObjectId.isValid(className) ? className : undefined,
+      updatedBy: req.user._id // save updater
+    };
+
+    // Handle file uploads
+    if (req.files?.aadharCard?.[0]) updatedFields.aadharCard = req.files.aadharCard[0].path;
+    if (req.files?.marksheet?.[0]) updatedFields.marksheet = req.files.marksheet[0].path;
+
+    // ✅ Do NOT update email
+    delete updatedFields.email;
+
+    user = await Organizationuser.findByIdAndUpdate(userId, updatedFields, { new: true })
+      .populate('countryId stateId cityId');
+
+    res.status(200).json({
+      message: 'User updated successfully.',
+      user
+    });
+
+  } catch (error) {
+    console.error('Update User Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.deleteOrganizationUser = async (req, res) => {
+  try {
+    const { userId } = req.params; // user _id to delete
+
+    const user = await Organizationuser.findById(userId);
+    if (!user) return res.status(404).json({ message: 'User not found.' });
+
+    await Organizationuser.findByIdAndDelete(userId);
+
+    res.status(200).json({ message: 'User deleted successfully.' });
+
+  } catch (error) {
+    console.error('Delete User Error:', error);
+    res.status(500).json({ message: error.message });
   }
 };
