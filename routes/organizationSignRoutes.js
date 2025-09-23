@@ -22,13 +22,13 @@ router.post("/organization/organizationUser",auth,upload.fields([
 
 
 router.get("/organization/organizationUserprofile",auth, organizationSignController.getOrganizationUserProfile);
-
 router.put("/organization/organizationUser/:userId", upload.fields([
   { name: 'aadharCard', maxCount: 1 },
   { name: 'marksheet', maxCount: 1 }
 ]), organizationSignController.updateOrganizationUser);
 
 router.delete("/organization/organizationUser/:userId", organizationSignController.deleteOrganizationUser);
+router.post("/organization/invite", organizationSignController.inviteUsers);
 
 
 router.get('/organization/verify-token', (req, res) => {

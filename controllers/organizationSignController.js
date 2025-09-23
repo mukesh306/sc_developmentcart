@@ -384,13 +384,12 @@ exports.verifyForgetPasswordOTP = async (req, res) => {
 exports.resetPassword = async (req, res) => {
   try {
     const { password, newPassword } = req.body;
-    const token = req.headers.authorization?.split(" ")[1]; // "Bearer <token>"
+    const token = req.headers.authorization?.split(" ")[1]; 
 
     if (!token) {
       return res.status(401).json({ message: "Authorization token required" });
     }
 
-    // Verify token
     let decoded;
     try {
       decoded = jwt.verify(token, process.env.JWT_SECRET || "SECRET_KEY");
@@ -398,18 +397,15 @@ exports.resetPassword = async (req, res) => {
       return res.status(401).json({ message: "Invalid or expired token" });
     }
 
-    // Find user
     const user = await OrganizationSign.findById(decoded.id);
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    // ✅ Check if password and newPassword match
     if (password !== newPassword) {
       return res.status(400).json({ message: "Password and New Password must be same" });
     }
 
-    // Hash new password
     const hashedPassword = await bcrypt.hash(newPassword, 10);
     user.password = hashedPassword;
 
@@ -708,7 +704,7 @@ exports.getOrganizationUserProfile = async (req, res) => {
 
 exports.updateOrganizationUser = async (req, res) => {
   try {
-    const { userId } = req.params; // user _id to update
+    const { userId } = req.params;
     const {
       firstName,
       middleName,
@@ -742,14 +738,14 @@ exports.updateOrganizationUser = async (req, res) => {
       instituteName,
       collegeName,
       className: mongoose.Types.ObjectId.isValid(className) ? className : undefined,
-      updatedBy: req.user._id // save updater
+      updatedBy: req.user._id 
     };
 
-    // Handle file uploads
+   
     if (req.files?.aadharCard?.[0]) updatedFields.aadharCard = req.files.aadharCard[0].path;
     if (req.files?.marksheet?.[0]) updatedFields.marksheet = req.files.marksheet[0].path;
 
-    // ✅ Do NOT update email
+   
     delete updatedFields.email;
 
     user = await Organizationuser.findByIdAndUpdate(userId, updatedFields, { new: true })
@@ -780,6 +776,59 @@ exports.deleteOrganizationUser = async (req, res) => {
 
   } catch (error) {
     console.error('Delete User Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.inviteUsers = async (req, res) => {
+  try {
+    const { emails } = req.body;
+
+    if (!emails || !Array.isArray(emails) || emails.length === 0) {
+      return res.status(400).json({ message: 'Please provide at least one email.' });
+    }
+
+    // Use your existing transporter
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: 'noreply@shikshacart.com', 
+        pass: 'xyrx ryad ondf jaum' 
+      }
+    });
+
+    // Default message for invite
+    const defaultMessage = `
+Hello,
+
+You have been invited to Update Data!
+
+Please update your profile clicl Here: https://shikshacart.com/register
+
+Best regards,
+ShikshaCart Team
+`;
+
+    // Send invite to each email
+    const sendEmailPromises = emails.map(email => {
+      const mailOptions = {
+        from: 'noreply@shikshacart.com',
+        to: email,
+        subject: 'You are invited to join ShikshaCart!',
+        text: defaultMessage
+      };
+      return transporter.sendMail(mailOptions);
+    });
+
+    await Promise.all(sendEmailPromises);
+
+    res.status(200).json({
+      message: `Invitations sent successfully to ${emails.length} email(s).`
+    });
+
+  } catch (error) {
+    console.error('Invite Users Error:', error);
     res.status(500).json({ message: error.message });
   }
 };
