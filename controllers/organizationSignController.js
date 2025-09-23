@@ -78,8 +78,9 @@ exports.getOrganizationSigns = async (req, res) => {
 
 exports.getOrganizationSignById = async (req, res) => {
   try {
-    // ✅ id token से आएगी (auth middleware set करेगा req.user.id में)
-    const orgSign = await OrganizationSign.findById(req.user.id);
+    const orgSign = await OrganizationSign.findById(req.user.id).select(
+      "firstName middleName lastName mobileNumber email studentType instituteName"
+    );
 
     if (!orgSign) {
       return res.status(404).json({ message: "Organization Sign not found" });
@@ -94,6 +95,7 @@ exports.getOrganizationSignById = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 exports.updateOrganizationSign = async (req, res) => {
@@ -195,27 +197,28 @@ const transporter = nodemailer.createTransport({
      }
 });
 
-
 exports.loginOrganization = async (req, res) => {
   try {
     const { email, password } = req.body;
 
-   
     const orgUser = await OrganizationSign.findOne({ email });
     if (!orgUser) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    
+    // ❌ Agar email verify nahi hai
+    if (!orgUser.isVerified) {
+      return res.status(403).json({ message: "Please verify your email before logging in." });
+    }
+
     const isMatch = await bcrypt.compare(password, orgUser.password);
     if (!isMatch) {
       return res.status(400).json({ message: "Invalid credentials" });
     }
 
-
     const token = jwt.sign(
       { id: orgUser._id, email: orgUser.email },
-      process.env.JWT_SECRET || "SECRET_KEY", 
+      process.env.JWT_SECRET || "SECRET_KEY",
       { expiresIn: "1d" }
     );
 
@@ -254,20 +257,25 @@ exports.verifySignupOTP = async (req, res) => {
       return res.status(400).json({ message: "OTP expired" });
     }
 
-    orgUser.VerifyEmail = "yes";
+    // ✅ Verify
+    orgUser.isVerified = true;
 
+    // ✅ OTP history save
     orgUser.otpHistory.push({
       otp: orgUser.otp,
-      status: "used"
+      status: "used",
+      verifiedAt: new Date()
     });
+
+    // ✅ Clear OTP fields
     orgUser.otp = null;
     orgUser.otpExpires = null;
 
     await orgUser.save();
- 
+
     const token = jwt.sign(
       { id: orgUser._id, email: orgUser.email },
-      "SECRET_KEY",
+      process.env.JWT_SECRET || "SECRET_KEY",
       { expiresIn: "1d" }
     );
 
@@ -286,6 +294,7 @@ exports.verifySignupOTP = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 exports.forgetPasswordRequest = async (req, res) => {
   try {
@@ -324,7 +333,6 @@ exports.forgetPasswordRequest = async (req, res) => {
 };
 
 
-
 exports.verifyForgetPasswordOTP = async (req, res) => {
   try {
     const { email, otp } = req.body;
@@ -338,8 +346,17 @@ exports.verifyForgetPasswordOTP = async (req, res) => {
     // Expiry check
     if (user.otpExpires < Date.now()) return res.status(400).json({ message: "OTP expired" });
 
+    // ✅ If user was not verified, mark verified now
+    if (!user.isVerified) {
+      user.isVerified = true;
+    }
+
     // OTP history save
-    user.otpHistory.push({ otp: user.otp, status: "used" });
+    user.otpHistory.push({
+      otp: user.otp,
+      status: "used",
+      verifiedAt: new Date()
+    });
 
     // Clear OTP after verification
     user.otp = null;
@@ -354,17 +371,14 @@ exports.verifyForgetPasswordOTP = async (req, res) => {
     );
 
     res.json({
-      message: "OTP verified. Logged in successfully.",
-      token,
-      
+      message: "OTP verified successfully.",
+      token
     });
 
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
-
-
 
 
 exports.organizationUser = async (req, res) => {

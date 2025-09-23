@@ -1,5 +1,6 @@
 const express = require('express');
 const router = express.Router();
+const jwt = require('jsonwebtoken');
 const upload = require('../middleware/upload');
 const auth = require('../middleware/auth');
 const organizationSignController = require('../controllers/organizationSignController');
@@ -24,4 +25,28 @@ router.post("/organization/organizationUser",upload.fields([
 
 
 router.get("/organization/organizationUserprofile", organizationSignController.getOrganizationUserProfile);
+
+
+router.get('/organization/verify-token', (req, res) => {
+  const authHeader = req.headers.authorization;
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ status: "no", message: "Token not provided properly." });
+  }
+  const token = authHeader.split(' ')[1];
+  try {
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    return res.status(200).json({
+      status: "yes",
+      message: "Token is valid.",
+      userId: decoded.id
+    });
+  } catch (err) {
+    console.error("Token verification failed:", err.message);
+    return res.status(401).json({
+      status: "no",
+      message: "Token invalid or expired.",
+      error: err.message  
+    });
+  }
+});
 module.exports = router;
