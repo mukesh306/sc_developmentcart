@@ -3,7 +3,9 @@ const router = express.Router();
 const jwt = require('jsonwebtoken');
 const upload = require('../middleware/upload');
 const auth = require('../middleware/auth');
+
 const organizationSignController = require('../controllers/organizationSignController');
+
 router.post('/organization', organizationSignController.createOrganizationSign);
 router.get('/organization', organizationSignController.getOrganizationSigns);
 router.get('/organizationprofile',auth, organizationSignController.getOrganizationSignById);
@@ -31,7 +33,7 @@ router.delete("/organization/organizationUser/:userId", organizationSignControll
 router.post("/organization/invite", organizationSignController.inviteUsers);
 
 
-router.get("/organization/verify-token", (req, res) => {
+router.get('/organization1/verify-token', (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ status: "no", message: "Token not provided properly." });
@@ -53,5 +55,4 @@ router.get("/organization/verify-token", (req, res) => {
     });
   }
 });
-
 module.exports = router;
