@@ -615,96 +615,6 @@ exports.organizationUser = async (req, res) => {
 };
 
 
-// exports.getOrganizationUserProfile = async (req, res) => {
-//   try {
-//     const { fields, className } = req.query;
-
-//     // Base query
-//     let query = { createdBy: req.user._id };
-
-//     // If className filter is given, add it
-//     if (className && mongoose.Types.ObjectId.isValid(className)) {
-//       query.className = className;
-//     }
-
-//     let users = await Organizationuser.find(query)
-//       .populate('countryId', 'name')
-//       .populate('stateId', 'name')
-//       .populate('cityId', 'name')
-//       .populate({
-//         path: 'updatedBy',
-//         select: 'email session startDate endDate endTime name role'
-//       });
-
-//     if (!users || users.length === 0) {
-//       return res.status(404).json({ message: 'No users found for this token.' });
-//     }
-
-//     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
-
-//     const formattedUsers = await Promise.all(
-//       users.map(async (user) => {
-//         let classId = user.className;
-//         let classDetails = null;
-//         if (mongoose.Types.ObjectId.isValid(classId)) {
-//           classDetails =
-//             (await School.findById(classId)) ||
-//             (await College.findById(classId));
-//             // (await Institute.findById(classId));
-//         }
-
-//         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-//         }
-//         if (user.marksheet && fs.existsSync(user.marksheet)) {
-//           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-//         }
-
-//         if (!classDetails || classDetails.price == null) {
-//           classId = null;
-//           user.className = null;
-//         }
-
-//         const formattedUser = {
-//           ...user._doc,
-//           status: user.status,
-//           className: classId,
-//           country: user.countryId?.name || '',
-//           state: user.stateId?.name || '',
-//           city: user.cityId?.name || '',
-//           institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-//           institutionType: user.studentType || '',
-//           updatedBy: user.updatedBy || null,
-//           createdBy: user.createdBy || null,
-//           classOrYear: classDetails?.name || ''
-//         };
-
-//         if (fields) {
-//           const requestedFields = fields.split(',');
-//           const limited = {};
-//           requestedFields.forEach(f => {
-//             if (formattedUser.hasOwnProperty(f)) limited[f] = formattedUser[f];
-//           });
-//           return limited;
-//         }
-
-//         return formattedUser;
-//       })
-//     );
-
-//     return res.status(200).json({
-//       message: 'Organization user profiles fetched successfully.',
-//       users: formattedUsers
-//     });
-
-//   } catch (error) {
-//     console.error('Get OrganizationUser Profile Error:', error);
-//     return res.status(500).json({ message: error.message });
-//   }
-// };
-
-
-
 exports.getOrganizationUserProfile = async (req, res) => {
   try {
     const { fields, className } = req.query;
@@ -726,22 +636,23 @@ exports.getOrganizationUserProfile = async (req, res) => {
         select: 'email session startDate endDate endTime name role'
       });
 
+    if (!users || users.length === 0) {
+      return res.status(404).json({ message: 'No users found for this token.' });
+    }
+
     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
 
-    // Format each user
     const formattedUsers = await Promise.all(
       users.map(async (user) => {
         let classId = user.className;
         let classDetails = null;
-
         if (mongoose.Types.ObjectId.isValid(classId)) {
           classDetails =
             (await School.findById(classId)) ||
             (await College.findById(classId));
-          // (await Institute.findById(classId));
+            // (await Institute.findById(classId));
         }
 
-        // Convert file paths to URLs
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
         }
@@ -749,13 +660,11 @@ exports.getOrganizationUserProfile = async (req, res) => {
           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
         }
 
-        // Handle invalid classDetails
         if (!classDetails || classDetails.price == null) {
           classId = null;
           user.className = null;
         }
 
-        // Format single user
         const formattedUser = {
           ...user._doc,
           status: user.status,
@@ -766,11 +675,10 @@ exports.getOrganizationUserProfile = async (req, res) => {
           institutionName: user.schoolName || user.collegeName || user.instituteName || '',
           institutionType: user.studentType || '',
           updatedBy: user.updatedBy || null,
-          createdBy: user.createdBy || null, // raw ObjectId
+          createdBy: user.createdBy || null,
           classOrYear: classDetails?.name || ''
         };
 
-        // Apply fields filter if requested
         if (fields) {
           const requestedFields = fields.split(',');
           const limited = {};
@@ -786,7 +694,7 @@ exports.getOrganizationUserProfile = async (req, res) => {
 
     return res.status(200).json({
       message: 'Organization user profiles fetched successfully.',
-      users: formattedUsers   
+      users: formattedUsers
     });
 
   } catch (error) {
@@ -794,6 +702,98 @@ exports.getOrganizationUserProfile = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// exports.getOrganizationUserProfile = async (req, res) => {
+//   try {
+//     const { fields, className } = req.query;
+
+//     // Base query
+//     let query = { createdBy: req.user._id };
+
+//     // If className filter is given, add it
+//     if (className && mongoose.Types.ObjectId.isValid(className)) {
+//       query.className = className;
+//     }
+
+//     let users = await Organizationuser.find(query)
+//       .populate('countryId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('cityId', 'name')
+//       .populate({
+//         path: 'updatedBy',
+//         select: 'email session startDate endDate endTime name role'
+//       });
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+
+//     // Format each user
+//     const formattedUsers = await Promise.all(
+//       users.map(async (user) => {
+//         let classId = user.className;
+//         let classDetails = null;
+
+//         if (mongoose.Types.ObjectId.isValid(classId)) {
+//           classDetails =
+//             (await School.findById(classId)) ||
+//             (await College.findById(classId));
+//           // (await Institute.findById(classId));
+//         }
+
+//         // Convert file paths to URLs
+//         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//         }
+//         if (user.marksheet && fs.existsSync(user.marksheet)) {
+//           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//         }
+
+//         // Handle invalid classDetails
+//         if (!classDetails || classDetails.price == null) {
+//           classId = null;
+//           user.className = null;
+//         }
+
+//         // Format single user
+//         const formattedUser = {
+//           ...user._doc,
+//           status: user.status,
+//           className: classId,
+//           country: user.countryId?.name || '',
+//           state: user.stateId?.name || '',
+//           city: user.cityId?.name || '',
+//           institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+//           institutionType: user.studentType || '',
+//           updatedBy: user.updatedBy || null,
+//           createdBy: user.createdBy || null, // raw ObjectId
+//           classOrYear: classDetails?.name || ''
+//         };
+
+//         // Apply fields filter if requested
+//         if (fields) {
+//           const requestedFields = fields.split(',');
+//           const limited = {};
+//           requestedFields.forEach(f => {
+//             if (formattedUser.hasOwnProperty(f)) limited[f] = formattedUser[f];
+//           });
+//           return limited;
+//         }
+
+//         return formattedUser;
+//       })
+//     );
+
+//     return res.status(200).json({
+//       message: 'Organization user profiles fetched successfully.',
+//       users: formattedUsers   
+//     });
+
+//   } catch (error) {
+//     console.error('Get OrganizationUser Profile Error:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.updateOrganizationUser = async (req, res) => {
