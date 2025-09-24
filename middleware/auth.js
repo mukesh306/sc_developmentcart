@@ -38,9 +38,10 @@
 
 
 const jwt = require('jsonwebtoken');
-const Admin = require('../models/admin');   // superadmin
-const Admin1 = require('../models/admin1'); // admin
-const User = require('../models/User');     // optional user model
+const Admin = require('../models/admin');   
+const Admin1 = require('../models/admin1'); 
+const User = require('../models/User');     
+const OrganizationSign = require('../models/organizationSign');     
 
 module.exports = async (req, res, next) => {
   try {
@@ -74,6 +75,12 @@ module.exports = async (req, res, next) => {
     if (user) {
       req.user = user;
       req.role = 'admin';
+      return next();
+    }
+    user = await OrganizationSign.findById(decoded.id);
+    if (user) {
+      req.user = user;
+      req.role = 'OrganizationSign';
       return next();
     }
 

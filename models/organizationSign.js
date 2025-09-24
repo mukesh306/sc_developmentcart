@@ -6,12 +6,9 @@ const OrganizationSignSchema = new mongoose.Schema({
   lastName: { type: String, required: true },
   mobileNumber: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
-  VerifyEmail: {
-    type: String,
-    default: 'no'
-  },
+  isVerified: { type: Boolean, default: false },
   password: { type: String, required: true },
-  studentType: { type: String, enum: ['school', 'college', 'institute'] }, 
+  studentType: { type: String, enum: ['school', 'college', 'institute','others'] }, 
   instituteName: { type: String },
   session: { type: String },
   otp: { type: String },
