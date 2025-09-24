@@ -30,27 +30,35 @@ router.put("/organization/organizationUser/:userId", upload.fields([
 router.delete("/organization/organizationUser/:userId", organizationSignController.deleteOrganizationUser);
 router.post("/organization/invite", organizationSignController.inviteUsers);
 
-
-router.get('/organization/verify-token', (req, res) => {
-  const authHeader = req.headers.authorization;
-  if (!authHeader || !authHeader.startsWith('Bearer ')) {
-    return res.status(401).json({ status: "no", message: "Token not provided properly." });
-  }
-  const token = authHeader.split(' ')[1];
+router.get('/organization/action/verify-token', (req, res) => {
   try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        status: "no",
+        message: "Authorization header missing or malformed."
+      });
+    }
+
+    const token = authHeader.split(' ')[1];
+
+    // Verify JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
     return res.status(200).json({
       status: "yes",
       message: "Token is valid.",
       userId: decoded.id
     });
   } catch (err) {
-    console.error("Token verification failed:", err.message);
     return res.status(401).json({
       status: "no",
       message: "Token invalid or expired.",
-      error: err.message  
+      error: err.name === "TokenExpiredError" ? "Token has expired" : err.message
     });
   }
 });
+
+
 module.exports = router;
