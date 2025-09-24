@@ -33,7 +33,7 @@ router.delete("/organization/organizationUser/:userId", organizationSignControll
 router.post("/organization/invite", organizationSignController.inviteUsers);
 
 
-router.get('/organization1/verify-token', (req, res) => {
+router.get('/organization2/verify-token', (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ status: "no", message: "Token not provided properly." });
