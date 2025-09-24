@@ -5,7 +5,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: backend
+    container_name: sc_backend
     restart: unless-stopped
     ports:
       - "${PORT}:${PORT}"
