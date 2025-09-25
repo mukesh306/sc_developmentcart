@@ -23,7 +23,6 @@ router.post("/organization/organizationUser",auth,upload.fields([
       { name: 'marksheet', maxCount: 1 }
     ]), organizationSignController.organizationUser);
 
-
 router.get("/organization/organizationUserprofile",auth, organizationSignController.getOrganizationUserProfile);
 router.put("/organization/organizationUser/:userId", upload.fields([
   { name: 'aadharCard', maxCount: 1 },
