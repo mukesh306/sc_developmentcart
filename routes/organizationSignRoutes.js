@@ -16,6 +16,7 @@ router.post("/organization/verify-otp", organizationSignController.verifySignupO
 router.post("/organization/forget-password", organizationSignController.forgetPasswordRequest); 
 router.post("/organization/verify-forget-otp", organizationSignController.verifyForgetPasswordOTP); 
 router.post("/organization/reset-password", auth,organizationSignController.resetPassword);
+router.post("/organization/bulk-upload", auth,organizationSignController.bulkUploadOrganizationUsers);
 
 router.post("/organization/organizationUser",auth,upload.fields([
       { name: 'aadharCard', maxCount: 1 },
@@ -33,7 +34,7 @@ router.delete("/organization/organizationUser/:userId", organizationSignControll
 router.post("/organization/invite", organizationSignController.inviteUsers);
 
 
-router.get('/organization2/verify-token', (req, res) => {
+router.get('/organization/verify-token', (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
     return res.status(401).json({ status: "no", message: "Token not provided properly." });

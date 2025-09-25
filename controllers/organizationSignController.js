@@ -419,6 +419,62 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
+exports.bulkUploadOrganizationUsers = async (req, res) => {
+  try {
+    const { users } = req.body; // expecting an array of user objects
+
+    if (!users || !Array.isArray(users) || users.length === 0) {
+      return res.status(400).json({ message: 'No users provided for bulk upload.' });
+    }
+
+    const validUsers = [];
+    const invalidUsers = [];
+
+    // Validate each user
+    for (const user of users) {
+      const { firstName, middleName, lastName, mobileNumber, email } = user;
+
+      if (!email) {
+        invalidUsers.push({ user, reason: 'Email is required.' });
+        continue;
+      }
+
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(email)) {
+        invalidUsers.push({ user, reason: 'Invalid email format.' });
+        continue;
+      }
+
+      // Prepare user data for insertion
+      validUsers.push({
+        firstName,
+        middleName,
+        lastName,
+        mobileNumber,
+        email,
+        createdBy: req.user._id, // from token
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    }
+
+    // Insert valid users in bulk
+    let insertedUsers = [];
+    if (validUsers.length > 0) {
+      insertedUsers = await Organizationuser.insertMany(validUsers, { ordered: false }); 
+      // 'ordered: false' will continue inserting even if some fail (like duplicates)
+    }
+
+    res.status(200).json({
+      message: 'Bulk upload completed.',
+      insertedCount: insertedUsers.length,
+      invalidUsers
+    });
+  } catch (error) {
+    console.error('Bulk Upload Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
 
 
 // exports.organizationUser = async (req, res) => {
