@@ -4,7 +4,7 @@ name: Deploy Backend
 on:
   push:
     branches:
-      - dev
+      - UAT
 
 jobs:
   deploy:
@@ -17,17 +17,17 @@ jobs:
       - name: SSH into EC2 & Deploy
         uses: appleboy/ssh-action@v0.1.7
         with:
-          host: ${{ secrets.EC2_DEV_HOST }}
+          host: ${{ secrets.EC2_UAT_HOST }}
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
-          port: 32321
+          port: 22
           script: |
             pwd  # Print working directory
             ls -la  # Check if the files exist
             git config --global --add safe.directory /home/ubuntu/Shikshacart-code/SC_Backend
             cd /home/ubuntu/Shikshacart-code/SC_Backend/
             git reset --hard HEAD
-            git pull origin dev
+            git pull origin UAT
             export DOCKER_BUILDKIT=1
             export COMPOSE_DOCKER_CLI_BUILD=1
             sudo docker compose down
