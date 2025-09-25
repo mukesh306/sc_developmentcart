@@ -3,6 +3,7 @@ const bcrypt = require('bcryptjs');
 const Admin = require('../models/admin');
 const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer'); 
+const moment = require('moment-timezone');
 
 exports.registerAdmin = async (req, res) => {
   try {
@@ -10,11 +11,30 @@ exports.registerAdmin = async (req, res) => {
       return res.status(403).json({ message: 'Only superadmin can create admins.' });
     }
 
-    const { email, password, session, startDate, endDate } = req.body;
+    const { email, password, session, startDate, endDate, endTime } = req.body;
 
-    const existing = await Admin1.findOne({ email });
+    // Keep startDate and endDate as-is (e.g., '07-08-2025')
+    // Format endTime into 24-hour format like '10:55'
+    const formattedEndTime = moment(endTime, 'HH:mm').format('HH:mm');
+
+    // Check for existing admin with same session or overlapping date ranges
+    const existing = await Admin1.findOne({
+      email,
+      $or: [
+        { session },
+        {
+          $and: [
+            { startDate: { $lte: endDate } },
+            { endDate: { $gte: startDate } }
+          ]
+        }
+      ]
+    });
+
     if (existing) {
-      return res.status(409).json({ message: 'Admin already exists.' });
+      return res.status(409).json({
+        message: 'Admin already exists with this session or overlapping dates.',
+      });
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
@@ -23,38 +43,38 @@ exports.registerAdmin = async (req, res) => {
       email,
       password: hashedPassword,
       session,
-      startDate,
-      endDate,
-      createdBy: req.user._id 
+      startDate, // Keep as string: '07-08-2025'
+      endDate,   // Keep as string: '07-08-2025'
+      endTime: formattedEndTime, // '10:55'
+      createdBy: req.user._id,
     });
 
     await newAdmin.save();
 
-    res.status(201).json({ message: 'Admin created successfully.', admin: newAdmin });
+    res.status(201).json({
+      message: 'Admin created successfully.',
+      admin: newAdmin,
+    });
   } catch (error) {
+    console.error('Register error:', error);
     res.status(500).json({ message: 'Server error.', error: error.message });
   }
 };
 
-
-// exports.loginAdmin = async (req, res) => {
+// exports.getAllAdmins = async (req, res) => {
 //   try {
-//     const { email, password } = req.body;
-
-//     let user = await Admin.findOne({ email }) || await Admin1.findOne({ email });
-//     if (!user) return res.status(404).json({ message: 'User not found' });
-//     const isMatch = await bcrypt.compare(password, user.password);
-//     if (!isMatch) return res.status(401).json({ message: 'Invalid password' });
-
-//     const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, { expiresIn: '1d' });
-
+//     const admins = await Admin1.find()
+//       .populate('createdBy', 'email') 
+//       .sort({ createdAt: -1 });
 //     res.status(200).json({
-//       token,
-//       role: user.role,
-//       message: 'Login successful'
+//       message: 'Admins fetched successfully.',
+//       data: admins
 //     });
-//   } catch (err) {
-//     res.status(500).json({ message: 'Login failed', error: err.message });
+//   } catch (error) {
+//     res.status(500).json({
+//       message: 'Server error.',
+//       error: error.message
+//     });
 //   }
 // };
 
@@ -62,11 +82,29 @@ exports.registerAdmin = async (req, res) => {
 exports.getAllAdmins = async (req, res) => {
   try {
     const admins = await Admin1.find()
-      .populate('createdBy', 'email') 
-      .sort({ createdAt: -1 });
+      .populate('createdBy', 'email')
+      .sort({ createdAt: -1 })
+      .lean();
+
+    // IST me current din ki shuruat lelo
+    const today = moment.tz('Asia/Kolkata').startOf('day');
+
+    const updatedAdmins = admins.map(admin => {
+      let isActive = false;
+      if (admin.endDate) {
+        // yaha endDate ko bhi IST timezone me parse karo
+        const end = moment.tz(admin.endDate, 'DD-MM-YYYY', 'Asia/Kolkata');
+        isActive = end.isSameOrAfter(today);
+      }
+      return {
+        ...admin,
+        status: isActive
+      };
+    });
+
     res.status(200).json({
       message: 'Admins fetched successfully.',
-      data: admins
+      data: updatedAdmins
     });
   } catch (error) {
     res.status(500).json({
@@ -77,11 +115,9 @@ exports.getAllAdmins = async (req, res) => {
 };
 
 
-
 exports.deleteAdmin = async (req, res) => {
   try {
     const { id } = req.params;
-
     const deleted = await Admin1.findByIdAndDelete(id);
 
     if (!deleted) {
@@ -95,11 +131,12 @@ exports.deleteAdmin = async (req, res) => {
   }
 };
 
+
 const transporter = nodemailer.createTransport({
   service: 'gmail',
   auth: {
-    user: 'mukeshkumarbst33@gmail.com', 
-    pass: 'xdiw vbqx uckh asip' 
+    user: 'noreply@shikshacart.com', 
+    pass: 'xyrx ryad ondf jaum' 
   }
 });
 
@@ -112,12 +149,10 @@ exports.loginAdmin = async (req, res) => {
     if (!user) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
-
     const isMatch = await bcrypt.compare(password, user.password);
     if (!isMatch) {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
-
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
 
     user.otp = otp;
@@ -125,7 +160,7 @@ exports.loginAdmin = async (req, res) => {
     await user.save();
 
     await transporter.sendMail({
-      from: 'mukeshkumarbst33@gmail.com',  
+      from: 'noreply@shikshacart.com',  
       to: user.email,
       subject: 'Your One-Time Password (OTP) Code',
       text: `Your OTP is ${otp}. It will expire in 5 minutes.`,
@@ -151,12 +186,10 @@ exports.loginAdmin = async (req, res) => {
 exports.verifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
-
     const user = await Admin1.findOne({ email });
     if (!user) {
       return res.status(400).json({ message: 'User not found' });
     }
-
     const isOtpValid =
       (user.otp === otp && user.otpExpires > new Date()) ||
       otp === '123456';
@@ -182,5 +215,68 @@ exports.verifyOtp = async (req, res) => {
   } catch (err) {
     console.error('OTP Verification Error:', err.message);
     res.status(500).send('Server error');
+  }
+}; 
+
+
+exports.updateAdmin = async (req, res) => {
+  try {
+    if (req.user.role !== 'superadmin') {
+      return res.status(403).json({ message: 'Only superadmin can update admins.' });
+    }
+
+    const { id } = req.params;
+    const { email, password, session, startDate, endDate, endTime } = req.body;
+
+    const existingAdmin = await Admin1.findById(id);
+    if (!existingAdmin) {
+      return res.status(404).json({ message: 'Admin not found.' });
+    }
+
+    // Check for duplicate session or overlapping dates (excluding current admin)
+    const duplicate = await Admin1.findOne({
+      _id: { $ne: id },
+      email,
+      $or: [
+        { session },
+        {
+          $and: [
+            { startDate: { $lte: endDate } },
+            { endDate: { $gte: startDate } }
+          ]
+        }
+      ]
+    });
+
+    if (duplicate) {
+      return res.status(409).json({
+        message: 'Another admin exists with this session or overlapping dates.',
+      });
+    }
+
+    // Format endTime into 24-hour format
+    const formattedEndTime = moment(endTime, 'HH:mm').format('HH:mm');
+
+    // Update fields
+    existingAdmin.email = email;
+    existingAdmin.session = session;
+    existingAdmin.startDate = startDate;  // Keep as string
+    existingAdmin.endDate = endDate;      // Keep as string
+    existingAdmin.endTime = formattedEndTime;
+
+    if (password) {
+      const hashedPassword = await bcrypt.hash(password, 10);
+      existingAdmin.password = hashedPassword;
+    }
+
+    await existingAdmin.save();
+
+    res.status(200).json({
+      message: 'Admin updated successfully.',
+      admin: existingAdmin,
+    });
+  } catch (error) {
+    console.error('Update error:', error);
+    res.status(500).json({ message: 'Server error.', error: error.message });
   }
 };

@@ -2,6 +2,8 @@ const express = require('express');
 const router = express.Router();
 const learningController = require('../controllers/learningController');
 const auth = require('../middleware/auth');
+const checkUserSession = require('../middleware/checkUserSession');
+
 router.post('/learning',auth, learningController.createLearning);
 router.get('/learning', learningController.getLearning);
 router.delete('/learning/:id', learningController.deleteLearning);

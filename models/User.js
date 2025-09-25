@@ -18,6 +18,19 @@ const userSchema = new mongoose.Schema({
   studentType: { type: String, enum: ['school', 'college', 'institute'] }, 
   instituteName: { type: String },
   className: { type: mongoose.Schema.Types.ObjectId, ref: 'Adminschool' },
+  session: { type: String },
+   startDate: {
+    type: String, 
+  },
+  endDate: {
+    type: String, 
+  },
+   endTime: {
+  type: String,
+},
+platformDetails:{
+ type: String,
+},
   aadharCard: { type: String },
   marksheet: { type: String },
   resetPasswordOTP: { type: String },
@@ -53,6 +66,8 @@ const userSchema = new mongoose.Schema({
     enum: ['no', 'yes'],
     default: 'no'
   },
+  updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
+ 
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });

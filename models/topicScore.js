@@ -17,6 +17,17 @@ const topicScoreSchema = new mongoose.Schema({
   totalMarks: { type: Number },
   negativeMarking: { type: Number },
   scorePercent: { type: Number },
+  session: { type: String },
+  classId: { type: String },
+   startDate: {
+    type: String, 
+  },
+  endDate: {
+    type: String, 
+  },
+   endTime: {
+  type: String,
+},
  strickStatus: { type: Boolean, default: false },
   createdAt: {
         type: Date,

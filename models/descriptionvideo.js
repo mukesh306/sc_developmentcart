@@ -7,6 +7,17 @@ const descriptionvideoSchema = new mongoose.Schema({
   learningId:  { type: mongoose.Schema.Types.ObjectId, ref: 'Learnings' },
   isdescription: { type: Boolean, default: false },
   isvideo: { type: Boolean, default: false },
+  session:{type:String},
+  classId:{type:String},
+    startDate: {
+    type: String, 
+  },
+  endDate: {
+    type: String, 
+  },
+   endTime: {
+  type: String,
+},
   createdAt: {
         type: Date,
         default: Date.now

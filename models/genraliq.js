@@ -17,6 +17,17 @@ const GenralIQSchema = new mongoose.Schema(
       type: Number,
       required: true,
     },
+     startDate: {
+    type: String, 
+  },
+  endDate: {
+    type: String, 
+  },
+   endTime: {
+  type: String,
+},
+    session:{type:String},
+    classId:{type:String},
   },
   { timestamps: true }
 );

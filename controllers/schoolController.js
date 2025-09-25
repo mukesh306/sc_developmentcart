@@ -5,19 +5,16 @@ const SimpleInstitution = require('../models/adminschool');
   
 const AdminSchool = require('../models/adminschool');
 const AdminCollege = require('../models/admincollege');
-
-
+const jwt = require('jsonwebtoken');
+const Admin = require('../models/admin1');
+const moment = require('moment-timezone');
 
   exports.addInstitution = async (req, res) => {
     try {
       const { name, price, type } = req.body;
   
-      if (!name || price === undefined || !type) {
-        return res.status(400).json({ message: 'Name, price, and type are required.' });
-      }
-  
-      if (typeof price !== 'number' || price < 0) {
-        return res.status(400).json({ message: 'Price must be a positive number.' });
+      if (!name ||  !type) {
+        return res.status(400).json({ message: 'Name, and type are required.' });
       }
   
       if (!['college', 'school'].includes(type.toLowerCase())) {
@@ -48,9 +45,14 @@ const AdminCollege = require('../models/admincollege');
   };
   
 
-exports.getSchools = async (req, res) => {
+exports.getSchoolsuser = async (req, res) => {
     try {
-      const schools = await School.find();
+    const { price } = req.query; 
+    const filter = {};
+    if (price) {
+      filter.price = { $ne: null }; 
+    }
+      const schools = await School.find(filter); 
       res.status(200).json(schools);
     } catch (error) {
       console.error('Error fetching schools:', error);
@@ -59,22 +61,103 @@ exports.getSchools = async (req, res) => {
   };
   
 
-  exports.getCollege = async (req, res) => {
-    try {
-      const colleges = await College.find();
-      res.status(200).json(colleges);
-    } catch (error) {
-      console.error('Error fetching colleges:', error);
-      res.status(500).json({ message: 'Server error while fetching colleges' });
-    }
-  };
+exports.getSchools = async (req, res) => {
+  try {
+    const { price } = req.query;
+    const filter = {};
 
+    if (price) {
+      filter.price = { $ne: null }; 
+    }
+
+    let schools = await School.find(filter)
+      .populate('updatedBy');
+
+    // Get today's date in IST
+    const today = moment().tz('Asia/Kolkata').startOf('day');
+
+    for (let school of schools) {
+      if (school.updatedBy && school.updatedBy.endDate) {
+        const endDate = moment(school.updatedBy.endDate, 'DD-MM-YYYY')
+          .tz('Asia/Kolkata')
+          .startOf('day');
+
+        if (endDate.isBefore(today)) {
+          await School.updateOne(
+            { _id: school._id },
+            { $set: { price: null } }
+          );
+          school.price = null;
+        }
+      }
+    }
+
+    res.status(200).json(schools);
+  } catch (error) {
+    console.error('Error fetching schools:', error);
+    res.status(500).json({ message: 'Server error while fetching schools' });
+  }
+};
+
+
+exports.getCollege = async (req, res) => {
+  try {
+    const { price } = req.query; 
+    const filter = {};
+    if (price) {
+      filter.price = { $ne: null }; 
+    }
+
+    let colleges = await College.find(filter)
+      .populate('updatedBy');
+
+    // Today's date in IST
+    const today = moment().tz('Asia/Kolkata').startOf('day');
+
+    for (let college of colleges) {
+      if (college.updatedBy && college.updatedBy.endDate) {
+        const endDate = moment(college.updatedBy.endDate, 'DD-MM-YYYY')
+          .tz('Asia/Kolkata')
+          .startOf('day');
+
+        // If endDate is strictly before today → price null
+        if (endDate.isBefore(today)) {
+          await College.updateOne(
+            { _id: college._id },
+            { $set: { price: null } }
+          );
+          college.price = null; // reflect in API response
+        }
+      }
+    }
+
+    res.status(200).json(colleges);
+  } catch (error) {
+    console.error('Error fetching colleges:', error);
+    res.status(500).json({ message: 'Server error while fetching colleges' });
+  }
+};
+
+
+exports.getCollegeuser = async (req, res) => {
+  try {
+    const { price } = req.query; 
+    const filter = {};
+    if (price) {
+      filter.price = { $ne: null }; 
+    }
+    const colleges = await College.find(filter);
+    res.status(200).json(colleges);
+  } catch (error) {
+    console.error('Error fetching colleges:', error);
+    res.status(500).json({ message: 'Server error while fetching colleges' });
+  }
+};
 
   exports.updateInstitution = async (req, res) => {
     try {
       const { id } = req.params;
       const { name, price, type } = req.body;
-  
       if (!id || !type) {
         return res.status(400).json({ message: 'ID and type are required.' });
       }
@@ -82,9 +165,7 @@ exports.getSchools = async (req, res) => {
       if (!['college', 'school'].includes(type.toLowerCase())) {
         return res.status(400).json({ message: 'Invalid type. Type must be either "college" or "school".' });
       }
-  
       const Model = type.toLowerCase() === 'college' ? College : School;
-  
       const institution = await Model.findById(id);
       if (!institution) {
         return res.status(404).json({ message: `${type.charAt(0).toUpperCase() + type.slice(1)} not found.` });
@@ -126,29 +207,33 @@ exports.getSchools = async (req, res) => {
     }
   };
 
-  exports.institute = async (req, res) => {
-    try {
-      const schools = await School.find();
-      const colleges = await College.find();
-  
-      const institutes = [...schools, ...colleges];
-  
-      res.status(200).json({ institutes });
-    } catch (error) {
-      console.error('Error fetching schools and colleges:', error);
-      res.status(500).json({ message: 'Server error while fetching data' });
+ exports.institute = async (req, res) => {
+  try {
+    const { price } = req.query;
+    const schoolFilter = {};
+    const collegeFilter = {};
+    if (price) {
+      schoolFilter.price = { $ne: null };
+      collegeFilter.price = { $ne: null };
     }
-  };
-  
+
+    const schools = await School.find(schoolFilter);
+    const colleges = await College.find(collegeFilter);
+    const institutes = [...schools, ...colleges];
+    res.status(200).json({ institutes });
+  } catch (error) {
+    console.error('Error fetching schools and colleges:', error);
+    res.status(500).json({ message: 'Server error while fetching data' });
+  }
+};
+
   exports.deleteCollege = async (req, res) => {
     try {
       const { id } = req.params;
       const deletedCollege = await College.findByIdAndDelete(id);
-  
       if (!deletedCollege) {
         return res.status(404).json({ message: 'College not found' });
-      }
-  
+      } 
       res.status(200).json({ message: 'College deleted successfully' });
     } catch (error) {
       console.error('Error deleting College:', error);
@@ -395,10 +480,52 @@ exports.deleteAdminCollege = async (req, res) => {
 };
 
 
+// exports.setInstitutionPrice = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const { price, type } = req.body;
+//     const updatedBy = req.user?._id; 
+
+//     if (!id || !type) {
+//       return res.status(400).json({ message: 'ID and type are required.' });
+//     }
+
+//     if (typeof price !== 'number' || price < 0) {
+//       return res.status(400).json({ message: 'Price must be a positive number.' });
+//     }
+
+//     if (!['college', 'school'].includes(type.toLowerCase())) {
+//       return res.status(400).json({ message: 'Invalid type. Must be either "college" or "school".' });
+//     }
+
+//     const Model = type.toLowerCase() === 'college' ? College : School;
+//     const institution = await Model.findById(id);
+
+//     if (!institution) {
+//       return res.status(404).json({ message: `${type} not found.` });
+//     }
+
+//     institution.price = price;
+//     institution.updatedBy = updatedBy; 
+//     await institution.save();
+
+//     res.status(200).json({
+//       message: `Price set successfully for ${type}.`,
+//       data: institution
+//     });
+
+//   } catch (error) {
+//     console.error('Error setting price:', error);
+//     res.status(500).json({ message: 'Server error while setting price.' });
+//   }
+// };
+
+
 exports.setInstitutionPrice = async (req, res) => {
   try {
     const { id } = req.params;
     const { price, type } = req.body;
+    const updatedBy = req.user?._id;
 
     if (!id || !type) {
       return res.status(400).json({ message: 'ID and type are required.' });
@@ -414,11 +541,13 @@ exports.setInstitutionPrice = async (req, res) => {
 
     const Model = type.toLowerCase() === 'college' ? College : School;
     const institution = await Model.findById(id);
+
     if (!institution) {
       return res.status(404).json({ message: `${type} not found.` });
     }
 
     institution.price = price;
+    institution.updatedBy = updatedBy;
     await institution.save();
 
     res.status(200).json({
@@ -429,5 +558,57 @@ exports.setInstitutionPrice = async (req, res) => {
   } catch (error) {
     console.error('Error setting price:', error);
     res.status(500).json({ message: 'Server error while setting price.' });
+  }
+};
+
+
+exports.deleteSchoolPrice = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admin can delete price.' });
+    }
+    const school = await School.findById(id);
+    if (!school) {
+      return res.status(404).json({ message: 'School not found.' });
+    }
+    school.price = null;
+    school.updatedBy = req.user._id; 
+    await school.save();
+
+    res.status(200).json({ message: 'Price removed from school successfully.', data: school });
+
+  } catch (error) {
+    console.error('Error removing school price:', error);
+    res.status(500).json({ message: 'Server error while removing price.' });
+  }
+};
+
+
+
+exports.deleteCollegePrice = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!req.user || req.user.role !== 'admin') {
+      return res.status(403).json({ message: 'Only admin can delete price.' });
+    }
+
+    const college = await College.findById(id);
+
+    if (!college) {
+      return res.status(404).json({ message: 'College not found.' });
+    }
+
+    college.price = null;
+    college.updatedBy = req.user._id; 
+    await college.save();
+
+    res.status(200).json({ message: 'Price removed from college successfully.', data: college });
+
+  } catch (error) {
+    console.error('Error removing college price:', error);
+    res.status(500).json({ message: 'Server error while removing price.' });
   }
 };

@@ -13,7 +13,9 @@ const Learning = require('../models/learning');
 const LearningScore = require('../models/learningScore');
 const TopicScore = require('../models/topicScore');
 const DescriptionVideo = require('../models/descriptionvideo'); 
-
+const User = require('../models/User');
+const path = require('path');
+const fs = require('fs');
 
 exports.createTopicWithQuiz = async (req, res) => {
   try {
@@ -27,7 +29,15 @@ exports.createTopicWithQuiz = async (req, res) => {
     } = req.body;
 
     const createdBy = req.user._id;
-    const image = req.files?.image?.[0]?.path || null;
+    // const image = req.files?.image?.[0]?.path || null;
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+    // ⬇️ Handle image
+    let image = req.files?.image?.[0]?.path || null;
+    if (image && fs.existsSync(image)) {
+      image = `${baseUrl}/uploads/${path.basename(image)}`;
+    }
 
     const videoFile = req.files?.video?.[0]?.path || null;
     const videoLink = req.body.video || null;
@@ -199,6 +209,11 @@ exports.getAllTopicNames = async (req, res) => {
 //       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
 //     }
 
+//     if (!user.session) {
+//       return res.status(400).json({ message: 'User session not found.' });
+//     }
+
+//     const session = user.session;
 //     const registrationDate = moment(user.createdAt).startOf('day');
 //     const today = moment().startOf('day');
 //     const daysPassed = today.diff(registrationDate, 'days') + 1;
@@ -217,23 +232,63 @@ exports.getAllTopicNames = async (req, res) => {
 
 //     const allTopics = await Topic.find(query)
 //       .sort({ createdAt: 1 })
-//       .select('topic score createdAt isdescription isvideo')
+//       .select('topic createdAt')
 //       .lean();
 
 //     if (!allTopics || allTopics.length === 0) {
 //       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
 //     }
 
-//     const validScores = allTopics
-//       .map(topic => parseFloat(topic.score))
-//       .filter(score => !isNaN(score));
+//     const userDescriptionVideos = await DescriptionVideo.find({
+//       userId: user._id,
+//       learningId: id,
+//       session
+//     }).select('topicId isvideo isdescription').lean();
 
-//     const averageScore =
-//       validScores.length > 0
-//         ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-//         : null;
+//     const descriptionMap = {};
+//     userDescriptionVideos.forEach(entry => {
+//       descriptionMap[entry.topicId.toString()] = {
+//         isvideo: entry.isvideo,
+//         isdescription: entry.isdescription
+//       };
+//     });
 
-//     const assignedRecord = await Assigned.findOne({ classId: query.classId });
+//     // ✅ Fetch only session-matching TopicScore entries
+//     const topicScores = await TopicScore.find({
+//       userId: user._id,
+//       learningId: id,
+//       session
+//     }).select('topicId score').lean();
+
+//     const scoreMap = {};
+//     topicScores.forEach(entry => {
+//       scoreMap[entry.topicId.toString()] = entry.score;
+//     });
+
+//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
+//       const topicIdStr = topic._id.toString();
+//       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
+//       const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : null;
+
+//       return {
+//         _id: topic._id,
+//         topic: topic.topic,
+//         createdAt: topic.createdAt,
+//         isvideo: extra.isvideo,
+//         isdescription: extra.isdescription,
+//         score: topicScoreValue
+//       };
+//     });
+
+//     const validScores = unlockedTopics
+//       .map(t => t.score)
+//       .filter(score => typeof score === 'number' && score >= 0);
+
+//     const averageScore = validScores.length > 0
+//       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
+//       : 0;
+
+//     const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
 //     if (assignedRecord) {
 //       if (assignedRecord.learning?.toString() === id) {
 //         assignedRecord.learningAverage = averageScore;
@@ -247,16 +302,8 @@ exports.getAllTopicNames = async (req, res) => {
 //       await assignedRecord.save();
 //     }
 
-//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
-//       if (topic.score === null || topic.score === undefined) {
-//         const { score, ...rest } = topic;
-//         return rest;
-//       }
-//       return topic;
-//     });
-
 //     res.status(200).json({
-//       learningName: learningData.name, 
+//       learningName: learningData.name,
 //       averageScore,
 //       topics: unlockedTopics
 //     });
@@ -278,8 +325,36 @@ exports.TopicWithLeaning = async (req, res) => {
       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
     }
 
-    const registrationDate = moment(user.createdAt).startOf('day');
+    if (!user.session) {
+      return res.status(400).json({ message: 'User session not found.' });
+    }
+
     const today = moment().startOf('day');
+
+    // ✅ Validate startDate
+    if (user.startDate) {
+      const startDate = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
+      if (!startDate.isValid()) {
+        return res.status(400).json({ message: 'Invalid startDate format. Must be DD-MM-YYYY.' });
+      }
+      if (today.isBefore(startDate)) {
+        return res.status(403).json({ message: 'Your access has not started yet. Please wait until your start date.' });
+      }
+    }
+
+    // ✅ Validate endDate
+    if (user.endDate) {
+      const endDate = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
+      if (!endDate.isValid()) {
+        return res.status(400).json({ message: 'Invalid endDate format. Must be DD-MM-YYYY.' });
+      }
+      if (today.isAfter(endDate)) {
+        return res.status(403).json({ message: 'Your access has expired. Please renew your access.' });
+      }
+    }
+
+    const session = user.session;
+    const registrationDate = moment(user.createdAt).startOf('day');
     const daysPassed = today.diff(registrationDate, 'days') + 1;
 
     const query = { learningId: new mongoose.Types.ObjectId(id) };
@@ -303,10 +378,20 @@ exports.TopicWithLeaning = async (req, res) => {
       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
     }
 
-    const userDescriptionVideos = await DescriptionVideo.find({
+    // ✅ DescriptionVideo filter with session, classId, startDate, endDate
+    const descriptionVideoQuery = {
       userId: user._id,
-      learningId: id
-    }).select('topicId isvideo isdescription').lean();
+      learningId: id,
+      session,
+      classId: user.className
+    };
+
+    if (user.startDate) descriptionVideoQuery.startDate = user.startDate;
+    if (user.endDate) descriptionVideoQuery.endDate = user.endDate;
+
+    const userDescriptionVideos = await DescriptionVideo.find(descriptionVideoQuery)
+      .select('topicId isvideo isdescription')
+      .lean();
 
     const descriptionMap = {};
     userDescriptionVideos.forEach(entry => {
@@ -316,17 +401,24 @@ exports.TopicWithLeaning = async (req, res) => {
       };
     });
 
-    const topicScores = await TopicScore.find({
+    // ✅ TopicScore filter by session and endDate
+    const topicScoreQuery = {
       userId: user._id,
-      learningId: id
-    }).select('topicId score').lean();
+      learningId: id,
+      session
+    };
+
+    if (user.endDate) topicScoreQuery.endDate = user.endDate;
+
+    const topicScores = await TopicScore.find(topicScoreQuery)
+      .select('topicId score')
+      .lean();
 
     const scoreMap = {};
     topicScores.forEach(entry => {
       scoreMap[entry.topicId.toString()] = entry.score;
     });
 
-   
     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
       const topicIdStr = topic._id.toString();
       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
@@ -344,12 +436,11 @@ exports.TopicWithLeaning = async (req, res) => {
 
     const validScores = unlockedTopics
       .map(t => t.score)
-      .filter(score => score !== null && score !== undefined)
-      .map(score => Number(score));
+      .filter(score => typeof score === 'number' && score >= 0);
 
     const averageScore = validScores.length > 0
       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
-      : null;
+      : 0;
 
     const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
     if (assignedRecord) {
@@ -378,70 +469,146 @@ exports.TopicWithLeaning = async (req, res) => {
 };
 
 
-// exports.getTopicById = async (req, res) => {
+
+// exports.TopicWithLeaning = async (req, res) => {
 //   try {
 //     const { id } = req.params;
-//     const { isvideo, isdescription } = req.query;
+//     const { classId: queryClassId } = req.query;
+//     const user = req.user;
 
-//     let topic = await Topic.findById(id)
-//       .populate('learningId')
-//       .populate('createdBy', 'email');
-
-//     if (!topic) {
-//       return res.status(404).json({ message: 'Topic not found.' });
+//     if (!user || user.status !== 'yes') {
+//       return res.status(403).json({ message: 'Access denied. Please complete your payment.' });
 //     }
 
-//     let updated = false;
-//     if (isvideo !== undefined) {
-//       topic.isvideo = isvideo === 'true' ? 'true' : 'false';
-//       updated = true;
+//     if (!user.session) {
+//       return res.status(400).json({ message: 'User session not found.' });
 //     }
 
-//     if (isdescription !== undefined) {
-//       topic.isdescription = isdescription === 'true' ? 'true' : 'false';
-//       updated = true;
-//     }
+//     // ✅ Check endDate validity (same as session logic)
+//     if (user.endDate) {
+//       const today = moment().startOf('day');
+//       const endDate = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
 
-//     if (!topic.testTimeInSeconds || topic.testTimeInSeconds === 0) {
-//       if (topic.testTime && topic.testTime > 0) {
-//         topic.testTimeInSeconds = topic.testTime * 60;
-//         updated = true;
+//       if (!endDate.isValid()) {
+//         return res.status(400).json({ message: 'Invalid endDate format. Must be DD-MM-YYYY.' });
+//       }
+
+//       if (today.isAfter(endDate)) {
+//         return res.status(403).json({ message: 'Your session has expired. Please renew your access.' });
 //       }
 //     }
 
-//     if (updated) {
-//       await topic.save();
+//     const session = user.session;
+//     const registrationDate = moment(user.createdAt).startOf('day');
+//     const today = moment().startOf('day');
+//     const daysPassed = today.diff(registrationDate, 'days') + 1;
+
+//     const query = { learningId: new mongoose.Types.ObjectId(id) };
+//     if (queryClassId) {
+//       query.classId = new mongoose.Types.ObjectId(queryClassId);
+//     } else if (user.className) {
+//       query.classId = new mongoose.Types.ObjectId(user.className);
 //     }
 
-//     const topicObj = topic.toObject();
-
-//     topicObj.testTimeInSeconds = topic.testTimeInSeconds || 0;
-//     let classInfo = await School.findById(topic.classId).lean();
-//     if (!classInfo) {
-//       classInfo = await College.findById(topic.classId).lean();
+//     const learningData = await Learning.findById(id).select('name').lean();
+//     if (!learningData) {
+//       return res.status(404).json({ message: 'Learning not found.' });
 //     }
-//     topicObj.classInfo = classInfo || null;
 
-//     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
-//     topicObj.quizzes = quizzes || [];
+//     const allTopics = await Topic.find(query)
+//       .sort({ createdAt: 1 })
+//       .select('topic createdAt')
+//       .lean();
+
+//     if (!allTopics || allTopics.length === 0) {
+//       return res.status(404).json({ message: 'No topics found for this learningId or classId' });
+//     }
+
+//     // ✅ Added classId check in DescriptionVideo query
+//     const userDescriptionVideos = await DescriptionVideo.find({
+//       userId: user._id,
+//       learningId: id,
+//       session,
+//       classId: user.className  // ✅ classId added here
+//     }).select('topicId isvideo isdescription').lean();
+
+//     const descriptionMap = {};
+//     userDescriptionVideos.forEach(entry => {
+//       descriptionMap[entry.topicId.toString()] = {
+//         isvideo: entry.isvideo,
+//         isdescription: entry.isdescription
+//       };
+//     });
+
+//     const topicScores = await TopicScore.find({
+//       userId: user._id,
+//       learningId: id,
+//       session
+//     }).select('topicId score').lean();
+
+//     const scoreMap = {};
+//     topicScores.forEach(entry => {
+//       scoreMap[entry.topicId.toString()] = entry.score;
+//     });
+
+//     const unlockedTopics = allTopics.slice(0, daysPassed).map(topic => {
+//       const topicIdStr = topic._id.toString();
+//       const extra = descriptionMap[topicIdStr] || { isvideo: false, isdescription: false };
+//       const topicScoreValue = scoreMap.hasOwnProperty(topicIdStr) ? scoreMap[topicIdStr] : null;
+
+//       return {
+//         _id: topic._id,
+//         topic: topic.topic,
+//         createdAt: topic.createdAt,
+//         isvideo: extra.isvideo,
+//         isdescription: extra.isdescription,
+//         score: topicScoreValue
+//       };
+//     });
+
+//     const validScores = unlockedTopics
+//       .map(t => t.score)
+//       .filter(score => typeof score === 'number' && score >= 0);
+
+//     const averageScore = validScores.length > 0
+//       ? parseFloat((validScores.reduce((acc, val) => acc + val, 0) / validScores.length).toFixed(2))
+//       : 0;
+
+//     const assignedRecord = await Assigned.findOne({ classId: queryClassId || user.className });
+//     if (assignedRecord) {
+//       if (assignedRecord.learning?.toString() === id) {
+//         assignedRecord.learningAverage = averageScore;
+//       } else if (assignedRecord.learning2?.toString() === id) {
+//         assignedRecord.learning2Average = averageScore;
+//       } else if (assignedRecord.learning3?.toString() === id) {
+//         assignedRecord.learning3Average = averageScore;
+//       } else if (assignedRecord.learning4?.toString() === id) {
+//         assignedRecord.learning4Average = averageScore;
+//       }
+//       await assignedRecord.save();
+//     }
+
 //     res.status(200).json({
-//       message: 'Topic fetched successfully.',
-//       data: topicObj
+//       learningName: learningData.name,
+//       averageScore,
+//       topics: unlockedTopics
 //     });
+
 //   } catch (error) {
-//     console.error('Error fetching topic by ID:', error);
-//     res.status(500).json({
-//       message: 'Error fetching topic.',
-//       error: error.message
-//     });
+//     console.error('Error fetching topics with learningId:', error);
+//     res.status(500).json({ message: error.message });
 //   }
 // };
+
+
+
 
 exports.getTopicById = async (req, res) => {
   try {
     const { id } = req.params;
     const { isvideo, isdescription } = req.query;
     const userId = req.user._id;
+    const userSession = req.user.session;
 
     const topic = await Topic.findById(id)
       .populate('learningId')
@@ -453,39 +620,42 @@ exports.getTopicById = async (req, res) => {
 
     const learningId = topic.learningId?._id || null;
 
-    // Find or update DescriptionVideo
-    let existingRecord = await DescriptionVideo.findOne({
+    // 🔍 Find DescriptionVideo for current session
+    let currentSessionRecord = await DescriptionVideo.findOne({
       userId,
       topicId: topic._id,
-      learningId
+      learningId,
+      session: userSession,
     });
 
-    if (!existingRecord && isdescription === 'true') {
-      existingRecord = await DescriptionVideo.create({
+    // 🆕 If not found and isdescription=true, create new record
+    if (!currentSessionRecord && isdescription === 'true') {
+      currentSessionRecord = await DescriptionVideo.create({
         userId,
         topicId: topic._id,
         learningId,
         isvideo: false,
         isdescription: true,
-        scoreDate: new Date()
+        session: userSession,
+        scoreDate: new Date(),
       });
     }
 
-    if (existingRecord && isvideo === 'true' && !existingRecord.isvideo) {
-      existingRecord.isvideo = true;
-      await existingRecord.save();
+    // ✅ Update isvideo = true only if session matches
+    if (
+      currentSessionRecord &&
+      isvideo === 'true' &&
+      !currentSessionRecord.isvideo
+    ) {
+      currentSessionRecord.isvideo = true;
+      await currentSessionRecord.save();
     }
 
-    const latestDescription = await DescriptionVideo.findOne({
-      userId,
-      topicId: topic._id,
-      learningId
-    }).sort({ createdAt: -1 }).select('isvideo isdescription');
-
-    // ✅ Fetch topicScore with only required fields
+    // ✅ Score for current session only
     const topicScoreData = await TopicScore.findOne({
       userId,
-      topicId: topic._id
+      topicId: topic._id,
+      session: userSession,
     }).select(
       'score totalQuestions answeredQuestions correctAnswers incorrectAnswers skippedQuestions marksObtained totalMarks negativeMarking scorePercent strickStatus scoreDate createdAt updatedAt'
     ).lean();
@@ -493,22 +663,28 @@ exports.getTopicById = async (req, res) => {
     const topicObj = topic.toObject();
     topicObj.testTimeInSeconds = topic.testTimeInSeconds || (topic.testTime ? topic.testTime * 60 : 0);
 
-    // Add class info
+    // ✅ Add full image URL
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    if (topicObj.image) {
+      topicObj.image = `${baseUrl}/uploads/${path.basename(topicObj.image)}`;
+    }
+
+    // Class info (school or college)
     let classInfo = await School.findById(topic.classId).lean();
     if (!classInfo) {
       classInfo = await College.findById(topic.classId).lean();
     }
     topicObj.classInfo = classInfo || null;
 
-    // Add quizzes
+    // Quizzes
     const quizzes = await Quiz.find({ topicId: id }).select('-__v');
     topicObj.quizzes = quizzes || [];
 
-    // Add video/description flags
-    topicObj.isvideo = latestDescription?.isvideo || false;
-    topicObj.isdescription = latestDescription?.isdescription || false;
+    // ✅ Set flags from session-specific record
+    topicObj.isvideo = currentSessionRecord?.isvideo === true;
+    topicObj.isdescription = currentSessionRecord?.isdescription === true;
 
-    // 🔥 Add filtered topicScore data directly (flattened)
+    // ✅ Set score fields only if session matches
     topicObj.score = topicScoreData?.score || null;
     topicObj.totalQuestions = topicScoreData?.totalQuestions || 0;
     topicObj.answeredQuestions = topicScoreData?.answeredQuestions || 0;
@@ -524,22 +700,19 @@ exports.getTopicById = async (req, res) => {
     topicObj.createdAt = topicScoreData?.createdAt || null;
     topicObj.updatedAt = topicScoreData?.updatedAt || null;
 
-    // Send response
     res.status(200).json({
       message: 'Topic fetched successfully.',
-      data: topicObj
+      data: topicObj,
     });
 
   } catch (error) {
     console.error('Error fetching topic by ID:', error);
     res.status(500).json({
       message: 'Error fetching topic.',
-      error: error.message
+      error: error.message,
     });
   }
 };
-
-
 
 
 exports.submitQuiz = async (req, res) => {
@@ -630,21 +803,64 @@ exports.saveQuizAnswer = async (req, res) => {
 };
 
 
+// exports.submitQuizAnswer = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { topicId, questionId, selectedAnswer } = req.body;
+//     if (!topicId || !questionId) {
+//       return res.status(400).json({ message: 'topicId and questionId are required.' });
+//     }
+//     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
+//     if (!quiz) {
+//       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
+//     }
+//     if (selectedAnswer) {
+//       await UserQuizAnswer.findOneAndUpdate(
+//         { userId, topicId, questionId },
+//         { selectedAnswer },
+//         { upsert: true, new: true }
+//       );
+//       return res.status(200).json({ message: 'Answer saved successfully.' });
+//     } else {
+//       await UserQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
+//       return res.status(200).json({ message: 'Question skipped (no answer saved).' });
+//     }
+//   } catch (error) {
+//     console.error('Error in saveQuizAnswer:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
+
 exports.submitQuizAnswer = async (req, res) => {
   try {
     const userId = req.user._id;
     const { topicId, questionId, selectedAnswer } = req.body;
+
     if (!topicId || !questionId) {
       return res.status(400).json({ message: 'topicId and questionId are required.' });
     }
+
+    // Get the quiz question
     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
     if (!quiz) {
       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
     }
+
+    // ✅ Fetch user's session
+    const user = await User.findById(userId).select('session').lean();
+    const session = user?.session || null;
+
+    console.log('Saving with session:', session); // ✅ Debug log
+
     if (selectedAnswer) {
       await UserQuizAnswer.findOneAndUpdate(
         { userId, topicId, questionId },
-        { selectedAnswer },
+        {
+          selectedAnswer,
+          session 
+        },
         { upsert: true, new: true }
       );
       return res.status(200).json({ message: 'Answer saved successfully.' });
@@ -652,12 +868,41 @@ exports.submitQuizAnswer = async (req, res) => {
       await UserQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
       return res.status(200).json({ message: 'Question skipped (no answer saved).' });
     }
+
   } catch (error) {
     console.error('Error in saveQuizAnswer:', error);
     res.status(500).json({ message: error.message });
   }
 };
 
+
+// exports.submitQuizAnswer = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { topicId, questionId, selectedAnswer } = req.body;
+//     if (!topicId || !questionId) {
+//       return res.status(400).json({ message: 'topicId and questionId are required.' });
+//     }
+//     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
+//     if (!quiz) {
+//       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
+//     }
+//     if (selectedAnswer) {
+//       await UserQuizAnswer.findOneAndUpdate(
+//         { userId, topicId, questionId },
+//         { selectedAnswer },
+//         { upsert: true, new: true }
+//       );
+//       return res.status(200).json({ message: 'Answer saved successfully.' });
+//     } else {
+//       await UserQuizAnswer.findOneAndDelete({ userId, topicId, questionId });
+//       return res.status(200).json({ message: 'Question skipped (no answer saved).' });
+//     }
+//   } catch (error) {
+//     console.error('Error in saveQuizAnswer:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.updateTestTimeInSeconds = async (req, res) => {
@@ -689,7 +934,6 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 };
 
 
-
 // exports.calculateQuizScore = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -699,10 +943,14 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //       return res.status(400).json({ message: 'topicId is required.' });
 //     }
 
-//     const topic = await Topic.findById(topicId);
+//     const topic = await Topic.findById(topicId).lean();
 //     if (!topic) {
 //       return res.status(404).json({ message: 'Topic not found.' });
 //     }
+
+//     const user = await User.findById(userId).lean();
+//     const userSession = user?.session || null;
+//     const userClassId = user?.className || null;
 
 //     const allQuizzes = await Quiz.find({ topicId }).lean();
 //     const totalQuestions = allQuizzes.length;
@@ -710,27 +958,33 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //     if (totalQuestions === 0) {
 //       return res.status(400).json({ message: 'No questions found for this topic.' });
 //     }
-//     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
-//     const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
-//       ? topicTotalMarks / totalQuestions
-//       : (markingSetting?.maxMarkPerQuestion || 1);
 
-//     const negativeMarking = (typeof inputNegativeMarking === 'number')
-//       ? inputNegativeMarking
-//       : (markingSetting?.negativeMarking || 0);
+//     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
+
+//     const maxMarkPerQuestion =
+//       typeof topicTotalMarks === 'number' && topicTotalMarks > 0
+//         ? topicTotalMarks / totalQuestions
+//         : markingSetting?.maxMarkPerQuestion || 1;
+
+//     const negativeMarking =
+//       typeof inputNegativeMarking === 'number'
+//         ? inputNegativeMarking
+//         : markingSetting?.negativeMarking || 0;
 
 //     const totalMarks = maxMarkPerQuestion * totalQuestions;
 
 //     const answers = await UserQuizAnswer.find({ userId, topicId });
+
 //     let correctCount = 0;
 //     let incorrectCount = 0;
+
 //     for (const answer of answers) {
 //       const quiz = allQuizzes.find(q => q._id.toString() === answer.questionId.toString());
 //       if (!quiz) continue;
-
 //       if (answer.selectedAnswer === quiz.answer) correctCount++;
 //       else incorrectCount++;
 //     }
+
 //     const answeredQuestions = correctCount + incorrectCount;
 //     const skippedQuestions = totalQuestions - answeredQuestions;
 
@@ -744,22 +998,38 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //     const scorePercent = (roundedMarks / totalMarks) * 100;
 //     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
 
-//     if (topic.score === null || topic.score === undefined) {
-//       topic.score = roundedScorePercent;
-//       topic.totalQuestions = totalQuestions;
-//       topic.correctAnswers = correctCount;
-//       topic.incorrectAnswers = incorrectCount;
-//       topic.skippedQuestions = skippedQuestions;
-//       topic.marksObtained = roundedMarks;
-//       topic.totalMarks = totalMarks;
-//       topic.negativeMarking = negativeMarking;
-//       topic.scoreUpdatedAt = new Date();
-//       topic.strickStatus = true;
-//       await topic.save();
+//     const existingScore = await TopicScore.findOne({
+//       userId,
+//       topicId,
+//       session: userSession
+//     });
+
+//     if (!existingScore) {
+//       await TopicScore.create({
+//         userId,
+//         topicId,
+//         learningId: topic.learningId,
+//         score: roundedScorePercent,
+//         totalQuestions,
+//         answeredQuestions,
+//         correctAnswers: correctCount,
+//         incorrectAnswers: incorrectCount,
+//         skippedQuestions,
+//         marksObtained: roundedMarks,
+//         totalMarks,
+//         negativeMarking,
+//         scorePercent: roundedScorePercent,
+//         scoreDate: new Date(),
+//         strickStatus: true,
+//         session: userSession,     // ✅ session from user
+//         classId: userClassId      // ✅ className saved as classId
+//       });
 //     }
 
 //     return res.status(200).json({
-//       message: 'Score calculated successfully.',
+//       message: existingScore
+//         ? 'Score already saved. Recalculated result returned for display only.'
+//         : 'Score calculated and saved successfully.',
 //       totalQuestions,
 //       answeredQuestions,
 //       skippedQuestions,
@@ -767,13 +1037,14 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //       incorrectAnswers: incorrectCount,
 //       marksObtained: roundedMarks,
 //       totalMarks,
-//       maxMarkPerQuestion, 
+//       maxMarkPerQuestion,
 //       negativeMarking,
 //       scorePercent: roundedScorePercent,
 //       testTime: topic.testTime || 0,
-//       scoreUpdatedAt: topic.scoreUpdatedAt,
-//       updatedAt: topic.updatedAt,
-//       strickStatus: topic.strickStatus || false
+//       strickStatus: true,
+//       session: userSession,
+//       classId: userClassId,           // ✅ return classId in response too (optional)
+//       scoreUpdatedAt: new Date()
 //     });
 
 //   } catch (error) {
@@ -781,6 +1052,7 @@ exports.updateTestTimeInSeconds = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
+
 
 exports.calculateQuizScore = async (req, res) => {
   try {
@@ -796,25 +1068,36 @@ exports.calculateQuizScore = async (req, res) => {
       return res.status(404).json({ message: 'Topic not found.' });
     }
 
+    const user = await User.findById(userId).lean();
+    const userSession = user?.session || null;
+    const userClassId = user?.className || null;
+    const userStartDate = user?.startDate || null;  
+    const userEndDate = user?.endDate || null;  
+    const userEndTime = user?.endTime || null;    
+
     const allQuizzes = await Quiz.find({ topicId }).lean();
     const totalQuestions = allQuizzes.length;
+
     if (totalQuestions === 0) {
       return res.status(400).json({ message: 'No questions found for this topic.' });
     }
 
     const markingSetting = await MarkingSetting.findOne().sort({ createdAt: -1 }).lean();
 
-    const maxMarkPerQuestion = (typeof topicTotalMarks === 'number' && topicTotalMarks > 0)
-      ? topicTotalMarks / totalQuestions
-      : (markingSetting?.maxMarkPerQuestion || 1);
+    const maxMarkPerQuestion =
+      typeof topicTotalMarks === 'number' && topicTotalMarks > 0
+        ? topicTotalMarks / totalQuestions
+        : markingSetting?.maxMarkPerQuestion || 1;
 
-    const negativeMarking = (typeof inputNegativeMarking === 'number')
-      ? inputNegativeMarking
-      : (markingSetting?.negativeMarking || 0);
+    const negativeMarking =
+      typeof inputNegativeMarking === 'number'
+        ? inputNegativeMarking
+        : markingSetting?.negativeMarking || 0;
 
     const totalMarks = maxMarkPerQuestion * totalQuestions;
 
     const answers = await UserQuizAnswer.find({ userId, topicId });
+
     let correctCount = 0;
     let incorrectCount = 0;
 
@@ -830,20 +1113,24 @@ exports.calculateQuizScore = async (req, res) => {
 
     const positiveMarks = correctCount * maxMarkPerQuestion;
     const negativeMarks = incorrectCount * negativeMarking;
+
     let marksObtained = positiveMarks - negativeMarks;
     if (marksObtained < 0) marksObtained = 0;
 
     const roundedMarks = parseFloat(marksObtained.toFixed(2));
     const scorePercent = (roundedMarks / totalMarks) * 100;
     const roundedScorePercent = parseFloat(scorePercent.toFixed(2));
-
-    const existingScore = await TopicScore.findOne({ userId, topicId });
+    const existingScore = await TopicScore.findOne({
+      userId,
+      topicId,
+      session: userSession
+    });
 
     if (!existingScore) {
       await TopicScore.create({
         userId,
         topicId,
-        learningId: topic.learningId, // ✅ save learningId
+        learningId: topic.learningId,
         score: roundedScorePercent,
         totalQuestions,
         answeredQuestions,
@@ -855,7 +1142,12 @@ exports.calculateQuizScore = async (req, res) => {
         negativeMarking,
         scorePercent: roundedScorePercent,
         scoreDate: new Date(),
-        strickStatus: true
+        strickStatus: true,
+        session: userSession,       
+        classId: userClassId,       
+        startDate: userStartDate,   
+        endDate: userEndDate,
+        endTime: userEndTime      
       });
     }
 
@@ -875,6 +1167,8 @@ exports.calculateQuizScore = async (req, res) => {
       scorePercent: roundedScorePercent,
       testTime: topic.testTime || 0,
       strickStatus: true,
+      session: userSession,
+      classId: userClassId,
       scoreUpdatedAt: new Date()
     });
 
@@ -884,61 +1178,6 @@ exports.calculateQuizScore = async (req, res) => {
   }
 };
 
-
-
-
-// exports.updateTopicWithQuiz = async (req, res) => {
-//   try {
-//     const topicId = req.params.id;
-//     const {
-//       classId,
-//       learningId,
-//       topic,
-//       testTime,
-//       videoTime,
-//       description,
-//       userId 
-//     } = req.body;
-
-//     const image = req.files?.image?.[0]?.path || null;
-//     const videoFile = req.files?.video?.[0]?.path || null;
-//     const videoLink = req.body.video || null;
-
-//     if (videoFile && videoLink) {
-//       return res.status(400).json({
-//         message: 'Please provide either a video file or a video link, not both.'
-//       });
-//     }
-
-//     const video = videoFile || videoLink || null;
-
-//     const topicToUpdate = await Topic.findById(topicId);
-//     if (!topicToUpdate) {
-//       return res.status(404).json({ message: "Topic not found." });
-//     }
-
-//     // Update fields only if provided
-//     if (classId) topicToUpdate.classId = classId;
-//     if (learningId) topicToUpdate.learningId = learningId;
-//     if (topic) topicToUpdate.topic = topic;
-//     if (testTime) topicToUpdate.testTime = testTime;
-//     if (videoTime) topicToUpdate.videoTime = videoTime;
-//     if (description) topicToUpdate.description = description;
-//     if (image) topicToUpdate.image = image;
-//     if (video) topicToUpdate.video = video;
-//     if (userId) topicToUpdate.updatedBy = userId;
-
-//     await topicToUpdate.save();
-
-//     res.status(200).json({
-//       message: "Topic updated successfully.",
-//       topicId: topicToUpdate._id
-//     });
-//   } catch (error) {
-//     console.error("Error updating topic:", error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 
 exports.updateTopicWithQuiz = async (req, res) => {
   try {
@@ -1063,11 +1302,8 @@ exports.deleteTopicWithQuiz = async (req, res) => {
     if (!topic) {
       return res.status(404).json({ message: 'Topic not found.' });
     }
-    
     await Quiz.deleteMany({ topicId });
-
     await Topic.findByIdAndDelete(topicId);
-
     res.status(200).json({ message: 'Topic and related quiz deleted successfully.' });
   } catch (error) {
     console.error('Error deleting topic and quiz:', error);
@@ -1134,7 +1370,6 @@ exports.deleteTopicWithQuiz = async (req, res) => {
   }
 };
 
-
 exports.getAllQuizzesByLearningId = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1151,7 +1386,6 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
     } else if (user.className) {
       query.classId = new mongoose.Types.ObjectId(user.className);
     }
-
 
     const learningData = await Learning.findById(id).select('name').lean();
     if (!learningData) {
@@ -1170,16 +1404,17 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
       return res.status(404).json({ message: 'No marking settings found.' });
     }
 
-    const { totalquiz, totalnoofquestion } = markingSetting;
+    const { totalquiz: timeBasedOnQuestions, totalnoofquestion: quizLimit } = markingSetting;
+
     const allQuizzes = await Quiz.find({ topicId: { $in: topicIds } }).lean();
     const shuffledQuizzes = allQuizzes.sort(() => 0.5 - Math.random());
-    const selectedQuizzes = shuffledQuizzes.slice(0, totalquiz || allQuizzes.length);
+    const selectedQuizzes = shuffledQuizzes.slice(0, quizLimit || allQuizzes.length);
 
     res.status(200).json({
       message: 'Quizzes fetched successfully.',
       learningName: learningData.name,
       totalQuestions: selectedQuizzes.length,
-      timeLimitInSeconds: totalnoofquestion * 60,
+      timeLimitInSeconds: timeBasedOnQuestions * 60,
       quizzes: selectedQuizzes
     });
   } catch (error) {
@@ -1189,79 +1424,212 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 };
 
 
-
-
-// exports.PracticeTest = async (req, res) => {
+// exports.PracticescoreCard = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
-//     const { topicId, questionId, selectedAnswer, learningId } = req.body;
 
-//     if (!topicId || !questionId || !learningId) {
-//       return res.status(400).json({ message: 'topicId, questionId, and learningId are required.' });
+//     const user = await User.findById(userId).lean();
+//     if (!user?.session || !user?.className) {
+//       return res.status(400).json({ message: 'User session or classId not found.' });
 //     }
 
-//     const quiz = await Quiz.findOne({ _id: questionId, topicId }).lean();
-//     if (!quiz) {
-//       return res.status(404).json({ message: 'Quiz question not found for the given topic.' });
-//     }
+//     const userSession = user.session;
+//     const userClassId = user.className;
 
-//     const answerToSave = selectedAnswer ? selectedAnswer : null;
-//     await PracticesQuizAnswer.findOneAndUpdate(
-//       { userId, topicId, questionId },
+//     const todayStr = moment().format('YYYY-MM-DD');
+//     let minDate = null;
+//     let maxDate = moment().startOf('day');
+
+//     // Step 1: Get first practice score per day (filtered by session + classId)
+//     const rawScores = await LearningScore.aggregate([
 //       {
-//         selectedAnswer: answerToSave,
-//         learningId,
-//         isSkipped: !selectedAnswer 
+//         $match: {
+//           userId: new mongoose.Types.ObjectId(userId),
+//           session: userSession,
+//           classId: userClassId.toString()
+//         }
 //       },
-//       { upsert: true, new: true }
-//     );
+//       { $sort: { scoreDate: 1, createdAt: 1 } },
+//       {
+//         $group: {
+//           _id: {
+//             date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
+//           },
+//           doc: { $first: "$$ROOT" }
+//         }
+//       },
+//       { $replaceRoot: { newRoot: "$doc" } },
+//     ]);
 
-//     const message = selectedAnswer ? 'Answer saved successfully.' : 'Question skipped and recorded.';
-//     return res.status(200).json({ message });
+//     // Step 2: Populate learningId
+//     const populatedScores = await LearningScore.populate(rawScores, {
+//       path: 'learningId',
+//       select: 'name'
+//     });
+
+//     // Step 3: Normalize and map
+//     const scoreMap = new Map();
+
+//     for (const score of populatedScores) {
+//       const scoreDate = moment(score.scoreDate).startOf('day');
+//       const dateStr = scoreDate.format('YYYY-MM-DD');
+
+//       scoreMap.set(dateStr, {
+//         ...score.toObject?.() || score,
+//         date: dateStr,
+//         isToday: dateStr === todayStr
+//       });
+
+//       if (!minDate || scoreDate.isBefore(minDate)) minDate = scoreDate;
+//       if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
+//     }
+
+//     if (!minDate) minDate = moment().startOf('day');
+
+//     // Step 4: Fill missing days
+//     const fullResult = [];
+//     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
+//       const dateStr = m.format('YYYY-MM-DD');
+//       if (scoreMap.has(dateStr)) {
+//         fullResult.push(scoreMap.get(dateStr));
+//       } else {
+//         fullResult.push({
+//           date: dateStr,
+//           score: null,
+//           isToday: dateStr === todayStr
+//         });
+//       }
+//     }
+
+//     // Step 5: Bring today's score to top, rest sorted by date ascending
+//     const sortedFinal = fullResult.sort((a, b) => {
+//       if (a.date === todayStr) return -1;
+//       if (b.date === todayStr) return 1;
+//       return new Date(a.date) - new Date(b.date);
+//     });
+
+//     // Step 6: Calculate average
+//     const scoresOnly = fullResult
+//       .filter(s => typeof s.score === 'number')
+//       .map(s => s.score);
+
+//     const avgScore = scoresOnly.length > 0
+//       ? parseFloat((scoresOnly.reduce((a, b) => a + b, 0) / scoresOnly.length).toFixed(2))
+//       : 0;
+
+//     // Step 7: Return response
+//     res.status(200).json({
+//       scores: sortedFinal,
+//       averageScore: avgScore
+//     });
 
 //   } catch (error) {
-//     console.error('Error in PracticeTest:', error);
-//     return res.status(500).json({ message: error.message });
+//     console.error('Error in PracticescoreCard:', error);
+//     res.status(500).json({ message: error.message });
 //   }
 // };
-
-
 
 
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
+    const user = await User.findById(userId).lean();
+    if (!user?.endDate || !user?.className) {
+      // return res.status(400).json({ message: 'User endDate or classId not found.' });
+      return res.status(400).json({ message: 'Please complete your profile.' });
+    }
+
+    const userEndDate = user.endDate;
+    const userClassId = user.className;
+
+    const todayStr = moment().format('YYYY-MM-DD');
+    let minDate = null;
+    let maxDate = moment().startOf('day');
+
+    // Step 1: Get first practice score per day (filtered by endDate + classId)
     const rawScores = await LearningScore.aggregate([
       {
-        $match: { userId: new mongoose.Types.ObjectId(userId) }
+        $match: {
+          userId: new mongoose.Types.ObjectId(userId),
+          endDate: userEndDate, // ⬅️ changed from session to endDate
+          classId: userClassId.toString()
+        }
       },
-      {
-        $sort: { scoreDate: 1 } // earliest first
-      },
+      { $sort: { scoreDate: 1, createdAt: 1 } },
       {
         $group: {
           _id: {
-            $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
           },
           doc: { $first: "$$ROOT" }
         }
       },
-      {
-        $replaceRoot: { newRoot: "$doc" }
-      },
-      {
-        $sort: { scoreDate: -1 } // latest date on top (optional)
-      }
+      { $replaceRoot: { newRoot: "$doc" } },
     ]);
 
-    // Populate learningId manually to match your previous response format
+    // Step 2: Populate learningId
     const populatedScores = await LearningScore.populate(rawScores, {
       path: 'learningId',
       select: 'name'
     });
 
-    res.status(200).json({ scores: populatedScores });
+    // Step 3: Normalize and map
+    const scoreMap = new Map();
+
+    for (const score of populatedScores) {
+      const scoreDate = moment(score.scoreDate).startOf('day');
+      const dateStr = scoreDate.format('YYYY-MM-DD');
+
+      scoreMap.set(dateStr, {
+        ...score.toObject?.() || score,
+        date: dateStr,
+        isToday: dateStr === todayStr
+      });
+
+      if (!minDate || scoreDate.isBefore(minDate)) minDate = scoreDate;
+      if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
+    }
+
+    if (!minDate) minDate = moment().startOf('day');
+
+    // Step 4: Fill missing days
+    const fullResult = [];
+    for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
+      const dateStr = m.format('YYYY-MM-DD');
+      if (scoreMap.has(dateStr)) {
+        fullResult.push(scoreMap.get(dateStr));
+      } else {
+        fullResult.push({
+          date: dateStr,
+          score: null,
+          isToday: dateStr === todayStr
+        });
+      }
+    }
+
+    // Step 5: Bring today's score to top, rest sorted by date ascending
+    const sortedFinal = fullResult.sort((a, b) => {
+      if (a.date === todayStr) return -1;
+      if (b.date === todayStr) return 1;
+      return new Date(a.date) - new Date(b.date);
+    });
+
+    // Step 6: Calculate average
+    const scoresOnly = fullResult
+      .filter(s => typeof s.score === 'number')
+      .map(s => s.score);
+
+    const avgScore = scoresOnly.length > 0
+      ? parseFloat((scoresOnly.reduce((a, b) => a + b, 0) / scoresOnly.length).toFixed(2))
+      : 0;
+
+    // Step 7: Return response
+    res.status(200).json({
+      scores: sortedFinal,
+      averageScore: avgScore
+    });
+
   } catch (error) {
     console.error('Error in PracticescoreCard:', error);
     res.status(500).json({ message: error.message });
@@ -1269,6 +1637,115 @@ exports.PracticescoreCard = async (req, res) => {
 };
 
 
+// exports.PracticescoreCard = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     const user = await User.findById(userId).lean();
+//     if (!user?.className || !user?.endDate) {
+//       return res.status(400).json({ message: 'User classId or endDate not found.' });
+//     }
+
+//     const userClassId = user.className;
+//     const endDate = moment(user.endDate).endOf('day');
+//     const today = moment().startOf('day');
+
+//     // If endDate has expired
+//     if (endDate.isBefore(today)) {
+//       return res.status(403).json({ message: 'Your access has expired.' });
+//     }
+
+//     const todayStr = today.format('YYYY-MM-DD');
+//     let minDate = null;
+//     let maxDate = today;
+
+//     // Step 1: Get first practice score per day (filtered by classId)
+//     const rawScores = await LearningScore.aggregate([
+//       {
+//         $match: {
+//           userId: new mongoose.Types.ObjectId(userId),
+//           classId: userClassId.toString()
+//         }
+//       },
+//       { $sort: { scoreDate: 1, createdAt: 1 } },
+//       {
+//         $group: {
+//           _id: {
+//             date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
+//           },
+//           doc: { $first: "$$ROOT" }
+//         }
+//       },
+//       { $replaceRoot: { newRoot: "$doc" } },
+//     ]);
+
+//     // Step 2: Populate learningId
+//     const populatedScores = await LearningScore.populate(rawScores, {
+//       path: 'learningId',
+//       select: 'name'
+//     });
+
+//     // Step 3: Normalize and map
+//     const scoreMap = new Map();
+
+//     for (const score of populatedScores) {
+//       const scoreDate = moment(score.scoreDate).startOf('day');
+//       const dateStr = scoreDate.format('YYYY-MM-DD');
+
+//       scoreMap.set(dateStr, {
+//         ...score.toObject?.() || score,
+//         date: dateStr,
+//         isToday: dateStr === todayStr
+//       });
+
+//       if (!minDate || scoreDate.isBefore(minDate)) minDate = scoreDate;
+//       if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
+//     }
+
+//     if (!minDate) minDate = today;
+
+//     // Step 4: Fill missing days
+//     const fullResult = [];
+//     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
+//       const dateStr = m.format('YYYY-MM-DD');
+//       if (scoreMap.has(dateStr)) {
+//         fullResult.push(scoreMap.get(dateStr));
+//       } else {
+//         fullResult.push({
+//           date: dateStr,
+//           score: null,
+//           isToday: dateStr === todayStr
+//         });
+//       }
+//     }
+
+//     // Step 5: Bring today's score to top
+//     const sortedFinal = fullResult.sort((a, b) => {
+//       if (a.date === todayStr) return -1;
+//       if (b.date === todayStr) return 1;
+//       return new Date(a.date) - new Date(b.date);
+//     });
+
+//     // Step 6: Average
+//     const scoresOnly = fullResult
+//       .filter(s => typeof s.score === 'number')
+//       .map(s => s.score);
+
+//     const avgScore = scoresOnly.length > 0
+//       ? parseFloat((scoresOnly.reduce((a, b) => a + b, 0) / scoresOnly.length).toFixed(2))
+//       : 0;
+
+//     // Step 7: Response
+//     res.status(200).json({
+//       scores: sortedFinal,
+//       averageScore: avgScore
+//     });
+
+//   } catch (error) {
+//     console.error('Error in PracticescoreCard:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.StrictScore = async (req, res) => {

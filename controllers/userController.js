@@ -4,9 +4,14 @@ const jwt = require('jsonwebtoken');
 const College = require('../models/college');
 const School = require('../models/school');
 const mongoose = require('mongoose');
-const AdminSchool = require('../models/adminschool');
-const AdminCollege = require('../models/admincollege');
 const nodemailer = require('nodemailer');
+const Admin1 = require('../models/admin1'); 
+const UserHistory = require('../models/UserHistory');
+
+const fs = require('fs');
+const path = require('path');
+// const moment = require('moment');
+const moment = require('moment-timezone');
 
 
 exports.signup = async (req, res) => {
@@ -114,6 +119,7 @@ exports.Userlogin = async (req, res) => {
   }
 };
 
+
 exports.completeProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -205,57 +211,130 @@ exports.completeProfile = async (req, res) => {
 //   try {
 //     const userId = req.user.id;
 
-//     const user = await User.findById(userId)
+//     let user = await User.findById(userId)
 //       .populate('countryId', 'name')
 //       .populate('stateId', 'name')
 //       .populate('cityId', 'name')
-//       .lean(); // Add `.lean()` to simplify processing
+//       .populate({
+//         path: 'updatedBy',
+//         select: 'email session startDate endDate endTime name role'
+//       });
 
 //     if (!user) {
 //       return res.status(404).json({ message: 'User not found.' });
 //     }
 
-//     const classId = user.className;
-//     let classDetails = '';
-//     let validClassName = classId;
+//     let classId = user.className;
+//     let classDetails = null;
 
 //     if (mongoose.Types.ObjectId.isValid(classId)) {
-//       const adminSchool = await AdminSchool.findById(classId).populate('className', 'name').lean();
-//       const adminCollege = await AdminCollege.findById(classId).populate('className', 'name').lean();
-//       const entry = adminSchool || adminCollege;
+//       classDetails =
+//         (await School.findById(classId)) ||
+//         (await College.findById(classId));
+//     }
 
-//       if (entry && entry.className && typeof entry.className === 'object') {
-//         classDetails = entry.className.name;
-//         validClassName = entry.className._id;
-//       } else {
-//         // className reference is invalid (e.g., deleted), so ignore it
-//         validClassName = null;
+//     // const baseUrl = `${req.protocol}://${req.get('host')}`;
+//       const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+
+//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//     }
+//     if (user.marksheet && fs.existsSync(user.marksheet)) {
+//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//     }
+
+//     if (!classDetails || classDetails.price == null) {
+//       classId = null;
+//       await User.findByIdAndUpdate(userId, { className: null });
+//       user.className = null;
+//     } else {
+//       const institutionUpdatedBy = classDetails.updatedBy || null;
+
+//       if (institutionUpdatedBy) {
+//         const existingUser = await User.findById(userId).select('updatedBy');
+
+//         // ✅ Pehli baar skip, dusri baar change hone par clone
+//         if (
+//           existingUser.updatedBy && 
+//           existingUser.updatedBy.toString() !== institutionUpdatedBy?.toString()
+//         ) {
+//           const userData = user.toObject();
+//           const originalId = userData._id;
+//           delete userData._id;
+
+//           await UserHistory.create({
+//             ...userData,
+//             _id: new mongoose.Types.ObjectId(),
+//             originalUserId: originalId,
+//             clonedAt: new Date()
+//           });
+
+//           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+//           user.updatedBy = institutionUpdatedBy;
+//         }
 //       }
 //     }
 
-//     // Add base URL to Aadhar & Marksheet if available
-//     const baseUrl = `${req.protocol}://${req.get('host')}`;
-//     if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
-//     if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
+//     // Sync session-related fields from updatedBy to user
+//     if (user.updatedBy && typeof user.updatedBy === 'object') {
+//       const updates = {};
 
+//       if (user.updatedBy.session && user.session !== user.updatedBy.session) {
+//         updates.session = user.updatedBy.session;
+//         user.session = user.updatedBy.session;
+//       }
+
+//       if (user.updatedBy.startDate && user.startDate !== user.updatedBy.startDate) {
+//         updates.startDate = user.updatedBy.startDate;
+//         user.startDate = user.updatedBy.startDate;
+//       }
+
+//       if (user.updatedBy.endDate && user.endDate !== user.updatedBy.endDate) {
+//         updates.endDate = user.updatedBy.endDate;
+//         user.endDate = user.updatedBy.endDate;
+//       }
+
+//       if (Object.keys(updates).length > 0) {
+//         await User.findByIdAndUpdate(userId, updates);
+//       }
+//     }
+
+//     // Check if session expired
+//     if (user.updatedBy?.endDate) {
+//       const rawEndDate = user.updatedBy.endDate.trim();
+//       const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
+//       const currentDate = moment.tz('Asia/Kolkata');
+
+//       if (!endDate.isValid()) {
+//         console.warn("⚠️ Invalid endDate. Format must be DD-MM-YYYY");
+//       } else if (currentDate.isSameOrAfter(endDate)) {
+//         if (user.status !== 'no') {
+//           await User.findByIdAndUpdate(userId, { status: 'no' });
+//           user.status = 'no';
+//         }
+//       }
+//     }
+
+//     // Final formatted response
 //     const formattedUser = {
-//       ...user,
+//       ...user._doc,
+//       status: user.status,
+//       className: classId,
 //       country: user.countryId?.name || '',
 //       state: user.stateId?.name || '',
 //       city: user.cityId?.name || '',
 //       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
 //       institutionType: user.studentType || '',
-//       classOrYear: classDetails || '',
+//       updatedBy: user.updatedBy || null
 //     };
 
-//     // Clean up invalid className from response
-//     if (!validClassName) {
-//       formattedUser.className = null;
+//     if (classDetails && classDetails.price != null) {
+//       formattedUser.classOrYear = classDetails.name;
 //     }
 
 //     res.status(200).json({
 //       message: 'User profile fetched successfully.',
-//       user: formattedUser,
+//       user: formattedUser
 //     });
 //   } catch (error) {
 //     console.error('Get User Profile Error:', error);
@@ -268,46 +347,124 @@ exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const user = await User.findById(userId)
+    // 1) लाओ user (populate कुछ फील्ड्स के साथ)
+    let user = await User.findById(userId)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
-      .populate('cityId', 'name');
+      .populate('cityId', 'name')
+      .populate({
+        path: 'updatedBy',
+        select: 'email session startDate endDate endTime name role'
+      });
 
     if (!user) {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    const classId = user.className;
+    // 2) className से classDetails ढूंढो (School या College)
+    let classId = user.className;
     let classDetails = null;
 
     if (mongoose.Types.ObjectId.isValid(classId)) {
       classDetails =
         (await School.findById(classId)) ||
-        (await College.findById(classId)) ||
-        (await Institute.findById(classId));
+        (await College.findById(classId));
     }
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
-    if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
+    // 3) file URLs (aadharCard / marksheet) को public URL बनाना (अगर local path है तो)
+    // const baseUrl = `${req.protocol}://${req.get('host')}`;
+const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+    }
+    if (user.marksheet && fs.existsSync(user.marksheet)) {
+      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+    }
 
+    // 4) अगर classDetails invalid हो तो className हटाओ
+    if (!classDetails || classDetails.price == null) {
+      classId = null;
+      await User.findByIdAndUpdate(userId, { className: null });
+      user.className = null;
+    } else {
+      // 5) अगर institution.updatedBy बदल गया है तो सिर्फ updatedBy अपडेट करो (clone logic हटाया गया है)
+      const institutionUpdatedBy = classDetails.updatedBy || null;
+
+      if (institutionUpdatedBy) {
+        const existingUser = await User.findById(userId).select('updatedBy');
+
+        if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
+          await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
+          user.updatedBy = institutionUpdatedBy;
+        }
+      }
+    }
+
+    // 6) Sync session-related fields from updatedBy (if populated object) to user
+    if (user.updatedBy && typeof user.updatedBy === 'object') {
+      const updates = {};
+
+      if (user.updatedBy.session && user.session !== user.updatedBy.session) {
+        updates.session = user.updatedBy.session;
+        user.session = user.updatedBy.session;
+      }
+
+      if (user.updatedBy.startDate && user.startDate !== user.updatedBy.startDate) {
+        updates.startDate = user.updatedBy.startDate;
+        user.startDate = user.updatedBy.startDate;
+      }
+
+      if (user.updatedBy.endDate && user.endDate !== user.updatedBy.endDate) {
+        updates.endDate = user.updatedBy.endDate;
+        user.endDate = user.updatedBy.endDate;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await User.findByIdAndUpdate(userId, updates);
+      }
+    }
+
+    // 7) Check session expiry (using moment-timezone)
+    if (user.updatedBy?.endDate) {
+      const rawEndDate = String(user.updatedBy.endDate).trim();
+      const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
+      const currentDate = moment.tz('Asia/Kolkata');
+
+      if (!endDate.isValid()) {
+        console.warn("⚠️ Invalid endDate. Format must be DD-MM-YYYY");
+      } else if (currentDate.isSameOrAfter(endDate)) {
+        if (user.status !== 'no') {
+          await User.findByIdAndUpdate(userId, { status: 'no' });
+          user.status = 'no';
+        }
+      }
+    }
+
+    // 8) Final formatted response
     const formattedUser = {
       ...user._doc,
+      status: user.status,
+      className: classId,
       country: user.countryId?.name || '',
       state: user.stateId?.name || '',
       city: user.cityId?.name || '',
       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
       institutionType: user.studentType || '',
-      classOrYear: classDetails?.name || '',
+      updatedBy: user.updatedBy || null
     };
 
-    res.status(200).json({
+    if (classDetails && classDetails.price != null) {
+      formattedUser.classOrYear = classDetails.name;
+    }
+
+    return res.status(200).json({
       message: 'User profile fetched successfully.',
       user: formattedUser
     });
+
   } catch (error) {
     console.error('Get User Profile Error:', error);
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
@@ -326,17 +483,17 @@ exports.sendResetOTP = async (req, res) => {
     user.resetPasswordExpires = expiry;
     await user.save();
 
-    
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'mukeshkumarbst33@gmail.com', 
-    pass: 'xdiw vbqx uckh asip' 
-      },
-    });
+   
+   const transporter = nodemailer.createTransport({
+     service: 'gmail',
+     auth: {
+       user: 'noreply@shikshacart.com', 
+       pass: 'xyrx ryad ondf jaum' 
+     }
+   });
 
     await transporter.sendMail({
-      from: 'mukeshkumarbst33@gmail.com',
+      from: 'noreply@shikshacart.com',
       to: email,
       subject: 'Login OTP',
       text: `Your OTP is: ${otp}`,
@@ -407,16 +564,17 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
 
     const user = await User.findByIdAndUpdate(userId, { password: hashedPassword }, { new: true });
 
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'mukeshkumarbst33@gmail.com',
-        pass: 'xdiw vbqx uckh asip',
-      },
-    });
+   
+   const transporter = nodemailer.createTransport({
+     service: 'gmail',
+     auth: {
+       user: 'noreply@shikshacart.com', 
+       pass: 'xyrx ryad ondf jaum' 
+     }
+   });
 
     await transporter.sendMail({
-      from: 'mukeshkumarbst33@gmail.com',
+      from: 'noreply@shikshacart.com',
       to: user.email,
       subject: 'Password Changed Successfully',
       text: `Hi ${user.firstName || 'User'},\n\nYour password has been successfully changed. You can now login with your new password.\n\nIf you did not perform this action, please contact support immediately.`,
@@ -428,31 +586,30 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 exports.SendEmailverifyOTP = async (req, res) => {
   try {
     const { email } = req.body;
 
     const user = await User.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found' });
-
     const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
     const expiry = new Date(Date.now() + 5 * 60 * 1000); 
-
     user.resetPasswordOTP = otp;
     user.resetPasswordExpires = expiry;
     await user.save();
 
     // Email setup
-    const transporter = nodemailer.createTransport({
-      service: 'gmail',
-      auth: {
-        user: 'mukeshkumarbst33@gmail.com', 
-    pass: 'xdiw vbqx uckh asip' 
-      },
-    });
+   const transporter = nodemailer.createTransport({
+     service: 'gmail',
+     auth: {
+       user: 'noreply@shikshacart.com', 
+       pass: 'xyrx ryad ondf jaum' 
+     }
+   });
 
     await transporter.sendMail({
-      from: 'mukeshkumarbst33@gmail.com',
+      from: 'noreply@shikshacart.com',
       to: email,
       subject: 'Email Verify OTP',
       text: `Your OTP is: ${otp}`,
@@ -518,12 +675,12 @@ exports.updateUser = async (req, res) => {
 };
 
 
+
 // exports.updateProfile = async (req, res) => {
 //   try {
 //     const userId = req.user.id;
-   
-//     const existingUser = await User.findById(userId);
 
+//     const existingUser = await User.findById(userId);
 //     if (!existingUser) {
 //       return res.status(404).json({ message: 'User not found' });
 //     }
@@ -531,6 +688,7 @@ exports.updateUser = async (req, res) => {
 //     if (existingUser.status === 'yes') {
 //       return res.status(403).json({ message: 'You are not eligible to update.' });
 //     }
+
 //     let {
 //       countryId,
 //       stateId,
@@ -547,14 +705,12 @@ exports.updateUser = async (req, res) => {
 //       return res.status(400).json({ message: 'Invalid Pincode' });
 //     }
 
-  
 //     const updatedFields = {
 //       pincode,
 //       studentType,
 //       schoolName,
 //       instituteName,
-//       collegeName,
-//       // status: 'no' 
+//       collegeName
 //     };
 
 //     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
@@ -565,24 +721,41 @@ exports.updateUser = async (req, res) => {
 //     if (req.files?.aadharCard?.[0]) {
 //       updatedFields.aadharCard = req.files.aadharCard[0].path;
 //     }
+
 //     if (req.files?.marksheet?.[0]) {
 //       updatedFields.marksheet = req.files.marksheet[0].path;
 //     }
 
-    
+//     // === Fetch class updatedBy and admin session ===
+//     let classDetails = null;
+//     if (mongoose.Types.ObjectId.isValid(className)) {
+//       classDetails = await School.findById(className) || await College.findById(className);
+//       if (classDetails?.updatedBy) {
+//         updatedFields.updatedBy = classDetails.updatedBy;
+
+//         // ✅ Also fetch session from admin and assign to user
+//         const admin = await Admin1.findById(classDetails.updatedBy);
+//         if (admin?.session) {
+//           updatedFields.session = admin.session;
+//         }
+//       }
+//     }
+
+//     // === Update user ===
 //     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
 //       .populate('countryId')
 //       .populate('stateId')
-//       .populate('cityId');
+//       .populate('cityId')
+//       .populate('updatedBy', 'email session startDate endDate');
 
-    
-//     let classDetails = null;
-//     if (mongoose.Types.ObjectId.isValid(className)) {
-//       classDetails =
-//         (await School.findById(className)) ||
-//         (await College.findById(className)) ;
-//         // (await Institute.findById(className));
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
 //     }
+//     if (user.marksheet && fs.existsSync(user.marksheet)) {
+//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//     }
+
 //     const formattedUser = {
 //       ...user._doc,
 //       country: user.countryId?.name || '',
@@ -591,15 +764,17 @@ exports.updateUser = async (req, res) => {
 //       institutionName: schoolName || collegeName || instituteName || '',
 //       institutionType: studentType || '',
 //       classOrYear: classDetails?.name || '',
+//       session: user.session || '',
+//       updatedBy: user.updatedBy || null
 //     };
 
-//     res.status(200).json({
+//     return res.status(200).json({
 //       message: 'Profile updated. Redirecting to home page.',
 //       user: formattedUser
 //     });
 
 //   } catch (error) {
-//     console.error('Complete Profile Error:', error);
+//     console.error('Update Profile Error:', error);
 //     res.status(500).json({ message: error.message });
 //   }
 // };
@@ -639,7 +814,7 @@ exports.updateProfile = async (req, res) => {
       studentType,
       schoolName,
       instituteName,
-      collegeName,
+      collegeName
     };
 
     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
@@ -655,25 +830,83 @@ exports.updateProfile = async (req, res) => {
       updatedFields.marksheet = req.files.marksheet[0].path;
     }
 
-    const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
-      .populate('countryId', 'name')
-      .populate('stateId', 'name')
-      .populate('cityId', 'name');
-
-    // === Fetch classOrYear name from AdminSchool or AdminCollege using className ===
-    let classDetails = '';
+    // === Fetch class updatedBy and admin session ===
+    let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(className)) {
-      const adminSchool = await AdminSchool.findById(className).populate('className', 'name');
-      const adminCollege = await AdminCollege.findById(className).populate('className', 'name');
-      const entry = adminSchool || adminCollege;
-      if (entry?.className?.name) {
-        classDetails = entry.className.name;
+      classDetails = await School.findById(className) || await College.findById(className);
+
+      if (classDetails?.updatedBy) {
+        let shouldClone = false;
+
+        // 1️⃣ पहली बार updatedBy set हो रहा है
+        if (!existingUser.updatedBy) {
+          shouldClone = true;
+        }
+
+        // 2️⃣ className बदला गया
+        if (existingUser.className?.toString() !== className?.toString()) {
+          shouldClone = true;
+        }
+
+        // 3️⃣ className same है लेकिन updatedBy बदला है
+        if (
+          existingUser.className?.toString() === className?.toString() &&
+          existingUser.updatedBy?.toString() !== classDetails.updatedBy.toString()
+        ) {
+          shouldClone = true;
+        }
+
+        // ✅ अगर condition match होती है तो clone बनाओ
+        if (shouldClone) {
+          const userData = existingUser.toObject();
+          const currentUserId = userData._id;
+          delete userData._id;
+
+          if (userData.countryId && typeof userData.countryId === 'object') {
+            userData.countryId = userData.countryId._id || userData.countryId;
+          }
+          if (userData.stateId && typeof userData.stateId === 'object') {
+            userData.stateId = userData.stateId._id || userData.stateId;
+          }
+          if (userData.cityId && typeof userData.cityId === 'object') {
+            userData.cityId = userData.cityId._id || userData.cityId;
+          }
+          if (userData.updatedBy && typeof userData.updatedBy === 'object') {
+            userData.updatedBy = userData.updatedBy._id || userData.updatedBy;
+          }
+          delete userData.__v;
+
+          await UserHistory.create({
+            ...userData,
+            _id: currentUserId,
+            originalUserId: new mongoose.Types.ObjectId(),
+            clonedAt: new Date()
+          });
+        }
+
+        updatedFields.updatedBy = classDetails.updatedBy;
+
+        const admin = await Admin1.findById(classDetails.updatedBy);
+        if (admin?.session) {
+          updatedFields.session = admin.session;
+        }
       }
     }
 
+    // === Update user ===
+    const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
+      .populate('countryId')
+      .populate('stateId')
+      .populate('cityId')
+      .populate('updatedBy', 'email session startDate endDate');
+
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    if (user.aadharCard) user.aadharCard = `${baseUrl}/${user.aadharCard}`;
-    if (user.marksheet) user.marksheet = `${baseUrl}/${user.marksheet}`;
+    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+    }
+    if (user.marksheet && fs.existsSync(user.marksheet)) {
+      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+    }
 
     const formattedUser = {
       ...user._doc,
@@ -682,20 +915,21 @@ exports.updateProfile = async (req, res) => {
       city: user.cityId?.name || '',
       institutionName: schoolName || collegeName || instituteName || '',
       institutionType: studentType || '',
-      classOrYear: classDetails || '',
+      classOrYear: classDetails?.name || '',
+      session: user.session || '',
+      updatedBy: user.updatedBy || null
     };
 
-    res.status(200).json({
+    return res.status(200).json({
       message: 'Profile updated. Redirecting to home page.',
       user: formattedUser
     });
 
   } catch (error) {
-    console.error('Complete Profile Error:', error);
+    console.error('Update Profile Error:', error);
     res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
@@ -707,6 +941,352 @@ exports.updateProfileStatus = async (req, res) => {
 
     res.status(200).json({ message: 'yes' });
   } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+exports.UserSessionDetails = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const user = await User.findById(userId)
+      .populate('updatedBy', 'email session startDate endDate');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found.' });
+    }
+
+    const admin = user.updatedBy;
+
+    if (!admin) {
+      return res.status(404).json({ message: 'No session found for that user.' });
+    }
+
+    res.status(200).json({
+      message: 'User session details fetched successfully.',
+      Email: admin.email,
+      session: admin.session,
+      startDate: admin.startDate,
+      endDate: admin.endDate
+    });
+  } catch (error) {
+    console.error('Get User Session Details Error:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+};
+
+
+
+
+// exports.getActiveSessionUsers = async (req, res) => {
+//   try {
+//     const { startDate, endDate, fields } = req.query;
+
+//     if (!startDate || !endDate) {
+//       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
+//     }
+
+//     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
+//     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
+
+//     if (!start.isValid() || !end.isValid()) {
+//       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
+//     }
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+//     // Fetch users from a collection with source tag
+//     async function getUsersFromCollection(Model, source) {
+//       const users = await Model.find({
+//         startDate: { $exists: true, $ne: '' },
+//         endDate: { $exists: true, $ne: '' }
+//       })
+//         .populate('cityId', 'name')
+//         .populate('stateId', 'name')
+//         .populate('countryId', 'name')
+//         .lean();
+
+//       return users
+//         .filter(user => {
+//           const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
+//           const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
+//           if (!userStart.isValid() || !userEnd.isValid()) return false;
+//           return userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
+//         })
+//         .map(user => ({ ...user, _source: source }));  // Mark source
+//     }
+
+//     // Get users from both collections with source marks
+//     const [usersFromUser, usersFromUserHistory] = await Promise.all([
+//       getUsersFromCollection(User, 'User'),
+//       getUsersFromCollection(UserHistory, 'UserHistory')
+//     ]);
+
+//     // Combine and remove duplicates by _id (original _id from collection)
+//     const combinedMap = new Map();
+//     [...usersFromUser, ...usersFromUserHistory].forEach(user => {
+//       combinedMap.set(user._id.toString(), user);
+//     });
+//     const combinedUsers = Array.from(combinedMap.values());
+
+//     // Enrich users with class info, fix file URLs, replace _id if from UserHistory, and filter fields if requested
+//     const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
+//       let classData = null;
+//       let classId = user.className;
+
+//       if (mongoose.Types.ObjectId.isValid(classId)) {
+//         const school = await School.findById(classId);
+//         const college = school ? null : await College.findById(classId);
+//         const institution = school || college;
+
+//         if (institution && institution.price != null) {
+//           classData = {
+//             id: classId,
+//             name: institution.name
+//           };
+//         } else {
+//           classId = null;
+//         }
+//       }
+
+//       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
+//       fileFields.forEach(field => {
+//         if (user[field]) {
+//           const match = user[field].match(/uploads\/(.+)$/);
+//           if (match && match[1]) {
+//             user[field] = `${baseUrl}/uploads/${match[1]}`;
+//           }
+//         }
+//       });
+
+//       // Replace _id with originalUserId only if user is from UserHistory
+//       let idToUse = user._id.toString();
+//       if (user._source === 'UserHistory' && user.originalUserId) {
+//         idToUse = user.originalUserId.toString();
+//       }
+
+//       const formatted = {
+//         ...user,
+//         _id: idToUse,
+//         className: classData ? classData.id : null,
+//         classOrYear: classData ? classData.name : null,
+//         country: user.countryId?.name || '',
+//         state: user.stateId?.name || '',
+//         city: user.cityId?.name || '',
+//         platformDetails: idToUse
+//       };
+
+//       if (fields) {
+//         const requestedFields = fields.split(',');
+//         const limited = {};
+//         requestedFields.forEach(f => {
+//           if (formatted.hasOwnProperty(f)) {
+//             limited[f] = formatted[f];
+//           }
+//         });
+//         return limited;
+//       }
+
+//       return formatted;
+//     }));
+
+//     res.status(200).json({
+//       message: 'Filtered users fully inside session range from User and UserHistory.',
+//       count: enrichedUsers.length,
+//       users: enrichedUsers
+//     });
+
+//   } catch (error) {
+//     console.error('Error filtering users by session range:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
+exports.getActiveSessionUsers = async (req, res) => {
+  try {
+    const { startDate, endDate, fields } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
+    }
+
+    const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
+    const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
+
+    if (!start.isValid() || !end.isValid()) {
+      return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+    // Fetch users from a collection with source tag
+    async function getUsersFromCollection(Model, source) {
+      const users = await Model.find({
+        startDate: { $exists: true, $ne: '' },
+        endDate: { $exists: true, $ne: '' }
+      })
+        .populate('cityId', 'name')
+        .populate('stateId', 'name')
+        .populate('countryId', 'name')
+        .lean();
+
+      return users
+        .filter(user => {
+          const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
+          const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
+          if (!userStart.isValid() || !userEnd.isValid()) return false;
+          return userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
+        })
+        .map(user => ({ ...user, _source: source }));  // Mark source
+    }
+
+    // Get users from both collections with source marks
+    const [usersFromUser, usersFromUserHistory] = await Promise.all([
+      getUsersFromCollection(User, 'User'),
+      getUsersFromCollection(UserHistory, 'UserHistory')
+    ]);
+
+    // Combine and remove duplicates by _id (original _id from collection)
+    const combinedMap = new Map();
+    [...usersFromUser, ...usersFromUserHistory].forEach(user => {
+      combinedMap.set(user._id.toString(), user);
+    });
+    const combinedUsers = Array.from(combinedMap.values());
+
+    // Enrich users with class info, fix file URLs, replace _id if from UserHistory, and filter fields if requested
+    const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
+      let classData = null;
+      let classId = user.className;
+
+      if (mongoose.Types.ObjectId.isValid(classId)) {
+        const school = await School.findById(classId);
+        const college = school ? null : await College.findById(classId);
+        const institution = school || college;
+
+        if (institution && institution.price != null) {
+          classData = {
+            id: classId,
+            name: institution.name
+          };
+        } else {
+          classId = null;
+        }
+      }
+
+      const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
+      fileFields.forEach(field => {
+        if (user[field]) {
+          const match = user[field].match(/uploads\/(.+)$/);
+          if (match && match[1]) {
+            user[field] = `${baseUrl}/uploads/${match[1]}`;
+          }
+        }
+      });
+
+      // Replace _id with originalUserId only if user is from UserHistory
+      let idToUse = user._id.toString();
+      if (user._source === 'UserHistory' && user.originalUserId) {
+        idToUse = user.originalUserId.toString();
+      }
+
+      // ✅ Compare IST date with endDate, update status in DB if expired
+      const currentIST = moment().tz("Asia/Kolkata").startOf('day');
+      const userEndDate = moment(user.endDate, 'DD-MM-YYYY', true).startOf('day');
+
+      if (currentIST.isAfter(userEndDate) && user.status !== 'no') {
+        await User.updateOne({ _id: user._id }, { $set: { status: 'no' } });
+        user.status = 'no'; // reflect in API response
+      }
+
+      const formatted = {
+        ...user,
+        _id: idToUse,
+        className: classData ? classData.id : null,
+        classOrYear: classData ? classData.name : null,
+        country: user.countryId?.name || '',
+        state: user.stateId?.name || '',
+        city: user.cityId?.name || '',
+        platformDetails: idToUse
+      };
+
+      if (fields) {
+        const requestedFields = fields.split(',');
+        const limited = {};
+        requestedFields.forEach(f => {
+          if (formatted.hasOwnProperty(f)) {
+            limited[f] = formatted[f];
+          }
+        });
+        return limited;
+      }
+
+      return formatted;
+    }));
+
+    res.status(200).json({
+      message: 'Filtered users fully inside session range from User and UserHistory.',
+      count: enrichedUsers.length,
+      users: enrichedUsers
+    });
+
+  } catch (error) {
+    console.error('Error filtering users by session range:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.getUserHistories = async (req, res) => {
+  try {
+    const { originalUserId } = req.query; // optional filter
+
+    let filter = {};
+    if (originalUserId && mongoose.Types.ObjectId.isValid(originalUserId)) {
+      filter.originalUserId = originalUserId;
+    }
+
+    let histories = await UserHistory.find(filter)
+      .populate('updatedBy', 'email session startDate endDate endTime name role')
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
+      .sort({ clonedAt: -1 })
+      .lean();
+
+    // Add computed fields like institutionName, classOrYear for each history
+    for (const hist of histories) {
+      // Fetch class details from School or College
+      let classDetails = null;
+      if (hist.className && mongoose.Types.ObjectId.isValid(hist.className)) {
+        classDetails = (await School.findById(hist.className).lean()) || (await College.findById(hist.className).lean());
+      }
+
+      // institutionName priority: schoolName > collegeName > instituteName (from hist)
+      hist.institutionName = hist.schoolName || hist.collegeName || hist.instituteName || '';
+      hist.institutionType = hist.studentType || '';
+
+      hist.classOrYear = (classDetails && classDetails.price != null) ? classDetails.name : null;
+
+      // Attach readable country/state/city names
+      hist.country = hist.countryId?.name || '';
+      hist.state = hist.stateId?.name || '';
+      hist.city = hist.cityId?.name || '';
+
+      // Clean up to keep only useful fields (optional)
+      delete hist.countryId;
+      delete hist.stateId;
+      delete hist.cityId;
+    }
+
+    res.status(200).json({
+      message: 'User histories fetched successfully',
+      count: histories.length,
+      data: histories
+    });
+
+  } catch (error) {
+    console.error('Error fetching User Histories:', error);
     res.status(500).json({ message: error.message });
   }
 };

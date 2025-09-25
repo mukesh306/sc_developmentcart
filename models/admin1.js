@@ -29,6 +29,13 @@ const AdminSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  status: {
+    type: Boolean,
+    default: true
+  },
+  endTime: {
+  type: String,
+},
   otp: {
     type: String
   },
