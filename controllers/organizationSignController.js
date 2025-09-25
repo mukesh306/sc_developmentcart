@@ -421,7 +421,7 @@ exports.resetPassword = async (req, res) => {
 
 exports.bulkUploadOrganizationUsers = async (req, res) => {
   try {
-    const { users } = req.body; // expecting an array of user objects
+    const { users } = req.body; 
 
     if (!users || !Array.isArray(users) || users.length === 0) {
       return res.status(400).json({ message: 'No users provided for bulk upload.' });
@@ -693,8 +693,11 @@ exports.getOrganizationUserProfile = async (req, res) => {
       });
 
     if (!users || users.length === 0) {
-      return res.status(404).json({ message: 'No users found for this token.' });
-    }
+  return res.status(200).json({
+    message: 'Organization user profiles fetched successfully.',
+    users: []
+  });
+}
 
     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
 
