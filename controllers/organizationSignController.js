@@ -421,60 +421,69 @@ exports.resetPassword = async (req, res) => {
 
 exports.bulkUploadOrganizationUsers = async (req, res) => {
   try {
-    const { users } = req.body; 
+    const { users } = req.body;
 
     if (!users || !Array.isArray(users) || users.length === 0) {
-      return res.status(400).json({ message: 'No users provided for bulk upload.' });
+      return res
+        .status(400)
+        .json({ message: "No users provided for bulk upload." });
     }
 
     const validUsers = [];
     const invalidUsers = [];
 
-    // Validate each user
     for (const user of users) {
       const { firstName, middleName, lastName, mobileNumber, email } = user;
 
       if (!email) {
-        invalidUsers.push({ user, reason: 'Email is required.' });
+        invalidUsers.push({ user, reason: "Email is required." });
         continue;
       }
 
       const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
       if (!emailRegex.test(email)) {
-        invalidUsers.push({ user, reason: 'Invalid email format.' });
+        invalidUsers.push({ user, reason: "Invalid email format." });
         continue;
       }
 
-      // Prepare user data for insertion
+      const existing = await Organizationuser.findOne({
+        createdBy: req.user._id,
+        email: email,
+      });
+
+      if (existing) {
+        continue;
+      }
       validUsers.push({
         firstName,
         middleName,
         lastName,
         mobileNumber,
         email,
-        createdBy: req.user._id, // from token
+        createdBy: req.user._id, 
         createdAt: new Date(),
         updatedAt: new Date(),
       });
     }
 
-    // Insert valid users in bulk
+    // Insert only valid users
     let insertedUsers = [];
     if (validUsers.length > 0) {
-      insertedUsers = await Organizationuser.insertMany(validUsers, { ordered: false }); 
-      // 'ordered: false' will continue inserting even if some fail (like duplicates)
+      insertedUsers = await Organizationuser.insertMany(validUsers, {
+        ordered: false,
+      });
     }
 
-    res.status(200).json({
-      message: 'Bulk upload completed.',
-      insertedCount: insertedUsers.length,
-      invalidUsers
-    });
+   return res.status(200).json({
+  message: `${insertedUsers.length} User uploaded Successfully.`,
+});
   } catch (error) {
-    console.error('Bulk Upload Error:', error);
-    res.status(500).json({ message: error.message });
+    console.error("Bulk Upload Error:", error);
+    return res.status(500).json({ message: error.message });
   }
 };
+
+
 
 
 // exports.organizationUser = async (req, res) => {
