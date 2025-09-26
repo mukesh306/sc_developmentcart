@@ -1,4 +1,4 @@
-version: '3.9'
+version: "3.8"
 
 services:
   sc_backend:
@@ -8,11 +8,11 @@ services:
     container_name: sc_backend
     restart: unless-stopped
     ports:
-      - "5001:5001"
+      - "${PORT}:${PORT}"
     env_file:
       - .env
     volumes:
-      - ./uploads:/usr/src/app/uploads
+      - uploads_data:/app/uploads
     networks:
       - backend_net
 
@@ -20,3 +20,5 @@ networks:
   backend_net:
     driver: bridge
 
+volumes:
+  uploads_data:
