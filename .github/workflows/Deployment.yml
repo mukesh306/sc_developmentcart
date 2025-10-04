@@ -39,9 +39,9 @@ jobs:
           script: |
             git config --global user.name "CI Bot"
             git config --global user.email "ci@bussibees.com"
-            git config --global --add safe.directory /home/ubuntu/Bussibees-code-UAT/Bussibees_Backend
+            git config --global --add safe.directory /home/ubuntu/Shikshacart-code/SC_Backend
 
-            cd /home/ubuntu/Bussibees-code/Bussibees_Backend
+            cd /home/ubuntu/Shikshacart-code/SC_Backend/
 
             git reset --hard
             git clean -fd
