@@ -1,0 +1,55 @@
+name: Deploy Backend
+
+on:
+  push:
+    branches:
+      - dev
+      - UAT
+      - production
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Set EC2 Host and Port based on branch
+        id: set-host-port
+        run: |
+          if [[ "${GITHUB_REF_NAME}" == "production" ]]; then
+            echo "EC2_HOST=${{ secrets.EC2_PROD_HOST }}" >> $GITHUB_ENV
+            echo "EC2_PORT=${{ secrets.EC2_PROD_PORT }}" >> $GITHUB_ENV
+          elif [[ "${GITHUB_REF_NAME}" == "UAT" ]]; then
+            echo "EC2_HOST=${{ secrets.EC2_UAT_HOST }}" >> $GITHUB_ENV
+            echo "EC2_PORT=${{ secrets.EC2_UAT_PORT }}" >> $GITHUB_ENV
+          else
+            echo "EC2_HOST=${{ secrets.EC2_DEV_HOST }}" >> $GITHUB_ENV
+            echo "EC2_PORT=${{ secrets.EC2_DEV_PORT }}" >> $GITHUB_ENV
+          fi
+
+      - name: SSH into EC2 & Deploy
+        uses: appleboy/ssh-action@v0.1.7
+        with:
+          host: ${{ env.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: ${{ env.EC2_PORT }}
+          script: |
+            git config --global user.name "CI Bot"
+            git config --global user.email "ci@bussibees.com"
+            git config --global --add safe.directory /home/ubuntu/Bussibees-code-UAT/Bussibees_Backend
+
+            cd /home/ubuntu/Bussibees-code/Bussibees_Backend
+
+            git reset --hard
+            git clean -fd
+            git pull origin $GITHUB_REF_NAME
+
+            export DOCKER_BUILDKIT=1
+            export COMPOSE_DOCKER_CLI_BUILD=1
+
+            sudo docker compose down
+            sudo docker compose build --no-cache
+            sudo docker compose up -d
