@@ -3,6 +3,7 @@ const School = require('../models/school');
 const College = require('../models/college');
 const Buy = require('../models/buyseats');
 
+
 exports.createClassSeat = async (req, res) => {
   try {
     const { className, seat } = req.body;
@@ -198,31 +199,31 @@ exports.buyClassSeats = async (req, res) => {
   }
 };
 
-// exports.getUserBuys = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
 
-//     const buys = await BuySeat.find({ userId })
-//       .populate({
-//         path: "classSeatId",
-//         select: "className seat" 
-//       })
-//       .sort({ createdAt: -1 });
+exports.getUserBuys = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const buys = await BuySeat.find({ userId })
+      .populate({
+        path: "classSeatId",
+        select: "className seat" 
+      })
+      .sort({ createdAt: -1 });
 
-//     if (!buys || buys.length === 0) {
-//       return res.status(404).json({ message: "No purchases found" });
-//     }
+    if (!buys || buys.length === 0) {
+      return res.status(404).json({ message: "No purchases found" });
+    }
 
-//     const buyRecords = buys.map(buy => ({
-//       className: buy.classSeatId.className,
-//       seat: buy.seat
-//     }));
+    const buyRecords = buys.map(buy => ({
+      className: buy.classSeatId.className,
+      seat: buy.seat
+    }));
 
-//     res.status(200).json({
-//       buyRecords
-//     });
+    res.status(200).json({
+      buyRecords
+    });
 
-//   } catch (err) {
-//     res.status(500).json({ message: err.message });
-//   }
-// };
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};

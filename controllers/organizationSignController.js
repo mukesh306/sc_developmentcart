@@ -419,6 +419,7 @@ exports.resetPassword = async (req, res) => {
   }
 };
 
+
 exports.bulkUploadOrganizationUsers = async (req, res) => {
   try {
     const { users } = req.body;
@@ -866,7 +867,7 @@ exports.getOrganizationUserProfile = async (req, res) => {
 
 exports.updateOrganizationUser = async (req, res) => {
   try {
-    const { userId } = req.params;
+    const { userId } = req.body;
     const {
       firstName,
       middleName,
@@ -884,8 +885,9 @@ exports.updateOrganizationUser = async (req, res) => {
     } = req.body;
 
     let user = await Organizationuser.findById(userId);
-    if (!user) return res.status(404).json({ message: 'User not found.' });
+    if (!user) return res.status(404).json({ message: "User not found." });
 
+    // ✅ Prepare update fields
     const updatedFields = {
       firstName,
       middleName,
@@ -900,25 +902,50 @@ exports.updateOrganizationUser = async (req, res) => {
       instituteName,
       collegeName,
       className: mongoose.Types.ObjectId.isValid(className) ? className : undefined,
-      updatedBy: req.user._id 
+      updatedBy: req.user?._id || null
     };
 
+    // ✅ File updates (if uploaded)
     if (req.files?.aadharCard?.[0]) updatedFields.aadharCard = req.files.aadharCard[0].path;
     if (req.files?.marksheet?.[0]) updatedFields.marksheet = req.files.marksheet[0].path;
 
-   
     delete updatedFields.email;
 
+    // ✅ Update the user
     user = await Organizationuser.findByIdAndUpdate(userId, updatedFields, { new: true })
-      .populate('countryId stateId cityId');
+      .populate("countryId stateId cityId");
+
+    // ✅ Get class details (from School, College, or Institute)
+    let classDetails = null;
+    if (mongoose.Types.ObjectId.isValid(className)) {
+      classDetails =
+        (await School.findById(className)) ||
+        (await College.findById(className)) ||
+        (await Institute.findById(className));
+    }
+
+    // ✅ Generate base URL for files
+    const baseUrl = `${req.protocol}://${req.get("host")}/uploads`;
+
+    // ✅ Format response user object
+    const formattedUser = {
+      ...user._doc,
+      country: user.countryId?.name || "",
+      state: user.stateId?.name || "",
+      city: user.cityId?.name || "",
+      institutionName: schoolName || collegeName || instituteName || "",
+      institutionType: studentType || "",
+      classOrYear: classDetails?.name || "",
+      aadharCard: user.aadharCard ? `${baseUrl}/${path.basename(user.aadharCard)}` : null,
+      marksheet: user.marksheet ? `${baseUrl}/${path.basename(user.marksheet)}` : null,
+    };
 
     res.status(200).json({
-      message: 'User updated successfully.',
-      user
+      message: "User updated successfully.",
+      user: formattedUser,
     });
-
   } catch (error) {
-    console.error('Update User Error:', error);
+    console.error("Update User Error:", error);
     res.status(500).json({ message: error.message });
   }
 };
@@ -926,7 +953,7 @@ exports.updateOrganizationUser = async (req, res) => {
 
 exports.deleteOrganizationUser = async (req, res) => {
   try {
-    const { userId } = req.params; // user _id to delete
+    const { userId } = req.params; 
 
     const user = await Organizationuser.findById(userId);
     if (!user) return res.status(404).json({ message: 'User not found.' });

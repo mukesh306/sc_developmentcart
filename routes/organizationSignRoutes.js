@@ -24,12 +24,14 @@ router.post("/organization/organizationUser",auth,upload.fields([
     ]), organizationSignController.organizationUser);
 
 router.get("/organization/organizationUserprofile",auth, organizationSignController.getOrganizationUserProfile);
-router.put("/organization/organizationUser/:userId", upload.fields([
+
+router.put("/organization/organizationUser",auth, upload.fields([
   { name: 'aadharCard', maxCount: 1 },
   { name: 'marksheet', maxCount: 1 }
 ]), organizationSignController.updateOrganizationUser);
 
 router.delete("/organization/organizationUser/:userId", organizationSignController.deleteOrganizationUser);
+
 router.post("/organization/invite", organizationSignController.inviteUsers);
 
 
