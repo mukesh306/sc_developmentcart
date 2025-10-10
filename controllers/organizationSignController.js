@@ -968,54 +968,139 @@ exports.deleteOrganizationUser = async (req, res) => {
 };
 
 
+// exports.inviteUsers = async (req, res) => {
+//   try {
+//     const { emails } = req.body;
+
+//     if (!emails || !Array.isArray(emails) || emails.length === 0) {
+//       return res.status(400).json({ message: 'Please provide at least one email.' });
+//     }
+
+//     // Use your existing transporter
+//     const transporter = nodemailer.createTransport({
+//       service: "gmail",
+//       auth: {
+//         user: 'noreply@shikshacart.com', 
+//         pass: 'xyrx ryad ondf jaum' 
+//       }
+//     });
+
+//     // Default message for invite
+//     const defaultMessage = `
+// Hello,
+
+// You have been invited to Update Data!
+
+// Please update your profile clicl Here: https://dev.organization.shikshacart.com/complete-profile
+
+// Best regards,
+// ShikshaCart Team
+// `;
+
+//     // Send invite to each email
+//     const sendEmailPromises = emails.map(email => {
+//       const mailOptions = {
+//         from: 'noreply@shikshacart.com',
+//         to: email,
+//         subject: 'You are invited to join ShikshaCart!',
+//         text: defaultMessage
+//       };
+//       return transporter.sendMail(mailOptions);
+//     });
+
+//     await Promise.all(sendEmailPromises);
+
+//     res.status(200).json({
+//       message: `Invitations sent successfully to ${emails.length} email(s).`
+//     });
+
+//   } catch (error) {
+//     console.error('Invite Users Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.inviteUsers = async (req, res) => {
   try {
     const { emails } = req.body;
 
     if (!emails || !Array.isArray(emails) || emails.length === 0) {
-      return res.status(400).json({ message: 'Please provide at least one email.' });
+      return res.status(400).json({ message: "Please provide at least one email." });
     }
 
-    // Use your existing transporter
+    // ✅ Setup mail transporter
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
-        user: 'noreply@shikshacart.com', 
-        pass: 'xyrx ryad ondf jaum' 
-      }
+        user: "noreply@shikshacart.com",
+        pass: "xyrx ryad ondf jaum", // use app password
+      },
     });
 
-    // Default message for invite
-    const defaultMessage = `
+    // ✅ Process each email
+    const sendEmailPromises = emails.map(async (email) => {
+      // 1️⃣ Find the user by email
+      let user = await Organizationuser.findOne({ email });
+
+      // 2️⃣ If user doesn't exist, create a new record
+      if (!user) {
+        user = new Organizationuser({
+          email,
+          invitedBy: req.user?._id || null,
+        });
+        await user.save();
+      }
+
+      // 3️⃣ Generate user-specific profile link
+      const inviteLink = `https://dev.organization.shikshacart.com/complete-profile/${user._id}`;
+
+      // 4️⃣ Prepare email content
+      const mailOptions = {
+        from: "noreply@shikshacart.com",
+        to: email,
+        subject: "You are invited to join ShikshaCart!",
+        text: `
 Hello,
 
-You have been invited to Update Data!
+You have been invited to complete your profile on ShikshaCart!
 
-Please update your profile clicl Here: https://shikshacart.com/register
+Please click the link below to complete your profile:
+${inviteLink}
 
 Best regards,
 ShikshaCart Team
-`;
-
-    // Send invite to each email
-    const sendEmailPromises = emails.map(email => {
-      const mailOptions = {
-        from: 'noreply@shikshacart.com',
-        to: email,
-        subject: 'You are invited to join ShikshaCart!',
-        text: defaultMessage
+`,
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <h3>Hello,</h3>
+            <p>You have been invited to complete your profile on <b>ShikshaCart</b>!</p>
+            <p>
+              Please click the button below to complete your profile:
+            </p>
+            <p>
+              <a href="${inviteLink}" style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
+                Complete Profile
+              </a>
+            </p>
+            <p>If the button doesn’t work, copy and paste this link into your browser:</p>
+            <p><a href="${inviteLink}">${inviteLink}</a></p>
+            <p>Best regards,<br><b>ShikshaCart Team</b></p>
+          </div>
+        `,
       };
-      return transporter.sendMail(mailOptions);
+
+      // 5️⃣ Send email
+      await transporter.sendMail(mailOptions);
     });
 
     await Promise.all(sendEmailPromises);
 
     res.status(200).json({
-      message: `Invitations sent successfully to ${emails.length} email(s).`
+      message: `Invitations sent successfully to ${emails.length} email(s).`,
     });
-
   } catch (error) {
-    console.error('Invite Users Error:', error);
+    console.error("Invite Users Error:", error);
     res.status(500).json({ message: error.message });
   }
 };
