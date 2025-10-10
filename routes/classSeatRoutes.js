@@ -7,7 +7,7 @@ const classSeatController = require('../controllers/classSeatController');
 router.post("/classSeat",auth, classSeatController.createClassSeat);
 router.get("/classSeat",auth, classSeatController.getAllClassSeats);
 router.post("/buySeat",auth, classSeatController.buyClassSeats);
-// router.get("/getUserBuys",auth, classSeatController.getUserBuys);
+router.get("/getUserBuys",auth, classSeatController.getUserBuys);
 
 
 
