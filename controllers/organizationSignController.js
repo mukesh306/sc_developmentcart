@@ -650,8 +650,7 @@ exports.organizationUser = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(className)) {
       classDetails =
         (await School.findById(className)) ||
-        (await College.findById(className)) ||
-        (await Institute.findById(className));
+        (await College.findById(className)) ;
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
@@ -920,8 +919,8 @@ exports.updateOrganizationUser = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(className)) {
       classDetails =
         (await School.findById(className)) ||
-        (await College.findById(className)) ||
-        (await Institute.findById(className));
+        (await College.findById(className)) ;
+       
     }
 
     // ✅ Generate base URL for files
