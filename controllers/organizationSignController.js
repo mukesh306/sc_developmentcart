@@ -979,7 +979,7 @@ exports.getOrganizationUserById = async (req, res) => {
 
     // Find user
     const user = await Organizationuser.findById(id)
-      .populate("countryId stateId cityId ");
+      .populate("countryId stateId cityId createdBy updatedBy");
 
     if (!user) {
       return res.status(404).json({ message: "User not found." });
@@ -990,8 +990,8 @@ exports.getOrganizationUserById = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(user.className)) {
       classDetails =
         (await School.findById(user.className)) ||
-        (await College.findById(user.className)) ||
-        (await Institute.findById(user.className));
+        (await College.findById(user.className)) ;
+       
     }
 
     // Base URL for file paths
