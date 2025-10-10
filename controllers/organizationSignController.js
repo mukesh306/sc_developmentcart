@@ -972,72 +972,75 @@ exports.getOrganizationUserById = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Validate ID
     if (!mongoose.Types.ObjectId.isValid(id)) {
-      return res.status(400).json({ message: "Invalid user ID." });
+      return res.status(400).json({ message: 'Invalid user ID.' });
     }
 
-    // Find user
     const user = await Organizationuser.findById(id)
-      .populate("countryId stateId cityId ");
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
+      .populate({
+        path: 'updatedBy',
+        select: 'email session startDate endDate endTime name role'
+      });
 
     if (!user) {
-      return res.status(404).json({ message: "User not found." });
+      return res.status(404).json({ message: 'User not found.' });
     }
 
-    // Get class details
+    const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+
+    // 🔹 Fetch class details (from School or College)
+    let classId = user.className;
     let classDetails = null;
-    if (mongoose.Types.ObjectId.isValid(user.className)) {
+    if (mongoose.Types.ObjectId.isValid(classId)) {
       classDetails =
-        (await School.findById(user.className)) ||
-        (await College.findById(user.className)) ||
-        (await Institute.findById(user.className));
+        (await School.findById(classId)) ||
+        (await College.findById(classId));
+        // (await Institute.findById(classId));
     }
 
-    // Base URL for file paths
-    const baseUrl = `${req.protocol}://${req.get("host")}`;
+    // 🔹 Format file URLs if they exist
+    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+    }
+    if (user.marksheet && fs.existsSync(user.marksheet)) {
+      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+    }
 
-    // Format URLs for files
-    const formattedAadhar = user.aadharCard
-      ? `${baseUrl}/uploads/${path.basename(user.aadharCard)}`
-      : null;
-    const formattedMarksheet = user.marksheet
-      ? `${baseUrl}/uploads/${path.basename(user.marksheet)}`
-      : null;
+    // 🔹 If no valid class, reset
+    if (!classDetails || classDetails.price == null) {
+      classId = null;
+      user.className = null;
+    }
 
-    // Format response object
     const formattedUser = {
-      _id: user._id,
-      firstName: user.firstName || "",
-      middleName: user.middleName || "",
-      lastName: user.lastName || "",
-      email: user.email || "",
-      mobileNumber: user.mobileNumber || "",
-      country: user.countryId?.name || "",
-      state: user.stateId?.name || "",
-      city: user.cityId?.name || "",
-      pincode: user.pincode || "",
-      studentType: user.studentType || "",
-      institutionName: user.schoolName || user.collegeName || user.instituteName || "",
-      classOrYear: classDetails?.name || "",
-      aadharCard: formattedAadhar,
-      marksheet: formattedMarksheet,
-      createdBy: user.createdBy || null,
+      ...user._doc,
+      status: user.status,
+      className: classId,
+      country: user.countryId?.name || '',
+      state: user.stateId?.name || '',
+      city: user.cityId?.name || '',
+      institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+      institutionType: user.studentType || '',
       updatedBy: user.updatedBy || null,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
+      createdBy: user.createdBy || null,
+      classOrYear: classDetails?.name || ''
     };
 
-    res.status(200).json({
-      message: "Organization user fetched successfully.",
-      user: formattedUser,
+    return res.status(200).json({
+      message: 'Organization user profile fetched successfully.',
+      user: formattedUser
     });
 
   } catch (error) {
-    console.error("Get Organization User Error:", error);
-    res.status(500).json({ message: error.message });
+    console.error('Get OrganizationUser Profile by ID Error:', error);
+    return res.status(500).json({ message: error.message });
   }
 };
+
+
 
 
 // exports.inviteUsers = async (req, res) => {
