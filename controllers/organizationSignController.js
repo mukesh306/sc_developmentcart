@@ -968,6 +968,78 @@ exports.deleteOrganizationUser = async (req, res) => {
 };
 
 
+exports.getOrganizationUserById = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Validate ID
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid user ID." });
+    }
+
+    // Find user
+    const user = await Organizationuser.findById(id)
+      .populate("countryId stateId cityId ");
+
+    if (!user) {
+      return res.status(404).json({ message: "User not found." });
+    }
+
+    // Get class details
+    let classDetails = null;
+    if (mongoose.Types.ObjectId.isValid(user.className)) {
+      classDetails =
+        (await School.findById(user.className)) ||
+        (await College.findById(user.className)) ||
+        (await Institute.findById(user.className));
+    }
+
+    // Base URL for file paths
+    const baseUrl = `${req.protocol}://${req.get("host")}`;
+
+    // Format URLs for files
+    const formattedAadhar = user.aadharCard
+      ? `${baseUrl}/uploads/${path.basename(user.aadharCard)}`
+      : null;
+    const formattedMarksheet = user.marksheet
+      ? `${baseUrl}/uploads/${path.basename(user.marksheet)}`
+      : null;
+
+    // Format response object
+    const formattedUser = {
+      _id: user._id,
+      firstName: user.firstName || "",
+      middleName: user.middleName || "",
+      lastName: user.lastName || "",
+      email: user.email || "",
+      mobileNumber: user.mobileNumber || "",
+      country: user.countryId?.name || "",
+      state: user.stateId?.name || "",
+      city: user.cityId?.name || "",
+      pincode: user.pincode || "",
+      studentType: user.studentType || "",
+      institutionName: user.schoolName || user.collegeName || user.instituteName || "",
+      classOrYear: classDetails?.name || "",
+      aadharCard: formattedAadhar,
+      marksheet: formattedMarksheet,
+      createdBy: user.createdBy || null,
+      updatedBy: user.updatedBy || null,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+    };
+
+    res.status(200).json({
+      message: "Organization user fetched successfully.",
+      user: formattedUser,
+    });
+
+  } catch (error) {
+    console.error("Get Organization User Error:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
 // exports.inviteUsers = async (req, res) => {
 //   try {
 //     const { emails } = req.body;

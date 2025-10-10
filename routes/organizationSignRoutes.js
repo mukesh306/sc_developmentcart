@@ -32,6 +32,12 @@ router.put("/organization/organizationUser",auth, upload.fields([
 
 router.delete("/organization/organizationUser/:userId", organizationSignController.deleteOrganizationUser);
 
+router.get(
+  "/organization/organizationUser/:id",
+ 
+  organizationSignController.getOrganizationUserById
+);
+
 router.post("/organization/invite", organizationSignController.inviteUsers);
 
 
