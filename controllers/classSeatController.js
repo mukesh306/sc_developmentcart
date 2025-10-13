@@ -249,7 +249,6 @@ exports.buyClassSeats = async (req, res) => {
   }
 };
 
-
 exports.getUserBuys = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -266,6 +265,7 @@ exports.getUserBuys = async (req, res) => {
     }
 
     const buyRecords = [];
+    let totalSeats = 0; // 👈 to store total seat count
 
     for (let buy of buys) {
       const classSeat = buy.classSeatId;
@@ -282,11 +282,13 @@ exports.getUserBuys = async (req, res) => {
           className: classData.className || classData.name,
           seat: classSeat.seat,
         });
+
+        totalSeats += classSeat.seat || 0; // 👈 add seat count
       }
     }
 
     res.status(200).json({
-      totalRecords: buyRecords.length,
+      totalRecords: totalSeats, // 👈 total seat count instead of record count
       buyRecords,
     });
   } catch (err) {
