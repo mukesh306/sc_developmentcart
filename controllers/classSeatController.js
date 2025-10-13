@@ -194,7 +194,6 @@ exports.buyClassSeats = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 exports.getUserBuys = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -202,7 +201,7 @@ exports.getUserBuys = async (req, res) => {
     const buys = await Buy.find({ userId })
       .populate({
         path: "classSeatId",
-        select: "classId seat", // we need classId to fetch class details
+        select: "className seat", // Fetch className (id reference) and seat
       })
       .sort({ createdAt: -1 });
 
@@ -213,18 +212,19 @@ exports.getUserBuys = async (req, res) => {
     const buyRecords = [];
 
     for (let buy of buys) {
-      const classId = buy.classSeatId?.classId;
-      if (!classId) continue;
+      const classSeat = buy.classSeatId;
+      if (!classSeat) continue;
 
-      // Find the class either from School or College collection
-      const classData =
-        (await School.findById(classId).select("className name")) ||
-        (await College.findById(classId).select("className name"));
+      // Try fetching from both School and College collections
+      let classData =
+        (await School.findById(classSeat.className).select("name className")) ||
+        (await College.findById(classSeat.className).select("name className"));
 
       if (classData) {
         buyRecords.push({
-          name: classData.className || classData.name,
-          seat: buy.classSeatId.seat,
+          classId: classSeat._id,
+          className: classData.className || classData.name,
+          seat: classSeat.seat,
         });
       }
     }
