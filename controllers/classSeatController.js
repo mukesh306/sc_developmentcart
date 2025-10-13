@@ -27,27 +27,82 @@ exports.createClassSeat = async (req, res) => {
 };
 
 
+// exports.getAllClassSeats = async (req, res) => {
+//   try {
+//     let seats = await ClassSeat.find({ createdBy: req.user._id });
+
+//     const response = [];
+//     let grandTotal = 0; 
+
+//     for (let seat of seats) {
+//       let classData = null;
+
+      
+//       classData = await School.findById(seat.className);
+
+      
+//       if (!classData) {
+//         classData = await College.findById(seat.className);
+//       }
+
+//       const price = classData?.price || 0;
+//       const total = price * seat.seat;
+//       grandTotal += total; 
+
+//       response.push({
+//         _id: seat._id,
+//         classId: seat.className,
+//         className: classData?.name || "Unknown",
+//         price,
+//         seat: seat.seat,
+//         totalPrice: total,
+//         createdBy: seat.createdBy,
+//         createdAt: seat.createdAt
+//       });
+//     }
+
+    
+//     res.json({
+//       seats: response,
+//       grandTotal
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+
 exports.getAllClassSeats = async (req, res) => {
   try {
-    let seats = await ClassSeat.find({ createdBy: req.user._id });
+    const userId = req.user._id;
+
+    // Find all seatIds already purchased by this user
+    const boughtSeats = await Buy.find({ userId }).select("classSeatId");
+    const boughtSeatIds = boughtSeats.map(b => b.classSeatId.toString());
+
+    // Find all class seats created by the user but not yet bought
+    let seats = await ClassSeat.find({
+      createdBy: userId,
+      _id: { $nin: boughtSeatIds } // exclude already bought
+    });
 
     const response = [];
-    let grandTotal = 0; 
+    let grandTotal = 0;
 
     for (let seat of seats) {
       let classData = null;
 
-      
+      // Check in School
       classData = await School.findById(seat.className);
 
-      
+      // If not found, check in College
       if (!classData) {
         classData = await College.findById(seat.className);
       }
 
       const price = classData?.price || 0;
       const total = price * seat.seat;
-      grandTotal += total; 
+      grandTotal += total;
 
       response.push({
         _id: seat._id,
@@ -61,7 +116,6 @@ exports.getAllClassSeats = async (req, res) => {
       });
     }
 
-    
     res.json({
       seats: response,
       grandTotal
@@ -194,6 +248,8 @@ exports.buyClassSeats = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
+
 exports.getUserBuys = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -201,7 +257,7 @@ exports.getUserBuys = async (req, res) => {
     const buys = await Buy.find({ userId })
       .populate({
         path: "classSeatId",
-        select: "className seat", // Fetch className (id reference) and seat
+        select: "className seat", 
       })
       .sort({ createdAt: -1 });
 
