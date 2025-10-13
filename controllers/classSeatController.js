@@ -195,14 +195,14 @@ exports.buyClassSeats = async (req, res) => {
   }
 };
 
-
 exports.getUserBuys = async (req, res) => {
   try {
     const userId = req.user._id;
+
     const buys = await Buy.find({ userId })
       .populate({
         path: "classSeatId",
-        select: "className seat" 
+        select: "classId seat", // we need classId to fetch class details
       })
       .sort({ createdAt: -1 });
 
@@ -210,16 +210,33 @@ exports.getUserBuys = async (req, res) => {
       return res.status(404).json({ message: "No purchases found" });
     }
 
-    const buyRecords = buys.map(buy => ({
-      className: buy.classSeatId.className,
-      seat: buy.seat
-    }));
+    const buyRecords = [];
+
+    for (let buy of buys) {
+      const classId = buy.classSeatId?.classId;
+      if (!classId) continue;
+
+      // Find the class either from School or College collection
+      const classData =
+        (await School.findById(classId).select("className name")) ||
+        (await College.findById(classId).select("className name"));
+
+      if (classData) {
+        buyRecords.push({
+          name: classData.className || classData.name,
+          seat: buy.classSeatId.seat,
+        });
+      }
+    }
 
     res.status(200).json({
-      buyRecords
+      totalRecords: buyRecords.length,
+      buyRecords,
     });
-
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
+
+
