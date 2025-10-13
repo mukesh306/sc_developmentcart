@@ -953,7 +953,6 @@ exports.updateOrganizationUser = async (req, res) => {
 exports.deleteOrganizationUser = async (req, res) => {
   try {
     const { userId } = req.params; 
-
     const user = await Organizationuser.findById(userId);
     if (!user) return res.status(404).json({ message: 'User not found.' });
 

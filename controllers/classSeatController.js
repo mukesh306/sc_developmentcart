@@ -3,7 +3,7 @@ const School = require('../models/school');
 const College = require('../models/college');
 const Buy = require('../models/buyseats');
 
-
+1
 exports.createClassSeat = async (req, res) => {
   try {
     const { className, seat } = req.body;
@@ -16,9 +16,7 @@ exports.createClassSeat = async (req, res) => {
       seat,
       createdBy: req.user ? req.user._id : null   
     });
-
     await newSeat.save();
-
     res.status(201).json({
       message: "ClassSeat created successfully",
       data: newSeat
@@ -27,7 +25,6 @@ exports.createClassSeat = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 
 
 exports.getAllClassSeats = async (req, res) => {
@@ -50,7 +47,6 @@ exports.getAllClassSeats = async (req, res) => {
 
       const price = classData?.price || 0;
       const total = price * seat.seat;
-
       grandTotal += total; 
 
       response.push({
@@ -203,7 +199,7 @@ exports.buyClassSeats = async (req, res) => {
 exports.getUserBuys = async (req, res) => {
   try {
     const userId = req.user._id;
-    const buys = await BuySeat.find({ userId })
+    const buys = await Buy.find({ userId })
       .populate({
         path: "classSeatId",
         select: "className seat" 
