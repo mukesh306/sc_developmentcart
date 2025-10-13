@@ -24,6 +24,7 @@ router.post("/organization/organizationUser",auth,upload.fields([
     ]), organizationSignController.organizationUser);
 
 router.get("/organization/organizationUserprofile",auth, organizationSignController.getOrganizationUserProfile);
+router.get("/organization/Organizationallocation",auth, organizationSignController.Organizationallocation);
 
 router.put("/organization/organizationUser", upload.fields([
   { name: 'aadharCard', maxCount: 1 },
