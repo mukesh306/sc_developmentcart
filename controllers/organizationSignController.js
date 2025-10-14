@@ -1289,3 +1289,87 @@ exports.Organizationallocation = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
+exports.allocateuser = async (req, res) => {
+  try {
+    const { emails } = req.body;
+
+    if (!emails || !Array.isArray(emails) || emails.length === 0) {
+      return res.status(400).json({ message: "Please provide at least one email." });
+    }
+
+    // ✅ Setup mail transporter
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: "noreply@shikshacart.com",
+        pass: "xyrx ryad ondf jaum", // Gmail app password
+      },
+    });
+
+    // ✅ Process each email
+    const sendEmailPromises = emails.map(async (email) => {
+      // 1️⃣ Check if user exists
+      let user = await Organizationuser.findOne({ email });
+
+      // 2️⃣ If not, create a record
+      if (!user) {
+        user = new Organizationuser({
+          email,
+          invitedBy: req.user?._id || null,
+        });
+        await user.save();
+      }
+
+      // 3️⃣ Login page link
+      const loginLink = `https://dev.organization.shikshacart.com/login`;
+
+      // 4️⃣ Prepare login credentials email
+      const mailOptions = {
+        from: "noreply@shikshacart.com",
+        to: email,
+        subject: "Your ShikshaCart Login Credentials",
+        html: `
+          <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+            <h2>Welcome to ShikshaCart!</h2>
+            <p>You have been invited to join the <b>ShikshaCart Organization Portal</b>.</p>
+            
+            <p><b>Your Login Credentials:</b></p>
+            <p style="background-color:#f7f7f7;padding:10px;border-radius:6px;">
+              <b>Email:</b> ${email}
+            </p>
+
+            <p>
+              Click the button below to log in and access your account:
+            </p>
+            <p>
+              <a href="${loginLink}" 
+                style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
+                Login to ShikshaCart
+              </a>
+            </p>
+
+            <p>If the button doesn’t work, copy and paste this link into your browser:</p>
+            <p><a href="${loginLink}">${loginLink}</a></p>
+
+            <p>Best regards,<br><b>ShikshaCart Team</b></p>
+          </div>
+        `,
+      };
+
+      // 5️⃣ Send the email
+      await transporter.sendMail(mailOptions);
+    });
+
+    await Promise.all(sendEmailPromises);
+
+    res.status(200).json({
+      message: `Login credential emails sent successfully to ${emails.length} user(s).`,
+    });
+  } catch (error) {
+    console.error("Invite Users Error:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
+

@@ -40,6 +40,7 @@ router.get(
 );
 
 router.post("/organization/invite", organizationSignController.inviteUsers);
+router.post("/organization/allocateuser", organizationSignController.allocateuser);
 
 
 router.get('/organization/verify-token', (req, res) => {
