@@ -1642,8 +1642,7 @@ exports.getAllocatedUsers = async (req, res) => {
         { path: "countryId", select: "name" },
         { path: "stateId", select: "name" },
         { path: "cityId", select: "name" },
-        { path: "createdBy", select: "_id" },
-        { path: "updatedBy", select: "_id" }
+       
       ])
       .sort({ createdAt: -1 });
 
