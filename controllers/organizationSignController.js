@@ -1633,20 +1633,89 @@ exports.getAllocatedUsers = async (req, res) => {
       return res.status(400).json({ message: "Allocator ID not found in request." });
     }
 
-    // ✅ Find all users allocated by this user
-    const allocatedUsers = await User.find({ allocatedBy: allocatorId })
+    const { fields } = req.query;
+
+    // Fetch allocated users
+    const users = await User.find({ allocatedBy: allocatorId })
       .populate({
         path: "allocatedBy",
-        select: "firstName lastName email", // to show allocator info
+        select: "firstName lastName email"
       })
       .sort({ createdAt: -1 });
 
-   
+    if (!users || users.length === 0) {
+      return res.status(200).json({
+        message: 'Allocated users fetched successfully.',
+        users: []
+      });
+    }
+
+    const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+
+    const formattedUsers = await Promise.all(
+      users.map(async (user) => {
+        let classId = user.className;
+        let classDetails = null;
+        if (mongoose.Types.ObjectId.isValid(classId)) {
+          classDetails =
+            (await School.findById(classId)) ||
+            (await College.findById(classId));
+        }
+
+        // File URLs
+        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+        }
+        if (user.marksheet && fs.existsSync(user.marksheet)) {
+          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+        }
+
+        if (!classDetails || classDetails.price == null) {
+          classId = null;
+          user.className = null;
+        }
+
+        const formattedUser = {
+          _id: user._id,
+          firstName: user.firstName,
+          middleName: user.middleName || '',
+          lastName: user.lastName,
+          mobileNumber: user.mobileNumber,
+          email: user.email,
+          VerifyEmail: user.VerifyEmail || 'no',
+          status: user.status || 'no',
+          createdBy: user.createdBy || null,
+          createdAt: user.createdAt,
+          aadharCard: user.aadharCard || null,
+          marksheet: user.marksheet || null,
+          country: user.countryId?.name || '',
+          state: user.stateId?.name || '',
+          city: user.cityId?.name || '',
+          institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+          institutionType: user.studentType || '',
+          classOrYear: classDetails?.name || '',
+          className: classId,
+          updatedBy: user.updatedBy || null
+        };
+
+        if (fields) {
+          const requestedFields = fields.split(',');
+          const limited = {};
+          requestedFields.forEach(f => {
+            if (formattedUser.hasOwnProperty(f)) limited[f] = formattedUser[f];
+          });
+          return limited;
+        }
+
+        return formattedUser;
+      })
+    );
 
     res.status(200).json({
-      count: allocatedUsers.length,
-      users: allocatedUsers || [],
+      message: 'Allocated users fetched successfully.',
+      users: formattedUsers
     });
+
   } catch (error) {
     console.error("Get Allocated Users Error:", error);
     res.status(500).json({ message: error.message });
