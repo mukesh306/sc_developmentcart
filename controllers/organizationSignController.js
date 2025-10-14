@@ -8,6 +8,7 @@ const path = require('path');
 const Organizationuser = require('../models/organizationuser');
 const School = require('../models/school');
 const College = require('../models/college');
+const User = require("../models/User");
 
 
 exports.createOrganizationSign = async (req, res) => {
@@ -1182,6 +1183,115 @@ ShikshaCart Team
 
 
 
+// exports.Organizationallocation = async (req, res) => {
+//   try {
+//     const { fields, className } = req.query;
+
+//     // Base query: users created by logged-in user
+//     let query = { createdBy: req.user._id };
+
+//     // Optional filter by className
+//     if (className && mongoose.Types.ObjectId.isValid(className)) {
+//       query.className = className;
+//     }
+
+//     let users = await Organizationuser.find(query)
+//       .populate('countryId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('cityId', 'name')
+//       .populate({
+//         path: 'updatedBy',
+//         select: 'email session startDate endDate endTime name role'
+//       });
+
+//     if (!users || users.length === 0) {
+//       return res.status(200).json({
+//         message: 'Organization user profiles fetched successfully.',
+//         users: []
+//       });
+//     }
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+
+//     const formattedUsers = await Promise.all(
+//       users.map(async (user) => {
+//         let classId = user.className;
+//         let classDetails = null;
+//         if (mongoose.Types.ObjectId.isValid(classId)) {
+//           classDetails =
+//             (await School.findById(classId)) ||
+//             (await College.findById(classId));
+//         }
+
+//         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//         }
+//         if (user.marksheet && fs.existsSync(user.marksheet)) {
+//           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//         }
+
+//         if (!classDetails || classDetails.price == null) {
+//           classId = null;
+//           user.className = null;
+//         }
+
+//         const formattedUser = {
+//           ...user._doc,
+//           status: user.status,
+//           className: classId,
+//           country: user.countryId?.name || '',
+//           state: user.stateId?.name || '',
+//           city: user.cityId?.name || '',
+//           institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+//           institutionType: user.studentType || '',
+//           updatedBy: user.updatedBy || null,
+//           createdBy: user.createdBy || null,
+//           classOrYear: classDetails?.name || ''
+//         };
+
+//         // ✅ Apply "complete profile" filter
+//         const isCompleteProfile =
+//           formattedUser.firstName &&
+//           formattedUser.lastName &&
+//           formattedUser.email &&
+//           formattedUser.mobileNumber &&
+//           formattedUser.institutionName &&
+//           formattedUser.institutionType &&
+//           formattedUser.country &&
+//           formattedUser.state &&
+//           formattedUser.city &&
+//           formattedUser.classOrYear;
+
+//         if (!isCompleteProfile) return null; // skip incomplete profiles
+
+//         if (fields) {
+//           const requestedFields = fields.split(',');
+//           const limited = {};
+//           requestedFields.forEach(f => {
+//             if (formattedUser.hasOwnProperty(f)) limited[f] = formattedUser[f];
+//           });
+//           return limited;
+//         }
+
+//         return formattedUser;
+//       })
+//     );
+
+//     // ✅ Filter out null (incomplete profiles)
+//     const completedProfiles = formattedUsers.filter(Boolean);
+
+//     return res.status(200).json({
+//       message: 'Organization user profiles fetched successfully.',
+//       users: completedProfiles
+//     });
+
+//   } catch (error) {
+//     console.error('Get OrganizationUser Profile Error:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.Organizationallocation = async (req, res) => {
   try {
     const { fields, className } = req.query;
@@ -1194,6 +1304,7 @@ exports.Organizationallocation = async (req, res) => {
       query.className = className;
     }
 
+    // ✅ Fetch org users
     let users = await Organizationuser.find(query)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
@@ -1212,8 +1323,17 @@ exports.Organizationallocation = async (req, res) => {
 
     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
 
+    // ✅ Filter out already allocated users
+    const availableUsers = [];
+    for (const user of users) {
+      const allocated = await User.findOne({ email: user.email });
+      if (!allocated) { // agar User me exist nahi hai to include karo
+        availableUsers.push(user);
+      }
+    }
+
     const formattedUsers = await Promise.all(
-      users.map(async (user) => {
+      availableUsers.map(async (user) => {
         let classId = user.className;
         let classDetails = null;
         if (mongoose.Types.ObjectId.isValid(classId)) {
@@ -1291,6 +1411,90 @@ exports.Organizationallocation = async (req, res) => {
 };
 
 
+
+// exports.allocateuser = async (req, res) => {
+//   try {
+//     const { emails } = req.body;
+
+//     if (!emails || !Array.isArray(emails) || emails.length === 0) {
+//       return res.status(400).json({ message: "Please provide at least one email." });
+//     }
+
+//     // ✅ Setup mail transporter
+//     const transporter = nodemailer.createTransport({
+//       service: "gmail",
+//       auth: {
+//         user: "noreply@shikshacart.com",
+//         pass: "xyrx ryad ondf jaum", // Gmail app password
+//       },
+//     });
+
+//     // ✅ Process each email
+//     const sendEmailPromises = emails.map(async (email) => {
+//       // 1️⃣ Check if user exists
+//       let user = await Organizationuser.findOne({ email });
+
+//       // 2️⃣ If not, create a record
+//       if (!user) {
+//         user = new Organizationuser({
+//           email,
+//           invitedBy: req.user?._id || null,
+//         });
+//         await user.save();
+//       }
+
+//       // 3️⃣ Login page link
+//       const loginLink = `https://dev.organization.shikshacart.com/login`;
+
+//       // 4️⃣ Prepare login credentials email
+//       const mailOptions = {
+//         from: "noreply@shikshacart.com",
+//         to: email,
+//         subject: "Your ShikshaCart Login Credentials",
+//         html: `
+//           <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+//             <h2>Welcome to ShikshaCart!</h2>
+//             <p>You have been invited to join the <b>ShikshaCart Organization Portal</b>.</p>
+            
+//             <p><b>Your Login Credentials:</b></p>
+//             <p style="background-color:#f7f7f7;padding:10px;border-radius:6px;">
+//               <b>Email:</b> ${email}
+//             </p>
+
+//             <p>
+//               Click the button below to log in and access your account:
+//             </p>
+//             <p>
+//               <a href="${loginLink}" 
+//                 style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
+//                 Login to ShikshaCart
+//               </a>
+//             </p>
+
+//             <p>If the button doesn’t work, copy and paste this link into your browser:</p>
+//             <p><a href="${loginLink}">${loginLink}</a></p>
+
+//             <p>Best regards,<br><b>ShikshaCart Team</b></p>
+//           </div>
+//         `,
+//       };
+
+//       // 5️⃣ Send the email
+//       await transporter.sendMail(mailOptions);
+//     });
+
+//     await Promise.all(sendEmailPromises);
+
+//     res.status(200).json({
+//       message: `Login credential emails sent successfully to ${emails.length} user(s).`,
+//     });
+//   } catch (error) {
+//     console.error("Invite Users Error:", error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.allocateuser = async (req, res) => {
   try {
     const { emails } = req.body;
@@ -1299,33 +1503,82 @@ exports.allocateuser = async (req, res) => {
       return res.status(400).json({ message: "Please provide at least one email." });
     }
 
-    // ✅ Setup mail transporter
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
         user: "noreply@shikshacart.com",
-        pass: "xyrx ryad ondf jaum", // Gmail app password
+        pass: "xyrx ryad ondf jaum",
       },
     });
 
-    // ✅ Process each email
     const sendEmailPromises = emails.map(async (email) => {
-      // 1️⃣ Check if user exists
-      let user = await Organizationuser.findOne({ email });
-
-      // 2️⃣ If not, create a record
-      if (!user) {
-        user = new Organizationuser({
+      // 1️⃣ Find or create org user
+      let orgUser = await Organizationuser.findOne({ email });
+      if (!orgUser) {
+        orgUser = new Organizationuser({
           email,
           invitedBy: req.user?._id || null,
         });
+        await orgUser.save();
+      }
+
+      // 2️⃣ Generate temp password
+      const tempPassword = Math.random().toString(36).slice(-8);
+      const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+      // 3️⃣ Prepare copied data
+      const userData = {
+        firstName: orgUser.firstName || "User",
+        middleName: orgUser.middleName || "",
+        lastName: orgUser.lastName || "Allocated",
+        mobileNumber: orgUser.mobileNumber || `999${Math.floor(Math.random() * 10000000)}`,
+        email: orgUser.email,
+        VerifyEmail: "yes",
+        password: hashedPassword,
+        countryId: orgUser.countryId || null,
+        stateId: orgUser.stateId || null,
+        cityId: orgUser.cityId || null,
+        pincode: orgUser.pincode || "",
+        studentType: orgUser.studentType || "",
+        instituteName: orgUser.instituteName || "",
+        className: orgUser.className || null,
+        session: orgUser.session || "",
+        startDate: orgUser.startDate || "",
+        endDate: orgUser.endDate || "",
+        endTime: orgUser.endTime || "",
+        platformDetails: orgUser.platformDetails || "",
+        aadharCard: orgUser.aadharCard || "",
+        marksheet: orgUser.marksheet || "",
+        updatedBy: req.user?._id || null,
+      };
+
+      // 4️⃣ Create or update in User collection
+      let user = await User.findOne({ email });
+
+      if (!user) {
+        // ✅ New user, set allocatedBy properly
+        userData.allocatedBy = orgUser.createdBy || req.user?._id || null;
+
+        user = new User(userData);
+        await user.save();
+      } else {
+        // ✅ Existing user, overwrite other fields but not allocatedBy if already set
+        const existingAllocatedBy = user.allocatedBy;
+        Object.assign(user, userData);
+
+        // agar pehle se allocatedBy nahi hai tab hi set karo
+        if (!existingAllocatedBy) {
+          user.allocatedBy = orgUser.createdBy || req.user?._id || null;
+        } else {
+          user.allocatedBy = existingAllocatedBy;
+        }
+
         await user.save();
       }
 
-      // 3️⃣ Login page link
-      const loginLink = `https://dev.organization.shikshacart.com/login`;
+      // 5️⃣ Send login email
+      const loginLink = `https://dev.product.shikshacart.com/login`;
 
-      // 4️⃣ Prepare login credentials email
       const mailOptions = {
         from: "noreply@shikshacart.com",
         to: email,
@@ -1334,15 +1587,14 @@ exports.allocateuser = async (req, res) => {
           <div style="font-family: Arial, sans-serif; line-height: 1.6;">
             <h2>Welcome to ShikshaCart!</h2>
             <p>You have been invited to join the <b>ShikshaCart Organization Portal</b>.</p>
-            
-            <p><b>Your Login Credentials:</b></p>
-            <p style="background-color:#f7f7f7;padding:10px;border-radius:6px;">
-              <b>Email:</b> ${email}
-            </p>
 
-            <p>
-              Click the button below to log in and access your account:
-            </p>
+            <p><b>Your Login Credentials:</b></p>
+            <div style="background-color:#f7f7f7;padding:10px;border-radius:6px;">
+              <p><b>Email:</b> ${email}</p>
+              <p><b>Temporary Password:</b> ${tempPassword}</p>
+            </div>
+
+            <p>Click below to log in:</p>
             <p>
               <a href="${loginLink}" 
                 style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
@@ -1350,7 +1602,7 @@ exports.allocateuser = async (req, res) => {
               </a>
             </p>
 
-            <p>If the button doesn’t work, copy and paste this link into your browser:</p>
+            <p>If button doesn't work, copy this link:</p>
             <p><a href="${loginLink}">${loginLink}</a></p>
 
             <p>Best regards,<br><b>ShikshaCart Team</b></p>
@@ -1358,18 +1610,47 @@ exports.allocateuser = async (req, res) => {
         `,
       };
 
-      // 5️⃣ Send the email
       await transporter.sendMail(mailOptions);
     });
 
     await Promise.all(sendEmailPromises);
 
     res.status(200).json({
-      message: `Login credential emails sent successfully to ${emails.length} user(s).`,
+      message: `Users allocated successfully. Login credentials sent to ${emails.length} user(s).`,
     });
   } catch (error) {
-    console.error("Invite Users Error:", error);
+    console.error("Allocate Users Error:", error);
     res.status(500).json({ message: error.message });
   }
 };
 
+
+exports.getAllocatedUsers = async (req, res) => {
+  try {
+    const allocatorId = req.user?._id;
+
+    if (!allocatorId) {
+      return res.status(400).json({ message: "Allocator ID not found in request." });
+    }
+
+    // ✅ Find all users allocated by this user
+    const allocatedUsers = await User.find({ allocatedBy: allocatorId })
+      .populate({
+        path: "allocatedBy",
+        select: "firstName lastName email", // to show allocator info
+      })
+      .sort({ createdAt: -1 });
+
+    if (!allocatedUsers || allocatedUsers.length === 0) {
+      return res.status(404).json({ message: "No allocated users found." });
+    }
+
+    res.status(200).json({
+      count: allocatedUsers.length,
+      users: allocatedUsers,
+    });
+  } catch (error) {
+    console.error("Get Allocated Users Error:", error);
+    res.status(500).json({ message: error.message });
+  }
+};
