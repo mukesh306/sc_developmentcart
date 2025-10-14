@@ -1641,13 +1641,11 @@ exports.getAllocatedUsers = async (req, res) => {
       })
       .sort({ createdAt: -1 });
 
-    if (!allocatedUsers || allocatedUsers.length === 0) {
-      return res.status(404).json({ message: "No allocated users found." });
-    }
+   
 
     res.status(200).json({
       count: allocatedUsers.length,
-      users: allocatedUsers,
+      users: allocatedUsers || [],
     });
   } catch (error) {
     console.error("Get Allocated Users Error:", error);
