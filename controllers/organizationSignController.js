@@ -1684,6 +1684,7 @@ exports.getAllocatedUsers = async (req, res) => {
           middleName: user.middleName || '',
           lastName: user.lastName,
           mobileNumber: user.mobileNumber,
+          pincode: user.pincode,
           email: user.email,
           VerifyEmail: user.VerifyEmail || 'no',
           status: user.status || 'no',
@@ -1698,8 +1699,8 @@ exports.getAllocatedUsers = async (req, res) => {
           country: user.countryId?.name || '',
           state: user.stateId?.name || '',
           city: user.cityId?.name || '',
-          institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-          institutionType: user.studentType || '',
+          instituteName: user.schoolName || user.collegeName || user.instituteName || '',
+          studentType: user.studentType || '',
           classOrYear: classDetails?.name || '',
           className: classId,
           updatedBy: user.updatedBy?._id || null
