@@ -287,6 +287,7 @@ exports.getUserBuys = async (req, res) => {
       }
     }
 
+    
     res.status(200).json({
       totalRecords: totalSeats, // 👈 total seat count instead of record count
       buyRecords,
