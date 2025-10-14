@@ -1635,12 +1635,16 @@ exports.getAllocatedUsers = async (req, res) => {
 
     const { fields } = req.query;
 
-    // Fetch allocated users
+    // Fetch allocated users and populate necessary references
     const users = await User.find({ allocatedBy: allocatorId })
-      .populate({
-        path: "allocatedBy",
-        select: "firstName lastName email"
-      })
+      .populate([
+        { path: "allocatedBy", select: "firstName lastName email" },
+        { path: "countryId", select: "name" },
+        { path: "stateId", select: "name" },
+        { path: "cityId", select: "name" },
+        { path: "createdBy", select: "_id" },
+        { path: "updatedBy", select: "_id" }
+      ])
       .sort({ createdAt: -1 });
 
     if (!users || users.length === 0) {
@@ -1684,10 +1688,14 @@ exports.getAllocatedUsers = async (req, res) => {
           email: user.email,
           VerifyEmail: user.VerifyEmail || 'no',
           status: user.status || 'no',
-          createdBy: user.createdBy || null,
+          createdBy: user.createdBy?._id || null,
           createdAt: user.createdAt,
+          __v: user.__v,
           aadharCard: user.aadharCard || null,
           marksheet: user.marksheet || null,
+          countryId: user.countryId || null,
+          stateId: user.stateId || null,
+          cityId: user.cityId || null,
           country: user.countryId?.name || '',
           state: user.stateId?.name || '',
           city: user.cityId?.name || '',
@@ -1695,7 +1703,7 @@ exports.getAllocatedUsers = async (req, res) => {
           institutionType: user.studentType || '',
           classOrYear: classDetails?.name || '',
           className: classId,
-          updatedBy: user.updatedBy || null
+          updatedBy: user.updatedBy?._id || null
         };
 
         if (fields) {
@@ -1721,3 +1729,5 @@ exports.getAllocatedUsers = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
