@@ -1110,7 +1110,7 @@ exports.inviteUsers = async (req, res) => {
       auth: {
         user: "noreply@shikshacart.com",
         pass: "xyrx ryad ondf jaum", // use app password
-      },
+      }, 
     });
 
     // ✅ Process each email
