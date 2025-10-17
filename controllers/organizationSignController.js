@@ -1533,7 +1533,7 @@ exports.allocateuser = async (req, res) => {
         lastName: orgUser.lastName || "Allocated",
         mobileNumber: orgUser.mobileNumber || `999${Math.floor(Math.random() * 10000000)}`,
         email: orgUser.email,
-        VerifyEmail: "yes",
+        VerifyEmail: "Yes",
         password: hashedPassword,
         countryId: orgUser.countryId || null,
         stateId: orgUser.stateId || null,
