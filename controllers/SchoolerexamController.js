@@ -55,8 +55,8 @@ exports.getAllExams = async (req, res) => {
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
 
-    if (!exams || exams.length === 0) {
-      return res.status(404).json({ message: "No exams found." });
+   if (!exams || exams.length === 0) {
+      return res.status(200).json([]);
     }
 
     // ✅ Replace className with data from School or College
