@@ -116,7 +116,7 @@ exports.getAllSchoolergroups = async (req, res) => {
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: -1 });
 
-    res.status(200).json(groups);
+    res.status(200).json(groups || []);
   } catch (error) {
     res.status(500).json({ message: "Error fetching groups.", error });
   }
@@ -132,7 +132,7 @@ exports.getSchoolergroupById = async (req, res) => {
       return res.status(404).json({ message: "Group not found." });
     }
 
-    res.status(200).json(group);
+    res.status(200).json(groups || []);
   } catch (error) {
     res.status(500).json({ message: "Error fetching group.", error });
   }
