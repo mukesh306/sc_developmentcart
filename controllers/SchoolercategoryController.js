@@ -1,6 +1,7 @@
 const Schoolercategory = require("../models/schoolershipcategory");
 const Schoolergroup = require("../models/Schoolergroup");
 
+
 exports.createSchoolercategory = async (req, res) => {
   try {
     const { name } = req.body;
@@ -96,7 +97,7 @@ exports.createSchoolergroup = async (req, res) => {
     if (!category || !seat) {
       return res.status(400).json({ message: "Category and seat are required." });
     }
-
+ 
     const newGroup = new Schoolergroup({ category, seat, createdBy });
     await newGroup.save();
     res.status(201).json({
