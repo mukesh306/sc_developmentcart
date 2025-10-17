@@ -67,7 +67,7 @@ platformDetails:{
     default: 'no'
   },
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
-  allocatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'OrganizationSign' },
+  // allocatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'OrganizationSign' },
 
   resetPasswordExpires: { type: Date },
   createdAt: { type: Date, default: Date.now }
