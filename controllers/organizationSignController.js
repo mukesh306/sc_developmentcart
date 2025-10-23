@@ -777,8 +777,8 @@ exports.getOrganizationUserProfile = async (req, res) => {
     const { fields, className } = req.query;
     const createdBy = req.user._id;
 
-    // 🔹 Step 1: Get all userIds from User collection created by this user
-    const existingUserIds = await User.find({ createdBy }).distinct('_id');
+    // 🔹 Step 1: Get all emails from User collection created by this user
+    const existingUserEmails = await User.find({ createdBy }).distinct('email');
 
     // 🔹 Step 2: Build query for Organizationuser
     let query = { createdBy };
@@ -787,10 +787,10 @@ exports.getOrganizationUserProfile = async (req, res) => {
       query.className = className;
     }
 
-    // Exclude users that exist in User collection
-    query._id = { $nin: existingUserIds };
+    // 🔹 Step 3: Exclude users already in User collection
+    query.email = { $nin: existingUserEmails };
 
-    // 🔹 Step 3: Fetch Organizationuser
+    // 🔹 Step 4: Fetch Organizationuser
     let users = await Organizationuser.find(query)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
@@ -868,6 +868,7 @@ exports.getOrganizationUserProfile = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
