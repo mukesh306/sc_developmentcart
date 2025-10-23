@@ -1635,6 +1635,112 @@ exports.allocateuser = async (req, res) => {
 };
 
 
+// exports.getAllocatedUsers = async (req, res) => {
+//   try {
+//     const allocatorId = req.user?._id;
+
+//     if (!allocatorId) {
+//       return res.status(400).json({ message: "Allocator ID not found in request." });
+//     }
+
+//     const { fields } = req.query;
+
+//     // Fetch allocated users and populate necessary references
+//     const users = await User.find({ allocatedBy: allocatorId })
+//       .populate([
+//         { path: "allocatedBy", select: "firstName lastName email" },
+//         { path: "countryId", select: "name" },
+//         { path: "stateId", select: "name" },
+//         { path: "cityId", select: "name" },
+       
+//       ])
+//       .sort({ createdAt: -1 });
+
+//     if (!users || users.length === 0) {
+//       return res.status(200).json({
+//         message: 'Allocated users fetched successfully.',
+//         users: []
+//       });
+//     }
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+
+//     const formattedUsers = await Promise.all(
+//       users.map(async (user) => {
+//         let classId = user.className;
+//         let classDetails = null;
+//         if (mongoose.Types.ObjectId.isValid(classId)) {
+//           classDetails =
+//             (await School.findById(classId)) ||
+//             (await College.findById(classId));
+//         }
+
+//         // File URLs
+//         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//         }
+//         if (user.marksheet && fs.existsSync(user.marksheet)) {
+//           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//         }
+
+//         if (!classDetails || classDetails.price == null) {
+//           classId = null;
+//           user.className = null;
+//         }
+
+//         const formattedUser = {
+//           _id: user._id,
+//           firstName: user.firstName,
+//           middleName: user.middleName || '',
+//           lastName: user.lastName,
+//           mobileNumber: user.mobileNumber,
+//           pincode: user.pincode,
+//           email: user.email,
+//           VerifyEmail: user.VerifyEmail || 'no',
+//           status: user.status || 'no',
+//           createdBy: user.createdBy?._id || null,
+//           createdAt: user.createdAt,
+//           __v: user.__v,
+//           aadharCard: user.aadharCard || null,
+//           marksheet: user.marksheet || null,
+//           countryId: user.countryId || null,
+//           stateId: user.stateId || null,
+//           cityId: user.cityId || null,
+//           country: user.countryId?.name || '',
+//           state: user.stateId?.name || '',
+//           city: user.cityId?.name || '',
+//           instituteName: user.schoolName || user.collegeName || user.instituteName || '',
+//           studentType: user.studentType || '',
+//           classOrYear: classDetails?.name || '',
+//           className: classId,
+//           updatedBy: user.updatedBy?._id || null
+//         };
+
+//         if (fields) {
+//           const requestedFields = fields.split(',');
+//           const limited = {};
+//           requestedFields.forEach(f => {
+//             if (formattedUser.hasOwnProperty(f)) limited[f] = formattedUser[f];
+//           });
+//           return limited;
+//         }
+
+//         return formattedUser;
+//       })
+//     );
+
+//     res.status(200).json({
+//       message: 'Allocated users fetched successfully.',
+//       users: formattedUsers
+//     });
+
+//   } catch (error) {
+//     console.error("Get Allocated Users Error:", error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.getAllocatedUsers = async (req, res) => {
   try {
     const allocatorId = req.user?._id;
@@ -1645,16 +1751,21 @@ exports.getAllocatedUsers = async (req, res) => {
 
     const { fields } = req.query;
 
-    // Fetch allocated users and populate necessary references
-    const users = await User.find({ allocatedBy: allocatorId })
+    // Step 1: Fetch all emails from Organizationuser
+    const orgUserEmails = await Organizationuser.find().distinct("email");
+
+    // Step 2: Fetch allocated users
+    let users = await User.find({ allocatedBy: allocatorId })
       .populate([
         { path: "allocatedBy", select: "firstName lastName email" },
         { path: "countryId", select: "name" },
         { path: "stateId", select: "name" },
         { path: "cityId", select: "name" },
-       
       ])
       .sort({ createdAt: -1 });
+
+    // Step 3: Filter out users that exist in Organizationuser
+    users = users.filter(user => !orgUserEmails.includes(user.email));
 
     if (!users || users.length === 0) {
       return res.status(200).json({
@@ -1739,5 +1850,3 @@ exports.getAllocatedUsers = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
