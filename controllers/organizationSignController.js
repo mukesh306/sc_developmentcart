@@ -777,47 +777,42 @@ exports.getOrganizationUserProfile = async (req, res) => {
     const { fields, className } = req.query;
     const createdBy = req.user._id;
 
-    // Step 1: Get all users from User collection to exclude
-    const allocatedUsers = await User.find({ createdBy }).select("email mobileNumber");
-    const allocatedEmails = allocatedUsers.map(u => u.email).filter(Boolean);
-    const allocatedMobiles = allocatedUsers.map(u => u.mobileNumber).filter(Boolean);
+    // 🔹 Step 1: Get all userIds from User collection created by this user
+    const existingUserIds = await User.find({ createdBy }).distinct('_id');
 
-    // Step 2: Build query for Organizationuser
-    const query = {
-      createdBy,
-      email: { $nin: allocatedEmails },
-      mobileNumber: { $nin: allocatedMobiles }
-    };
+    // 🔹 Step 2: Build query for Organizationuser
+    let query = { createdBy };
 
     if (className && mongoose.Types.ObjectId.isValid(className)) {
       query.className = className;
     }
 
-    // Step 3: Fetch Organizationuser data
-    const users = await Organizationuser.find(query)
-      .populate("countryId", "name")
-      .populate("stateId", "name")
-      .populate("cityId", "name")
+    // Exclude users that exist in User collection
+    query._id = { $nin: existingUserIds };
+
+    // 🔹 Step 3: Fetch Organizationuser
+    let users = await Organizationuser.find(query)
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
       .populate({
-        path: "updatedBy",
-        select: "email session startDate endDate endTime name role"
+        path: 'updatedBy',
+        select: 'email session startDate endDate endTime name role'
       });
 
     if (!users || users.length === 0) {
       return res.status(200).json({
-        message: "Organization user profiles fetched successfully.",
+        message: 'Organization user profiles fetched successfully.',
         users: []
       });
     }
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
+    const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
 
-    // Step 4: Format users
     const formattedUsers = await Promise.all(
       users.map(async (user) => {
         let classId = user.className;
         let classDetails = null;
-
         if (mongoose.Types.ObjectId.isValid(classId)) {
           classDetails =
             (await School.findById(classId)) ||
@@ -840,21 +835,20 @@ exports.getOrganizationUserProfile = async (req, res) => {
           ...user._doc,
           status: user.status,
           className: classId,
-          country: user.countryId?.name || "",
-          state: user.stateId?.name || "",
-          city: user.cityId?.name || "",
-          institutionName: user.schoolName || user.collegeName || user.instituteName || "",
-          institutionType: user.studentType || "",
+          country: user.countryId?.name || '',
+          state: user.stateId?.name || '',
+          city: user.cityId?.name || '',
+          institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+          institutionType: user.studentType || '',
           updatedBy: user.updatedBy || null,
           createdBy: user.createdBy || null,
-          classOrYear: classDetails?.name || "",
+          classOrYear: classDetails?.name || ''
         };
 
-        // Apply requested fields filter
         if (fields) {
-          const requestedFields = fields.split(",");
+          const requestedFields = fields.split(',');
           const limited = {};
-          requestedFields.forEach((f) => {
+          requestedFields.forEach(f => {
             if (formattedUser.hasOwnProperty(f)) limited[f] = formattedUser[f];
           });
           return limited;
@@ -865,12 +859,12 @@ exports.getOrganizationUserProfile = async (req, res) => {
     );
 
     return res.status(200).json({
-      message: "Organization user profiles fetched successfully.",
+      message: 'Organization user profiles fetched successfully.',
       users: formattedUsers
     });
 
   } catch (error) {
-    console.error("Get OrganizationUser Profile Error:", error);
+    console.error('Get OrganizationUser Profile Error:', error);
     return res.status(500).json({ message: error.message });
   }
 };
