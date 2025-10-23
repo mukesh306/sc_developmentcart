@@ -2,8 +2,8 @@ const ClassSeat = require('../models/classSeat');
 const School = require('../models/school');
 const College = require('../models/college');
 const Buy = require('../models/buyseats');
+const User = require("../models/User");
 
-1
 exports.createClassSeat = async (req, res) => {
   try {
     const { className, seat } = req.body;
@@ -250,6 +250,55 @@ exports.buyClassSeats = async (req, res) => {
 };
 
 
+// exports.getUserBuys = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     const buys = await Buy.find({ userId })
+//       .populate({
+//         path: "classSeatId",
+//         select: "className seat", 
+//       })
+//       .sort({ createdAt: -1 });
+
+//     if (!buys || buys.length === 0) {
+//       return res.status(404).json({ message: "No purchases found" });
+//     }
+
+//     const buyRecords = [];
+//     let totalSeats = 0; // 👈 to store total seat count
+
+//     for (let buy of buys) {
+//       const classSeat = buy.classSeatId;
+//       if (!classSeat) continue;
+
+//       // Try fetching from both School and College collections
+//       let classData =
+//         (await School.findById(classSeat.className).select("name className")) ||
+//         (await College.findById(classSeat.className).select("name className"));
+
+//       if (classData) {
+//         buyRecords.push({
+//           classId: classSeat._id,
+//           className: classData.className || classData.name,
+//           seat: classSeat.seat,
+//         });
+
+//         totalSeats += classSeat.seat || 0; // 👈 add seat count
+//       }
+//     }
+
+    
+//     res.status(200).json({
+//       totalRecords: totalSeats, // 👈 total seat count instead of record count
+//       buyRecords,
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+
 exports.getUserBuys = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -266,37 +315,42 @@ exports.getUserBuys = async (req, res) => {
     }
 
     const buyRecords = [];
-    let totalSeats = 0; // 👈 to store total seat count
+    let totalRemainingSeats = 0;
 
     for (let buy of buys) {
       const classSeat = buy.classSeatId;
       if (!classSeat) continue;
 
-      // Try fetching from both School and College collections
+      // Fetch class info
       let classData =
         (await School.findById(classSeat.className).select("name className")) ||
         (await College.findById(classSeat.className).select("name className"));
 
       if (classData) {
+        // Count how many users are already allocated to this class
+        const allocatedUsersCount = await User.countDocuments({
+          className: classSeat.className,
+        });
+
+        // Remaining seats
+        const remainingSeats = Math.max((classSeat.seat || 0) - allocatedUsersCount, 0);
+
         buyRecords.push({
           classId: classSeat._id,
           className: classData.className || classData.name,
-          seat: classSeat.seat,
+          originalSeat: classSeat.seat,
+          remainingSeat: remainingSeats,
         });
 
-        totalSeats += classSeat.seat || 0; // 👈 add seat count
+        totalRemainingSeats += remainingSeats;
       }
     }
 
-    
     res.status(200).json({
-      totalRecords: totalSeats, // 👈 total seat count instead of record count
+      totalRemainingSeats,
       buyRecords,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
-
-
-
