@@ -774,29 +774,14 @@ exports.organizationUser = async (req, res) => {
 
 exports.getOrganizationUserProfile = async (req, res) => {
   try {
-    const { fields, className, slotDate } = req.query;
-    const createdBy = req.user._id;
+    const { fields, className } = req.query;
 
-    // 🔹 Step 1: Get all emails of users already in User collection
-    const existingUserEmails = await User.find({ createdBy })
-      .distinct('email')
-      .then(arr => arr.map(e => e.trim().toLowerCase())); // normalize
-
-    // 🔹 Step 2: Build query for Organizationuser
-    let query = { createdBy };
-
+    // Base query
+    let query = { createdBy: req.user._id };
     if (className && mongoose.Types.ObjectId.isValid(className)) {
       query.className = className;
     }
 
-    if (slotDate) {
-      query.slotDate = slotDate; // apply time-based filter if required
-    }
-
-    // 🔹 Step 3: Exclude users already in User collection
-    query.email = { $nin: existingUserEmails };
-
-    // 🔹 Step 4: Fetch Organizationuser with population
     let users = await Organizationuser.find(query)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
@@ -822,9 +807,7 @@ exports.getOrganizationUserProfile = async (req, res) => {
         let classDetails = null;
 
         if (mongoose.Types.ObjectId.isValid(classId)) {
-          classDetails =
-            (await School.findById(classId)) ||
-            (await College.findById(classId));
+          classDetails = (await School.findById(classId)) || (await College.findById(classId));
         }
 
         // File URLs
@@ -854,7 +837,22 @@ exports.getOrganizationUserProfile = async (req, res) => {
           classOrYear: classDetails?.name || ''
         };
 
-        // Optional fields filter
+        // ✅ Exclude complete profiles
+        const isCompleteProfile =
+          formattedUser.firstName &&
+          formattedUser.lastName &&
+          formattedUser.email &&
+          formattedUser.mobileNumber &&
+          formattedUser.institutionName &&
+          formattedUser.institutionType &&
+          formattedUser.country &&
+          formattedUser.state &&
+          formattedUser.city &&
+          formattedUser.classOrYear;
+
+        if (isCompleteProfile) return null; // skip complete profiles
+
+        // ✅ Apply requested fields filter if any
         if (fields) {
           const requestedFields = fields.split(',');
           const limited = {};
@@ -868,9 +866,11 @@ exports.getOrganizationUserProfile = async (req, res) => {
       })
     );
 
+    const incompleteProfiles = formattedUsers.filter(Boolean); // remove nulls
+
     return res.status(200).json({
       message: 'Organization user profiles fetched successfully.',
-      users: formattedUsers
+      users: incompleteProfiles
     });
 
   } catch (error) {
@@ -878,6 +878,8 @@ exports.getOrganizationUserProfile = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
 
 
 
@@ -1200,115 +1202,6 @@ ShikshaCart Team
 };
 
 
-
-
-// exports.Organizationallocation = async (req, res) => {
-//   try {
-//     const { fields, className } = req.query;
-
-//     // Base query: users created by logged-in user
-//     let query = { createdBy: req.user._id };
-
-//     // Optional filter by className
-//     if (className && mongoose.Types.ObjectId.isValid(className)) {
-//       query.className = className;
-//     }
-
-//     let users = await Organizationuser.find(query)
-//       .populate('countryId', 'name')
-//       .populate('stateId', 'name')
-//       .populate('cityId', 'name')
-//       .populate({
-//         path: 'updatedBy',
-//         select: 'email session startDate endDate endTime name role'
-//       });
-
-//     if (!users || users.length === 0) {
-//       return res.status(200).json({
-//         message: 'Organization user profiles fetched successfully.',
-//         users: []
-//       });
-//     }
-
-//     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
-
-//     const formattedUsers = await Promise.all(
-//       users.map(async (user) => {
-//         let classId = user.className;
-//         let classDetails = null;
-//         if (mongoose.Types.ObjectId.isValid(classId)) {
-//           classDetails =
-//             (await School.findById(classId)) ||
-//             (await College.findById(classId));
-//         }
-
-//         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-//         }
-//         if (user.marksheet && fs.existsSync(user.marksheet)) {
-//           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-//         }
-
-//         if (!classDetails || classDetails.price == null) {
-//           classId = null;
-//           user.className = null;
-//         }
-
-//         const formattedUser = {
-//           ...user._doc,
-//           status: user.status,
-//           className: classId,
-//           country: user.countryId?.name || '',
-//           state: user.stateId?.name || '',
-//           city: user.cityId?.name || '',
-//           institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-//           institutionType: user.studentType || '',
-//           updatedBy: user.updatedBy || null,
-//           createdBy: user.createdBy || null,
-//           classOrYear: classDetails?.name || ''
-//         };
-
-//         // ✅ Apply "complete profile" filter
-//         const isCompleteProfile =
-//           formattedUser.firstName &&
-//           formattedUser.lastName &&
-//           formattedUser.email &&
-//           formattedUser.mobileNumber &&
-//           formattedUser.institutionName &&
-//           formattedUser.institutionType &&
-//           formattedUser.country &&
-//           formattedUser.state &&
-//           formattedUser.city &&
-//           formattedUser.classOrYear;
-
-//         if (!isCompleteProfile) return null; // skip incomplete profiles
-
-//         if (fields) {
-//           const requestedFields = fields.split(',');
-//           const limited = {};
-//           requestedFields.forEach(f => {
-//             if (formattedUser.hasOwnProperty(f)) limited[f] = formattedUser[f];
-//           });
-//           return limited;
-//         }
-
-//         return formattedUser;
-//       })
-//     );
-
-//     // ✅ Filter out null (incomplete profiles)
-//     const completedProfiles = formattedUsers.filter(Boolean);
-
-//     return res.status(200).json({
-//       message: 'Organization user profiles fetched successfully.',
-//       users: completedProfiles
-//     });
-
-//   } catch (error) {
-//     console.error('Get OrganizationUser Profile Error:', error);
-//     return res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 exports.Organizationallocation = async (req, res) => {
