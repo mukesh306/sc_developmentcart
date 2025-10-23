@@ -298,6 +298,8 @@ exports.buyClassSeats = async (req, res) => {
 //   }
 // };
 
+
+
 exports.getUserBuys = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -347,6 +349,68 @@ exports.getUserBuys = async (req, res) => {
     res.status(200).json({
       totalRecords: totalSeats, // same key, value updated
       buyRecords,               // same structure, seat value updated
+    });
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+exports.filterAvalibleSeat = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { classId } = req.query; // optional filter by classId
+
+    // Build query
+    let buyQuery = { userId };
+    if (classId) {
+      buyQuery.classSeatId = classId; // filter by class if provided
+    }
+
+    const buys = await Buy.find(buyQuery)
+      .populate({
+        path: "classSeatId",
+        select: "className seat",
+      })
+      .sort({ createdAt: -1 });
+
+    if (!buys || buys.length === 0) {
+      return res.status(404).json({ message: "No purchases found" });
+    }
+
+    const buyRecords = [];
+    let totalSeats = 0; // total remaining seats
+
+    for (let buy of buys) {
+      const classSeat = buy.classSeatId;
+      if (!classSeat) continue;
+
+      // Fetch class info from School or College
+      const classData =
+        (await School.findById(classSeat.className).select("name className")) ||
+        (await College.findById(classSeat.className).select("name className"));
+
+      if (classData) {
+        // Count allocated users for this class
+        const allocatedUsersCount = await User.countDocuments({
+          className: classSeat.className,
+        });
+
+        // Calculate remaining seats
+        const remainingSeats = Math.max((classSeat.seat || 0) - allocatedUsersCount, 0);
+
+        buyRecords.push({
+          classId: classSeat._id,
+          className: classData.className || classData.name,
+          seat: remainingSeats, // only value updates, key stays the same
+        });
+
+        totalSeats += remainingSeats;
+      }
+    }
+
+    res.status(200).json({
+      totalRecords: totalSeats, // total remaining seats
+      buyRecords,               // same structure, filtered if classId provided
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
