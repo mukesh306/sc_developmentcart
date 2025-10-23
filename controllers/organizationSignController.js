@@ -777,20 +777,23 @@ exports.getOrganizationUserProfile = async (req, res) => {
     const { fields, className } = req.query;
     const createdBy = req.user._id;
 
-    // 🔹 Step 1: Get all emails from User collection to exclude
-    const allocatedEmails = await User.find({ createdBy }).distinct("email");
+    // Step 1: Get all users from User collection to exclude
+    const allocatedUsers = await User.find({ createdBy }).select("email mobileNumber");
+    const allocatedEmails = allocatedUsers.map(u => u.email).filter(Boolean);
+    const allocatedMobiles = allocatedUsers.map(u => u.mobileNumber).filter(Boolean);
 
-    // 🔹 Step 2: Build query for Organizationuser
+    // Step 2: Build query for Organizationuser
     const query = {
       createdBy,
-      email: { $nin: allocatedEmails } // exclude already allocated users
+      email: { $nin: allocatedEmails },
+      mobileNumber: { $nin: allocatedMobiles }
     };
 
     if (className && mongoose.Types.ObjectId.isValid(className)) {
       query.className = className;
     }
 
-    // 🔹 Step 3: Fetch Organizationuser data
+    // Step 3: Fetch Organizationuser data
     const users = await Organizationuser.find(query)
       .populate("countryId", "name")
       .populate("stateId", "name")
@@ -809,7 +812,7 @@ exports.getOrganizationUserProfile = async (req, res) => {
 
     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
 
-    // 🔹 Step 4: Format users
+    // Step 4: Format users
     const formattedUsers = await Promise.all(
       users.map(async (user) => {
         let classId = user.className;
@@ -819,10 +822,8 @@ exports.getOrganizationUserProfile = async (req, res) => {
           classDetails =
             (await School.findById(classId)) ||
             (await College.findById(classId));
-            // (await Institute.findById(classId));
         }
 
-        // File URLs
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
         }
@@ -849,7 +850,7 @@ exports.getOrganizationUserProfile = async (req, res) => {
           classOrYear: classDetails?.name || "",
         };
 
-        // Select only requested fields if provided
+        // Apply requested fields filter
         if (fields) {
           const requestedFields = fields.split(",");
           const limited = {};
