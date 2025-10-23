@@ -779,19 +779,12 @@ exports.getOrganizationUserProfile = async (req, res) => {
     // Base query
     let query = { createdBy: req.user._id };
 
-    // If className filter is given, add it
+    // Optional filter by className
     if (className && mongoose.Types.ObjectId.isValid(className)) {
       query.className = className;
     }
 
-    // ✅ New Code: Exclude users who are already allocated
-    const allocatedUsers = await User.find({ allocatedBy: req.user._id }).select('_id');
-    const allocatedUserIds = allocatedUsers.map(u => u._id);
-    if (allocatedUserIds.length > 0) {
-      query._id = { $nin: allocatedUserIds };
-    }
-    // ✅ End of new code
-
+    // Fetch organization users
     let users = await Organizationuser.find(query)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
@@ -799,7 +792,8 @@ exports.getOrganizationUserProfile = async (req, res) => {
       .populate({
         path: 'updatedBy',
         select: 'email session startDate endDate endTime name role'
-      });
+      })
+      .sort({ createdAt: -1 });
 
     if (!users || users.length === 0) {
       return res.status(200).json({
@@ -814,13 +808,15 @@ exports.getOrganizationUserProfile = async (req, res) => {
       users.map(async (user) => {
         let classId = user.className;
         let classDetails = null;
+
+        // Fetch class details
         if (mongoose.Types.ObjectId.isValid(classId)) {
           classDetails =
             (await School.findById(classId)) ||
             (await College.findById(classId));
-            // (await Institute.findById(classId));
         }
 
+        // File URLs
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
         }
@@ -828,23 +824,39 @@ exports.getOrganizationUserProfile = async (req, res) => {
           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
         }
 
+        // Handle missing class info
         if (!classDetails || classDetails.price == null) {
           classId = null;
           user.className = null;
         }
 
+        // ✅ Use same structure as getAllocatedUsers
         const formattedUser = {
-          ...user._doc,
-          status: user.status,
-          className: classId,
+          _id: user._id,
+          firstName: user.firstName,
+          middleName: user.middleName || '',
+          lastName: user.lastName,
+          mobileNumber: user.mobileNumber,
+          pincode: user.pincode,
+          email: user.email,
+          VerifyEmail: user.VerifyEmail || 'no',
+          status: user.status || 'no',
+          createdBy: user.createdBy?._id || null,
+          createdAt: user.createdAt,
+          __v: user.__v,
+          aadharCard: user.aadharCard || null,
+          marksheet: user.marksheet || null,
+          countryId: user.countryId || null,
+          stateId: user.stateId || null,
+          cityId: user.cityId || null,
           country: user.countryId?.name || '',
           state: user.stateId?.name || '',
           city: user.cityId?.name || '',
-          institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-          institutionType: user.studentType || '',
-          updatedBy: user.updatedBy || null,
-          createdBy: user.createdBy || null,
-          classOrYear: classDetails?.name || ''
+          instituteName: user.schoolName || user.collegeName || user.instituteName || '',
+          studentType: user.studentType || '',
+          classOrYear: classDetails?.name || '',
+          className: classId,
+          updatedBy: user.updatedBy?._id || null
         };
 
         if (fields) {
@@ -870,6 +882,7 @@ exports.getOrganizationUserProfile = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
