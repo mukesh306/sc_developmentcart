@@ -775,45 +775,51 @@ exports.organizationUser = async (req, res) => {
 exports.getOrganizationUserProfile = async (req, res) => {
   try {
     const { fields, className } = req.query;
+    const createdBy = req.user._id;
 
-    // Base query
-    let query = { createdBy: req.user._id };
+    // 🔹 Step 1: Get all emails from User collection to exclude
+    const allocatedEmails = await User.find({ createdBy }).distinct("email");
 
-    // Optional filter by className
+    // 🔹 Step 2: Build query for Organizationuser
+    const query = {
+      createdBy,
+      email: { $nin: allocatedEmails } // exclude already allocated users
+    };
+
     if (className && mongoose.Types.ObjectId.isValid(className)) {
       query.className = className;
     }
 
-    // Fetch organization users
-    let users = await Organizationuser.find(query)
-      .populate('countryId', 'name')
-      .populate('stateId', 'name')
-      .populate('cityId', 'name')
+    // 🔹 Step 3: Fetch Organizationuser data
+    const users = await Organizationuser.find(query)
+      .populate("countryId", "name")
+      .populate("stateId", "name")
+      .populate("cityId", "name")
       .populate({
-        path: 'updatedBy',
-        select: 'email session startDate endDate endTime name role'
-      })
-      .sort({ createdAt: -1 });
+        path: "updatedBy",
+        select: "email session startDate endDate endTime name role"
+      });
 
     if (!users || users.length === 0) {
       return res.status(200).json({
-        message: 'Organization user profiles fetched successfully.',
+        message: "Organization user profiles fetched successfully.",
         users: []
       });
     }
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+    const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
 
+    // 🔹 Step 4: Format users
     const formattedUsers = await Promise.all(
       users.map(async (user) => {
         let classId = user.className;
         let classDetails = null;
 
-        // Fetch class details
         if (mongoose.Types.ObjectId.isValid(classId)) {
           classDetails =
             (await School.findById(classId)) ||
             (await College.findById(classId));
+            // (await Institute.findById(classId));
         }
 
         // File URLs
@@ -824,45 +830,30 @@ exports.getOrganizationUserProfile = async (req, res) => {
           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
         }
 
-        // Handle missing class info
         if (!classDetails || classDetails.price == null) {
           classId = null;
           user.className = null;
         }
 
-        // ✅ Use same structure as getAllocatedUsers
         const formattedUser = {
-          _id: user._id,
-          firstName: user.firstName,
-          middleName: user.middleName || '',
-          lastName: user.lastName,
-          mobileNumber: user.mobileNumber,
-          pincode: user.pincode,
-          email: user.email,
-          VerifyEmail: user.VerifyEmail || 'no',
-          status: user.status || 'no',
-          createdBy: user.createdBy?._id || null,
-          createdAt: user.createdAt,
-          __v: user.__v,
-          aadharCard: user.aadharCard || null,
-          marksheet: user.marksheet || null,
-          countryId: user.countryId || null,
-          stateId: user.stateId || null,
-          cityId: user.cityId || null,
-          country: user.countryId?.name || '',
-          state: user.stateId?.name || '',
-          city: user.cityId?.name || '',
-          instituteName: user.schoolName || user.collegeName || user.instituteName || '',
-          studentType: user.studentType || '',
-          classOrYear: classDetails?.name || '',
+          ...user._doc,
+          status: user.status,
           className: classId,
-          updatedBy: user.updatedBy?._id || null
+          country: user.countryId?.name || "",
+          state: user.stateId?.name || "",
+          city: user.cityId?.name || "",
+          institutionName: user.schoolName || user.collegeName || user.instituteName || "",
+          institutionType: user.studentType || "",
+          updatedBy: user.updatedBy || null,
+          createdBy: user.createdBy || null,
+          classOrYear: classDetails?.name || "",
         };
 
+        // Select only requested fields if provided
         if (fields) {
-          const requestedFields = fields.split(',');
+          const requestedFields = fields.split(",");
           const limited = {};
-          requestedFields.forEach(f => {
+          requestedFields.forEach((f) => {
             if (formattedUser.hasOwnProperty(f)) limited[f] = formattedUser[f];
           });
           return limited;
@@ -873,15 +864,16 @@ exports.getOrganizationUserProfile = async (req, res) => {
     );
 
     return res.status(200).json({
-      message: 'Organization user profiles fetched successfully.',
+      message: "Organization user profiles fetched successfully.",
       users: formattedUsers
     });
 
   } catch (error) {
-    console.error('Get OrganizationUser Profile Error:', error);
+    console.error("Get OrganizationUser Profile Error:", error);
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
