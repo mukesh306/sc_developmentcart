@@ -298,7 +298,6 @@ exports.buyClassSeats = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserBuys = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -315,40 +314,39 @@ exports.getUserBuys = async (req, res) => {
     }
 
     const buyRecords = [];
-    let totalRemainingSeats = 0;
+    let totalSeats = 0; // total remaining seats
 
     for (let buy of buys) {
       const classSeat = buy.classSeatId;
       if (!classSeat) continue;
 
-      // Fetch class info
-      let classData =
+      // Fetch class info from School or College
+      const classData =
         (await School.findById(classSeat.className).select("name className")) ||
         (await College.findById(classSeat.className).select("name className"));
 
       if (classData) {
-        // Count how many users are already allocated to this class
+        // Count allocated users for this class
         const allocatedUsersCount = await User.countDocuments({
           className: classSeat.className,
         });
 
-        // Remaining seats
+        // Calculate remaining seats
         const remainingSeats = Math.max((classSeat.seat || 0) - allocatedUsersCount, 0);
 
         buyRecords.push({
           classId: classSeat._id,
           className: classData.className || classData.name,
-          originalSeat: classSeat.seat,
-          remainingSeat: remainingSeats,
+          seat: remainingSeats, // only value updates, key stays the same
         });
 
-        totalRemainingSeats += remainingSeats;
+        totalSeats += remainingSeats;
       }
     }
 
     res.status(200).json({
-      totalRemainingSeats,
-      buyRecords,
+      totalRecords: totalSeats, // same key, value updated
+      buyRecords,               // same structure, seat value updated
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
