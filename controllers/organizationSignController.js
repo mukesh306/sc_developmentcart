@@ -989,6 +989,7 @@ exports.deleteOrganizationUser = async (req, res) => {
 };
 
 
+
 // exports.getOrganizationUserById = async (req, res) => {
 //   try {
 //     const { id } = req.params;
@@ -1050,25 +1051,6 @@ exports.deleteOrganizationUser = async (req, res) => {
 //       classOrYear: classDetails?.name || ''
 //     };
 
-//     // ✅ Determine if profile is complete
-//     const requiredFields = [
-//       formattedUser.firstName,
-//       formattedUser.lastName,
-//       formattedUser.email,
-//       formattedUser.mobileNumber,
-//       formattedUser.pincode,
-//       formattedUser.country,
-//       formattedUser.state,
-//       formattedUser.city,
-//       formattedUser.classOrYear,
-//       formattedUser.institutionName,
-//       formattedUser.aadharCard,
-//       formattedUser.marksheet
-//     ];
-
-//     const isProfileComplete = requiredFields.every(field => field && field !== '');
-//     formattedUser.profile = isProfileComplete ? true : false;
-
 //     return res.status(200).json({
 //       message: 'Organization user profile fetched successfully.',
 //       user: formattedUser
@@ -1108,10 +1090,8 @@ exports.getOrganizationUserById = async (req, res) => {
     let classId = user.className;
     let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(classId)) {
-      classDetails =
-        (await School.findById(classId)) ||
-        (await College.findById(classId));
-        // (await Institute.findById(classId));
+      classDetails = (await School.findById(classId)) || (await College.findById(classId));
+      // classDetails = classDetails || (await Institute.findById(classId)); // Uncomment if needed
     }
 
     // 🔹 Format file URLs if they exist
@@ -1142,6 +1122,18 @@ exports.getOrganizationUserById = async (req, res) => {
       classOrYear: classDetails?.name || ''
     };
 
+    // ✅ Add profileStatus inside user
+    const requiredFields = [
+      'firstName', 'lastName', 'mobileNumber', 'email',
+      'pincode', 'studentType', 'instituteName', 'status',
+      'aadharCard', 'marksheet', 'city', 'state', 'country',
+      'classOrYear'
+    ];
+
+    formattedUser.profileStatus = requiredFields.every(
+      field => formattedUser[field] !== null && formattedUser[field] !== undefined && formattedUser[field] !== ''
+    );
+
     return res.status(200).json({
       message: 'Organization user profile fetched successfully.',
       user: formattedUser
@@ -1152,8 +1144,6 @@ exports.getOrganizationUserById = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
 
 
 // exports.inviteUsers = async (req, res) => {
