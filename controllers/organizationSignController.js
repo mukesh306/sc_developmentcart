@@ -987,6 +987,7 @@ exports.deleteOrganizationUser = async (req, res) => {
 };
 
 
+
 // exports.getOrganizationUserById = async (req, res) => {
 //   try {
 //     const { id } = req.params;
@@ -1048,25 +1049,6 @@ exports.deleteOrganizationUser = async (req, res) => {
 //       classOrYear: classDetails?.name || ''
 //     };
 
-//     // ✅ Determine if profile is complete
-//     const requiredFields = [
-//       formattedUser.firstName,
-//       formattedUser.lastName,
-//       formattedUser.email,
-//       formattedUser.mobileNumber,
-//       formattedUser.pincode,
-//       formattedUser.country,
-//       formattedUser.state,
-//       formattedUser.city,
-//       formattedUser.classOrYear,
-//       formattedUser.institutionName,
-//       formattedUser.aadharCard,
-//       formattedUser.marksheet
-//     ];
-
-//     const isProfileComplete = requiredFields.every(field => field && field !== '');
-//     formattedUser.profile = isProfileComplete ? true : false;
-
 //     return res.status(200).json({
 //       message: 'Organization user profile fetched successfully.',
 //       user: formattedUser
@@ -1077,7 +1059,6 @@ exports.deleteOrganizationUser = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
-
 
 exports.getOrganizationUserById = async (req, res) => {
   try {
@@ -1102,14 +1083,13 @@ exports.getOrganizationUserById = async (req, res) => {
 
     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
 
-    // 🔹 Fetch class details (from School or College)
+    // 🔹 Fetch class details (School or College)
     let classId = user.className;
     let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(classId)) {
       classDetails =
         (await School.findById(classId)) ||
         (await College.findById(classId));
-        // (await Institute.findById(classId));
     }
 
     // 🔹 Format file URLs if they exist
@@ -1126,6 +1106,26 @@ exports.getOrganizationUserById = async (req, res) => {
       user.className = null;
     }
 
+    // ✅ Strict profile completeness check
+    const requiredFields = [
+      user.firstName,
+      user.lastName,
+      user.email,
+      user.mobileNumber,
+      user.countryId,
+      user.stateId,
+      user.cityId,
+      user.className
+    ];
+
+    // If all required fields are valid and either aadharCard or marksheet exists → true
+    const profileStatus =
+      requiredFields.every(field => field && field !== '') &&
+      (user.aadharCard || user.marksheet)
+        ? true
+        : false;
+
+    // 🔹 Build formatted response
     const formattedUser = {
       ...user._doc,
       status: user.status,
@@ -1137,7 +1137,8 @@ exports.getOrganizationUserById = async (req, res) => {
       institutionType: user.studentType || '',
       updatedBy: user.updatedBy || null,
       createdBy: user.createdBy || null,
-      classOrYear: classDetails?.name || ''
+      classOrYear: classDetails?.name || '',
+      profileStatus // ✅ added field
     };
 
     return res.status(200).json({
@@ -1150,7 +1151,6 @@ exports.getOrganizationUserById = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
