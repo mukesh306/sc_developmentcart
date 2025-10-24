@@ -250,6 +250,8 @@ exports.buyClassSeats = async (req, res) => {
 };
 
 
+
+
 // exports.getUserBuys = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -266,39 +268,44 @@ exports.buyClassSeats = async (req, res) => {
 //     }
 
 //     const buyRecords = [];
-//     let totalSeats = 0; // 👈 to store total seat count
+//     let totalSeats = 0; // total remaining seats
 
 //     for (let buy of buys) {
 //       const classSeat = buy.classSeatId;
 //       if (!classSeat) continue;
 
-//       // Try fetching from both School and College collections
-//       let classData =
+//       // Fetch class info from School or College
+//       const classData =
 //         (await School.findById(classSeat.className).select("name className")) ||
 //         (await College.findById(classSeat.className).select("name className"));
 
 //       if (classData) {
+//         // Count allocated users for this class
+//         const allocatedUsersCount = await User.countDocuments({
+//           className: classSeat.className,
+//         });
+
+//         // Calculate remaining seats
+//         const remainingSeats = Math.max((classSeat.seat || 0) - allocatedUsersCount, 0);
+
 //         buyRecords.push({
 //           classId: classSeat._id,
 //           className: classData.className || classData.name,
-//           seat: classSeat.seat,
+//           seat: remainingSeats, // only value updates, key stays the same
 //         });
 
-//         totalSeats += classSeat.seat || 0; // 👈 add seat count
+//         totalSeats += remainingSeats;
 //       }
 //     }
 
-    
 //     res.status(200).json({
-//       totalRecords: totalSeats, // 👈 total seat count instead of record count
-//       buyRecords,
+//       totalRecords: totalSeats, // same key, value updated
+//       buyRecords,               // same structure, seat value updated
 //     });
 //   } catch (err) {
 //     res.status(500).json({ message: err.message });
 //   }
 // };
-
-
 
 exports.getUserBuys = async (req, res) => {
   try {
@@ -307,7 +314,7 @@ exports.getUserBuys = async (req, res) => {
     const buys = await Buy.find({ userId })
       .populate({
         path: "classSeatId",
-        select: "className seat", 
+        select: "className seat",
       })
       .sort({ createdAt: -1 });
 
@@ -316,7 +323,7 @@ exports.getUserBuys = async (req, res) => {
     }
 
     const buyRecords = [];
-    let totalSeats = 0; // total remaining seats
+    let totalSeats = 0;
 
     for (let buy of buys) {
       const classSeat = buy.classSeatId;
@@ -337,9 +344,10 @@ exports.getUserBuys = async (req, res) => {
         const remainingSeats = Math.max((classSeat.seat || 0) - allocatedUsersCount, 0);
 
         buyRecords.push({
-          classId: classSeat._id,
+          id: classSeat._id,          // ✅ now seat table ID
+          classId: classData._id,     // ✅ now real class ID (School/College)
           className: classData.className || classData.name,
-          seat: remainingSeats, // only value updates, key stays the same
+          seat: remainingSeats,
         });
 
         totalSeats += remainingSeats;
@@ -347,23 +355,24 @@ exports.getUserBuys = async (req, res) => {
     }
 
     res.status(200).json({
-      totalRecords: totalSeats, // same key, value updated
-      buyRecords,               // same structure, seat value updated
+      totalRecords: totalSeats,
+      buyRecords,
     });
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
 
+
+
 exports.filterAvalibleSeat = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { classId } = req.query; // optional filter by classId
+    const { classId } = req.query; 
 
-    // Build query
     let buyQuery = { userId };
     if (classId) {
-      buyQuery.classSeatId = classId; // filter by class if provided
+      buyQuery.classSeatId = classId; 
     }
 
     const buys = await Buy.find(buyQuery)
@@ -378,7 +387,7 @@ exports.filterAvalibleSeat = async (req, res) => {
     }
 
     const buyRecords = [];
-    let totalSeats = 0; // total remaining seats
+    let totalSeats = 0; 
 
     for (let buy of buys) {
       const classSeat = buy.classSeatId;
