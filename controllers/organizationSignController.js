@@ -1641,6 +1641,7 @@ exports.allocateuser = async (req, res) => {
 //   }
 // };
 
+
 exports.getAllocatedUsers = async (req, res) => {
   try {
     const allocatorId = req.user?._id;
