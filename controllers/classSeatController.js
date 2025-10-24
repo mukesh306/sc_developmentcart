@@ -367,7 +367,7 @@ exports.getUserBuys = async (req, res) => {
 exports.filterAvalibleSeat = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { classId } = req.query; // real class ID (School/College)
+    const { classId } = req.query; 
 
     const buys = await Buy.find({ userId })
       .populate({
@@ -429,8 +429,6 @@ exports.filterAvalibleSeat = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
-
 
 
 // exports.filterAvalibleSeat = async (req, res) => {
