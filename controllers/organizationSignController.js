@@ -1060,6 +1060,7 @@ exports.deleteOrganizationUser = async (req, res) => {
 //   }
 // };
 
+
 exports.getOrganizationUserById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1083,13 +1084,12 @@ exports.getOrganizationUserById = async (req, res) => {
 
     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
 
-    // 🔹 Fetch class details (School or College)
+    // 🔹 Fetch class details (from School or College)
     let classId = user.className;
     let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(classId)) {
-      classDetails =
-        (await School.findById(classId)) ||
-        (await College.findById(classId));
+      classDetails = (await School.findById(classId)) || (await College.findById(classId));
+      // classDetails = classDetails || (await Institute.findById(classId)); // Uncomment if needed
     }
 
     // 🔹 Format file URLs if they exist
@@ -1106,26 +1106,6 @@ exports.getOrganizationUserById = async (req, res) => {
       user.className = null;
     }
 
-    // ✅ Strict profile completeness check
-    const requiredFields = [
-      user.firstName,
-      user.lastName,
-      user.email,
-      user.mobileNumber,
-      user.countryId,
-      user.stateId,
-      user.cityId,
-      user.className
-    ];
-
-    // If all required fields are valid and either aadharCard or marksheet exists → true
-    const profileStatus =
-      requiredFields.every(field => field && field !== '') &&
-      (user.aadharCard || user.marksheet)
-        ? true
-        : false;
-
-    // 🔹 Build formatted response
     const formattedUser = {
       ...user._doc,
       status: user.status,
@@ -1137,9 +1117,20 @@ exports.getOrganizationUserById = async (req, res) => {
       institutionType: user.studentType || '',
       updatedBy: user.updatedBy || null,
       createdBy: user.createdBy || null,
-      classOrYear: classDetails?.name || '',
-      profileStatus // ✅ added field
+      classOrYear: classDetails?.name || ''
     };
+
+    // ✅ Add profileStatus inside user
+    const requiredFields = [
+      'firstName', 'lastName', 'mobileNumber', 'email',
+      'pincode', 'studentType', 'instituteName', 'status',
+      'aadharCard', 'marksheet', 'city', 'state', 'country',
+      'classOrYear'
+    ];
+
+    formattedUser.profileStatus = requiredFields.every(
+      field => formattedUser[field] !== null && formattedUser[field] !== undefined && formattedUser[field] !== ''
+    );
 
     return res.status(200).json({
       message: 'Organization user profile fetched successfully.',
@@ -1151,7 +1142,6 @@ exports.getOrganizationUserById = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 // exports.inviteUsers = async (req, res) => {
