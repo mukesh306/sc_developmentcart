@@ -48,6 +48,43 @@ exports.createExam = async (req, res) => {
 };
 
 
+// exports.getAllExams = async (req, res) => {
+//   try {
+//     let exams = await Schoolerexam.find()
+//       .populate("category", "name")
+//       .populate("createdBy", "name email")
+//       .sort({ createdAt: -1 });
+
+//    if (!exams || exams.length === 0) {
+//       return res.status(200).json([]);
+//     }
+
+//     // ✅ Replace className with data from School or College
+//     const updatedExams = [];
+//     for (const exam of exams) {
+//       let classData =
+//         (await School.findById(exam.className).select("name className")) ||
+//         (await College.findById(exam.className).select("name className"));
+
+//       // convert to plain JS object to modify safely
+//       const examObj = exam.toObject();
+
+//       if (classData) {
+//         examObj.className = classData.className || classData.name;
+//       } else {
+//         examObj.className = null;
+//       }
+// examObj.totalQuestions = exam.topicQuestions ? exam.topicQuestions.length : 0;
+//       updatedExams.push(examObj);
+//     }
+
+//     res.status(200).json(updatedExams);
+//   } catch (error) {
+//     console.error("Error fetching exams:", error);
+//     res.status(500).json({ message: "Internal server error.", error });
+//   }
+// };
+
 exports.getAllExams = async (req, res) => {
   try {
     let exams = await Schoolerexam.find()
@@ -55,26 +92,33 @@ exports.getAllExams = async (req, res) => {
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
 
-   if (!exams || exams.length === 0) {
+    if (!exams || exams.length === 0) {
       return res.status(200).json([]);
     }
 
-    // ✅ Replace className with data from School or College
     const updatedExams = [];
-    for (const exam of exams) {
-      let classData =
-        (await School.findById(exam.className).select("name className")) ||
-        (await College.findById(exam.className).select("name className"));
 
-      // convert to plain JS object to modify safely
+    for (const exam of exams) {
+      // Try fetching from School or College
+      let classData =
+        (await School.findById(exam.className).select("_id name className")) ||
+        (await College.findById(exam.className).select("_id name className"));
+
       const examObj = exam.toObject();
 
       if (classData) {
-        examObj.className = classData.className || classData.name;
+        examObj.className = {
+          _id: classData._id,
+          name: classData.className || classData.name,
+        };
       } else {
         examObj.className = null;
       }
-examObj.totalQuestions = exam.topicQuestions ? exam.topicQuestions.length : 0;
+
+      examObj.totalQuestions = exam.topicQuestions
+        ? exam.topicQuestions.length
+        : 0;
+
       updatedExams.push(examObj);
     }
 
@@ -84,6 +128,7 @@ examObj.totalQuestions = exam.topicQuestions ? exam.topicQuestions.length : 0;
     res.status(500).json({ message: "Internal server error.", error });
   }
 };
+
 
 
 exports.getExamById = async (req, res) => {
@@ -231,6 +276,8 @@ exports.submitExamAnswer = async (req, res) => {
     res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 };
+
+
 exports.calculateExamResult = async (req, res) => {
   try {
     const userId = req.user._id;

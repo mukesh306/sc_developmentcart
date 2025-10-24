@@ -989,6 +989,79 @@ exports.deleteOrganizationUser = async (req, res) => {
 };
 
 
+// exports.getOrganizationUserById = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     if (!mongoose.Types.ObjectId.isValid(id)) {
+//       return res.status(400).json({ message: 'Invalid user ID.' });
+//     }
+
+//     const user = await Organizationuser.findById(id)
+//       .populate('countryId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('cityId', 'name')
+//       .populate({
+//         path: 'updatedBy',
+//         select: 'email session startDate endDate endTime name role'
+//       });
+
+//     if (!user) {
+//       return res.status(404).json({ message: 'User not found.' });
+//     }
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+
+//     // 🔹 Fetch class details (from School or College)
+//     let classId = user.className;
+//     let classDetails = null;
+//     if (mongoose.Types.ObjectId.isValid(classId)) {
+//       classDetails =
+//         (await School.findById(classId)) ||
+//         (await College.findById(classId));
+//         // (await Institute.findById(classId));
+//     }
+
+//     // 🔹 Format file URLs if they exist
+//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//     }
+//     if (user.marksheet && fs.existsSync(user.marksheet)) {
+//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//     }
+
+//     // 🔹 If no valid class, reset
+//     if (!classDetails || classDetails.price == null) {
+//       classId = null;
+//       user.className = null;
+//     }
+
+//     const formattedUser = {
+//       ...user._doc,
+//       status: user.status,
+//       className: classId,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+//       institutionType: user.studentType || '',
+//       updatedBy: user.updatedBy || null,
+//       createdBy: user.createdBy || null,
+//       classOrYear: classDetails?.name || ''
+//     };
+
+//     return res.status(200).json({
+//       message: 'Organization user profile fetched successfully.',
+//       user: formattedUser
+//     });
+
+//   } catch (error) {
+//     console.error('Get OrganizationUser Profile by ID Error:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.getOrganizationUserById = async (req, res) => {
   try {
     const { id } = req.params;
@@ -1050,6 +1123,25 @@ exports.getOrganizationUserById = async (req, res) => {
       classOrYear: classDetails?.name || ''
     };
 
+    // ✅ Determine if profile is complete
+    const requiredFields = [
+      formattedUser.firstName,
+      formattedUser.lastName,
+      formattedUser.email,
+      formattedUser.mobileNumber,
+      formattedUser.pincode,
+      formattedUser.country,
+      formattedUser.state,
+      formattedUser.city,
+      formattedUser.classOrYear,
+      formattedUser.institutionName,
+      formattedUser.aadharCard,
+      formattedUser.marksheet
+    ];
+
+    const isProfileComplete = requiredFields.every(field => field && field !== '');
+    formattedUser.profile = isProfileComplete ? true : false;
+
     return res.status(200).json({
       message: 'Organization user profile fetched successfully.',
       user: formattedUser
@@ -1060,7 +1152,6 @@ exports.getOrganizationUserById = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
@@ -1149,7 +1240,7 @@ exports.inviteUsers = async (req, res) => {
       }
 
       // 3️⃣ Generate user-specific profile link
-      const inviteLink = `https://dev.organization.shikshacart.com/complete-profile/${user._id}`;
+      const inviteLink = `https://dev.product.shikshacart.com/complete-profile/${user._id}`;
 
       // 4️⃣ Prepare email content
       const mailOptions = {
