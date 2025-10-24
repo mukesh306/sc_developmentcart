@@ -1048,6 +1048,25 @@ exports.deleteOrganizationUser = async (req, res) => {
 //       classOrYear: classDetails?.name || ''
 //     };
 
+//     // ✅ Determine if profile is complete
+//     const requiredFields = [
+//       formattedUser.firstName,
+//       formattedUser.lastName,
+//       formattedUser.email,
+//       formattedUser.mobileNumber,
+//       formattedUser.pincode,
+//       formattedUser.country,
+//       formattedUser.state,
+//       formattedUser.city,
+//       formattedUser.classOrYear,
+//       formattedUser.institutionName,
+//       formattedUser.aadharCard,
+//       formattedUser.marksheet
+//     ];
+
+//     const isProfileComplete = requiredFields.every(field => field && field !== '');
+//     formattedUser.profile = isProfileComplete ? true : false;
+
 //     return res.status(200).json({
 //       message: 'Organization user profile fetched successfully.',
 //       user: formattedUser
@@ -1121,25 +1140,6 @@ exports.getOrganizationUserById = async (req, res) => {
       classOrYear: classDetails?.name || ''
     };
 
-    // ✅ Determine if profile is complete
-    const requiredFields = [
-      formattedUser.firstName,
-      formattedUser.lastName,
-      formattedUser.email,
-      formattedUser.mobileNumber,
-      formattedUser.pincode,
-      formattedUser.country,
-      formattedUser.state,
-      formattedUser.city,
-      formattedUser.classOrYear,
-      formattedUser.institutionName,
-      formattedUser.aadharCard,
-      formattedUser.marksheet
-    ];
-
-    const isProfileComplete = requiredFields.every(field => field && field !== '');
-    formattedUser.profile = isProfileComplete ? true : false;
-
     return res.status(200).json({
       message: 'Organization user profile fetched successfully.',
       user: formattedUser
@@ -1150,6 +1150,7 @@ exports.getOrganizationUserById = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
