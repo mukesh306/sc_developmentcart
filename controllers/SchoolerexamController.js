@@ -311,7 +311,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id; // ✅ Token-based user
@@ -360,6 +359,15 @@ exports.UsersExams = async (req, res) => {
       examObj.correct = userResult ? userResult.correct : null;
       examObj.finalScore = userResult ? userResult.finalScore : null;
 
+      // ✅ Add percentage if result exists
+      if (userResult && examObj.totalQuestions > 0) {
+        examObj.percentage = parseFloat(
+          ((userResult.finalScore / examObj.totalQuestions) * 100).toFixed(2)
+        );
+      } else {
+        examObj.percentage = null;
+      }
+
       updatedExams.push(examObj);
     }
 
@@ -379,6 +387,7 @@ exports.UsersExams = async (req, res) => {
       .json({ message: "Internal server error", error: error.message });
   }
 };
+
 
 
 
@@ -496,7 +505,6 @@ exports.submitExamAnswer = async (req, res) => {
 //   }
 // };
 
-
 exports.calculateExamResult = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -526,6 +534,7 @@ exports.calculateExamResult = async (req, res) => {
 
     const negative = wrong * (parseFloat(exam.Negativemark) || 0);
     const finalScore = Math.max(correct - negative, 0);
+    const percentage = total > 0 ? (correct / total) * 100 : 0;
     const result = finalScore >= exam.passout ? "pass" : "fail";
 
     const examResult = await ExamResult.findOneAndUpdate(
@@ -539,6 +548,7 @@ exports.calculateExamResult = async (req, res) => {
         wrong,
         negativeMarks: negative,
         finalScore,
+        percentage: parseFloat(percentage.toFixed(2)), // ✅ Save formatted value
         result,
       },
       { upsert: true, new: true }
@@ -553,6 +563,7 @@ exports.calculateExamResult = async (req, res) => {
     res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 };
+
 
 
 exports.getTopUsersPerGroup = async (req, res) => {
