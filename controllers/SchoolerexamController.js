@@ -423,22 +423,31 @@ exports.UsersExams = async (req, res) => {
 };
 
 
+
 exports.ExamQuestion = async (req, res) => {
   try {
-    const exam = await Schoolerexam.findById(req.params.id).select("topicQuestions");
+    const exam = await Schoolerexam.findById(req.params.id)
+      .populate("category", "name") 
+      .select("examName ExamTime category topicQuestions"); 
 
     if (!exam) {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // ✅ Return only topicQuestions array
-    res.status(200).json(exam.topicQuestions || []);
+    // ✅ Format clean response
+    const response = {
+      examName: exam.examName,
+      ExamTime: exam.ExamTime,
+      categoryName: exam.category ? exam.category.name : null, // ✅ Only category name
+      topicQuestions: exam.topicQuestions || []
+    };
+
+    res.status(200).json(response);
   } catch (error) {
     console.error("Error fetching exam:", error);
     res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 };
-
 
 
 
