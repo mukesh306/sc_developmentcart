@@ -48,6 +48,7 @@ exports.createExam = async (req, res) => {
 };
 
 
+
 // exports.getAllExams = async (req, res) => {
 //   try {
 //     let exams = await Schoolerexam.find()
@@ -55,26 +56,33 @@ exports.createExam = async (req, res) => {
 //       .populate("createdBy", "name email")
 //       .sort({ createdAt: -1 });
 
-//    if (!exams || exams.length === 0) {
+//     if (!exams || exams.length === 0) {
 //       return res.status(200).json([]);
 //     }
 
-//     // ✅ Replace className with data from School or College
 //     const updatedExams = [];
-//     for (const exam of exams) {
-//       let classData =
-//         (await School.findById(exam.className).select("name className")) ||
-//         (await College.findById(exam.className).select("name className"));
 
-//       // convert to plain JS object to modify safely
+//     for (const exam of exams) {
+//       // Try fetching from School or College
+//       let classData =
+//         (await School.findById(exam.className).select("_id name className")) ||
+//         (await College.findById(exam.className).select("_id name className"));
+
 //       const examObj = exam.toObject();
 
 //       if (classData) {
-//         examObj.className = classData.className || classData.name;
+//         examObj.className = {
+//           _id: classData._id,
+//           name: classData.className || classData.name,
+//         };
 //       } else {
 //         examObj.className = null;
 //       }
-// examObj.totalQuestions = exam.topicQuestions ? exam.topicQuestions.length : 0;
+
+//       examObj.totalQuestions = exam.topicQuestions
+//         ? exam.topicQuestions.length
+//         : 0;
+
 //       updatedExams.push(examObj);
 //     }
 
@@ -85,9 +93,22 @@ exports.createExam = async (req, res) => {
 //   }
 // };
 
+
 exports.getAllExams = async (req, res) => {
   try {
-    let exams = await Schoolerexam.find()
+    const { category, className } = req.query; // ✅ Get filters from query params
+
+    // ✅ Build filter object dynamically
+    let filter = {};
+    if (category && mongoose.Types.ObjectId.isValid(category)) {
+      filter.category = category;
+    }
+    if (className && mongoose.Types.ObjectId.isValid(className)) {
+      filter.className = className;
+    }
+
+    // ✅ Apply filter
+    let exams = await Schoolerexam.find(filter)
       .populate("category", "name")
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
