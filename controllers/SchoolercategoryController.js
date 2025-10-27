@@ -27,7 +27,7 @@ exports.getAllSchoolercategories = async (req, res) => {
   try {
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: 1 });
 
     res.status(200).json(categories);
   } catch (error) {
@@ -115,7 +115,7 @@ exports.getAllSchoolergroups = async (req, res) => {
     const groups = await Schoolergroup.find()
       .populate("category", "name")
       .populate("createdBy", "firstName lastName email")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: 1 });
 
     res.status(200).json(groups || []);
   } catch (error) {
