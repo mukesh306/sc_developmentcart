@@ -311,6 +311,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id; // ✅ Token-based user
@@ -320,7 +321,7 @@ exports.UsersExams = async (req, res) => {
     let exams = await Schoolerexam.find()
       .populate("category", "name")
       .populate("createdBy", "name email")
-      .sort({ createdAt: -1 });
+     .sort({ createdAt: 1 });
 
     if (!exams || exams.length === 0) {
       return res.status(200).json([]);
@@ -352,7 +353,7 @@ exports.UsersExams = async (req, res) => {
 
       // ✅ Fetch user result if exists
       const userResult = await ExamResult.findOne({ userId, examId: exam._id })
-        .select("correct finalScore")
+        .select("correct finalScore percentage createdAt")
         .lean();
 
       // ✅ Add result info directly in root (not inside userResult)
@@ -366,6 +367,28 @@ exports.UsersExams = async (req, res) => {
         );
       } else {
         examObj.percentage = null;
+      }
+
+      // ✅ Calculate rank (strict order, no tie sharing)
+      if (userResult) {
+        const allResults = await ExamResult.find({ examId: exam._id })
+          .select("userId percentage createdAt")
+          .sort({ percentage: -1, createdAt: 1 }) // Highest % first, earlier first if same %
+          .lean();
+
+        let rank = null;
+        for (let i = 0; i < allResults.length; i++) {
+          if (allResults[i].userId.toString() === userId.toString()) {
+            rank = i + 1; // Rank starts from 1
+            break;
+          }
+        }
+
+        examObj.rank = rank;
+        examObj.totalParticipants = allResults.length; // Optional: total participants
+      } else {
+        examObj.rank = null;
+        examObj.totalParticipants = 0;
       }
 
       updatedExams.push(examObj);
@@ -387,6 +410,7 @@ exports.UsersExams = async (req, res) => {
       .json({ message: "Internal server error", error: error.message });
   }
 };
+
 
 
 
