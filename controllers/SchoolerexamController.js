@@ -315,6 +315,7 @@ exports.addQuestionsToExam = async (req, res) => {
 // };
 
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id; // ✅ Logged-in user
@@ -441,6 +442,59 @@ exports.ExamQuestion = async (req, res) => {
 
 
 
+// exports.submitExamAnswer = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { examId, questionId, selectedAnswer, attemptId } = req.body;
+
+//     if (!examId || !questionId || !attemptId) {
+//       return res.status(400).json({ message: "examId, questionId, and attemptId are required." });
+//     }
+
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) return res.status(404).json({ message: "Exam not found." });
+
+//     // Save / update answer
+//     await ExamAnswer.findOneAndUpdate(
+//       { userId, examId, questionId, attemptId },
+//       { selectedAnswer },
+//       { upsert: true, new: true }
+//     );
+
+//     const groupSize = exam.seat;
+
+//     // Find the last group (highest groupNumber) for this exam
+//     let lastGroup = await ExamGroup.findOne({ examId })
+//       .sort({ groupNumber: -1 });
+
+//     if (!lastGroup || lastGroup.members.length >= groupSize) {
+//       // Create a new group
+//       lastGroup = await ExamGroup.create({
+//         examId,
+//         groupNumber: lastGroup ? lastGroup.groupNumber + 1 : 1,
+//         members: [userId],
+//       });
+//     } else {
+//       // Add user to the last group
+//       if (!lastGroup.members.includes(userId)) {
+//         lastGroup.members.push(userId);
+//         await lastGroup.save();
+//       }
+//     }
+
+//     return res.status(200).json({
+//       message: "Answer saved successfully.",
+//       attemptId,
+//       groupNumber: lastGroup.groupNumber,
+//       membersInGroup: lastGroup.members.length
+//     });
+//   } catch (error) {
+//     console.error("Error in submitExamAnswer:", error);
+//     res.status(500).json({ message: "Internal server error.", error: error.message });
+//   }
+// };
+
+
 exports.submitExamAnswer = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -451,30 +505,37 @@ exports.submitExamAnswer = async (req, res) => {
     }
 
     const exam = await Schoolerexam.findById(examId);
-    if (!exam) return res.status(404).json({ message: "Exam not found." });
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found." });
+    }
 
-    // Save / update answer
+    // ✅ Auto-detect skip
+    const isSkipped = !selectedAnswer || selectedAnswer === "";
+
+    // ✅ Save / update answer
     await ExamAnswer.findOneAndUpdate(
       { userId, examId, questionId, attemptId },
-      { selectedAnswer },
+      { 
+        selectedAnswer: isSkipped ? null : selectedAnswer,
+        skipped: isSkipped 
+      },
       { upsert: true, new: true }
     );
 
     const groupSize = exam.seat;
 
-    // Find the last group (highest groupNumber) for this exam
-    let lastGroup = await ExamGroup.findOne({ examId })
-      .sort({ groupNumber: -1 });
+    // ✅ Find the last group (highest groupNumber)
+    let lastGroup = await ExamGroup.findOne({ examId }).sort({ groupNumber: -1 });
 
     if (!lastGroup || lastGroup.members.length >= groupSize) {
-      // Create a new group
+      // ✅ Create new group
       lastGroup = await ExamGroup.create({
         examId,
         groupNumber: lastGroup ? lastGroup.groupNumber + 1 : 1,
         members: [userId],
       });
     } else {
-      // Add user to the last group
+      // ✅ Add user to existing group if not already
       if (!lastGroup.members.includes(userId)) {
         lastGroup.members.push(userId);
         await lastGroup.save();
@@ -482,16 +543,17 @@ exports.submitExamAnswer = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: "Answer saved successfully.",
+      message: isSkipped ? "Question skipped successfully." : "Answer saved successfully.",
       attemptId,
       groupNumber: lastGroup.groupNumber,
-      membersInGroup: lastGroup.members.length
+      membersInGroup: lastGroup.members.length,
     });
   } catch (error) {
     console.error("Error in submitExamAnswer:", error);
     res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 };
+
 
 
 // exports.calculateExamResult = async (req, res) => {
@@ -555,6 +617,7 @@ exports.submitExamAnswer = async (req, res) => {
 //   }
 // };
 
+
 exports.calculateExamResult = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -569,6 +632,7 @@ exports.calculateExamResult = async (req, res) => {
 
     let correct = 0,
         wrong = 0,
+        skippedCount = 0,
         total = exam.topicQuestions.length;
 
     for (const ans of answers) {
@@ -577,6 +641,11 @@ exports.calculateExamResult = async (req, res) => {
       );
 
       if (question) {
+        if (ans.skipped === true || ans.selectedAnswer === null || ans.selectedAnswer === "") {
+          skippedCount++;
+          continue; // ✅ Skip ko ignore karo (na correct na wrong)
+        }
+
         if (ans.selectedAnswer === question.answer) correct++;
         else wrong++;
       }
@@ -585,8 +654,9 @@ exports.calculateExamResult = async (req, res) => {
     const negative = wrong * (parseFloat(exam.Negativemark) || 0);
     const finalScore = Math.max(correct - negative, 0);
 
-    // ✅ Percentage based on finalScore (not correct)
-    const percentage = total > 0 ? (finalScore / total) * 100 : 0;
+    // ✅ Percentage based on attempted questions (not skipped)
+    const attempted = total - skippedCount;
+    const percentage = attempted > 0 ? (finalScore / total) * 100 : 0;
 
     const result = finalScore >= exam.passout ? "pass" : "fail";
 
@@ -597,11 +667,13 @@ exports.calculateExamResult = async (req, res) => {
         examId,
         attemptId,
         totalQuestions: total,
+        attempted,
+        skipped: skippedCount,
         correct,
         wrong,
         negativeMarks: negative,
         finalScore,
-        percentage: parseFloat(percentage.toFixed(2)), // ✅ Based on finalScore
+        percentage: parseFloat(percentage.toFixed(2)),
         result,
       },
       { upsert: true, new: true }
@@ -616,6 +688,69 @@ exports.calculateExamResult = async (req, res) => {
     res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 };
+
+
+// exports.calculateExamResult = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { examId, attemptId } = req.body;
+
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) return res.status(404).json({ message: "Exam not found." });
+
+//     const answers = await ExamAnswer.find({ userId, examId, attemptId });
+//     if (answers.length === 0)
+//       return res.status(400).json({ message: "No answers found for this attempt." });
+
+//     let correct = 0,
+//         wrong = 0,
+//         total = exam.topicQuestions.length;
+
+//     for (const ans of answers) {
+//       const question = exam.topicQuestions.find(
+//         q => q._id.toString() === ans.questionId.toString()
+//       );
+
+//       if (question) {
+//         if (ans.selectedAnswer === question.answer) correct++;
+//         else wrong++;
+//       }
+//     }
+
+//     const negative = wrong * (parseFloat(exam.Negativemark) || 0);
+//     const finalScore = Math.max(correct - negative, 0);
+
+//     // ✅ Percentage based on finalScore (not correct)
+//     const percentage = total > 0 ? (finalScore / total) * 100 : 0;
+
+//     const result = finalScore >= exam.passout ? "pass" : "fail";
+
+//     const examResult = await ExamResult.findOneAndUpdate(
+//       { userId, examId, attemptId },
+//       {
+//         userId,
+//         examId,
+//         attemptId,
+//         totalQuestions: total,
+//         correct,
+//         wrong,
+//         negativeMarks: negative,
+//         finalScore,
+//         percentage: parseFloat(percentage.toFixed(2)), // ✅ Based on finalScore
+//         result,
+//       },
+//       { upsert: true, new: true }
+//     );
+
+//     return res.status(200).json({
+//       message: "Result calculated and saved successfully.",
+//       examResult,
+//     });
+//   } catch (error) {
+//     console.error("Error calculating exam result:", error);
+//     res.status(500).json({ message: "Internal server error.", error: error.message });
+//   }
+// };
 
 
 
