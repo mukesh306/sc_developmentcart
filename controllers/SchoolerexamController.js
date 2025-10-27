@@ -93,22 +93,12 @@ exports.createExam = async (req, res) => {
 //   }
 // };
 
-
 exports.getAllExams = async (req, res) => {
   try {
-    const { category, className } = req.query; // ✅ Get filters from query params
+    const { category, className } = req.query;
 
-    // ✅ Build filter object dynamically
-    let filter = {};
-    if (category && mongoose.Types.ObjectId.isValid(category)) {
-      filter.category = category;
-    }
-    if (className && mongoose.Types.ObjectId.isValid(className)) {
-      filter.className = className;
-    }
-
-    // ✅ Apply filter
-    let exams = await Schoolerexam.find(filter)
+    // ✅ Step 1: Fetch all exams first
+    let exams = await Schoolerexam.find()
       .populate("category", "name")
       .populate("createdBy", "name email")
       .sort({ createdAt: -1 });
@@ -119,8 +109,8 @@ exports.getAllExams = async (req, res) => {
 
     const updatedExams = [];
 
+    // ✅ Step 2: Build data with class info and filtering logic
     for (const exam of exams) {
-      // Try fetching from School or College
       let classData =
         (await School.findById(exam.className).select("_id name className")) ||
         (await College.findById(exam.className).select("_id name className"));
@@ -143,10 +133,25 @@ exports.getAllExams = async (req, res) => {
       updatedExams.push(examObj);
     }
 
-    res.status(200).json(updatedExams);
+    // ✅ Step 3: Apply filter on final objects
+    let filteredExams = updatedExams;
+
+    if (category) {
+      filteredExams = filteredExams.filter(
+        (e) => e.category && e.category._id?.toString() === category
+      );
+    }
+
+    if (className) {
+      filteredExams = filteredExams.filter(
+        (e) => e.className && e.className._id?.toString() === className
+      );
+    }
+
+    res.status(200).json(filteredExams);
   } catch (error) {
-    console.error("Error fetching exams:", error);
-    res.status(500).json({ message: "Internal server error.", error });
+    console.error("🔥 Error fetching exams:", error);
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
 
