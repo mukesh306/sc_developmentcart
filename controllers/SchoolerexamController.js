@@ -311,25 +311,31 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
-    const userId = req.user._id; // ✅ Token-based user
-    const { category } = req.query; // ✅ Only category filter now
+    const userId = req.user._id; // ✅ Logged-in user
+    const { category } = req.query;
 
-    // ✅ Step 1: Fetch all exams
-    let exams = await Schoolerexam.find()
+    // ✅ Step 1: Get user's className
+    const user = await User.findById(userId).select("className");
+    if (!user || !user.className) {
+      return res.status(400).json({ message: "User class not found." });
+    }
+
+    // ✅ Step 2: Fetch only exams for user's class
+    let exams = await Schoolerexam.find({ className: user.className })
       .populate("category", "name")
       .populate("createdBy", "name email")
-     .sort({ createdAt: 1 });
+      .sort({ createdAt: 1 }); // oldest first
 
+    // ✅ Step 3: If no exams found → return empty array
     if (!exams || exams.length === 0) {
-      return res.status(200).json([]);
+      return res.status(200).json([]); // ✅ Blank array
     }
 
     const updatedExams = [];
 
-    // ✅ Step 2: Add class info, totalQuestions, and user score (if exists)
+    // ✅ Step 4: Add class info, totalQuestions, result, rank, etc.
     for (const exam of exams) {
       let classData =
         (await School.findById(exam.className).select("_id name className")) ||
@@ -346,21 +352,20 @@ exports.UsersExams = async (req, res) => {
         examObj.className = null;
       }
 
-      // ✅ Total question count
+      // ✅ Total questions
       examObj.totalQuestions = exam.topicQuestions
         ? exam.topicQuestions.length
         : 0;
 
-      // ✅ Fetch user result if exists
+      // ✅ User result
       const userResult = await ExamResult.findOne({ userId, examId: exam._id })
         .select("correct finalScore percentage createdAt")
         .lean();
 
-      // ✅ Add result info directly in root (not inside userResult)
       examObj.correct = userResult ? userResult.correct : null;
       examObj.finalScore = userResult ? userResult.finalScore : null;
 
-      // ✅ Add percentage if result exists
+      // ✅ Percentage
       if (userResult && examObj.totalQuestions > 0) {
         examObj.percentage = parseFloat(
           ((userResult.finalScore / examObj.totalQuestions) * 100).toFixed(2)
@@ -369,23 +374,23 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // ✅ Calculate rank (strict order, no tie sharing)
+      // ✅ Rank calculation
       if (userResult) {
         const allResults = await ExamResult.find({ examId: exam._id })
           .select("userId percentage createdAt")
-          .sort({ percentage: -1, createdAt: 1 }) // Highest % first, earlier first if same %
+          .sort({ percentage: -1, createdAt: 1 })
           .lean();
 
         let rank = null;
         for (let i = 0; i < allResults.length; i++) {
           if (allResults[i].userId.toString() === userId.toString()) {
-            rank = i + 1; // Rank starts from 1
+            rank = i + 1;
             break;
           }
         }
 
         examObj.rank = rank;
-        examObj.totalParticipants = allResults.length; // Optional: total participants
+        examObj.totalParticipants = allResults.length;
       } else {
         examObj.rank = null;
         examObj.totalParticipants = 0;
@@ -394,7 +399,7 @@ exports.UsersExams = async (req, res) => {
       updatedExams.push(examObj);
     }
 
-    // ✅ Step 3: Filter only by category
+    // ✅ Step 5: Filter by category (optional)
     let filteredExams = updatedExams;
     if (category) {
       filteredExams = filteredExams.filter(
@@ -402,6 +407,7 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
+    // ✅ Step 6: Return exams
     res.status(200).json(filteredExams);
   } catch (error) {
     console.error("🔥 Error fetching exams:", error);
@@ -410,6 +416,7 @@ exports.UsersExams = async (req, res) => {
       .json({ message: "Internal server error", error: error.message });
   }
 };
+
 
 
 
