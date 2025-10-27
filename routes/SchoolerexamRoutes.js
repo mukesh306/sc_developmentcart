@@ -14,7 +14,6 @@ router.get("/schooler/UsersExams",auth, SchoolerexamController.UsersExams);
 router.post("/schooler/submitExamAnswer", auth, SchoolerexamController.submitExamAnswer);
 router.post("/schooler/calculateExamResult", auth, SchoolerexamController.calculateExamResult);
 router.post("/schooler/getTopUsersPerGroup", SchoolerexamController.getTopUsersPerGroup);
-
 router.get('/schooler/groupall', SchoolerexamController.getAllExamGroups);
 
 router.post(
