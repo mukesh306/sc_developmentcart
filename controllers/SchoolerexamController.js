@@ -189,6 +189,9 @@ examObj.totalQuestions = exam.topicQuestions ? exam.topicQuestions.length : 0;
   }
 };
 
+
+
+
 exports.updateExam = async (req, res) => {
   try {
     const updatedExam = await Schoolerexam.findByIdAndUpdate(
@@ -311,6 +314,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id; // ✅ Logged-in user
@@ -418,6 +422,21 @@ exports.UsersExams = async (req, res) => {
 };
 
 
+exports.ExamQuestion = async (req, res) => {
+  try {
+    const exam = await Schoolerexam.findById(req.params.id).select("topicQuestions");
+
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found." });
+    }
+
+    // ✅ Return only topicQuestions array
+    res.status(200).json(exam.topicQuestions || []);
+  } catch (error) {
+    console.error("Error fetching exam:", error);
+    res.status(500).json({ message: "Internal server error.", error: error.message });
+  }
+};
 
 
 
