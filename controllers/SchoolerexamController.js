@@ -435,6 +435,68 @@ exports.submitExamAnswer = async (req, res) => {
 };
 
 
+// exports.calculateExamResult = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { examId, attemptId } = req.body;
+
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) return res.status(404).json({ message: "Exam not found." });
+
+//     const answers = await ExamAnswer.find({ userId, examId, attemptId });
+//     if (answers.length === 0)
+//       return res.status(400).json({ message: "No answers found for this attempt." });
+
+//     let correct = 0,
+//       wrong = 0,
+//       total = exam.topicQuestions.length;
+
+//     for (const ans of answers) {
+//       const question = exam.topicQuestions.find(
+//         q => q._id.toString() === ans.questionId.toString()
+//       );
+
+//       if (question) {
+//         // Map selected option key to its value
+//         const selectedValue = question[ans.selectedAnswer]?.trim().toLowerCase();
+//         const correctAnswer = question.answer?.trim().toLowerCase();
+
+//         if (selectedValue === correctAnswer) correct++;
+//         else if (ans.selectedAnswer) wrong++;
+//       }
+//     }
+
+//     const negative = wrong * (parseFloat(exam.Negativemark) || 0);
+//     const finalScore = Math.max(correct - negative, 0);
+//     const result = finalScore >= exam.passout ? "pass" : "fail";
+
+//     const examResult = await ExamResult.findOneAndUpdate(
+//       { userId, examId, attemptId },
+//       {
+//         userId,
+//         examId,
+//         attemptId,
+//         totalQuestions: total,
+//         correct,
+//         wrong,
+//         negativeMarks: negative,
+//         finalScore,
+//         result,
+//       },
+//       { upsert: true, new: true }
+//     );
+
+//     return res.status(200).json({
+//       message: "Result calculated and saved successfully.",
+//       examResult,
+//     });
+//   } catch (error) {
+//     console.error("Error calculating exam result:", error);
+//     res.status(500).json({ message: "Internal server error.", error: error.message });
+//   }
+// };
+
+
 exports.calculateExamResult = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -448,8 +510,8 @@ exports.calculateExamResult = async (req, res) => {
       return res.status(400).json({ message: "No answers found for this attempt." });
 
     let correct = 0,
-      wrong = 0,
-      total = exam.topicQuestions.length;
+        wrong = 0,
+        total = exam.topicQuestions.length;
 
     for (const ans of answers) {
       const question = exam.topicQuestions.find(
@@ -457,12 +519,8 @@ exports.calculateExamResult = async (req, res) => {
       );
 
       if (question) {
-        // Map selected option key to its value
-        const selectedValue = question[ans.selectedAnswer]?.trim().toLowerCase();
-        const correctAnswer = question.answer?.trim().toLowerCase();
-
-        if (selectedValue === correctAnswer) correct++;
-        else if (ans.selectedAnswer) wrong++;
+        if (ans.selectedAnswer === question.answer) correct++;
+        else wrong++;
       }
     }
 
@@ -495,7 +553,6 @@ exports.calculateExamResult = async (req, res) => {
     res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 };
-
 
 
 exports.getTopUsersPerGroup = async (req, res) => {
