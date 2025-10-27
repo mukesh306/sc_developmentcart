@@ -534,7 +534,10 @@ exports.calculateExamResult = async (req, res) => {
 
     const negative = wrong * (parseFloat(exam.Negativemark) || 0);
     const finalScore = Math.max(correct - negative, 0);
-    const percentage = total > 0 ? (correct / total) * 100 : 0;
+
+    // ✅ Percentage based on finalScore (not correct)
+    const percentage = total > 0 ? (finalScore / total) * 100 : 0;
+
     const result = finalScore >= exam.passout ? "pass" : "fail";
 
     const examResult = await ExamResult.findOneAndUpdate(
@@ -548,7 +551,7 @@ exports.calculateExamResult = async (req, res) => {
         wrong,
         negativeMarks: negative,
         finalScore,
-        percentage: parseFloat(percentage.toFixed(2)), // ✅ Save formatted value
+        percentage: parseFloat(percentage.toFixed(2)), // ✅ Based on finalScore
         result,
       },
       { upsert: true, new: true }
@@ -563,6 +566,7 @@ exports.calculateExamResult = async (req, res) => {
     res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 };
+
 
 
 
