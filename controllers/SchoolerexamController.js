@@ -93,6 +93,8 @@ exports.createExam = async (req, res) => {
 //   }
 // };
 
+
+
 exports.getAllExams = async (req, res) => {
   try {
     const { category, className } = req.query;
@@ -249,6 +251,66 @@ exports.addQuestionsToExam = async (req, res) => {
     res.status(500).json({ message: "Internal server error.", error });
   }
 };
+
+
+exports.UsersExams = async (req, res) => {
+  try {
+    const { category } = req.query; // ✅ Only category filter now
+
+    // ✅ Step 1: Fetch all exams
+    let exams = await Schoolerexam.find()
+      .populate("category", "name")
+      .populate("createdBy", "name email")
+      .sort({ createdAt: -1 });
+
+    if (!exams || exams.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    const updatedExams = [];
+
+    // ✅ Step 2: Add class info and totalQuestions
+    for (const exam of exams) {
+      let classData =
+        (await School.findById(exam.className).select("_id name className")) ||
+        (await College.findById(exam.className).select("_id name className"));
+
+      const examObj = exam.toObject();
+
+      if (classData) {
+        examObj.className = {
+          _id: classData._id,
+          name: classData.className || classData.name,
+        };
+      } else {
+        examObj.className = null;
+      }
+
+      examObj.totalQuestions = exam.topicQuestions
+        ? exam.topicQuestions.length
+        : 0;
+
+      updatedExams.push(examObj);
+    }
+
+    // ✅ Step 3: Filter only by category
+    let filteredExams = updatedExams;
+
+    if (category) {
+      filteredExams = filteredExams.filter(
+        (e) => e.category && e.category._id?.toString() === category
+      );
+    }
+
+    res.status(200).json(filteredExams);
+  } catch (error) {
+    console.error("🔥 Error fetching exams:", error);
+    res
+      .status(500)
+      .json({ message: "Internal server error", error: error.message });
+  }
+};
+
 
 
 exports.submitExamAnswer = async (req, res) => {
