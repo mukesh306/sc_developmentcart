@@ -6,6 +6,8 @@ const ExamGroup = require("../models/examGroup");
 const User = require("../models/User");
 const ExamResult = require("../models/examResult");
 
+
+
 exports.createExam = async (req, res) => {
   try {
     const {
@@ -504,6 +506,7 @@ exports.ExamQuestion = async (req, res) => {
 // };
 
 
+
 exports.submitExamAnswer = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -762,11 +765,11 @@ exports.calculateExamResult = async (req, res) => {
 // };
 
 
-
-
-exports.getTopUsersPerGroup = async (req, res) => {
+exports.Leaderboard = async (req, res) => {
   try {
     const { examId } = req.body;
+    const loggedInUserId = req.user?._id; // ✅ token user
+
     if (!examId) return res.status(400).json({ message: "examId required." });
 
     // 1️⃣ Fetch the exam to get the passout value
@@ -805,15 +808,81 @@ exports.getTopUsersPerGroup = async (req, res) => {
       });
     }
 
+    // 4️⃣ Reorder: Logged-in user's group first
+    let userGroupData = [];
+    let otherGroups = [];
+
+    for (const groupData of result) {
+      const isUserInGroup = groupData.topUsers.some(
+        (u) => u.userId?._id?.toString() === loggedInUserId?.toString()
+      );
+      if (isUserInGroup) userGroupData.push(groupData);
+      else otherGroups.push(groupData);
+    }
+
+    const finalResult = [...userGroupData, ...otherGroups];
+
     return res.status(200).json({
       message: "Top users per group fetched successfully.",
-      data: result,
+      data: finalResult,
     });
   } catch (error) {
     console.error("Error in getTopUsersPerGroup:", error);
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
+
+
+// exports.getTopUsersPerGroup = async (req, res) => {
+//   try {
+//     const { examId } = req.body;
+//     if (!examId) return res.status(400).json({ message: "examId required." });
+
+//     // 1️⃣ Fetch the exam to get the passout value
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) return res.status(404).json({ message: "Exam not found." });
+
+//     const passoutLimit = parseInt(exam.passout) || 1; // default 1 if not set
+
+//     // 2️⃣ Get all groups for this exam
+//     const groups = await ExamGroup.find({ examId })
+//       .populate("members", "firstName lastName email");
+
+//     if (!groups || groups.length === 0)
+//       return res.status(404).json({ message: "No groups found for this exam." });
+
+//     const result = [];
+
+//     // 3️⃣ Loop through each group and fetch top scorers
+//     for (const group of groups) {
+//       const memberIds = group.members.map(m => m._id);
+
+//       // Get exam results for this group's members, sorted by score descending
+//       const scores = await ExamResult.find({
+//         examId,
+//         userId: { $in: memberIds },
+//       })
+//         .populate("userId", "firstName lastName email")
+//         .sort({ finalScore: -1 });
+
+//       // Pick top N (N = exam.passout)
+//       const topUsers = scores.slice(0, passoutLimit);
+
+//       result.push({
+//         groupNumber: group.groupNumber,
+//         topUsers,
+//       });
+//     }
+
+//     return res.status(200).json({
+//       message: "Top users per group fetched successfully.",
+//       data: result,
+//     });
+//   } catch (error) {
+//     console.error("Error in getTopUsersPerGroup:", error);
+//     res.status(500).json({ message: "Internal server error", error: error.message });
+//   }
+// };
 
 
 
