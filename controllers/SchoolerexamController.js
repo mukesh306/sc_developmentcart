@@ -768,7 +768,8 @@ exports.calculateExamResult = async (req, res) => {
 
 exports.Leaderboard = async (req, res) => {
   try {
-    const { examId } = req.body;
+    // const { examId } = req.query;
+    const examId = req.params.id;
     const loggedInUserId = req.user?._id; // ✅ token user id
 
     if (!examId) return res.status(400).json({ message: "examId required." });
