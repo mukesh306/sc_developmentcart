@@ -765,33 +765,32 @@ exports.calculateExamResult = async (req, res) => {
 // };
 
 
+
 exports.Leaderboard = async (req, res) => {
   try {
     const { examId } = req.body;
-    const loggedInUserId = req.user?._id; // ✅ token user
+    const loggedInUserId = req.user?._id; // ✅ token user id
 
     if (!examId) return res.status(400).json({ message: "examId required." });
 
-    // 1️⃣ Fetch the exam to get the passout value
+    // 1️⃣ Get exam for passout limit
     const exam = await Schoolerexam.findById(examId);
     if (!exam) return res.status(404).json({ message: "Exam not found." });
 
-    const passoutLimit = parseInt(exam.passout) || 1; // default 1 if not set
+    const passoutLimit = parseInt(exam.passout) || 1;
 
-    // 2️⃣ Get all groups for this exam
-    const groups = await ExamGroup.find({ examId })
-      .populate("members", "firstName lastName email");
+    // 2️⃣ Get all groups with members
+    const groups = await ExamGroup.find({ examId }).populate("members", "firstName lastName email");
 
     if (!groups || groups.length === 0)
       return res.status(404).json({ message: "No groups found for this exam." });
 
-    const result = [];
+    let allUsers = [];
 
-    // 3️⃣ Loop through each group and fetch top scorers
+    // 3️⃣ Collect top users from each group
     for (const group of groups) {
       const memberIds = group.members.map(m => m._id);
 
-      // Get exam results for this group's members, sorted by score descending
       const scores = await ExamResult.find({
         examId,
         userId: { $in: memberIds },
@@ -799,32 +798,39 @@ exports.Leaderboard = async (req, res) => {
         .populate("userId", "firstName lastName email")
         .sort({ finalScore: -1 });
 
-      // Pick top N (N = exam.passout)
       const topUsers = scores.slice(0, passoutLimit);
-
-      result.push({
-        groupNumber: group.groupNumber,
-        topUsers,
-      });
+      allUsers.push(...topUsers);
     }
 
-    // 4️⃣ Reorder: Logged-in user's group first
-    let userGroupData = [];
-    let otherGroups = [];
+    // ✅ 4️⃣ Remove duplicate users if any (same user in multiple groups)
+    const uniqueUsers = [];
+    const seen = new Set();
 
-    for (const groupData of result) {
-      const isUserInGroup = groupData.topUsers.some(
-        (u) => u.userId?._id?.toString() === loggedInUserId?.toString()
+    for (const user of allUsers) {
+      const userId = user.userId?._id?.toString();
+      if (userId && !seen.has(userId)) {
+        seen.add(userId);
+        uniqueUsers.push(user);
+      }
+    }
+
+    // ✅ 5️⃣ Bring token user to the top
+    if (loggedInUserId) {
+      const idx = uniqueUsers.findIndex(
+        (u) =>
+          u.userId &&
+          (u.userId._id ? u.userId._id.toString() : u.userId.toString()) === loggedInUserId.toString()
       );
-      if (isUserInGroup) userGroupData.push(groupData);
-      else otherGroups.push(groupData);
+      if (idx > -1) {
+        const [tokenUser] = uniqueUsers.splice(idx, 1);
+        uniqueUsers.unshift(tokenUser);
+      }
     }
 
-    const finalResult = [...userGroupData, ...otherGroups];
-
+    // ✅ 6️⃣ Final response
     return res.status(200).json({
-      message: "Top users per group fetched successfully.",
-      data: finalResult,
+      message: "Top users fetched successfully.",
+      users: uniqueUsers,
     });
   } catch (error) {
     console.error("Error in getTopUsersPerGroup:", error);
