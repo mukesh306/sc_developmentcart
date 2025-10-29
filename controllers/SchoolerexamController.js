@@ -716,6 +716,7 @@ exports.calculateExamResult = async (req, res) => {
 //   }
 // };
 
+
 exports.Leaderboard = async (req, res) => {
   try {
     // const { examId } = req.query;
@@ -814,9 +815,9 @@ exports.Leaderboard = async (req, res) => {
 exports.getAllExamGroups = async (req, res) => {
   try {
     const examGroups = await ExamGroup.find()
-      .populate('examId', 'name') // populate exam name
-      .populate('members', 'firstName lastName email') // populate user info
-      .sort({ createdAt: -1 }); // latest first
+      .populate('examId', 'name') 
+      .populate('members', 'firstName lastName email') 
+      .sort({ createdAt: -1 });
 
     if (!examGroups || examGroups.length === 0) {
       return res.status(404).json({ message: 'No exam groups found.' });
