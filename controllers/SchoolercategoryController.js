@@ -1,17 +1,22 @@
 const Schoolercategory = require("../models/schoolershipcategory");
 const Schoolergroup = require("../models/Schoolergroup");
 
-
 exports.createSchoolercategory = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name, price } = req.body;
     const createdBy = req.user?._id;
 
     if (!name) {
       return res.status(400).json({ message: "Name is required." });
     }
 
-    const newCategory = new Schoolercategory({ name, createdBy });
+    // ✅ Create new category with price
+    const newCategory = new Schoolercategory({
+      name,
+      price,
+      createdBy,
+    });
+
     await newCategory.save();
 
     res.status(201).json({
@@ -19,9 +24,10 @@ exports.createSchoolercategory = async (req, res) => {
       category: newCategory,
     });
   } catch (error) {
-    res.status(500).json({ message: "Error creating category.", error });
+    res.status(500).json({ message: "Error creating category.", error: error.message });
   }
 };
+
 
 exports.getAllSchoolercategories = async (req, res) => {
   try {
@@ -52,10 +58,10 @@ exports.getSchoolercategoryById = async (req, res) => {
 
 exports.updateSchoolercategory = async (req, res) => {
   try {
-    const { name } = req.body;
+    const { name ,price } = req.body;
     const category = await Schoolercategory.findByIdAndUpdate(
       req.params.id,
-      { name },
+      { name ,price },
       { new: true }
     );
 
