@@ -10,6 +10,7 @@ const examResultSchema = new mongoose.Schema({
   wrong: { type: Number, required: true },
   negativeMarks: { type: Number, required: true },
   finalScore: { type: Number, required: true },
+  Completiontime: { type: Number},
   percentage: { type: Number, required: true },
   result: { type: String, enum: ["pass", "fail"], required: true },
   createdAt: { type: Date, default: Date.now },
