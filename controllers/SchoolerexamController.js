@@ -569,6 +569,77 @@ exports.submitExamAnswer = async (req, res) => {
 
 
 
+// exports.calculateExamResult = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { examId, attemptId } = req.body;
+
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) return res.status(404).json({ message: "Exam not found." });
+
+//     const answers = await ExamAnswer.find({ userId, examId, attemptId });
+//     if (answers.length === 0)
+//       return res.status(400).json({ message: "No answers found for this attempt." });
+
+//     let correct = 0,
+//         wrong = 0,
+//         skippedCount = 0,
+//         total = exam.topicQuestions.length;
+
+//     for (const ans of answers) {
+//       const question = exam.topicQuestions.find(
+//         q => q._id.toString() === ans.questionId.toString()
+//       );
+
+//       if (question) {
+//         if (ans.skipped === true || ans.selectedAnswer === null || ans.selectedAnswer === "") {
+//           skippedCount++;
+//           continue; // ✅ Skip ko ignore karo (na correct na wrong)
+//         }
+
+//         if (ans.selectedAnswer === question.answer) correct++;
+//         else wrong++;
+//       }
+//     }
+
+//     const negative = wrong * (parseFloat(exam.Negativemark) || 0);
+//     const finalScore = Math.max(correct - negative, 0);
+
+//     // ✅ Percentage based on attempted questions (not skipped)
+//     const attempted = total - skippedCount;
+//     const percentage = attempted > 0 ? (finalScore / total) * 100 : 0;
+
+//     const result = finalScore >= exam.passout ? "pass" : "fail";
+
+//     const examResult = await ExamResult.findOneAndUpdate(
+//       { userId, examId, attemptId },
+//       {
+//         userId,
+//         examId,
+//         attemptId,
+//         totalQuestions: total,
+//         attempted,
+//         skipped: skippedCount,
+//         correct,
+//         wrong,
+//         negativeMarks: negative,
+//         finalScore,
+//         percentage: parseFloat(percentage.toFixed(2)),
+//         result,
+//       },
+//       { upsert: true, new: true }
+//     );
+
+//     return res.status(200).json({
+//       message: "Result calculated and saved successfully.",
+//       examResult,
+//     });
+//   } catch (error) {
+//     console.error("Error calculating exam result:", error);
+//     res.status(500).json({ message: "Internal server error.", error: error.message });
+//   }
+// };
+
 exports.calculateExamResult = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -594,7 +665,7 @@ exports.calculateExamResult = async (req, res) => {
       if (question) {
         if (ans.skipped === true || ans.selectedAnswer === null || ans.selectedAnswer === "") {
           skippedCount++;
-          continue; // ✅ Skip ko ignore karo (na correct na wrong)
+          continue;
         }
 
         if (ans.selectedAnswer === question.answer) correct++;
@@ -605,10 +676,8 @@ exports.calculateExamResult = async (req, res) => {
     const negative = wrong * (parseFloat(exam.Negativemark) || 0);
     const finalScore = Math.max(correct - negative, 0);
 
-    // ✅ Percentage based on attempted questions (not skipped)
     const attempted = total - skippedCount;
     const percentage = attempted > 0 ? (finalScore / total) * 100 : 0;
-
     const result = finalScore >= exam.passout ? "pass" : "fail";
 
     const examResult = await ExamResult.findOneAndUpdate(
@@ -630,9 +699,26 @@ exports.calculateExamResult = async (req, res) => {
       { upsert: true, new: true }
     );
 
+    // ✅ Custom response field mapping
+    const formattedResponse = {
+      _id: examResult._id,
+      examId: examResult.examId,
+      attemptId: examResult.attemptId,
+      userId: examResult.userId,
+      totalQuestions: examResult.totalQuestions,
+      correctAnswers: examResult.correct,
+      incorrectAnswers: examResult.wrong,
+      skipped: examResult.skipped,
+      negativeMarking: examResult.negativeMarks,
+      totalMarks: examResult.finalScore,
+      scorePercent: examResult.percentage,
+      result: examResult.result,
+      createdAt: examResult.createdAt,
+    };
+
     return res.status(200).json({
       message: "Result calculated and saved successfully.",
-      examResult,
+      examResult: formattedResponse,
     });
   } catch (error) {
     console.error("Error calculating exam result:", error);
