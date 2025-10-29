@@ -364,6 +364,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id; // ✅ Logged-in user
@@ -780,7 +781,6 @@ exports.calculateExamResult = async (req, res) => {
 
 
 
-
 // exports.Leaderboard = async (req, res) => {
 //   try {
 //     // const { examId } = req.query;
@@ -830,6 +830,25 @@ exports.calculateExamResult = async (req, res) => {
 //       }
 //     }
 
+//     // ✅ 4.1️⃣ Rank calculation based on percentage (with unique sequence)
+//     const allResults = await ExamResult.find({ examId })
+//       .select("userId percentage createdAt")
+//       .sort({ percentage: -1, createdAt: 1 }) // 🔹 highest % first, earlier submissions first
+//       .lean();
+
+//     // assign rank strictly by index order (no tie)
+//     const ranks = new Map();
+//     allResults.forEach((result, index) => {
+//       ranks.set(result.userId.toString(), index + 1); // rank = position + 1
+//     });
+
+//     // attach rank to uniqueUsers
+//     for (let i = 0; i < uniqueUsers.length; i++) {
+//       const userId = uniqueUsers[i].userId?._id?.toString();
+//       const rank = ranks.get(userId) || null;
+//       uniqueUsers[i]._doc = { ...uniqueUsers[i]._doc, rank };
+//     }
+
 //     // ✅ 5️⃣ Bring token user to the top
 //     if (loggedInUserId) {
 //       const idx = uniqueUsers.findIndex(
@@ -857,7 +876,6 @@ exports.calculateExamResult = async (req, res) => {
 
 exports.Leaderboard = async (req, res) => {
   try {
-    // const { examId } = req.query;
     const examId = req.params.id;
     const loggedInUserId = req.user?._id; // ✅ token user id
 
@@ -871,7 +889,6 @@ exports.Leaderboard = async (req, res) => {
 
     // 2️⃣ Get all groups with members
     const groups = await ExamGroup.find({ examId }).populate("members", "firstName lastName email");
-
     if (!groups || groups.length === 0)
       return res.status(404).json({ message: "No groups found for this exam." });
 
@@ -892,7 +909,7 @@ exports.Leaderboard = async (req, res) => {
       allUsers.push(...topUsers);
     }
 
-    // ✅ 4️⃣ Remove duplicate users if any (same user in multiple groups)
+    // ✅ Remove duplicate users if any
     const uniqueUsers = [];
     const seen = new Set();
 
@@ -904,26 +921,28 @@ exports.Leaderboard = async (req, res) => {
       }
     }
 
-    // ✅ 4.1️⃣ Rank calculation based on percentage (with unique sequence)
+    // ✅ Rank calculation based on percentage
     const allResults = await ExamResult.find({ examId })
       .select("userId percentage createdAt")
-      .sort({ percentage: -1, createdAt: 1 }) // 🔹 highest % first, earlier submissions first
+      .sort({ percentage: -1, createdAt: 1 })
       .lean();
 
-    // assign rank strictly by index order (no tie)
     const ranks = new Map();
     allResults.forEach((result, index) => {
-      ranks.set(result.userId.toString(), index + 1); // rank = position + 1
+      ranks.set(result.userId.toString(), index + 1);
     });
 
-    // attach rank to uniqueUsers
+    // attach rank
     for (let i = 0; i < uniqueUsers.length; i++) {
       const userId = uniqueUsers[i].userId?._id?.toString();
       const rank = ranks.get(userId) || null;
       uniqueUsers[i]._doc = { ...uniqueUsers[i]._doc, rank };
     }
 
-    // ✅ 5️⃣ Bring token user to the top
+    // ✅ Sort uniqueUsers by rank (lowest first)
+    uniqueUsers.sort((a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999));
+
+    // ✅ Bring token user to the top (without changing rank order)
     if (loggedInUserId) {
       const idx = uniqueUsers.findIndex(
         (u) =>
@@ -932,17 +951,17 @@ exports.Leaderboard = async (req, res) => {
       );
       if (idx > -1) {
         const [tokenUser] = uniqueUsers.splice(idx, 1);
-        uniqueUsers.unshift(tokenUser);
+        uniqueUsers.unshift(tokenUser); // move token user to top
       }
     }
 
-    // ✅ 6️⃣ Final response
+    // ✅ Final response
     return res.status(200).json({
       message: "Top users fetched successfully.",
       users: uniqueUsers,
     });
   } catch (error) {
-    console.error("Error in getTopUsersPerGroup:", error);
+    console.error("Error in Leaderboard:", error);
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
