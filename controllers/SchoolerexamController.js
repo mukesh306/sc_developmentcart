@@ -640,6 +640,8 @@ exports.submitExamAnswer = async (req, res) => {
 //   }
 // };
 
+
+
 exports.calculateExamResult = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -713,6 +715,7 @@ exports.calculateExamResult = async (req, res) => {
       totalMarks: examResult.finalScore,
       scorePercent: examResult.percentage,
       result: examResult.result,
+      maxMarkPerQuestion: 1,
       createdAt: examResult.createdAt,
     };
 
