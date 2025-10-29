@@ -119,7 +119,7 @@ exports.createSchoolergroup = async (req, res) => {
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const groups = await Schoolergroup.find()
-      .populate("category", "name")
+      .populate("category", "name price")
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
