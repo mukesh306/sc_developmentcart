@@ -126,7 +126,10 @@ exports.createSchoolergroup = async (req, res) => {
 //       .populate("createdBy", "firstName lastName email")
 //       .sort({ createdAt: 1 });
 
-//     res.status(200).json(groups || []);
+//     // ✅ Filter out groups where category is null
+//     const filteredGroups = groups.filter(group => group.category !== null);
+
+//     res.status(200).json(filteredGroups || []);
 //   } catch (error) {
 //     res.status(500).json({ message: "Error fetching groups.", error });
 //   }
@@ -142,7 +145,26 @@ exports.getAllSchoolergroups = async (req, res) => {
     // ✅ Filter out groups where category is null
     const filteredGroups = groups.filter(group => group.category !== null);
 
-    res.status(200).json(filteredGroups || []);
+    const updatedGroups = [];
+
+    for (const group of filteredGroups) {
+      const groupObj = group.toObject();
+
+      // ✅ Find latest exam for this category/group
+      const latestExam = await Schoolerexam.findOne({ category: group.category?._id })
+        .sort({ createdAt: -1 })
+        .select("passout")
+        .lean();
+
+      // ✅ Replace seat with latest exam passout if available
+      if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
+        groupObj.seat = latestExam.passout;
+      }
+
+      updatedGroups.push(groupObj);
+    }
+
+    res.status(200).json(updatedGroups || []);
   } catch (error) {
     res.status(500).json({ message: "Error fetching groups.", error });
   }
