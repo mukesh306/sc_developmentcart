@@ -403,7 +403,7 @@ exports.UsersExams = async (req, res) => {
 
     // ✅ Step 2: Fetch only exams for user's class
     let exams = await Schoolerexam.find({ className: user.className })
-      .populate("category", "name")
+      .populate("category", "name finalist")
       .populate("createdBy", "name email")
       .sort({ createdAt: 1 }); // oldest first
 
