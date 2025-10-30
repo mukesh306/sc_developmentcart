@@ -296,7 +296,7 @@ exports.addQuestionsToExam = async (req, res) => {
 
 //     // ✅ Step 2: Fetch only exams for user's class
 //     let exams = await Schoolerexam.find({ className: user.className })
-//       .populate("category", "name")
+//       .populate("category", "name finalist")
 //       .populate("createdBy", "name email")
 //       .sort({ createdAt: 1 }); // oldest first
 
@@ -368,6 +368,10 @@ exports.addQuestionsToExam = async (req, res) => {
 //         examObj.totalParticipants = 0;
 //       }
 
+//       // ✅ Only new addition (does not change previous response)
+//       examObj.status =
+//         examObj.percentage !== null && examObj.percentage >= 0 ? true : false;
+
 //       updatedExams.push(examObj);
 //     }
 
@@ -389,7 +393,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id; // ✅ Logged-in user
@@ -401,8 +404,11 @@ exports.UsersExams = async (req, res) => {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // ✅ Step 2: Fetch only exams for user's class
-    let exams = await Schoolerexam.find({ className: user.className })
+    // ✅ Step 2: Fetch only exams for user's class where publish is true
+    let exams = await Schoolerexam.find({
+      className: user.className,
+      publish: true, // ✅ Only published exams
+    })
       .populate("category", "name finalist")
       .populate("createdBy", "name email")
       .sort({ createdAt: 1 }); // oldest first
@@ -475,9 +481,12 @@ exports.UsersExams = async (req, res) => {
         examObj.totalParticipants = 0;
       }
 
-      // ✅ Only new addition (does not change previous response)
+      // ✅ Status (no change)
       examObj.status =
         examObj.percentage !== null && examObj.percentage >= 0 ? true : false;
+
+      // ✅ Include publish in response
+      examObj.publish = exam.publish;
 
       updatedExams.push(examObj);
     }
@@ -499,7 +508,6 @@ exports.UsersExams = async (req, res) => {
       .json({ message: "Internal server error", error: error.message });
   }
 };
-
 
 exports.ExamQuestion = async (req, res) => {
   try {
