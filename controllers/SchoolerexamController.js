@@ -1027,6 +1027,78 @@ exports.Leaderboard = async (req, res) => {
   }
 };
 
+// ✅ New API: Get Group-wise Toppers based on Exam Passout Limit
+exports.GroupWiseToppers = async (req, res) => {
+  try {
+    const examId = req.params.id;
+
+    if (!examId) {
+      return res.status(400).json({ message: "examId required." });
+    }
+
+    // 1️⃣ Get exam to fetch passout limit
+    const exam = await Schoolerexam.findById(examId);
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found." });
+    }
+
+    const passoutLimit = parseInt(exam.passout) || 1;
+
+    // 2️⃣ Get all groups for this exam
+    const groups = await ExamGroup.find({ examId })
+      .populate("members", "firstName lastName email")
+      .sort({ createdAt: 1 });
+
+    if (!groups || groups.length === 0) {
+      return res.status(200).json({
+        message: "No groups found for this exam.",
+        groups: [],
+      });
+    }
+
+    const groupResults = [];
+
+    // 3️⃣ For each group, find top users by percentage
+    for (const group of groups) {
+      const memberIds = group.members.map((m) => m._id);
+
+      // Get all results for this group's members
+      const results = await ExamResult.find({
+        examId,
+        userId: { $in: memberIds },
+      })
+        .populate("userId", "firstName lastName email")
+        .sort({ percentage: -1, createdAt: 1 })
+        .limit(passoutLimit)
+        .lean();
+
+      // Attach rank inside group
+      const groupToppers = results.map((r, index) => ({
+        ...r,
+        groupRank: index + 1,
+      }));
+
+      groupResults.push({
+        groupId: group._id,
+        groupName: group.name || `Group ${group.groupNumber || ""}`,
+        toppers: groupToppers,
+      });
+    }
+
+    // 4️⃣ Send final response
+    return res.status(200).json({
+      message: "Group-wise toppers fetched successfully.",
+      passoutLimit,
+      groups: groupResults,
+    });
+  } catch (error) {
+    console.error("Error in GroupWiseToppers:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
 
 
 

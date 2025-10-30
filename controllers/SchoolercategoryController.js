@@ -135,6 +135,7 @@ exports.createSchoolergroup = async (req, res) => {
 //   }
 // };
 
+
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const groups = await Schoolergroup.find()
