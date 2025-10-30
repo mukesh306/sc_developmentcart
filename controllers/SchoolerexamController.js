@@ -921,11 +921,9 @@ exports.calculateExamResult = async (req, res) => {
 //   }
 // };
 
-
 exports.topusers = async (req, res) => {
   try {
     const examId = req.params.id;
-    const loggedInUserId = req.user?._id; // ✅ token user id
 
     if (!examId) return res.status(400).json({ message: "examId required." });
 
@@ -938,7 +936,6 @@ exports.topusers = async (req, res) => {
     // 2️⃣ Get all groups with members
     const groups = await ExamGroup.find({ examId }).populate("members", "firstName lastName email");
 
-    // ✅ Instead of 404, return empty users array if no groups
     if (!groups || groups.length === 0) {
       return res.status(200).json({
         message: "No groups found for this exam.",
@@ -986,35 +983,20 @@ exports.topusers = async (req, res) => {
       ranks.set(result.userId.toString(), index + 1);
     });
 
-    // attach rank + Completiontime
+    // ✅ Attach rank and Completiontime
     for (let i = 0; i < uniqueUsers.length; i++) {
       const userId = uniqueUsers[i].userId?._id?.toString();
       const rank = ranks.get(userId) || null;
 
-      // ✅ Attach rank and Completiontime from DB
       uniqueUsers[i]._doc = {
         ...uniqueUsers[i]._doc,
         rank,
-        Completiontime: uniqueUsers[i].Completiontime || null, // ✅ Include Completiontime
+        Completiontime: uniqueUsers[i].Completiontime || null,
       };
     }
 
     // ✅ Sort uniqueUsers by rank (lowest first)
     uniqueUsers.sort((a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999));
-
-    // ✅ Bring token user to the top (without changing rank order)
-    if (loggedInUserId) {
-      const idx = uniqueUsers.findIndex(
-        (u) =>
-          u.userId &&
-          (u.userId._id ? u.userId._id.toString() : u.userId.toString()) ===
-            loggedInUserId.toString()
-      );
-      if (idx > -1) {
-        const [tokenUser] = uniqueUsers.splice(idx, 1);
-        uniqueUsers.unshift(tokenUser); // move token user to top
-      }
-    }
 
     // ✅ Final response
     return res.status(200).json({
@@ -1022,10 +1004,11 @@ exports.topusers = async (req, res) => {
       users: uniqueUsers,
     });
   } catch (error) {
-    console.error("Error in Leaderboard:", error);
+    console.error("Error in topusers:", error);
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
+
 
 
 exports.Leaderboard = async (req, res) => {
