@@ -119,6 +119,19 @@ exports.createSchoolergroup = async (req, res) => {
 };
 
 
+// exports.getAllSchoolergroups = async (req, res) => {
+//   try {
+//     const groups = await Schoolergroup.find()
+//       .populate("category", "name price")
+//       .populate("createdBy", "firstName lastName email")
+//       .sort({ createdAt: 1 });
+
+//     res.status(200).json(groups || []);
+//   } catch (error) {
+//     res.status(500).json({ message: "Error fetching groups.", error });
+//   }
+// };
+
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const groups = await Schoolergroup.find()
@@ -126,11 +139,15 @@ exports.getAllSchoolergroups = async (req, res) => {
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
-    res.status(200).json(groups || []);
+    // ✅ Filter out groups where category is null
+    const filteredGroups = groups.filter(group => group.category !== null);
+
+    res.status(200).json(filteredGroups || []);
   } catch (error) {
     res.status(500).json({ message: "Error fetching groups.", error });
   }
 };
+
 
 exports.getSchoolergroupById = async (req, res) => {
   try {
