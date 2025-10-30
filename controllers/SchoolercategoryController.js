@@ -3,7 +3,7 @@ const Schoolergroup = require("../models/Schoolergroup");
 
 exports.createSchoolercategory = async (req, res) => {
   try {
-    const { name, price } = req.body;
+    const { name, price,groupSize , finalist } = req.body;
     const createdBy = req.user?._id;
 
     if (!name) {
@@ -14,6 +14,8 @@ exports.createSchoolercategory = async (req, res) => {
     const newCategory = new Schoolercategory({
       name,
       price,
+      groupSize , 
+      finalist ,
       createdBy,
     });
 
@@ -58,10 +60,10 @@ exports.getSchoolercategoryById = async (req, res) => {
 
 exports.updateSchoolercategory = async (req, res) => {
   try {
-    const { name ,price } = req.body;
+    const { name ,price,groupSize , finalist } = req.body;
     const category = await Schoolercategory.findByIdAndUpdate(
       req.params.id,
-      { name ,price },
+      { name ,price,groupSize , finalist },
       { new: true }
     );
 
