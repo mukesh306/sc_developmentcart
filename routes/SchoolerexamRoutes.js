@@ -12,8 +12,6 @@ router.put("/schooler/updateExam/:id", auth, SchoolerexamController.updateExam);
 
 router.put("/schooler/publishExam/:id", SchoolerexamController.publishExam);
 
-
-
 router.delete("/schooler/deleteExam/:id", auth, SchoolerexamController.deleteExam);
 
 router.get("/schooler/UsersExams",auth, SchoolerexamController.UsersExams);

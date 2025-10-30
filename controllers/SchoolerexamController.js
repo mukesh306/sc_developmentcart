@@ -283,6 +283,7 @@ exports.addQuestionsToExam = async (req, res) => {
 };
 
 
+
 // exports.UsersExams = async (req, res) => {
 //   try {
 //     const userId = req.user._id; // ✅ Logged-in user
@@ -294,8 +295,11 @@ exports.addQuestionsToExam = async (req, res) => {
 //       return res.status(400).json({ message: "User class not found." });
 //     }
 
-//     // ✅ Step 2: Fetch only exams for user's class
-//     let exams = await Schoolerexam.find({ className: user.className })
+//     // ✅ Step 2: Fetch only exams for user's class where publish is true
+//     let exams = await Schoolerexam.find({
+//       className: user.className,
+//       publish: true, // ✅ Only published exams
+//     })
 //       .populate("category", "name finalist")
 //       .populate("createdBy", "name email")
 //       .sort({ createdAt: 1 }); // oldest first
@@ -368,9 +372,12 @@ exports.addQuestionsToExam = async (req, res) => {
 //         examObj.totalParticipants = 0;
 //       }
 
-//       // ✅ Only new addition (does not change previous response)
+//       // ✅ Status (no change)
 //       examObj.status =
 //         examObj.percentage !== null && examObj.percentage >= 0 ? true : false;
+
+//       // ✅ Include publish in response
+//       examObj.publish = exam.publish;
 
 //       updatedExams.push(examObj);
 //     }
@@ -395,47 +402,39 @@ exports.addQuestionsToExam = async (req, res) => {
 
 exports.UsersExams = async (req, res) => {
   try {
-    const userId = req.user._id; // ✅ Logged-in user
+    const userId = req.user._id;
     const { category } = req.query;
 
-    // ✅ Step 1: Get user's className
+    // ✅ Step 1: Get user's class
     const user = await User.findById(userId).select("className");
     if (!user || !user.className) {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // ✅ Step 2: Fetch only exams for user's class where publish is true
+    // ✅ Step 2: Get all published exams for user's class
     let exams = await Schoolerexam.find({
       className: user.className,
-      publish: true, // ✅ Only published exams
+      publish: true,
     })
       .populate("category", "name finalist")
       .populate("createdBy", "name email")
       .sort({ createdAt: 1 }); // oldest first
 
-    // ✅ Step 3: If no exams found → return empty array
     if (!exams || exams.length === 0) {
-      return res.status(200).json([]); // ✅ Blank array
+      return res.status(200).json([]);
     }
 
     const updatedExams = [];
 
-    // ✅ Step 4: Add class info, totalQuestions, result, rank, etc.
     for (const exam of exams) {
       let classData =
         (await School.findById(exam.className).select("_id name className")) ||
         (await College.findById(exam.className).select("_id name className"));
 
       const examObj = exam.toObject();
-
-      if (classData) {
-        examObj.className = {
-          _id: classData._id,
-          name: classData.className || classData.name,
-        };
-      } else {
-        examObj.className = null;
-      }
+      examObj.className = classData
+        ? { _id: classData._id, name: classData.className || classData.name }
+        : null;
 
       // ✅ Total questions
       examObj.totalQuestions = exam.topicQuestions
@@ -443,14 +442,16 @@ exports.UsersExams = async (req, res) => {
         : 0;
 
       // ✅ User result
-      const userResult = await ExamResult.findOne({ userId, examId: exam._id })
+      const userResult = await ExamResult.findOne({
+        userId,
+        examId: exam._id,
+      })
         .select("correct finalScore percentage createdAt")
         .lean();
 
       examObj.correct = userResult ? userResult.correct : null;
       examObj.finalScore = userResult ? userResult.finalScore : null;
 
-      // ✅ Percentage
       if (userResult && examObj.totalQuestions > 0) {
         examObj.percentage = parseFloat(
           ((userResult.finalScore / examObj.totalQuestions) * 100).toFixed(2)
@@ -481,17 +482,14 @@ exports.UsersExams = async (req, res) => {
         examObj.totalParticipants = 0;
       }
 
-      // ✅ Status (no change)
       examObj.status =
         examObj.percentage !== null && examObj.percentage >= 0 ? true : false;
-
-      // ✅ Include publish in response
       examObj.publish = exam.publish;
 
       updatedExams.push(examObj);
     }
 
-    // ✅ Step 5: Filter by category (optional)
+    // ✅ Optional category filter
     let filteredExams = updatedExams;
     if (category) {
       filteredExams = filteredExams.filter(
@@ -499,7 +497,31 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ✅ Step 6: Return exams
+    // ✅ Step 7: Show first exam to all, second exam only to toppers
+    if (filteredExams.length > 1) {
+      const firstExam = filteredExams[0];
+      const passoutLimit = parseInt(firstExam.passout) || 1;
+
+      // Get top users of first exam
+      const topResults = await ExamResult.find({ examId: firstExam._id })
+        .sort({ percentage: -1, createdAt: 1 })
+        .limit(passoutLimit)
+        .select("userId")
+        .lean();
+
+      const topUserIds = topResults.map((r) => r.userId.toString());
+
+      // Filter second exam visibility
+      if (topUserIds.includes(userId.toString())) {
+        // ✅ Topper → can see both
+        filteredExams = filteredExams.slice(0, 2);
+      } else {
+        // ❌ Non-topper → only first exam
+        filteredExams = [firstExam];
+      }
+    }
+
+    // ✅ Final response
     res.status(200).json(filteredExams);
   } catch (error) {
     console.error("🔥 Error fetching exams:", error);
@@ -508,6 +530,7 @@ exports.UsersExams = async (req, res) => {
       .json({ message: "Internal server error", error: error.message });
   }
 };
+
 
 exports.ExamQuestion = async (req, res) => {
   try {
