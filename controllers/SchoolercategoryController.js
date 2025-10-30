@@ -1,6 +1,6 @@
 const Schoolercategory = require("../models/schoolershipcategory");
 const Schoolergroup = require("../models/Schoolergroup");
-
+const Schoolerexam = require("../models/Schoolerexam");
 
 exports.createSchoolercategory = async (req, res) => {
   try {
@@ -150,15 +150,22 @@ exports.getAllSchoolergroups = async (req, res) => {
     for (const group of filteredGroups) {
       const groupObj = group.toObject();
 
-      // ✅ Find latest exam for this category/group
-      const latestExam = await Schoolerexam.findOne({ category: group.category?._id })
-        .sort({ createdAt: -1 })
-        .select("passout")
-        .lean();
+      try {
+        // ✅ Only find latest exam if category exists
+        let latestExam = null;
+        if (group.category && group.category._id) {
+          latestExam = await Schoolerexam.findOne({ category: group.category._id })
+            .sort({ createdAt: -1 })
+            .select("passout")
+            .lean();
+        }
 
-      // ✅ Replace seat with latest exam passout if available
-      if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
-        groupObj.seat = latestExam.passout;
+        // ✅ Replace seat with latest exam passout if found
+        if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
+          groupObj.seat = latestExam.passout;
+        }
+      } catch (err) {
+        console.error(`⚠️ Error processing group ${group._id}:`, err.message);
       }
 
       updatedGroups.push(groupObj);
@@ -166,9 +173,11 @@ exports.getAllSchoolergroups = async (req, res) => {
 
     res.status(200).json(updatedGroups || []);
   } catch (error) {
-    res.status(500).json({ message: "Error fetching groups.", error });
+    console.error("🔥 Error fetching groups:", error);
+    res.status(500).json({ message: "Error fetching groups.", error: error.message });
   }
 };
+
 
 
 exports.getSchoolergroupById = async (req, res) => {
