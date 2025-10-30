@@ -211,6 +211,32 @@ exports.updateExam = async (req, res) => {
   }
 };
 
+exports.publishExam = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    // Check if exam exists
+    const exam = await Schoolerexam.findById(id);
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found." });
+    }
+
+    // Update publish to true
+    exam.publish = true;
+    await exam.save();
+
+    res.status(200).json({
+      message: "Exam published successfully.",
+      exam,
+    });
+  } catch (error) {
+    console.error("Error publishing exam:", error);
+    res.status(500).json({ message: "Internal server error.", error });
+  }
+};
+
+
+
 // ✅ Delete exam
 exports.deleteExam = async (req, res) => {
   try {

@@ -30,6 +30,7 @@ const SchoolerExamSchema = new mongoose.Schema(
     Negativemark: { type: String, default: "0" },
     passout: { type: String, default: "0" },
     seat: { type: Number, required: true, min: 1 },
+    publish:{ type: Boolean,default: false},
     topicQuestions: [topicQuestionSchema],
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
