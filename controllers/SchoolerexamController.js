@@ -227,7 +227,6 @@ exports.publishExam = async (req, res) => {
 
     res.status(200).json({
       message: "Exam published successfully.",
-      exam,
     });
   } catch (error) {
     console.error("Error publishing exam:", error);

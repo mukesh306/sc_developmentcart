@@ -9,6 +9,7 @@ router.get("/schooler/getAllExams", SchoolerexamController.getAllExams);
 router.get("/schooler/getExam/:id", SchoolerexamController.getExamById);
 
 router.put("/schooler/updateExam/:id", auth, SchoolerexamController.updateExam);
+
 router.put("/schooler/publishExam/:id", SchoolerexamController.publishExam);
 
 
