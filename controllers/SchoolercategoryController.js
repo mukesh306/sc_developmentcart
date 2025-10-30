@@ -160,9 +160,13 @@ exports.getAllSchoolergroups = async (req, res) => {
             .lean();
         }
 
-        // ✅ Replace seat with latest exam passout if found
+       
         if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
           groupObj.seat = latestExam.passout;
+        } 
+       
+        else if (group.category && group.category.groupSize !== undefined && group.category.groupSize !== null) {
+          groupObj.seat = group.category.groupSize;
         }
       } catch (err) {
         console.error(`⚠️ Error processing group ${group._id}:`, err.message);
@@ -173,10 +177,11 @@ exports.getAllSchoolergroups = async (req, res) => {
 
     res.status(200).json(updatedGroups || []);
   } catch (error) {
-    console.error("🔥 Error fetching groups:", error);
+    console.error(" Error fetching groups:", error);
     res.status(500).json({ message: "Error fetching groups.", error: error.message });
   }
 };
+
 
 
 
