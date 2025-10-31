@@ -5,7 +5,7 @@ const ExamAnswer = require("../models/examAttempt");
 const ExamGroup = require("../models/examGroup");
 const User = require("../models/User");
 const ExamResult = require("../models/examResult");
-
+const Schoolercategory = require("../models/schoolershipcategory");
 
 
 exports.createExam = async (req, res) => {
