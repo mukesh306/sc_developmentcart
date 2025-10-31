@@ -876,93 +876,94 @@ exports.calculateExamResult = async (req, res) => {
 
 
 
-exports.topusers = async (req, res) => {
-  try {
-    const examId = req.params.id;
+// exports.topusers = async (req, res) => {
+//   try {
+//     const examId = req.params.id;
 
-    if (!examId) return res.status(400).json({ message: "examId required." });
+//     if (!examId) return res.status(400).json({ message: "examId required." });
 
-    // 1️⃣ Get exam for passout limit
-    const exam = await Schoolerexam.findById(examId);
-    if (!exam) return res.status(404).json({ message: "Exam not found." });
+//     // 1️⃣ Get exam for passout limit
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) return res.status(404).json({ message: "Exam not found." });
 
-    const passoutLimit = parseInt(exam.passout) || 1;
+//     const passoutLimit = parseInt(exam.passout) || 1;
 
-    // 2️⃣ Get all groups with members
-    const groups = await ExamGroup.find({ examId }).populate("members", "firstName lastName email");
+//     // 2️⃣ Get all groups with members
+//     const groups = await ExamGroup.find({ examId }).populate("members", "firstName lastName email");
 
-    if (!groups || groups.length === 0) {
-      return res.status(200).json({
-        message: "No groups found for this exam.",
-        users: [],
-      });
-    }
+//     if (!groups || groups.length === 0) {
+//       return res.status(200).json({
+//         message: "No groups found for this exam.",
+//         users: [],
+//       });
+//     }
 
-    let allUsers = [];
+//     let allUsers = [];
 
-    // 3️⃣ Collect top users from each group
-    for (const group of groups) {
-      const memberIds = group.members.map((m) => m._id);
+//     // 3️⃣ Collect top users from each group
+//     for (const group of groups) {
+//       const memberIds = group.members.map((m) => m._id);
 
-      const scores = await ExamResult.find({
-        examId,
-        userId: { $in: memberIds },
-      })
-        .populate("userId", "firstName lastName email")
-        .sort({ finalScore: -1 });
+//       const scores = await ExamResult.find({
+//         examId,
+//         userId: { $in: memberIds },
+//       })
+//         .populate("userId", "firstName lastName email")
+//         .sort({ finalScore: -1 });
 
-      const topUsers = scores.slice(0, passoutLimit);
-      allUsers.push(...topUsers);
-    }
+//       const topUsers = scores.slice(0, passoutLimit);
+//       allUsers.push(...topUsers);
+//     }
 
-    // ✅ Remove duplicate users if any
-    const uniqueUsers = [];
-    const seen = new Set();
+//     // ✅ Remove duplicate users if any
+//     const uniqueUsers = [];
+//     const seen = new Set();
 
-    for (const user of allUsers) {
-      const userId = user.userId?._id?.toString();
-      if (userId && !seen.has(userId)) {
-        seen.add(userId);
-        uniqueUsers.push(user);
-      }
-    }
+//     for (const user of allUsers) {
+//       const userId = user.userId?._id?.toString();
+//       if (userId && !seen.has(userId)) {
+//         seen.add(userId);
+//         uniqueUsers.push(user);
+//       }
+//     }
 
-    // ✅ Rank calculation based on percentage
-    const allResults = await ExamResult.find({ examId })
-      .select("userId percentage createdAt")
-      .sort({ percentage: -1, createdAt: 1 })
-      .lean();
+//     // ✅ Rank calculation based on percentage
+//     const allResults = await ExamResult.find({ examId })
+//       .select("userId percentage createdAt")
+//       .sort({ percentage: -1, createdAt: 1 })
+//       .lean();
 
-    const ranks = new Map();
-    allResults.forEach((result, index) => {
-      ranks.set(result.userId.toString(), index + 1);
-    });
+//     const ranks = new Map();
+//     allResults.forEach((result, index) => {
+//       ranks.set(result.userId.toString(), index + 1);
+//     });
 
-    // ✅ Attach rank and Completiontime
-    for (let i = 0; i < uniqueUsers.length; i++) {
-      const userId = uniqueUsers[i].userId?._id?.toString();
-      const rank = ranks.get(userId) || null;
+//     // ✅ Attach rank and Completiontime
+//     for (let i = 0; i < uniqueUsers.length; i++) {
+//       const userId = uniqueUsers[i].userId?._id?.toString();
+//       const rank = ranks.get(userId) || null;
 
-      uniqueUsers[i]._doc = {
-        ...uniqueUsers[i]._doc,
-        rank,
-        Completiontime: uniqueUsers[i].Completiontime || null,
-      };
-    }
+//       uniqueUsers[i]._doc = {
+//         ...uniqueUsers[i]._doc,
+//         rank,
+//         Completiontime: uniqueUsers[i].Completiontime || null,
+//       };
+//     }
 
-    // ✅ Sort uniqueUsers by rank (lowest first)
-    uniqueUsers.sort((a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999));
+//     // ✅ Sort uniqueUsers by rank (lowest first)
+//     uniqueUsers.sort((a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999));
 
-    // ✅ Final response
-    return res.status(200).json({
-      message: "Top users fetched successfully.",
-      users: uniqueUsers,
-    });
-  } catch (error) {
-    console.error("Error in topusers:", error);
-    res.status(500).json({ message: "Internal server error", error: error.message });
-  }
-};
+//     // ✅ Final response
+//     return res.status(200).json({
+//       message: "Top users fetched successfully.",
+//       users: uniqueUsers,
+//     });
+//   } catch (error) {
+//     console.error("Error in topusers:", error);
+//     res.status(500).json({ message: "Internal server error", error: error.message });
+//   }
+// };
+
 
 exports.topusers = async (req, res) => {
   try {
@@ -1091,7 +1092,7 @@ exports.Leaderboard = async (req, res) => {
     // 2️⃣ Get all exam results for this exam (all users who attempted)
     const allResults = await ExamResult.find({ examId })
       .populate("userId", "firstName lastName email")
-      .sort({ percentage: -1, createdAt: 1 }); // higher percentage first, earlier attempts first
+      .sort({ percentage: -1, Completiontime: 1 });
 
     if (!allResults || allResults.length === 0) {
       return res.status(200).json({
