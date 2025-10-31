@@ -1,6 +1,7 @@
 
 const MarkingSetting = require('../models/markingSetting');
 
+
 exports.createOrUpdateSettings = async (req, res) => {
   const {
     maxMarkPerQuestion,
@@ -12,7 +13,8 @@ exports.createOrUpdateSettings = async (req, res) => {
     experiencePoint,
     maxdailyexperience,
     dailyExperience,
-     deductions
+     deductions,
+     bufferTime
   } = req.body;
 
   try {
@@ -63,6 +65,9 @@ exports.createOrUpdateSettings = async (req, res) => {
      if (maxdailyexperience !== undefined) {
       setting.maxdailyexperience = maxdailyexperience;
     }
+     if (bufferTime !== undefined) {
+      setting.bufferTime = bufferTime;
+    }
 
     await setting.save();
 
@@ -83,6 +88,23 @@ exports.getSettings = async (req, res) => {
     if (!setting) {
       return res.status(404).json({ message: "Marking settings not found." });
     }
+    res.json(setting);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+exports.bufferTime = async (req, res) => {
+  try {
+    const setting = await MarkingSetting.findOne()
+      .select("bufferTime") 
+      .populate("createdBy", "email");
+
+    if (!setting) {
+      return res.status(404).json({ message: "Marking settings not found." });
+    }
+
     res.json(setting);
   } catch (err) {
     res.status(500).json({ message: err.message });
