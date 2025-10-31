@@ -170,7 +170,7 @@ exports.getAllSchoolergroups = async (req, res) => {
   try {
     // 🟢 Step 1: Fetch all categories that have a price
     const categoriesWithPrice = await Schoolercategory.find({ price: { $exists: true, $ne: null } })
-      .select("name price groupSize");
+      .select("name price groupSize finalist");
 
     // 🟢 Step 2: Extract category IDs that have a price
     const categoryIdsWithPrice = categoriesWithPrice.map(cat => cat._id.toString());
@@ -183,6 +183,7 @@ exports.getAllSchoolergroups = async (req, res) => {
 
     const updatedGroups = [];
 
+    // 🟢 Step 4: Process each group
     for (const group of groups) {
       const groupObj = group.toObject();
 
@@ -203,11 +204,14 @@ exports.getAllSchoolergroups = async (req, res) => {
           groupObj.seat = group.category.groupSize;
         }
 
-        // ✅ Add price from Schoolercategory
+        // ✅ Add price, finalist, and groupSize from Schoolercategory
         const matchedCategory = categoriesWithPrice.find(
           cat => cat._id.toString() === group.category._id.toString()
         );
+
         groupObj.price = matchedCategory?.price ?? null;
+        groupObj.finalist = matchedCategory?.finalist ?? null;
+        groupObj.groupSize = matchedCategory?.groupSize ?? null;
 
       } catch (err) {
         console.error(`⚠️ Error processing group ${group._id}:`, err.message);
@@ -216,12 +220,14 @@ exports.getAllSchoolergroups = async (req, res) => {
       updatedGroups.push(groupObj);
     }
 
+    // 🟢 Step 5: Send final response
     res.status(200).json(updatedGroups || []);
   } catch (error) {
     console.error("❌ Error fetching groups:", error);
     res.status(500).json({ message: "Error fetching groups.", error: error.message });
   }
 };
+
 
 
 
