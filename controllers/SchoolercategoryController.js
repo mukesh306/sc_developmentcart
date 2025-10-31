@@ -119,54 +119,94 @@ exports.createSchoolergroup = async (req, res) => {
 };
 
 
+// exports.getAllSchoolergroups = async (req, res) => {
+//   try {
+//     const groups = await Schoolergroup.find()
+//       .populate("category", "name price groupSize")
+//       .populate("createdBy", "firstName lastName email")
+//       .sort({ createdAt: 1 });
+
+//     // ✅ Filter out groups where category is null
+//     const filteredGroups = groups.filter(group => group.category !== null);
+
+//     const updatedGroups = [];
+
+//     for (const group of filteredGroups) {
+//       const groupObj = group.toObject();
+
+//       try {
+//         // ✅ Only find latest exam if category exists
+//         let latestExam = null;
+//         if (group.category && group.category._id) {
+//           latestExam = await Schoolerexam.findOne({ category: group.category._id })
+//             .sort({ createdAt: -1 })
+//             .select("passout")
+//             .lean();
+//         }
+
+       
+//         if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
+//           groupObj.seat = latestExam.passout;
+//         } 
+       
+//         else if (group.category && group.category.groupSize !== undefined && group.category.groupSize !== null) {
+//           groupObj.seat = group.category.groupSize;
+//         }
+//       } catch (err) {
+//         console.error(`⚠️ Error processing group ${group._id}:`, err.message);
+//       }
+
+//       updatedGroups.push(groupObj);
+//     }
+
+//     res.status(200).json(updatedGroups || []);
+//   } catch (error) {
+//     console.error(" Error fetching groups:", error);
+//     res.status(500).json({ message: "Error fetching groups.", error: error.message });
+//   }
+// };
+
+
 exports.getAllSchoolergroups = async (req, res) => {
   try {
-    const groups = await Schoolergroup.find()
-      .populate("category", "name price groupSize")
+    // 🟢 Step 1: Get all categories
+    const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
-    // ✅ Filter out groups where category is null
-    const filteredGroups = groups.filter(group => group.category !== null);
+    const updatedCategories = [];
 
-    const updatedGroups = [];
-
-    for (const group of filteredGroups) {
-      const groupObj = group.toObject();
+    // 🟢 Step 2: Add seat logic (based on latest exam passout)
+    for (const category of categories) {
+      const categoryObj = category.toObject();
 
       try {
-        // ✅ Only find latest exam if category exists
-        let latestExam = null;
-        if (group.category && group.category._id) {
-          latestExam = await Schoolerexam.findOne({ category: group.category._id })
-            .sort({ createdAt: -1 })
-            .select("passout")
-            .lean();
-        }
+        // ✅ Find latest exam for this category
+        let latestExam = await Schoolerexam.findOne({ category: category._id })
+          .sort({ createdAt: -1 })
+          .select("passout")
+          .lean();
 
-       
+        // ✅ Seat logic: passout → groupSize
         if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
-          groupObj.seat = latestExam.passout;
-        } 
-       
-        else if (group.category && group.category.groupSize !== undefined && group.category.groupSize !== null) {
-          groupObj.seat = group.category.groupSize;
+          categoryObj.seat = latestExam.passout;
+        } else if (category.groupSize !== undefined && category.groupSize !== null) {
+          categoryObj.seat = category.groupSize;
         }
       } catch (err) {
-        console.error(`⚠️ Error processing group ${group._id}:`, err.message);
+        console.error(`⚠️ Error processing category ${category._id}:`, err.message);
       }
 
-      updatedGroups.push(groupObj);
+      updatedCategories.push(categoryObj);
     }
 
-    res.status(200).json(updatedGroups || []);
+    // 🟢 Step 3: Send final response
+    res.status(200).json(updatedCategories);
   } catch (error) {
-    console.error(" Error fetching groups:", error);
-    res.status(500).json({ message: "Error fetching groups.", error: error.message });
+    console.error("❌ Error fetching categories:", error);
+    res.status(500).json({ message: "Error fetching categories.", error: error.message });
   }
 };
-
-
 
 
 
