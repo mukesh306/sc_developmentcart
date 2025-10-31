@@ -167,41 +167,43 @@ exports.createSchoolergroup = async (req, res) => {
 // };
 
 
+
 exports.getAllSchoolergroups = async (req, res) => {
   try {
-    // 🟢 Step 1: Get all categories
+    // ✅ Step 1: Get all categories with createdBy info
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
     const updatedCategories = [];
 
-    // 🟢 Step 2: Add seat logic (based on latest exam passout)
     for (const category of categories) {
-      const categoryObj = category.toObject();
+      // ✅ Step 2: Filter only those which have both price and groupSize
+      if (category.price && category.groupSize) {
+        const categoryObj = category.toObject();
 
-      try {
-        // ✅ Find latest exam for this category
-        let latestExam = await Schoolerexam.findOne({ category: category._id })
-          .sort({ createdAt: -1 })
-          .select("passout")
-          .lean();
+        try {
+          // ✅ Step 3: Find latest exam with this category
+          const latestExam = await Schoolerexam.findOne({ category: category._id })
+            .sort({ createdAt: -1 })
+            .select("passout")
+            .lean();
 
-        // ✅ Seat logic: passout → groupSize
-        if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
-          categoryObj.seat = latestExam.passout;
-        } else if (category.groupSize !== undefined && category.groupSize !== null) {
-          categoryObj.seat = category.groupSize;
+          // ✅ Step 4: Add seat = passout OR fallback to groupSize
+          if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
+            categoryObj.seat = latestExam.passout;
+          } else {
+            categoryObj.seat = category.groupSize;
+          }
+        } catch (err) {
+          console.error(`⚠️ Error processing category ${category._id}:`, err.message);
         }
-      } catch (err) {
-        console.error(`⚠️ Error processing category ${category._id}:`, err.message);
-      }
 
-      updatedCategories.push(categoryObj);
+        updatedCategories.push(categoryObj);
+      }
     }
 
-    // 🟢 Step 3: Send final response
-    res.status(200).json(updatedCategories);
+    res.status(200).json(updatedCategories || []);
   } catch (error) {
     console.error("❌ Error fetching categories:", error);
     res.status(500).json({ message: "Error fetching categories.", error: error.message });
