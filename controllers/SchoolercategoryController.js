@@ -168,25 +168,26 @@ exports.createSchoolergroup = async (req, res) => {
 
 exports.getAllSchoolergroups = async (req, res) => {
   try {
-    // 🟢 Step 1: Fetch all categories to access price
-    const categories = await Schoolercategory.find().select("name price groupSize");
+    // 🟢 Step 1: Fetch all categories that have a price
+    const categoriesWithPrice = await Schoolercategory.find({ price: { $exists: true, $ne: null } })
+      .select("name price groupSize");
 
-    // 🟢 Step 2: Fetch all groups
-    const groups = await Schoolergroup.find()
+    // 🟢 Step 2: Extract category IDs that have a price
+    const categoryIdsWithPrice = categoriesWithPrice.map(cat => cat._id.toString());
+
+    // 🟢 Step 3: Fetch all groups whose category is in that list
+    const groups = await Schoolergroup.find({ category: { $in: categoryIdsWithPrice } })
       .populate("category", "name groupSize")
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
-    // ✅ Filter out groups where category is null
-    const filteredGroups = groups.filter(group => group.category !== null);
-
     const updatedGroups = [];
 
-    for (const group of filteredGroups) {
+    for (const group of groups) {
       const groupObj = group.toObject();
 
       try {
-        // ✅ Only find latest exam if category exists
+        // ✅ Find latest exam for that category
         let latestExam = null;
         if (group.category && group.category._id) {
           latestExam = await Schoolerexam.findOne({ category: group.category._id })
@@ -198,17 +199,15 @@ exports.getAllSchoolergroups = async (req, res) => {
         // ✅ Seat logic (same as before)
         if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
           groupObj.seat = latestExam.passout;
-        } else if (group.category && group.category.groupSize !== undefined && group.category.groupSize !== null) {
+        } else if (group.category?.groupSize) {
           groupObj.seat = group.category.groupSize;
         }
 
-        // ✅ Add price (new)
-        const matchedCategory = categories.find(
+        // ✅ Add price from Schoolercategory
+        const matchedCategory = categoriesWithPrice.find(
           cat => cat._id.toString() === group.category._id.toString()
         );
-        if (matchedCategory && matchedCategory.price !== undefined) {
-          groupObj.price = matchedCategory.price;
-        }
+        groupObj.price = matchedCategory?.price ?? null;
 
       } catch (err) {
         console.error(`⚠️ Error processing group ${group._id}:`, err.message);
@@ -223,6 +222,7 @@ exports.getAllSchoolergroups = async (req, res) => {
     res.status(500).json({ message: "Error fetching groups.", error: error.message });
   }
 };
+
 
 
 
