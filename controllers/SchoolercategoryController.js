@@ -122,24 +122,58 @@ exports.createSchoolergroup = async (req, res) => {
 // exports.getAllSchoolergroups = async (req, res) => {
 //   try {
 //     const groups = await Schoolergroup.find()
-//       .populate("category", "name price")
+//       .populate("category", "name price groupSize")
 //       .populate("createdBy", "firstName lastName email")
 //       .sort({ createdAt: 1 });
 
 //     // ✅ Filter out groups where category is null
 //     const filteredGroups = groups.filter(group => group.category !== null);
 
-//     res.status(200).json(filteredGroups || []);
+//     const updatedGroups = [];
+
+//     for (const group of filteredGroups) {
+//       const groupObj = group.toObject();
+
+//       try {
+//         // ✅ Only find latest exam if category exists
+//         let latestExam = null;
+//         if (group.category && group.category._id) {
+//           latestExam = await Schoolerexam.findOne({ category: group.category._id })
+//             .sort({ createdAt: -1 })
+//             .select("passout")
+//             .lean();
+//         }
+
+       
+//         if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
+//           groupObj.seat = latestExam.passout;
+//         } 
+       
+//         else if (group.category && group.category.groupSize !== undefined && group.category.groupSize !== null) {
+//           groupObj.seat = group.category.groupSize;
+//         }
+//       } catch (err) {
+//         console.error(`⚠️ Error processing group ${group._id}:`, err.message);
+//       }
+
+//       updatedGroups.push(groupObj);
+//     }
+
+//     res.status(200).json(updatedGroups || []);
 //   } catch (error) {
-//     res.status(500).json({ message: "Error fetching groups.", error });
+//     console.error(" Error fetching groups:", error);
+//     res.status(500).json({ message: "Error fetching groups.", error: error.message });
 //   }
 // };
 
-
 exports.getAllSchoolergroups = async (req, res) => {
   try {
+    // 🟢 Step 1: Fetch all categories to access price
+    const categories = await Schoolercategory.find().select("name price groupSize");
+
+    // 🟢 Step 2: Fetch all groups
     const groups = await Schoolergroup.find()
-      .populate("category", "name price groupSize")
+      .populate("category", "name groupSize")
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
@@ -161,14 +195,21 @@ exports.getAllSchoolergroups = async (req, res) => {
             .lean();
         }
 
-       
+        // ✅ Seat logic (same as before)
         if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
           groupObj.seat = latestExam.passout;
-        } 
-       
-        else if (group.category && group.category.groupSize !== undefined && group.category.groupSize !== null) {
+        } else if (group.category && group.category.groupSize !== undefined && group.category.groupSize !== null) {
           groupObj.seat = group.category.groupSize;
         }
+
+        // ✅ Add price (new)
+        const matchedCategory = categories.find(
+          cat => cat._id.toString() === group.category._id.toString()
+        );
+        if (matchedCategory && matchedCategory.price !== undefined) {
+          groupObj.price = matchedCategory.price;
+        }
+
       } catch (err) {
         console.error(`⚠️ Error processing group ${group._id}:`, err.message);
       }
@@ -178,11 +219,10 @@ exports.getAllSchoolergroups = async (req, res) => {
 
     res.status(200).json(updatedGroups || []);
   } catch (error) {
-    console.error(" Error fetching groups:", error);
+    console.error("❌ Error fetching groups:", error);
     res.status(500).json({ message: "Error fetching groups.", error: error.message });
   }
 };
-
 
 
 
