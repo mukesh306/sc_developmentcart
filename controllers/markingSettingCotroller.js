@@ -114,7 +114,6 @@ exports.bufferTime = async (req, res) => {
     // ✅ 2. Get bufferTime from MarkingSetting
     const setting = await MarkingSetting.findOne()
       .select("bufferTime")
-      .populate("createdBy", "email");
 
     if (!setting) {
       return res.status(404).json({ message: "Marking settings not found." });
