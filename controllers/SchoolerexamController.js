@@ -105,7 +105,7 @@ exports.getAllExams = async (req, res) => {
     let exams = await Schoolerexam.find()
       .populate("category", "name")
       .populate("createdBy", "name email")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: 1 });
 
     if (!exams || exams.length === 0) {
       return res.status(200).json([]);
@@ -1082,7 +1082,6 @@ exports.Leaderboard = async (req, res) => {
   try {
     const examId = req.params.id;
     const loggedInUserId = req.user?._id;
-
     if (!examId) return res.status(400).json({ message: "examId required." });
 
     // 1️⃣ Check exam
