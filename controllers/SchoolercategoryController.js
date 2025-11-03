@@ -45,6 +45,7 @@ exports.getAllSchoolercategories = async (req, res) => {
   }
 };
 
+
 exports.getSchoolercategoryById = async (req, res) => {
   try {
     const category = await Schoolercategory.findById(req.params.id)
@@ -167,6 +168,8 @@ exports.createSchoolergroup = async (req, res) => {
 //   }
 // };
 
+
+
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const userId = req.user._id; // ✅ user from token
@@ -227,6 +230,7 @@ exports.getAllSchoolergroups = async (req, res) => {
     res.status(500).json({ message: "Error fetching categories.", error: error.message });
   }
 };
+
 
 
 // exports.getAllSchoolergroups = async (req, res) => {
