@@ -120,7 +120,7 @@ exports.getAllExams = async (req, res) => {
         (await College.findById(exam.className).select("_id name className"));
 
       const examObj = exam.toObject();
-
+      
       if (classData) {
         examObj.className = {
           _id: classData._id,
@@ -158,7 +158,6 @@ exports.getAllExams = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
-
 
 
 exports.getExamById = async (req, res) => {
