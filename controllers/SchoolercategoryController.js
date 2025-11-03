@@ -7,10 +7,11 @@ exports.createSchoolercategory = async (req, res) => {
     const { name, price,groupSize , finalist } = req.body;
     const createdBy = req.user?._id;
 
-    if (!name) {
-      return res.status(400).json({ message: "Name is required." });
+   if (!name || !price || !groupSize || !finalist) {
+      return res.status(400).json({ 
+        message: "All fields (name, price, groupSize, finalist) are required." 
+      });
     }
-
     // ✅ Create new category with price
     const newCategory = new Schoolercategory({
       name,
