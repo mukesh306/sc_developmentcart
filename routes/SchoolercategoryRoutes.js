@@ -15,7 +15,7 @@ router.delete("/schooler/Categorydelete/:id", auth, SchoolercategoryController.d
 
 router.post("/schooler/groupcreate", auth, SchoolercategoryController.createSchoolergroup);
 
-router.get("/schooler/allgroup", SchoolercategoryController.getAllSchoolergroups);
+router.get("/schooler/allgroup", auth,SchoolercategoryController.getAllSchoolergroups);
 router.get("/schooler/group/:id", SchoolercategoryController.getSchoolergroupById);
 router.put("/schooler/groupupdate/:id", auth, SchoolercategoryController.updateSchoolergroup);
 router.delete("/schooler/groupdelete/:id", auth, SchoolercategoryController.deleteSchoolergroup);
