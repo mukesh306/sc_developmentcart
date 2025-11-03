@@ -1,7 +1,7 @@
 const Schoolercategory = require("../models/schoolershipcategory");
 const Schoolergroup = require("../models/Schoolergroup");
 const Schoolerexam = require("../models/Schoolerexam");
-
+const ExamResult = require("../models/examResult");
 exports.createSchoolercategory = async (req, res) => {
   try {
     const { name, price,groupSize , finalist } = req.body;
