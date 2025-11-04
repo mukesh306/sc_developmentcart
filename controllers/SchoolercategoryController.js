@@ -170,54 +170,37 @@ exports.createSchoolergroup = async (req, res) => {
 
 
 
+
+
 exports.getAllSchoolergroups = async (req, res) => {
   try {
-    const userId = req.user._id; // ✅ user from token
-
     // ✅ Step 1: Get all categories with createdBy info
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
-    // ✅ Step 2: Find all exams user attempted
-    const userExamResults = await ExamResult.find({ userId }).select("examId").lean();
-
-    // ✅ Step 3: Get all exam IDs the user has attempted
-    const attemptedExamIds = userExamResults.map(r => r.examId);
-
-    // ✅ Step 4: Find categories linked to those exams
-    const userExamCategories = await Schoolerexam.find({
-      _id: { $in: attemptedExamIds }
-    }).select("category").lean();
-
-    const userCategoryIds = userExamCategories.map(e => e.category?.toString());
-
     const updatedCategories = [];
 
     for (const category of categories) {
-      // ✅ Step 5: Filter only those which have both price and groupSize
+      // ✅ Step 2: Filter only those which have both price and groupSize
       if (category.price && category.groupSize) {
         const categoryObj = category.toObject();
 
         try {
-          // ✅ Step 6: Find latest exam with this category
+          // ✅ Step 3: Find latest exam with this category
           const latestExam = await Schoolerexam.findOne({ category: category._id })
             .sort({ createdAt: -1 })
             .select("passout")
             .lean();
 
-          // ✅ Step 7: Add seat = passout OR fallback to groupSize
+          // ✅ Step 4: Add seat = passout OR fallback to groupSize
           if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
             categoryObj.seat = latestExam.passout;
           } else {
             categoryObj.seat = category.groupSize;
           }
-
-          // ✅ Step 8: Add status based on user's attempted categories
-          categoryObj.status = userCategoryIds.includes(category._id.toString());
         } catch (err) {
           console.error(`⚠️ Error processing category ${category._id}:`, err.message);
-          categoryObj.status = false;
         }
 
         updatedCategories.push(categoryObj);
@@ -230,50 +213,6 @@ exports.getAllSchoolergroups = async (req, res) => {
     res.status(500).json({ message: "Error fetching categories.", error: error.message });
   }
 };
-
-
-
-// exports.getAllSchoolergroups = async (req, res) => {
-//   try {
-//     // ✅ Step 1: Get all categories with createdBy info
-//     const categories = await Schoolercategory.find()
-//       .populate("createdBy", "firstName lastName email")
-//       .sort({ createdAt: 1 });
-
-//     const updatedCategories = [];
-
-//     for (const category of categories) {
-//       // ✅ Step 2: Filter only those which have both price and groupSize
-//       if (category.price && category.groupSize) {
-//         const categoryObj = category.toObject();
-
-//         try {
-//           // ✅ Step 3: Find latest exam with this category
-//           const latestExam = await Schoolerexam.findOne({ category: category._id })
-//             .sort({ createdAt: -1 })
-//             .select("passout")
-//             .lean();
-
-//           // ✅ Step 4: Add seat = passout OR fallback to groupSize
-//           if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
-//             categoryObj.seat = latestExam.passout;
-//           } else {
-//             categoryObj.seat = category.groupSize;
-//           }
-//         } catch (err) {
-//           console.error(`⚠️ Error processing category ${category._id}:`, err.message);
-//         }
-
-//         updatedCategories.push(categoryObj);
-//       }
-//     }
-
-//     res.status(200).json(updatedCategories || []);
-//   } catch (error) {
-//     console.error("❌ Error fetching categories:", error);
-//     res.status(500).json({ message: "Error fetching categories.", error: error.message });
-//   }
-// };
 
 
 
