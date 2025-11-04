@@ -437,7 +437,7 @@ exports.UsersExams = async (req, res) => {
     })
       .populate("category", "name finalist createdAt")
       .populate("createdBy", "name email")
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: 1 }) // Order matters for unlock logic
       .lean();
 
     if (!exams.length) return res.status(200).json([]);
@@ -491,58 +491,56 @@ exports.UsersExams = async (req, res) => {
       // 🟢 Attempt Status
       examObj.status = examObj.percentage !== null;
 
+      // ⭐ NEW: Check if user is a TOPPER in this exam
+      const passoutLimit = exam.passout ? parseInt(exam.passout) : 1;
+
+      const userGroup = await ExamGroup.findOne({ examId: exam._id, members: userId });
+      if (userGroup) {
+        const groupMembers = userGroup.members.map((m) => m.toString());
+
+        const groupScores = await ExamResult.find({
+          examId: exam._id,
+          userId: { $in: groupMembers },
+        })
+          .sort({ finalScore: -1 })
+          .lean();
+
+        const groupTopUsers = groupScores.slice(0, passoutLimit).map((x) => x.userId.toString());
+        examObj.isTopper = groupTopUsers.includes(userId.toString());
+      } else {
+        examObj.isTopper = false;
+      }
+
       updatedExams.push(examObj);
     }
 
-    // ✅ UNLOCK LOGIC (Only topper can see next exam)
-    let userStillTopper = true;
+    // ⭐ EXAM VISIBILITY UNLOCK CHAIN
+    let allowNext = true; // First exam always visible
 
-    for (let i = 0; i < updatedExams.length; i++) {
-      const examObj = updatedExams[i];
-
-      // First exam always visible (starting point)
-      if (i === 0) {
-        examObj.visible = true;
-        continue;
-      }
-
-      // Agar user pehle exam me topper nahi tha → aage sab hide
-      if (!userStillTopper) {
-        examObj.visible = false;
-        continue;
-      }
-
-      const prevExam = updatedExams[i - 1];
-      const passLimit = parseInt(prevExam.passout) || 1; // Default top 1
-
-      const topResults = await ExamResult.find({ examId: prevExam._id })
-        .select("userId percentage createdAt")
-        .sort({ percentage: -1, createdAt: 1 })
-        .limit(passLimit)
-        .lean();
-
-      const topUserIds = topResults.map((r) => r.userId.toString());
-
-      // ✅ If user is topper → unlock next
-      if (topUserIds.includes(userId.toString())) {
-        examObj.visible = true;
+    updatedExams.forEach((exam, index) => {
+      if (index === 0) {
+        exam.visible = true; // First exam always visible
       } else {
-        examObj.visible = false;
-        userStillTopper = false;
+        exam.visible = allowNext;
       }
-    }
 
-    // 3️⃣ Filter only visible exams
-    let visibleExams = updatedExams.filter((e) => e.visible);
+      // If user is topper in this exam, allow next exam
+      if (exam.isTopper) {
+        allowNext = true;
+      } else {
+        allowNext = false;
+      }
+    });
 
-    // 4️⃣ Optional category filter
+    // 3️⃣ Category Filter (optional)
+    let visibleExams = updatedExams;
     if (category) {
       visibleExams = visibleExams.filter(
         (e) => e.category && e.category._id.toString() === category
       );
     }
 
-    // ✅ Final Response
+    // ✅ Final Output
     res.status(200).json(visibleExams);
   } catch (error) {
     console.error("🔥 Error fetching exams:", error);
