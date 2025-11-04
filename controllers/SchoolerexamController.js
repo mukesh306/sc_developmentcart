@@ -283,175 +283,47 @@ exports.addQuestionsToExam = async (req, res) => {
 
 
 
-// exports.UsersExams = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const { category } = req.query;
-
-//     // 1️⃣ Get user class
-//     const user = await User.findById(userId).select("className");
-//     if (!user || !user.className) {
-//       return res.status(400).json({ message: "User class not found." });
-//     }
-
-//     // 2️⃣ Get all published exams of user class (sorted by order)
-//     let exams = await Schoolerexam.find({
-//       className: user.className,
-//       publish: true,
-//     })
-//       .populate("category", "name finalist")
-//       .populate("createdBy", "name email")
-//       .sort({ createdAt: 1 }); // oldest first (Exam 1 → Exam 2 → Exam 3...)
-
-//     if (!exams || exams.length === 0) {
-//       return res.status(200).json([]);
-//     }
-
-//     const updatedExams = [];
-
-//     // 3️⃣ Prepare exams info with rank/result
-//     for (const exam of exams) {
-//       let classData =
-//         (await School.findById(exam.className).select("_id name className")) ||
-//         (await College.findById(exam.className).select("_id name className"));
-
-//       const examObj = exam.toObject();
-//       examObj.className = classData
-//         ? { _id: classData._id, name: classData.className || classData.name }
-//         : null;
-
-//       examObj.totalQuestions = exam.topicQuestions
-//         ? exam.topicQuestions.length
-//         : 0;
-
-//       const userResult = await ExamResult.findOne({
-//         userId,
-//         examId: exam._id,
-//       })
-//         .select("correct finalScore percentage createdAt")
-//         .lean();
-
-//       examObj.correct = userResult ? userResult.correct : null;
-//       examObj.finalScore = userResult ? userResult.finalScore : null;
-
-//       if (userResult && examObj.totalQuestions > 0) {
-//         examObj.percentage = parseFloat(
-//           ((userResult.finalScore / examObj.totalQuestions) * 100).toFixed(2)
-//         );
-//       } else {
-//         examObj.percentage = null;
-//       }
-
-//       if (userResult) {
-//         const allResults = await ExamResult.find({ examId: exam._id })
-//           .select("userId percentage createdAt")
-//           .sort({ percentage: -1, createdAt: 1 })
-//           .lean();
-
-//         let rank = null;
-//         for (let i = 0; i < allResults.length; i++) {
-//           if (allResults[i].userId.toString() === userId.toString()) {
-//             rank = i + 1;
-//             break;
-//           }
-//         }
-
-//         examObj.rank = rank;
-//         examObj.totalParticipants = allResults.length;
-//       } else {
-//         examObj.rank = null;
-//         examObj.totalParticipants = 0;
-//       }
-
-//       examObj.status =
-//         examObj.percentage !== null && examObj.percentage >= 0 ? true : false;
-//       examObj.publish = exam.publish;
-
-//       updatedExams.push(examObj);
-//     }
-
-//     // 4️⃣ Category filter (optional)
-//     let filteredExams = updatedExams;
-//     if (category) {
-//       filteredExams = filteredExams.filter(
-//         (e) => e.category && e.category._id?.toString() === category
-//       );
-//     }
-
-//     // 5️⃣ Visibility logic (Exam progression chain)
-//     let visibleExams = [];
-
-//     for (let i = 0; i < filteredExams.length; i++) {
-//       const currentExam = filteredExams[i];
-
-//       if (i === 0) {
-//         // ✅ Exam 1 — visible to all
-//         visibleExams.push(currentExam);
-//       } else {
-//         const previousExam = filteredExams[i - 1];
-//         const passoutLimit = parseInt(previousExam.passout) || 1;
-
-//         // Get top users from previous exam
-//         const topResults = await ExamResult.find({ examId: previousExam._id })
-//           .sort({ percentage: -1, createdAt: 1 })
-//           .limit(passoutLimit)
-//           .select("userId")
-//           .lean();
-
-//         const topUserIds = topResults.map((r) => r.userId.toString());
-
-//         // ✅ Show current exam only if user is topper of previous exam
-//         if (topUserIds.includes(userId.toString())) {
-//           visibleExams.push(currentExam);
-//         } else {
-//           break; // ❌ Stop chain if user not topper — no further exams visible
-//         }
-//       }
-//     }
-
-//     // ✅ Final response
-//     return res.status(200).json(visibleExams);
-//   } catch (error) {
-//     console.error("🔥 Error fetching exams:", error);
-//     res.status(500).json({
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
     const { category } = req.query;
 
-    // 1️⃣ Get user's class
+    // 1️⃣ Get user class
     const user = await User.findById(userId).select("className");
     if (!user || !user.className) {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // 2️⃣ Get all exams (publish true + false both)
+    // 2️⃣ Get all published exams of user class (sorted by order)
     let exams = await Schoolerexam.find({
       className: user.className,
+      publish: true,
     })
-      .populate("category", "name finalist createdAt")
+      .populate("category", "name finalist")
       .populate("createdBy", "name email")
-      .sort({ createdAt: 1 }) // Order matters for unlock logic
-      .lean();
+      .sort({ createdAt: 1 }); // oldest first (Exam 1 → Exam 2 → Exam 3...)
 
-    if (!exams.length) return res.status(200).json([]);
+    if (!exams || exams.length === 0) {
+      return res.status(200).json([]);
+    }
 
     const updatedExams = [];
 
-    for (let i = 0; i < exams.length; i++) {
-      const exam = exams[i];
-      const examObj = { ...exam };
+    // 3️⃣ Prepare exams info with rank/result
+    for (const exam of exams) {
+      let classData =
+        (await School.findById(exam.className).select("_id name className")) ||
+        (await College.findById(exam.className).select("_id name className"));
 
-      // 🧩 Total Questions
-      examObj.totalQuestions = exam.topicQuestions?.length || 0;
+      const examObj = exam.toObject();
+      examObj.className = classData
+        ? { _id: classData._id, name: classData.className || classData.name }
+        : null;
 
-      // 🧩 Check User Result
+      examObj.totalQuestions = exam.topicQuestions
+        ? exam.topicQuestions.length
+        : 0;
+
       const userResult = await ExamResult.findOne({
         userId,
         examId: exam._id,
@@ -470,78 +342,75 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // 🧩 Rank & Participants
       if (userResult) {
         const allResults = await ExamResult.find({ examId: exam._id })
           .select("userId percentage createdAt")
           .sort({ percentage: -1, createdAt: 1 })
           .lean();
 
-        const rankIndex = allResults.findIndex(
-          (r) => r.userId.toString() === userId.toString()
-        );
+        let rank = null;
+        for (let i = 0; i < allResults.length; i++) {
+          if (allResults[i].userId.toString() === userId.toString()) {
+            rank = i + 1;
+            break;
+          }
+        }
 
-        examObj.rank = rankIndex !== -1 ? rankIndex + 1 : null;
+        examObj.rank = rank;
         examObj.totalParticipants = allResults.length;
       } else {
         examObj.rank = null;
         examObj.totalParticipants = 0;
       }
 
-      // 🟢 Attempt Status
-      examObj.status = examObj.percentage !== null;
-
-      // ⭐ NEW: Check if user is a TOPPER in this exam
-      const passoutLimit = exam.passout ? parseInt(exam.passout) : 1;
-
-      const userGroup = await ExamGroup.findOne({ examId: exam._id, members: userId });
-      if (userGroup) {
-        const groupMembers = userGroup.members.map((m) => m.toString());
-
-        const groupScores = await ExamResult.find({
-          examId: exam._id,
-          userId: { $in: groupMembers },
-        })
-          .sort({ finalScore: -1 })
-          .lean();
-
-        const groupTopUsers = groupScores.slice(0, passoutLimit).map((x) => x.userId.toString());
-        examObj.isTopper = groupTopUsers.includes(userId.toString());
-      } else {
-        examObj.isTopper = false;
-      }
+      examObj.status =
+        examObj.percentage !== null && examObj.percentage >= 0 ? true : false;
+      examObj.publish = exam.publish;
 
       updatedExams.push(examObj);
     }
 
-    // ⭐ EXAM VISIBILITY UNLOCK CHAIN
-    let allowNext = true; // First exam always visible
-
-    updatedExams.forEach((exam, index) => {
-      if (index === 0) {
-        exam.visible = true; // First exam always visible
-      } else {
-        exam.visible = allowNext;
-      }
-
-      // If user is topper in this exam, allow next exam
-      if (exam.isTopper) {
-        allowNext = true;
-      } else {
-        allowNext = false;
-      }
-    });
-
-    // 3️⃣ Category Filter (optional)
-    let visibleExams = updatedExams;
+    // 4️⃣ Category filter (optional)
+    let filteredExams = updatedExams;
     if (category) {
-      visibleExams = visibleExams.filter(
-        (e) => e.category && e.category._id.toString() === category
+      filteredExams = filteredExams.filter(
+        (e) => e.category && e.category._id?.toString() === category
       );
     }
 
-    // ✅ Final Output
-    res.status(200).json(visibleExams);
+    // 5️⃣ Visibility logic (Exam progression chain)
+    let visibleExams = [];
+
+    for (let i = 0; i < filteredExams.length; i++) {
+      const currentExam = filteredExams[i];
+
+      if (i === 0) {
+        // ✅ Exam 1 — visible to all
+        visibleExams.push(currentExam);
+      } else {
+        const previousExam = filteredExams[i - 1];
+        const passoutLimit = parseInt(previousExam.passout) || 1;
+
+        // Get top users from previous exam
+        const topResults = await ExamResult.find({ examId: previousExam._id })
+          .sort({ percentage: -1, createdAt: 1 })
+          .limit(passoutLimit)
+          .select("userId")
+          .lean();
+
+        const topUserIds = topResults.map((r) => r.userId.toString());
+
+        // ✅ Show current exam only if user is topper of previous exam
+        if (topUserIds.includes(userId.toString())) {
+          visibleExams.push(currentExam);
+        } else {
+          break; // ❌ Stop chain if user not topper — no further exams visible
+        }
+      }
+    }
+
+    // ✅ Final response
+    return res.status(200).json(visibleExams);
   } catch (error) {
     console.error("🔥 Error fetching exams:", error);
     res.status(500).json({
@@ -550,6 +419,137 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
+// exports.UsersExams = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { category } = req.query;
+
+//     // 1️⃣ Get user's class
+//     const user = await User.findById(userId).select("className");
+//     if (!user || !user.className) {
+//       return res.status(400).json({ message: "User class not found." });
+//     }
+
+//     // 2️⃣ Get all exams (publish true + false both)
+//     let exams = await Schoolerexam.find({
+//       className: user.className,
+//     })
+//       .populate("category", "name finalist createdAt")
+//       .populate("createdBy", "name email")
+//       .sort({ createdAt: 1 }) // Order matters for unlock logic
+//       .lean();
+
+//     if (!exams.length) return res.status(200).json([]);
+
+//     const updatedExams = [];
+
+//     for (let i = 0; i < exams.length; i++) {
+//       const exam = exams[i];
+//       const examObj = { ...exam };
+
+//       // 🧩 Total Questions
+//       examObj.totalQuestions = exam.topicQuestions?.length || 0;
+
+//       // 🧩 Check User Result
+//       const userResult = await ExamResult.findOne({
+//         userId,
+//         examId: exam._id,
+//       })
+//         .select("correct finalScore percentage createdAt")
+//         .lean();
+
+//       examObj.correct = userResult ? userResult.correct : null;
+//       examObj.finalScore = userResult ? userResult.finalScore : null;
+
+//       if (userResult && examObj.totalQuestions > 0) {
+//         examObj.percentage = parseFloat(
+//           ((userResult.finalScore / examObj.totalQuestions) * 100).toFixed(2)
+//         );
+//       } else {
+//         examObj.percentage = null;
+//       }
+
+//       // 🧩 Rank & Participants
+//       if (userResult) {
+//         const allResults = await ExamResult.find({ examId: exam._id })
+//           .select("userId percentage createdAt")
+//           .sort({ percentage: -1, createdAt: 1 })
+//           .lean();
+
+//         const rankIndex = allResults.findIndex(
+//           (r) => r.userId.toString() === userId.toString()
+//         );
+
+//         examObj.rank = rankIndex !== -1 ? rankIndex + 1 : null;
+//         examObj.totalParticipants = allResults.length;
+//       } else {
+//         examObj.rank = null;
+//         examObj.totalParticipants = 0;
+//       }
+
+//       // 🟢 Attempt Status
+//       examObj.status = examObj.percentage !== null;
+
+//       // ⭐ NEW: Check if user is a TOPPER in this exam
+//       const passoutLimit = exam.passout ? parseInt(exam.passout) : 1;
+
+//       const userGroup = await ExamGroup.findOne({ examId: exam._id, members: userId });
+//       if (userGroup) {
+//         const groupMembers = userGroup.members.map((m) => m.toString());
+
+//         const groupScores = await ExamResult.find({
+//           examId: exam._id,
+//           userId: { $in: groupMembers },
+//         })
+//           .sort({ finalScore: -1 })
+//           .lean();
+
+//         const groupTopUsers = groupScores.slice(0, passoutLimit).map((x) => x.userId.toString());
+//         examObj.isTopper = groupTopUsers.includes(userId.toString());
+//       } else {
+//         examObj.isTopper = false;
+//       }
+
+//       updatedExams.push(examObj);
+//     }
+
+//     // ⭐ EXAM VISIBILITY UNLOCK CHAIN
+//     let allowNext = true; // First exam always visible
+
+//     updatedExams.forEach((exam, index) => {
+//       if (index === 0) {
+//         exam.visible = true; // First exam always visible
+//       } else {
+//         exam.visible = allowNext;
+//       }
+
+//       // If user is topper in this exam, allow next exam
+//       if (exam.isTopper) {
+//         allowNext = true;
+//       } else {
+//         allowNext = false;
+//       }
+//     });
+
+//     // 3️⃣ Category Filter (optional)
+//     let visibleExams = updatedExams;
+//     if (category) {
+//       visibleExams = visibleExams.filter(
+//         (e) => e.category && e.category._id.toString() === category
+//       );
+//     }
+
+//     // ✅ Final Output
+//     res.status(200).json(visibleExams);
+//   } catch (error) {
+//     console.error("🔥 Error fetching exams:", error);
+//     res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
 
 
 
