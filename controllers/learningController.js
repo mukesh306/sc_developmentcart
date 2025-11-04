@@ -246,6 +246,7 @@ exports.updateLearning = async (req, res) => {
 // };
 
 
+
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -261,7 +262,7 @@ exports.scoreCard = async (req, res) => {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          endDate: userEndDate, // ⬅️ Replace session with endDate
+          endDate: userEndDate,
           classId: userClassId.toString()
         }
       },
@@ -288,7 +289,7 @@ exports.scoreCard = async (req, res) => {
     const today = moment().startOf('day');
     const todayStr = today.format('YYYY-MM-DD');
 
-    // map all existing scores
+    // Map all existing scores
     for (const score of populatedScores) {
       const scoreDate = moment(score.scoreDate).startOf('day');
       const dateStr = scoreDate.format('YYYY-MM-DD');
@@ -304,15 +305,15 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
-    // ✅ if no score found, start from 7 days ago
+    // ✅ If no scores found, start from 7 days ago
     if (!minDate) {
       minDate = moment(today).subtract(6, 'days');
     }
 
-    // ✅ always end till today
+    // ✅ Always end till today (so missing + future days fill)
     const maxDate = today;
 
-    // ✅ generate all dates between minDate → today
+    // ✅ Generate all dates between minDate → today (even if skipped days)
     const fullResult = [];
     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
       const dateStr = m.format('YYYY-MM-DD');
@@ -327,14 +328,14 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
-    // ✅ Step 3: Sort results (keep today on top)
+    // ✅ Step 3: Sort results (today on top)
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
-    // ✅ Step 4: Learning-wise averages
+    // ✅ Step 4: Learning-wise averages (no change)
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
