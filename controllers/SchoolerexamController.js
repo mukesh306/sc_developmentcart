@@ -420,7 +420,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -432,10 +431,9 @@ exports.UsersExams = async (req, res) => {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // 2️⃣ Get all published exams (sorted oldest → newest)
+    // 2️⃣ Get all exams (✅ both publish true and false)
     let exams = await Schoolerexam.find({
       className: user.className,
-      
     })
       .populate("category", "name finalist createdAt")
       .populate("createdBy", "name email")
@@ -445,7 +443,10 @@ exports.UsersExams = async (req, res) => {
     if (!exams.length) return res.status(200).json([]);
 
     const updatedExams = [];
-    let userStillTopper = true; // 🔒 if false, stop chain
+    let userStillTopper = true;
+
+    // 🔹 Flag to check if user has attempted any exam
+    let hasAttemptedAny = false;
 
     for (let i = 0; i < exams.length; i++) {
       const exam = exams[i];
@@ -495,46 +496,63 @@ exports.UsersExams = async (req, res) => {
       examObj.status =
         examObj.percentage !== null && examObj.percentage >= 0 ? true : false;
 
-      // 🧩 Default visibility (first exam always visible)
-      if (i === 0) {
-        examObj.visible = true;
-        updatedExams.push(examObj);
-        continue;
-      }
-
-      // 🔙 Previous exam
-      const prevExam = updatedExams[updatedExams.length - 1];
-
-      if (!userStillTopper) {
-        examObj.visible = false;
-        updatedExams.push(examObj);
-        continue;
-      }
-
-      // 🧩 Check if user was topper in previous exam
-      const passLimit = parseInt(prevExam.passout) || 1;
-      const topResults = await ExamResult.find({ examId: prevExam._id })
-        .sort({ percentage: -1, createdAt: 1 })
-        .limit(passLimit)
-        .select("userId")
-        .lean();
-
-      const topUserIds = topResults.map((r) => r.userId.toString());
-
-      if (topUserIds.includes(userId.toString())) {
-        examObj.visible = true; // ✅ unlock next
-      } else {
-        examObj.visible = false; // ❌ stop chain
-        userStillTopper = false;
-      }
+      if (examObj.status) hasAttemptedAny = true; // 🔹 track if attempted
 
       updatedExams.push(examObj);
     }
 
-    // 3️⃣ Filter only visible exams
+    // ✅ If user has NOT attempted any exam → show all directly
+    if (!hasAttemptedAny) {
+      updatedExams.forEach((exam) => (exam.visible = true));
+    } else {
+      // ✅ Else apply your existing topper visibility logic
+      const finalExams = [];
+      userStillTopper = true;
+
+      for (let i = 0; i < updatedExams.length; i++) {
+        const examObj = updatedExams[i];
+
+        if (i === 0) {
+          examObj.visible = true;
+          finalExams.push(examObj);
+          continue;
+        }
+
+        const prevExam = finalExams[finalExams.length - 1];
+
+        if (!userStillTopper) {
+          examObj.visible = false;
+          finalExams.push(examObj);
+          continue;
+        }
+
+        const passLimit = parseInt(prevExam.passout) || 1;
+        const topResults = await ExamResult.find({ examId: prevExam._id })
+          .sort({ percentage: -1, createdAt: 1 })
+          .limit(passLimit)
+          .select("userId")
+          .lean();
+
+        const topUserIds = topResults.map((r) => r.userId.toString());
+
+        if (topUserIds.includes(userId.toString())) {
+          examObj.visible = true;
+        } else {
+          examObj.visible = false;
+          userStillTopper = false;
+        }
+
+        finalExams.push(examObj);
+      }
+
+      // replace updatedExams with filtered ones
+      updatedExams.splice(0, updatedExams.length, ...finalExams);
+    }
+
+    // 3️⃣ Filter visible exams
     let visibleExams = updatedExams.filter((e) => e.visible);
 
-    // 4️⃣ Optional frontend category filter
+    // 4️⃣ Optional category filter
     if (category) {
       visibleExams = visibleExams.filter(
         (e) => e.category && e.category._id.toString() === category
@@ -551,7 +569,6 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
-
 
 
 exports.ExamQuestion = async (req, res) => {
