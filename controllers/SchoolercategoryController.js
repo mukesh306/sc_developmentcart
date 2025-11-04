@@ -169,62 +169,45 @@ exports.createSchoolergroup = async (req, res) => {
 // };
 
 
+
+
+
 exports.getAllSchoolergroups = async (req, res) => {
   try {
-    const userId = req.user._id; // ✅ Logged-in user
+    // ✅ Step 1: Get all categories with createdBy info
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
     const updatedCategories = [];
-    let allowNext = true; // ✅ First category open by default
 
     for (const category of categories) {
+      // ✅ Step 2: Filter only those which have both price and groupSize
       if (category.price && category.groupSize) {
         const categoryObj = category.toObject();
 
-        // ✅ Get last Exam of this category
-        const latestExam = await Schoolerexam.findOne({ category: category._id })
-          .sort({ createdAt: -1 })
-          .lean();
-
-        // ✅ Set seat value
-        categoryObj.seat = latestExam?.passout ?? category.groupSize;
-
-        // ✅ Default status = false
-        categoryObj.status = false;
-
-        if (allowNext === true) {
-          categoryObj.status = true; // First unlocked or last passed category
-        }
-
-        if (latestExam) {
-          // ✅ Check if user topped in last exam
-          const topUsers = await ExamResult.find({ examId: latestExam._id })
-            .sort({ percentage: -1, createdAt: 1 })
-            .limit(categoryObj.seat)
-            .select("userId")
+        try {
+          // ✅ Step 3: Find latest exam with this category
+          const latestExam = await Schoolerexam.findOne({ category: category._id })
+            .sort({ createdAt: -1 })
+            .select("passout")
             .lean();
 
-          const userTop = topUsers.some((u) => u.userId.toString() === userId.toString());
-
-          // ✅ If user topped → next category unlock hoga
-          if (userTop) {
-            allowNext = true;
+          // ✅ Step 4: Add seat = passout OR fallback to groupSize
+          if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
+            categoryObj.seat = latestExam.passout;
           } else {
-            allowNext = false;
+            categoryObj.seat = category.groupSize;
           }
-        } else {
-          // ✅ Agar exam hi nahi hua → pehli category open, baaki close
-          if (updatedCategories.length === 0) allowNext = true;
-          else allowNext = false;
+        } catch (err) {
+          console.error(`⚠️ Error processing category ${category._id}:`, err.message);
         }
 
         updatedCategories.push(categoryObj);
       }
     }
 
-    res.status(200).json(updatedCategories);
+    res.status(200).json(updatedCategories || []);
   } catch (error) {
     console.error("❌ Error fetching categories:", error);
     res.status(500).json({ message: "Error fetching categories.", error: error.message });
@@ -232,50 +215,67 @@ exports.getAllSchoolergroups = async (req, res) => {
 };
 
 
-
 // exports.getAllSchoolergroups = async (req, res) => {
 //   try {
-//     // ✅ Step 1: Get all categories with createdBy info
+//     const userId = req.user._id; // ✅ Logged-in user
 //     const categories = await Schoolercategory.find()
 //       .populate("createdBy", "firstName lastName email")
 //       .sort({ createdAt: 1 });
 
 //     const updatedCategories = [];
+//     let allowNext = true; // ✅ First category open by default
 
 //     for (const category of categories) {
-//       // ✅ Step 2: Filter only those which have both price and groupSize
 //       if (category.price && category.groupSize) {
 //         const categoryObj = category.toObject();
 
-//         try {
-//           // ✅ Step 3: Find latest exam with this category
-//           const latestExam = await Schoolerexam.findOne({ category: category._id })
-//             .sort({ createdAt: -1 })
-//             .select("passout")
+//         // ✅ Get last Exam of this category
+//         const latestExam = await Schoolerexam.findOne({ category: category._id })
+//           .sort({ createdAt: -1 })
+//           .lean();
+
+//         // ✅ Set seat value
+//         categoryObj.seat = latestExam?.passout ?? category.groupSize;
+
+//         // ✅ Default status = false
+//         categoryObj.status = false;
+
+//         if (allowNext === true) {
+//           categoryObj.status = true; // First unlocked or last passed category
+//         }
+
+//         if (latestExam) {
+//           // ✅ Check if user topped in last exam
+//           const topUsers = await ExamResult.find({ examId: latestExam._id })
+//             .sort({ percentage: -1, createdAt: 1 })
+//             .limit(categoryObj.seat)
+//             .select("userId")
 //             .lean();
 
-//           // ✅ Step 4: Add seat = passout OR fallback to groupSize
-//           if (latestExam && latestExam.passout !== undefined && latestExam.passout !== null) {
-//             categoryObj.seat = latestExam.passout;
+//           const userTop = topUsers.some((u) => u.userId.toString() === userId.toString());
+
+//           // ✅ If user topped → next category unlock hoga
+//           if (userTop) {
+//             allowNext = true;
 //           } else {
-//             categoryObj.seat = category.groupSize;
+//             allowNext = false;
 //           }
-//         } catch (err) {
-//           console.error(`⚠️ Error processing category ${category._id}:`, err.message);
+//         } else {
+//           // ✅ Agar exam hi nahi hua → pehli category open, baaki close
+//           if (updatedCategories.length === 0) allowNext = true;
+//           else allowNext = false;
 //         }
 
 //         updatedCategories.push(categoryObj);
 //       }
 //     }
 
-//     res.status(200).json(updatedCategories || []);
+//     res.status(200).json(updatedCategories);
 //   } catch (error) {
 //     console.error("❌ Error fetching categories:", error);
 //     res.status(500).json({ message: "Error fetching categories.", error: error.message });
 //   }
 // };
-
-
 
 
 
