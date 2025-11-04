@@ -435,7 +435,7 @@ exports.UsersExams = async (req, res) => {
     // 2️⃣ Get all published exams (sorted oldest → newest)
     let exams = await Schoolerexam.find({
       className: user.className,
-      publish: true,
+      
     })
       .populate("category", "name finalist createdAt")
       .populate("createdBy", "name email")
