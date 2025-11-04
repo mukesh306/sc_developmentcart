@@ -101,152 +101,6 @@ exports.updateLearning = async (req, res) => {
 
 
 
-// exports.scoreCard = async (req, res) => {
-//   try {
-//     const userId = req.user._id;
-//     const user = await User.findById(userId).lean();
-//     const userEndDate = user?.endDate;
-//     const userClassId = user?.className;
-//     if (!userEndDate || !userClassId) {
-//       return res.status(400).json({ message: 'Please complete your profile.' });
-//     }
-
-//     // ✅ Step 1: Get first score per day
-//     const rawScores = await TopicScore.aggregate([
-//       {
-//         $match: {
-//           userId: new mongoose.Types.ObjectId(userId),
-//           endDate: userEndDate, // ⬅️ Replace session with endDate
-//           classId: userClassId.toString()
-//         }
-//       },
-//       { $sort: { scoreDate: 1, createdAt: 1 } },
-//       {
-//         $group: {
-//           _id: {
-//             date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
-//           },
-//           doc: { $first: "$$ROOT" }
-//         }
-//       },
-//       { $replaceRoot: { newRoot: "$doc" } }
-//     ]);
-
-//     const populatedScores = await TopicScore.populate(rawScores, [
-//       { path: 'topicId', select: 'topic' },
-//       { path: 'learningId', select: 'name' }
-//     ]);
-
-//     const scoreMap = new Map();
-//     let minDate = null;
-//     let maxDate = moment().startOf('day');
-//     const todayStr = moment().format('YYYY-MM-DD');
-
-//     for (const score of populatedScores) {
-//       const scoreDate = moment(score.scoreDate).startOf('day');
-//       const dateStr = scoreDate.format('YYYY-MM-DD');
-
-//       scoreMap.set(dateStr, {
-//         ...score.toObject?.() || score,
-//         date: dateStr,
-//         isToday: dateStr === todayStr
-//       });
-
-//       if (!minDate || scoreDate.isBefore(minDate)) minDate = scoreDate;
-//       if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
-//     }
-
-//     if (!minDate) minDate = moment().startOf('day');
-
-//     const fullResult = [];
-//     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
-//       const dateStr = m.format('YYYY-MM-DD');
-//       if (scoreMap.has(dateStr)) {
-//         fullResult.push(scoreMap.get(dateStr));
-//       } else {
-//         fullResult.push({
-//           date: dateStr,
-//           score: null,
-//           isToday: dateStr === todayStr
-//         });
-//       }
-//     }
-
-//     const sortedFinal = fullResult.sort((a, b) => {
-//       if (a.date === todayStr) return -1;
-//       if (b.date === todayStr) return 1;
-//       return new Date(a.date) - new Date(b.date);
-//     });
-
-//     const learningScores = {};
-//     for (const entry of fullResult) {
-//       if (entry.score !== null && entry.learningId?._id) {
-//         const lid = entry.learningId._id.toString();
-//         const lname = entry.learningId.name || "Unknown";
-//         if (!learningScores[lid]) {
-//           learningScores[lid] = { learningId: lid, name: lname, scores: [] };
-//         }
-//         learningScores[lid].scores.push(entry.score);
-//       }
-//     }
-
-//     const learningWiseAverage = Object.values(learningScores).map(item => {
-//       const total = item.scores.reduce((sum, s) => sum + s, 0);
-//       const average = parseFloat((total / item.scores.length).toFixed(2));
-//       return {
-//         learningId: item.learningId,
-//         name: item.name,
-//         averageScore: average
-//       };
-//     });
-
-//     // ✅ Step 7: Update Assigned averages using endDate
-//     try {
-//       const assignedList = await Assigned.find({
-//         endDate: userEndDate,
-//         classId: userClassId
-//       });
-
-//       for (let assign of assignedList) {
-//         const update = {};
-
-//         const mapAvg = (learningField, avgField) => {
-//           const learningId = assign[learningField]?.toString();
-//           if (learningId) {
-//             const found = learningWiseAverage.find(l => l.learningId === learningId);
-//             if (found) {
-//               update[avgField] = found.averageScore;
-//             }
-//           }
-//         };
-
-//         mapAvg('learning', 'learningAverage');
-//         mapAvg('learning2', 'learning2Average');
-//         mapAvg('learning3', 'learning3Average');
-//         mapAvg('learning4', 'learning4Average');
-
-//         if (Object.keys(update).length > 0) {
-//           await Assigned.updateOne({ _id: assign._id }, { $set: update });
-//         }
-//       }
-//     } catch (err) {
-//       console.error('Error updating Assigned averages:', err.message);
-//     }
-
-//     // ✅ Final Response
-//     res.status(200).json({
-//       scores: sortedFinal,
-//       learningWiseAverage
-//     });
-
-//   } catch (error) {
-//     console.error('Error in scoreCard:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-
-
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -262,7 +116,7 @@ exports.scoreCard = async (req, res) => {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          endDate: userEndDate,
+          endDate: userEndDate, // ⬅️ Replace session with endDate
           classId: userClassId.toString()
         }
       },
@@ -283,13 +137,11 @@ exports.scoreCard = async (req, res) => {
       { path: 'learningId', select: 'name' }
     ]);
 
-    // ✅ Step 2: Build timeline (continuous till today)
     const scoreMap = new Map();
     let minDate = null;
-    const today = moment().startOf('day');
-    const todayStr = today.format('YYYY-MM-DD');
+    let maxDate = moment().startOf('day');
+    const todayStr = moment().format('YYYY-MM-DD');
 
-    // Map all existing scores
     for (const score of populatedScores) {
       const scoreDate = moment(score.scoreDate).startOf('day');
       const dateStr = scoreDate.format('YYYY-MM-DD');
@@ -300,20 +152,12 @@ exports.scoreCard = async (req, res) => {
         isToday: dateStr === todayStr
       });
 
-      if (!minDate || scoreDate.isBefore(minDate)) {
-        minDate = scoreDate;
-      }
+      if (!minDate || scoreDate.isBefore(minDate)) minDate = scoreDate;
+      if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
     }
 
-    // ✅ If no scores found, start from 7 days ago
-    if (!minDate) {
-      minDate = moment(today).subtract(6, 'days');
-    }
+    if (!minDate) minDate = moment().startOf('day');
 
-    // ✅ Always end till today (so missing + future days fill)
-    const maxDate = today;
-
-    // ✅ Generate all dates between minDate → today (even if skipped days)
     const fullResult = [];
     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
       const dateStr = m.format('YYYY-MM-DD');
@@ -328,14 +172,12 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
-    // ✅ Step 3: Sort results (today on top)
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
-    // ✅ Step 4: Learning-wise averages (no change)
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -358,7 +200,7 @@ exports.scoreCard = async (req, res) => {
       };
     });
 
-    // ✅ Step 5: Update Assigned averages (same as before)
+    // ✅ Step 7: Update Assigned averages using endDate
     try {
       const assignedList = await Assigned.find({
         endDate: userEndDate,
@@ -391,7 +233,7 @@ exports.scoreCard = async (req, res) => {
       console.error('Error updating Assigned averages:', err.message);
     }
 
-    // ✅ Step 6: Final Response
+    // ✅ Final Response
     res.status(200).json({
       scores: sortedFinal,
       learningWiseAverage
@@ -402,6 +244,9 @@ exports.scoreCard = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
 
 
 
