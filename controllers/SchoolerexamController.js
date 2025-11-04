@@ -420,6 +420,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -431,7 +432,7 @@ exports.UsersExams = async (req, res) => {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // 2️⃣ Get all exams (✅ both publish true and false)
+    // 2️⃣ Get all exams (✅ publish true + false both)
     let exams = await Schoolerexam.find({
       className: user.className,
     })
@@ -443,19 +444,15 @@ exports.UsersExams = async (req, res) => {
     if (!exams.length) return res.status(200).json([]);
 
     const updatedExams = [];
-    let userStillTopper = true;
-
-    // 🔹 Flag to check if user has attempted any exam
-    let hasAttemptedAny = false;
 
     for (let i = 0; i < exams.length; i++) {
       const exam = exams[i];
       const examObj = { ...exam };
 
-      // 🧩 Add total questions
+      // 🧩 Total Questions
       examObj.totalQuestions = exam.topicQuestions?.length || 0;
 
-      // 🧩 Get user result for this exam
+      // 🧩 Check User Result
       const userResult = await ExamResult.findOne({
         userId,
         examId: exam._id,
@@ -474,7 +471,7 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // 🧩 Get rank + total participants
+      // 🧩 Rank & Participants
       if (userResult) {
         const allResults = await ExamResult.find({ examId: exam._id })
           .select("userId percentage createdAt")
@@ -492,74 +489,24 @@ exports.UsersExams = async (req, res) => {
         examObj.totalParticipants = 0;
       }
 
-      // 🧩 Status = attempted or not
-      examObj.status =
-        examObj.percentage !== null && examObj.percentage >= 0 ? true : false;
-
-      if (examObj.status) hasAttemptedAny = true; // 🔹 track if attempted
+      // 🟢 Attempt Status
+      examObj.status = examObj.percentage !== null;
 
       updatedExams.push(examObj);
     }
 
-    // ✅ If user has NOT attempted any exam → show all directly
-    if (!hasAttemptedAny) {
-      updatedExams.forEach((exam) => (exam.visible = true));
-    } else {
-      // ✅ Else apply your existing topper visibility logic
-      const finalExams = [];
-      userStillTopper = true;
+    // ✅ IMPORTANT CHANGE 👇 → sab exams visible honge
+    updatedExams.forEach((e) => (e.visible = true));
 
-      for (let i = 0; i < updatedExams.length; i++) {
-        const examObj = updatedExams[i];
-
-        if (i === 0) {
-          examObj.visible = true;
-          finalExams.push(examObj);
-          continue;
-        }
-
-        const prevExam = finalExams[finalExams.length - 1];
-
-        if (!userStillTopper) {
-          examObj.visible = false;
-          finalExams.push(examObj);
-          continue;
-        }
-
-        const passLimit = parseInt(prevExam.passout) || 1;
-        const topResults = await ExamResult.find({ examId: prevExam._id })
-          .sort({ percentage: -1, createdAt: 1 })
-          .limit(passLimit)
-          .select("userId")
-          .lean();
-
-        const topUserIds = topResults.map((r) => r.userId.toString());
-
-        if (topUserIds.includes(userId.toString())) {
-          examObj.visible = true;
-        } else {
-          examObj.visible = false;
-          userStillTopper = false;
-        }
-
-        finalExams.push(examObj);
-      }
-
-      // replace updatedExams with filtered ones
-      updatedExams.splice(0, updatedExams.length, ...finalExams);
-    }
-
-    // 3️⃣ Filter visible exams
-    let visibleExams = updatedExams.filter((e) => e.visible);
-
-    // 4️⃣ Optional category filter
+    // 3️⃣ Category Filter (optional)
+    let visibleExams = updatedExams;
     if (category) {
       visibleExams = visibleExams.filter(
         (e) => e.category && e.category._id.toString() === category
       );
     }
 
-    // ✅ Final response
+    // ✅ Final Output
     res.status(200).json(visibleExams);
   } catch (error) {
     console.error("🔥 Error fetching exams:", error);
@@ -569,6 +516,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 exports.ExamQuestion = async (req, res) => {
