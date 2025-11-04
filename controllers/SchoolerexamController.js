@@ -437,7 +437,7 @@ exports.UsersExams = async (req, res) => {
       className: user.className,
       publish: true,
     })
-      .populate("category", "name createdAt")
+      .populate("category", "name finalist createdAt")
       .populate("createdBy", "name email")
       .sort({ createdAt: 1 })
       .lean();
