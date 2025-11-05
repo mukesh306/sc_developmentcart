@@ -420,6 +420,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -516,15 +517,15 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ✅ FINAL ATTEND LOGIC WITH PUBLISH UPDATE
+    // ✅ UPDATED ATTEND LOGIC (as requested)
     let stopNext = false;
 
     for (let i = 0; i < filteredExams.length; i++) {
       const exam = filteredExams[i];
 
       if (stopNext) {
-        exam.attend = "Not eligible";
-        exam.publish = false; // ✅ Jis exam ke baad stopNext true hai uska publish false
+        exam.attend = false;  // ✅ Now false instead of "Not eligible"
+        exam.publish = false; // ✅ stopNext ke baad publish false
         exam.rank = null;
         exam.correct = null;
         exam.finalScore = null;
@@ -534,13 +535,18 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
+      // ✅ Passed → attend true
       if (exam.result === "passed") {
-        exam.attend = "Attempted";
-      } else if (exam.result === "failed") {
-        exam.attend = "Attempted"; // ✅ Fail par bhi Attempted
-        stopNext = true; // ✅ Ab agle sab Not eligible
-      } else {
-        exam.attend = null;
+        exam.attend = true;
+      }
+      // ✅ Failed → attend true but stop next exams
+      else if (exam.result === "failed") {
+        exam.attend = true;
+        stopNext = true;
+      }
+      // ✅ Never attempted but eligible → attend true
+      else {
+        exam.attend = true;
       }
     }
 
@@ -579,6 +585,8 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
+
 
 
 
