@@ -420,7 +420,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -498,7 +497,7 @@ exports.UsersExams = async (req, res) => {
         examObj.totalParticipants = 0;
       }
 
-      // ✅ RESULT LOGIC (pass/fail/null)
+      // ✅ RESULT
       const passLimit = parseInt(exam.passout) || 1;
       if (examObj.rank !== null) {
         examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
@@ -519,14 +518,14 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ✅ ADDING ATTEND LOGIC (NO CHANGE TO ANY OLD LOGIC)
+    // ✅ ATTEND LOGIC (Your Required Logic)
     let stopNext = false;
 
     for (let i = 0; i < filteredExams.length; i++) {
       const exam = filteredExams[i];
 
       if (stopNext) {
-        exam.attend = null;
+        exam.attend = "Not Attempted";
         exam.rank = null;
         exam.correct = null;
         exam.finalScore = null;
@@ -540,9 +539,9 @@ exports.UsersExams = async (req, res) => {
         exam.attend = "Attempted";
       } else if (exam.result === "failed") {
         exam.attend = "Not Attempted";
-        stopNext = true;
+        stopNext = true; // ✅ Fail hone se aage sab Not Attempted
       } else {
-        exam.attend = null;
+        exam.attend = null; // rank null & no previous fail
       }
     }
 
@@ -569,7 +568,6 @@ exports.UsersExams = async (req, res) => {
         .lean();
 
       const topUserIds = topResults.map((r) => r.userId.toString());
-
       currentExam.visible = topUserIds.includes(userId.toString());
 
       visibleExams.push(currentExam);
