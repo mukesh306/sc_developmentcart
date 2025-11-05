@@ -420,8 +420,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -521,7 +519,7 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ✅ Attend / Missed / Lock Logic (unchanged)
+    // ✅ FINAL ATTEND / LOCK LOGIC (CORRECTED)
     let stopNext = false;
     const now = new Date();
 
@@ -532,6 +530,13 @@ exports.UsersExams = async (req, res) => {
         `${exam.ScheduleDate} ${exam.ScheduleTime}`
       );
 
+      // ✅ If exam is in future → always attend true
+      if (scheduledDateTime > now) {
+        exam.attend = true;
+        continue;
+      }
+
+      // ✅ If previous exam missed or failed → lock next
       if (stopNext) {
         exam.attend = false;
         exam.publish = false;
@@ -544,17 +549,23 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      if (exam.result === null && scheduledDateTime < now) {
+      // ✅ Missed exam (time passed + result null) → lock next exams
+      if (scheduledDateTime < now && exam.result === null) {
+        exam.attend = true; // missed exam itself remains attend = true
         stopNext = true;
         continue;
       }
 
+      // ✅ Failed → lock next exams
       if (exam.result === "failed") {
+        exam.attend = true;
         stopNext = true;
+      } else {
+        exam.attend = true;
       }
     }
 
-    // ✅ Visibility logic unchanged
+    // ✅ VISIBILITY LOGIC SAME
     let visibleExams = [];
     for (let i = 0; i < filteredExams.length; i++) {
       const currentExam = filteredExams[i];
