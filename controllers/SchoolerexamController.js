@@ -430,7 +430,6 @@ exports.UsersExams = async (req, res) => {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // ✅ publish filter removed (true + false both will come)
     let exams = await Schoolerexam.find({
       className: user.className,
     })
@@ -497,7 +496,6 @@ exports.UsersExams = async (req, res) => {
         examObj.totalParticipants = 0;
       }
 
-      // ✅ RESULT
       const passLimit = parseInt(exam.passout) || 1;
       if (examObj.rank !== null) {
         examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
@@ -518,14 +516,15 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ✅ ATTEND LOGIC (Your Required Logic)
+    // ✅ FINAL ATTEND LOGIC WITH PUBLISH UPDATE
     let stopNext = false;
 
     for (let i = 0; i < filteredExams.length; i++) {
       const exam = filteredExams[i];
 
       if (stopNext) {
-        exam.attend = "Not Attempted";
+        exam.attend = "Not eligible";
+        exam.publish = false; // ✅ Jis exam ke baad stopNext true hai uska publish false
         exam.rank = null;
         exam.correct = null;
         exam.finalScore = null;
@@ -538,17 +537,15 @@ exports.UsersExams = async (req, res) => {
       if (exam.result === "passed") {
         exam.attend = "Attempted";
       } else if (exam.result === "failed") {
-        exam.attend = "Not Attempted";
-        stopNext = true; // ✅ Fail hone se aage sab Not Attempted
+        exam.attend = "Attempted"; // ✅ Fail par bhi Attempted
+        stopNext = true; // ✅ Ab agle sab Not eligible
       } else {
-        exam.attend = null; // rank null & no previous fail
+        exam.attend = null;
       }
     }
 
     // ✅ VISIBILITY LOGIC (unchanged)
     let visibleExams = [];
-    let allowNext = true;
-
     for (let i = 0; i < filteredExams.length; i++) {
       const currentExam = filteredExams[i];
 
@@ -582,6 +579,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
