@@ -420,7 +420,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -517,7 +516,7 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ✅ --- UPDATED ATTEND / MISSED EXAM LOGIC ---
+    // ✅ --- UPDATED ATTEND / MISSED EXAM LOGIC (CORRECTED) ---
     let stopNext = false;
     const now = new Date();
 
@@ -540,11 +539,11 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      // ✅ If user did NOT attempt & exam date already passed → treat as failed
+      // ✅ Missed exam → keep attend=true, but lock next exams
       if (exam.result === null && scheduledDateTime < now) {
-        exam.attend = false;
-        exam.publish = false;
-        stopNext = true;
+        exam.attend = true;          // **IMPORTANT = remain true**
+        // publish also remains same
+        stopNext = true;              // lock next exams
         continue;
       }
 
@@ -593,6 +592,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
