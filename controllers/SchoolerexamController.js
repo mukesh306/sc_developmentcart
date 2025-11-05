@@ -502,7 +502,7 @@ exports.UsersExams = async (req, res) => {
       const passLimit = parseInt(exam.passout) || 1;
 
       if (examObj.rank !== null) {
-        examObj.result = examObj.rank <= passLimit ? "pass" : "fail";
+        examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
       } else {
         examObj.result = null;
       }
