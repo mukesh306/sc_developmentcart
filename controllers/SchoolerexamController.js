@@ -517,15 +517,20 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ✅ UPDATED ATTEND LOGIC (as requested)
+    // ✅ --- UPDATED ATTEND / MISSED EXAM LOGIC ---
     let stopNext = false;
+    const now = new Date();
 
     for (let i = 0; i < filteredExams.length; i++) {
       const exam = filteredExams[i];
 
+      const scheduledDateTime = new Date(
+        `${exam.ScheduleDate} ${exam.ScheduleTime}`
+      );
+
       if (stopNext) {
-        exam.attend = false;  // ✅ Now false instead of "Not eligible"
-        exam.publish = false; // ✅ stopNext ke baad publish false
+        exam.attend = false;
+        exam.publish = false;
         exam.rank = null;
         exam.correct = null;
         exam.finalScore = null;
@@ -535,22 +540,25 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      // ✅ Passed → attend true
+      // ✅ If user did NOT attempt & exam date already passed → treat as failed
+      if (exam.result === null && scheduledDateTime < now) {
+        exam.attend = false;
+        exam.publish = false;
+        stopNext = true;
+        continue;
+      }
+
       if (exam.result === "passed") {
         exam.attend = true;
-      }
-      // ✅ Failed → attend true but stop next exams
-      else if (exam.result === "failed") {
+      } else if (exam.result === "failed") {
         exam.attend = true;
         stopNext = true;
-      }
-      // ✅ Never attempted but eligible → attend true
-      else {
+      } else {
         exam.attend = true;
       }
     }
 
-    // ✅ VISIBILITY LOGIC (unchanged)
+    // ✅ VISIBILITY LOGIC SAME
     let visibleExams = [];
     for (let i = 0; i < filteredExams.length; i++) {
       const currentExam = filteredExams[i];
@@ -585,6 +593,8 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
+
 
 
 
