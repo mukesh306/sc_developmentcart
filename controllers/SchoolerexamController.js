@@ -500,7 +500,6 @@ exports.UsersExams = async (req, res) => {
 
       // ✅ RESULT LOGIC (pass/fail/null)
       const passLimit = parseInt(exam.passout) || 1;
-
       if (examObj.rank !== null) {
         examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
       } else {
@@ -520,7 +519,34 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ✅ NEW: visibility without skipping exams
+    // ✅ ADDING ATTEND LOGIC (NO CHANGE TO ANY OLD LOGIC)
+    let stopNext = false;
+
+    for (let i = 0; i < filteredExams.length; i++) {
+      const exam = filteredExams[i];
+
+      if (stopNext) {
+        exam.attend = null;
+        exam.rank = null;
+        exam.correct = null;
+        exam.finalScore = null;
+        exam.percentage = null;
+        exam.result = null;
+        exam.status = false;
+        continue;
+      }
+
+      if (exam.result === "passed") {
+        exam.attend = "Attempted";
+      } else if (exam.result === "failed") {
+        exam.attend = "Not Attempted";
+        stopNext = true;
+      } else {
+        exam.attend = null;
+      }
+    }
+
+    // ✅ VISIBILITY LOGIC (unchanged)
     let visibleExams = [];
     let allowNext = true;
 
@@ -528,7 +554,7 @@ exports.UsersExams = async (req, res) => {
       const currentExam = filteredExams[i];
 
       if (i === 0) {
-        currentExam.visible = true; // Exam 1 always visible
+        currentExam.visible = true;
         visibleExams.push(currentExam);
         continue;
       }
@@ -544,7 +570,6 @@ exports.UsersExams = async (req, res) => {
 
       const topUserIds = topResults.map((r) => r.userId.toString());
 
-      // ✅ If user is topper → Visible, else Locked
       currentExam.visible = topUserIds.includes(userId.toString());
 
       visibleExams.push(currentExam);
@@ -559,7 +584,6 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
-
 
 
 
