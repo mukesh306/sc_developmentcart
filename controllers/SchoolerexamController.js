@@ -498,6 +498,15 @@ exports.UsersExams = async (req, res) => {
         examObj.totalParticipants = 0;
       }
 
+      // ✅ RESULT LOGIC (pass/fail/null)
+      const passLimit = parseInt(exam.passout) || 1;
+
+      if (examObj.rank !== null) {
+        examObj.result = examObj.rank <= passLimit ? "pass" : "fail";
+      } else {
+        examObj.result = null;
+      }
+
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
 
@@ -550,6 +559,9 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
+
+
 
 
 
