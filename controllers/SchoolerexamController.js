@@ -420,6 +420,8 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -506,6 +508,9 @@ exports.UsersExams = async (req, res) => {
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
 
+      // ✅ BY DEFAULT ATTEND = TRUE
+      examObj.attend = true;
+
       updatedExams.push(examObj);
     }
 
@@ -516,7 +521,7 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ✅ --- UPDATED ATTEND / MISSED EXAM LOGIC (CORRECTED) ---
+    // ✅ Attend / Missed / Lock Logic (unchanged)
     let stopNext = false;
     const now = new Date();
 
@@ -539,25 +544,17 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      // ✅ Missed exam → keep attend=true, but lock next exams
       if (exam.result === null && scheduledDateTime < now) {
-        exam.attend = true;          // **IMPORTANT = remain true**
-        // publish also remains same
-        stopNext = true;              // lock next exams
+        stopNext = true;
         continue;
       }
 
-      if (exam.result === "passed") {
-        exam.attend = true;
-      } else if (exam.result === "failed") {
-        exam.attend = true;
+      if (exam.result === "failed") {
         stopNext = true;
-      } else {
-        exam.attend = true;
       }
     }
 
-    // ✅ VISIBILITY LOGIC SAME
+    // ✅ Visibility logic unchanged
     let visibleExams = [];
     for (let i = 0; i < filteredExams.length; i++) {
       const currentExam = filteredExams[i];
@@ -592,7 +589,6 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
-
 
 
 
