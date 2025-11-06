@@ -701,6 +701,95 @@ exports.submitExamAnswer = async (req, res) => {
 
 
 
+// exports.calculateExamResult = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { examId, attemptId, Completiontime } = req.body;
+
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) return res.status(404).json({ message: "Exam not found." });
+
+//     const answers = await ExamAnswer.find({ userId, examId, attemptId });
+//     if (answers.length === 0)
+//       return res.status(400).json({ message: "No answers found for this attempt." });
+
+//     let correct = 0,
+//       wrong = 0,
+//       skippedCount = 0,
+//       total = exam.topicQuestions.length;
+
+//     for (const ans of answers) {
+//       const question = exam.topicQuestions.find(
+//         q => q._id.toString() === ans.questionId.toString()
+//       );
+
+//       if (question) {
+//         if (ans.skipped === true || ans.selectedAnswer === null || ans.selectedAnswer === "") {
+//           skippedCount++;
+//           continue;
+//         }
+
+//         if (ans.selectedAnswer === question.answer) correct++;
+//         else wrong++;
+//       }
+//     }
+
+//     const negative = wrong * (parseFloat(exam.Negativemark) || 0);
+//     const finalScore = Math.max(correct - negative, 0);
+
+//     const attempted = total - skippedCount;
+//     const percentage = attempted > 0 ? (finalScore / total) * 100 : 0;
+//     const result = finalScore >= exam.passout ? "pass" : "fail";
+
+//     const examResult = await ExamResult.findOneAndUpdate(
+//       { userId, examId, attemptId },
+//       {
+//         userId,
+//         examId,
+//         attemptId,
+//         totalQuestions: total,
+//         attempted,
+//         skipped: skippedCount,
+//         correct,
+//         wrong,
+//         negativeMarks: negative,
+//         finalScore,
+//         percentage: parseFloat(percentage.toFixed(2)),
+//         result,
+//         Completiontime, // ✅ Added field to save completion time
+//       },
+//       { upsert: true, new: true }
+//     );
+
+//     // ✅ Custom response field mapping
+//     const formattedResponse = {
+//       _id: examResult._id,
+//       examId: examResult.examId,
+//       attemptId: examResult.attemptId,
+//       userId: examResult.userId,
+//       totalQuestions: examResult.totalQuestions,
+//       correctAnswers: examResult.correct,
+//       incorrectAnswers: examResult.wrong,
+//       skipped: examResult.skipped,
+//       negativeMarking: examResult.negativeMarks,
+//       totalMarks: examResult.finalScore,
+//       scorePercent: examResult.percentage,
+//       result: examResult.result,
+//       maxMarkPerQuestion: 1,
+//       Completiontime: examResult.Completiontime, // ✅ Include in response too
+//       createdAt: examResult.createdAt,
+//     };
+
+//     return res.status(200).json({
+//       message: "Result calculated and saved successfully.",
+//       examResult: formattedResponse,
+//     });
+//   } catch (error) {
+//     console.error("Error calculating exam result:", error);
+//     res.status(500).json({ message: "Internal server error.", error: error.message });
+//   }
+// };
+
 exports.calculateExamResult = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -710,28 +799,73 @@ exports.calculateExamResult = async (req, res) => {
     if (!exam) return res.status(404).json({ message: "Exam not found." });
 
     const answers = await ExamAnswer.find({ userId, examId, attemptId });
-    if (answers.length === 0)
-      return res.status(400).json({ message: "No answers found for this attempt." });
 
-    let correct = 0,
-      wrong = 0,
-      skippedCount = 0,
-      total = exam.topicQuestions.length;
+    const total = exam.topicQuestions.length;
+
+    // ✅ If no answers found → Auto save Zero Result
+    if (answers.length === 0) {
+      const examResult = await ExamResult.findOneAndUpdate(
+        { userId, examId, attemptId },
+        {
+          userId,
+          examId,
+          attemptId,
+          totalQuestions: total,
+          attempted: 0,
+          skipped: total,
+          correct: 0,
+          wrong: 0,
+          negativeMarks: 0,
+          finalScore: 0,
+          percentage: 0,
+          result: "fail",
+          Completiontime,
+        },
+        { upsert: true, new: true }
+      );
+
+      // ✅ Same Response Format
+      const formattedResponse = {
+        _id: examResult._id,
+        examId: examResult.examId,
+        attemptId: examResult.attemptId,
+        userId: examResult.userId,
+        totalQuestions: examResult.totalQuestions,
+        correctAnswers: examResult.correct,
+        incorrectAnswers: examResult.wrong,
+        skipped: examResult.skipped,
+        negativeMarking: examResult.negativeMarks,
+        totalMarks: examResult.finalScore,
+        scorePercent: examResult.percentage,
+        result: examResult.result,
+        maxMarkPerQuestion: 1,
+        Completiontime: examResult.Completiontime,
+        createdAt: examResult.createdAt,
+      };
+
+      return res.status(200).json({
+        message: "Result calculated and saved successfully.",
+        examResult: formattedResponse,
+      });
+    }
+
+    // ✅ Normal Calculation Block (Same as before)
+    let correct = 0, wrong = 0, skippedCount = 0;
 
     for (const ans of answers) {
       const question = exam.topicQuestions.find(
         q => q._id.toString() === ans.questionId.toString()
       );
 
-      if (question) {
-        if (ans.skipped === true || ans.selectedAnswer === null || ans.selectedAnswer === "") {
-          skippedCount++;
-          continue;
-        }
+      if (!question) continue;
 
-        if (ans.selectedAnswer === question.answer) correct++;
-        else wrong++;
+      if (ans.skipped === true || !ans.selectedAnswer) {
+        skippedCount++;
+        continue;
       }
+
+      if (ans.selectedAnswer === question.answer) correct++;
+      else wrong++;
     }
 
     const negative = wrong * (parseFloat(exam.Negativemark) || 0);
@@ -756,12 +890,11 @@ exports.calculateExamResult = async (req, res) => {
         finalScore,
         percentage: parseFloat(percentage.toFixed(2)),
         result,
-        Completiontime, // ✅ Added field to save completion time
+        Completiontime,
       },
       { upsert: true, new: true }
     );
 
-    // ✅ Custom response field mapping
     const formattedResponse = {
       _id: examResult._id,
       examId: examResult.examId,
@@ -776,7 +909,7 @@ exports.calculateExamResult = async (req, res) => {
       scorePercent: examResult.percentage,
       result: examResult.result,
       maxMarkPerQuestion: 1,
-      Completiontime: examResult.Completiontime, // ✅ Include in response too
+      Completiontime: examResult.Completiontime,
       createdAt: examResult.createdAt,
     };
 
@@ -789,7 +922,6 @@ exports.calculateExamResult = async (req, res) => {
     res.status(500).json({ message: "Internal server error.", error: error.message });
   }
 };
-
 
 
 
@@ -1042,7 +1174,7 @@ exports.getMyCategoryPrizes = async (req, res) => {
           finalScore = isWinner.finalScore;
         }
       }
-
+wwwFameTots
       // ✅ Push result for EVERY category
       result.push({
         categoryId: category._id,
