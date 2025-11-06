@@ -999,8 +999,8 @@ exports.getMyCategoryPrizes = async (req, res) => {
 
     for (const category of categories) {
       // ✅ Last exam of category
-      const lastExam = await Schoolerexam.findOne({ categoryId: category._id })
-        .sort({ createdAt: -1 });
+      const lastExam = await Schoolerexam.findOne({ category: category._id }).sort({ createdAt: -1 });
+
 
       let status = false; // ❗ default → user is not winner
       let percentage = null;
