@@ -22,6 +22,8 @@ router.get("/schooler/Leaderboard/:id",auth, SchoolerexamController.Leaderboard)
 router.get("/schooler/topusers/:id", SchoolerexamController.topusers);
 router.get('/schooler/groupall', SchoolerexamController.getAllExamGroups);
 
+router.get('/schooler/getMyCategoryPrizes',auth, SchoolerexamController.getMyCategoryPrizes);
+
 router.post(
   "/schooler/addQuestions/:examId",
   auth,
