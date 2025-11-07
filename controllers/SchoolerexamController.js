@@ -1116,7 +1116,7 @@ exports.getAllExamGroups = async (req, res) => {
 };
 
 
-exports.getMyCategoryPrizes = async (req, res) => {
+exports.schoolerShipPrizes = async (req, res) => {
   try {
     const userId = req.user?._id;
 
