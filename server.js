@@ -17,6 +17,7 @@ const MarkingSetting = require('./routes/markingSettingRoutes');
 const PracticesTest = require('./routes/practicesRoutes');
 const SchoolerCategory = require('./routes/SchoolercategoryRoutes')
 const SchoolerExam = require('./routes/SchoolerexamRoutes')
+const UserExamGroup = require('./routes/userexamGroupRoutes')
 
 
 const Organization = require('./routes/organizationSignRoutes');
@@ -47,6 +48,7 @@ app.use('/api/v1', MarkingSetting);
 app.use('/api/v1', PracticesTest);
 app.use('/api/v1', SchoolerCategory);
 app.use('/api/v1', SchoolerExam);
+app.use('/api/v1', UserExamGroup);
 
 
 app.use('/api/v1', Organization);
