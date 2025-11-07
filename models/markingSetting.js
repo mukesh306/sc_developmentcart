@@ -36,6 +36,9 @@ const MarkingSettingSchema = new mongoose.Schema({
   deductions: {
     type: Number
   },
+  bufferTime: {
+    type: Number
+  },
 
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin', required: true },
 }, { timestamps: true });

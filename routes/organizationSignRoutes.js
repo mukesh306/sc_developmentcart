@@ -24,13 +24,26 @@ router.post("/organization/organizationUser",auth,upload.fields([
     ]), organizationSignController.organizationUser);
 
 router.get("/organization/organizationUserprofile",auth, organizationSignController.getOrganizationUserProfile);
-router.put("/organization/organizationUser/:userId", upload.fields([
+
+router.get("/organization/Organizationallocation",auth, organizationSignController.Organizationallocation);
+
+router.put("/organization/organizationUser", upload.fields([
   { name: 'aadharCard', maxCount: 1 },
   { name: 'marksheet', maxCount: 1 }
 ]), organizationSignController.updateOrganizationUser);
 
 router.delete("/organization/organizationUser/:userId", organizationSignController.deleteOrganizationUser);
+
+router.get(
+  "/organization/organizationUser/:id",
+ 
+  organizationSignController.getOrganizationUserById
+);
+
 router.post("/organization/invite", organizationSignController.inviteUsers);
+router.post("/organization/allocateuser", organizationSignController.allocateuser);
+router.get("/organization/getAllocatedUsers",auth, organizationSignController.getAllocatedUsers);
+
 
 
 router.get('/organization/verify-token', (req, res) => {

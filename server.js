@@ -15,6 +15,10 @@ const topic = require('./routes/topicRoutes');
 const experiencePoint = require('./routes/experiencePointRoutes');
 const MarkingSetting = require('./routes/markingSettingRoutes');
 const PracticesTest = require('./routes/practicesRoutes');
+const SchoolerCategory = require('./routes/SchoolercategoryRoutes')
+const SchoolerExam = require('./routes/SchoolerexamRoutes')
+
+
 const Organization = require('./routes/organizationSignRoutes');
 const ClassSeat = require('./routes/classSeatRoutes');
 
@@ -41,6 +45,10 @@ app.use('/api/v1', topic);
 app.use('/api/v1', experiencePoint);
 app.use('/api/v1', MarkingSetting);
 app.use('/api/v1', PracticesTest);
+app.use('/api/v1', SchoolerCategory);
+app.use('/api/v1', SchoolerExam);
+
+
 app.use('/api/v1', Organization);
 app.use('/api/v1', ClassSeat);
 

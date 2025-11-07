@@ -1,5 +1,6 @@
 
 const MarkingSetting = require('../models/markingSetting');
+const Schoolerexam = require("../models/Schoolerexam");
 
 exports.createOrUpdateSettings = async (req, res) => {
   const {
@@ -12,7 +13,8 @@ exports.createOrUpdateSettings = async (req, res) => {
     experiencePoint,
     maxdailyexperience,
     dailyExperience,
-     deductions
+     deductions,
+     bufferTime
   } = req.body;
 
   try {
@@ -63,6 +65,9 @@ exports.createOrUpdateSettings = async (req, res) => {
      if (maxdailyexperience !== undefined) {
       setting.maxdailyexperience = maxdailyexperience;
     }
+     if (bufferTime !== undefined) {
+      setting.bufferTime = bufferTime;
+    }
 
     await setting.save();
 
@@ -84,6 +89,44 @@ exports.getSettings = async (req, res) => {
       return res.status(404).json({ message: "Marking settings not found." });
     }
     res.json(setting);
+  } catch (err) {
+    res.status(500).json({ message: err.message });
+  }
+};
+
+
+exports.bufferTime = async (req, res) => {
+  try {
+    const { examId } = req.params;
+
+    if (!examId) {
+      return res.status(400).json({ message: "examId is required." });
+    }
+
+    // ✅ 1. Find the exam by ID
+    const exam = await Schoolerexam.findById(examId)
+      .select("ScheduleDate ScheduleTime");
+
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found." });
+    }
+
+    // ✅ 2. Get bufferTime from MarkingSetting
+    const setting = await MarkingSetting.findOne()
+      .select("bufferTime")
+
+    if (!setting) {
+      return res.status(404).json({ message: "Marking settings not found." });
+    }
+
+    // ✅ 3. Combine both results
+    res.status(200).json({
+      bufferTime: setting.bufferTime,
+      createdBy: setting.createdBy,
+      ScheduleDate: exam.ScheduleDate,
+      ScheduleTime: exam.ScheduleTime,
+    });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
