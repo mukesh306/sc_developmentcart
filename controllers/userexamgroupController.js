@@ -8,7 +8,7 @@ exports.createGroup = async (req, res) => {
       return res.status(400).json({ message: "Members array is required and cannot be empty." });
     }
 
-    // ✅ Create group
+   
     const newGroup = await UserExamGroup.create({
       members: memberIds
     });
@@ -17,6 +17,7 @@ exports.createGroup = async (req, res) => {
       message: "Group created successfully",
       group: newGroup
     });
+
     
   } catch (error) {
     console.error("Error creating group:", error);
@@ -28,8 +29,8 @@ exports.createGroup = async (req, res) => {
 exports.AlluserExamGroups = async (req, res) => {
   try {
     const groups = await UserExamGroup.find()
-      .populate("members", "name email className") // optional populate
-      .sort({ createdAt: -1 }); // latest first
+      .populate("members", "name email className") 
+      .sort({ createdAt: -1 });
 
     res.status(200).json({
       totalGroups: groups.length,
