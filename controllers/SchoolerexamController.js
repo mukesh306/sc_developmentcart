@@ -1096,7 +1096,6 @@ exports.Leaderboard = async (req, res) => {
 };
 
 
-
 exports.getAllExamGroups = async (req, res) => {
   try {
     const examGroups = await ExamGroup.find()
