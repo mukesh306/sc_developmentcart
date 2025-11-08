@@ -232,7 +232,6 @@ exports.getAllSchoolergroups = async (req, res) => {
 
 
 
-
 exports.getSchoolergroupById = async (req, res) => {
   try {
     const group = await Schoolergroup.findById(req.params.id)
