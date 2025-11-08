@@ -102,7 +102,6 @@ exports.getAllActiveUsers = async (req, res) => {
   try {
     const { className } = req.query;
 
-   
     let query = { status: "yes" };
 
    
