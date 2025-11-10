@@ -209,14 +209,14 @@ exports.updateGroup = async (req, res) => {
 
     res.status(200).json({
       message: "Group updated successfully",
-      group: {
-        _id: updatedGroup._id,
-        category: updatedGroup.category ? updatedGroup.category.name : "N/A",
-        className: updatedGroup.className ? updatedGroup.className.name : "N/A",
-        totalMembers: updatedGroup.members.length,
-        members: updatedGroup.members,
-        createdAt: updatedGroup.createdAt,
-      },
+      // group: {
+      //   _id: updatedGroup._id,
+      //   category: updatedGroup.category ? updatedGroup.category.name : "N/A",
+      //   className: updatedGroup.className ? updatedGroup.className.name : "N/A",
+      //   totalMembers: updatedGroup.members.length,
+      //   members: updatedGroup.members,
+      //   createdAt: updatedGroup.createdAt,
+      // },
     });
   } catch (error) {
     console.error("Update Group Error:", error);
