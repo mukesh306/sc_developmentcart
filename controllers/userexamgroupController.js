@@ -46,6 +46,55 @@ exports.createGroup = async (req, res) => {
   }
 };
 
+// exports.AlluserExamGroups = async (req, res) => {
+//   try {
+//     const { className } = req.query;
+
+//     // ✅ Build query
+//     let query = {};
+//     if (className && mongoose.Types.ObjectId.isValid(className)) {
+//       query.className = className;
+//     }
+
+//     // ✅ Fetch groups based on className filter
+//     const groups = await UserExamGroup.find(query)
+//       .populate("category", "name")
+//       .sort({ createdAt: -1 });
+
+//     let finalGroups = [];
+
+//     for (let group of groups) {
+//       // ✅ Get className details like before
+//       let classId = group.className;
+//       let classDetails = null;
+
+//       if (mongoose.Types.ObjectId.isValid(classId)) {
+//         classDetails = (await School.findById(classId)) || (await College.findById(classId));
+//       }
+
+//       // ✅ Only return total member count
+//       const totalMembers = group.members ? group.members.length : 0;
+
+//       finalGroups.push({
+//         _id: group._id,
+//         category: group.category ? group.category.name : "N/A",
+//         className: classDetails ? classDetails.name : "N/A",
+//         totalMembers,
+//         createdAt: group.createdAt,
+//       });
+//     }
+
+//     return res.status(200).json({
+//       message: "Groups fetched successfully",
+//       totalGroups: finalGroups.length,
+//       groups: finalGroups,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching groups:", error);
+//     res.status(500).json({ message: "Internal Server Error", error: error.message });
+//   }
+// };
+
 exports.AlluserExamGroups = async (req, res) => {
   try {
     const { className } = req.query;
@@ -56,30 +105,40 @@ exports.AlluserExamGroups = async (req, res) => {
       query.className = className;
     }
 
-    // ✅ Fetch groups based on className filter
+    // ✅ Fetch groups with category populated
     const groups = await UserExamGroup.find(query)
-      .populate("category", "name")
+      .populate("category", "name _id")
       .sort({ createdAt: -1 });
 
     let finalGroups = [];
 
     for (let group of groups) {
-      // ✅ Get className details like before
+      // ✅ Get className details (from School or College)
       let classId = group.className;
       let classDetails = null;
 
       if (mongoose.Types.ObjectId.isValid(classId)) {
-        classDetails = (await School.findById(classId)) || (await College.findById(classId));
+        classDetails =
+          (await School.findById(classId).select("name _id")) ||
+          (await College.findById(classId).select("name _id"));
       }
 
-      // ✅ Only return total member count
+      // ✅ Count members
       const totalMembers = group.members ? group.members.length : 0;
 
+      // ✅ Construct clean response object
       finalGroups.push({
         _id: group._id,
-        category: group.category ? group.category.name : "N/A",
-        className: classDetails ? classDetails.name : "N/A",
+        category: {
+          _id: group.category ? group.category._id : null,
+          name: group.category ? group.category.name : "N/A",
+        },
+        className: {
+          _id: classDetails ? classDetails._id : null,
+          name: classDetails ? classDetails.name : "N/A",
+        },
         totalMembers,
+        members: [], // Always empty as per your request
         createdAt: group.createdAt,
       });
     }
@@ -94,6 +153,7 @@ exports.AlluserExamGroups = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 
 exports.updateGroup = async (req, res) => {
   try {
