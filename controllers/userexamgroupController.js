@@ -105,7 +105,7 @@ exports.AlluserExamGroups = async (req, res) => {
       query.className = className;
     }
 
-    // ✅ Fetch groups with category populated
+    // ✅ Fetch groups and populate category
     const groups = await UserExamGroup.find(query)
       .populate("category", "name _id")
       .sort({ createdAt: -1 });
@@ -113,7 +113,7 @@ exports.AlluserExamGroups = async (req, res) => {
     let finalGroups = [];
 
     for (let group of groups) {
-      // ✅ Get className details (from School or College)
+      // ✅ Get className details (School or College)
       let classId = group.className;
       let classDetails = null;
 
@@ -123,10 +123,7 @@ exports.AlluserExamGroups = async (req, res) => {
           (await College.findById(classId).select("name _id"));
       }
 
-      // ✅ Count members
-      const totalMembers = group.members ? group.members.length : 0;
-
-      // ✅ Construct clean response object
+      // ✅ Prepare response object
       finalGroups.push({
         _id: group._id,
         category: {
@@ -137,8 +134,8 @@ exports.AlluserExamGroups = async (req, res) => {
           _id: classDetails ? classDetails._id : null,
           name: classDetails ? classDetails.name : "N/A",
         },
-        totalMembers,
-        members: [], // Always empty as per your request
+        totalMembers: group.members ? group.members.length : 0,
+        members: group.members || [], // only user IDs
         createdAt: group.createdAt,
       });
     }
