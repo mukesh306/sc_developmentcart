@@ -95,34 +95,75 @@ exports.AlluserExamGroups = async (req, res) => {
   }
 };
 
-
 exports.updateGroup = async (req, res) => {
   try {
     const { groupId } = req.params;
-    const { memberIds } = req.body; // New array of user IDs
+    const { memberIds, category, className } = req.body;
 
-    if (!memberIds || !Array.isArray(memberIds) || memberIds.length === 0) {
-      return res.status(400).json({ message: "Members array cannot be empty." });
+    // ✅ Validate groupId
+    if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
+      return res.status(400).json({ message: "Valid groupId is required." });
     }
 
+    // ✅ Find group first
+    const existingGroup = await UserExamGroup.findById(groupId);
+    if (!existingGroup) {
+      return res.status(404).json({ message: "Group not found." });
+    }
+
+    // ✅ Prepare update object
+    let updateData = {};
+
+    // ✅ Validate members (optional but not empty if provided)
+    if (memberIds) {
+      if (!Array.isArray(memberIds) || memberIds.length === 0) {
+        return res
+          .status(400)
+          .json({ message: "Members array must be non-empty if provided." });
+      }
+      updateData.members = memberIds;
+    }
+
+    // ✅ Validate and set category
+    if (category) {
+      if (!mongoose.Types.ObjectId.isValid(category)) {
+        return res.status(400).json({ message: "Invalid category ID." });
+      }
+      updateData.category = category;
+    }
+
+    // ✅ Validate and set className
+    if (className) {
+      if (!mongoose.Types.ObjectId.isValid(className)) {
+        return res.status(400).json({ message: "Invalid className ID." });
+      }
+      updateData.className = className;
+    }
+
+    // ✅ Perform update
     const updatedGroup = await UserExamGroup.findByIdAndUpdate(
       groupId,
-      { members: memberIds },
+      updateData,
       { new: true }
-    ).populate("members", "name email");
-
-    if (!updatedGroup) {
-      return res.status(404).json({ message: "Group not found" });
-    }
+    )
+      .populate("members", "name email")
+      .populate("category", "name")
+      .populate("className", "name");
 
     res.status(200).json({
       message: "Group updated successfully",
-      group: updatedGroup,
+      group: {
+        _id: updatedGroup._id,
+        category: updatedGroup.category ? updatedGroup.category.name : "N/A",
+        className: updatedGroup.className ? updatedGroup.className.name : "N/A",
+        totalMembers: updatedGroup.members.length,
+        members: updatedGroup.members,
+        createdAt: updatedGroup.createdAt,
+      },
     });
-
   } catch (error) {
     console.error("Update Group Error:", error);
-    res.status(500).json({ message: "Internal Server Error" });
+    res.status(500).json({ message: "Internal Server Error", error: error.message });
   }
 };
 
