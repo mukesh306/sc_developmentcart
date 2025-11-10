@@ -97,15 +97,18 @@ exports.createGroup = async (req, res) => {
 
 exports.AlluserExamGroups = async (req, res) => {
   try {
-    const { className } = req.query;
+    const { className, category } = req.query; 
 
-    // ✅ Build query
+   
     let query = {};
     if (className && mongoose.Types.ObjectId.isValid(className)) {
       query.className = className;
     }
+    if (category && mongoose.Types.ObjectId.isValid(category)) {
+      query.category = category;
+    }
 
-    // ✅ Fetch groups and populate category
+    // ✅ Fetch groups based on filters
     const groups = await UserExamGroup.find(query)
       .populate("category", "name _id")
       .sort({ createdAt: -1 });
@@ -113,7 +116,7 @@ exports.AlluserExamGroups = async (req, res) => {
     let finalGroups = [];
 
     for (let group of groups) {
-      // ✅ Get className details (School or College)
+      // ✅ Get className details from School or College
       let classId = group.className;
       let classDetails = null;
 
@@ -123,7 +126,7 @@ exports.AlluserExamGroups = async (req, res) => {
           (await College.findById(classId).select("name _id"));
       }
 
-      // ✅ Prepare response object
+      // ✅ Prepare clean response
       finalGroups.push({
         _id: group._id,
         category: {
@@ -147,9 +150,12 @@ exports.AlluserExamGroups = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching groups:", error);
-    res.status(500).json({ message: "Internal Server Error", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Internal Server Error", error: error.message });
   }
 };
+
 
 
 exports.updateGroup = async (req, res) => {
