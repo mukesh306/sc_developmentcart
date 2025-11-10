@@ -256,12 +256,22 @@ exports.deleteGroup = async (req, res) => {
 
 //     let query = { status: "yes" };
 
-   
 //     if (className && mongoose.Types.ObjectId.isValid(className)) {
 //       query.className = className;
 //     }
 
-//     // ✅ Fetch users
+//     // ✅ Fetch all userIds already in any group
+//     const groupedUsers = await UserExamGroup.find({}, "members");
+//     const groupedUserIds = groupedUsers
+//       .flatMap(g => g.members)
+//       .map(id => id.toString());
+
+//     // ✅ Exclude already grouped users
+//     if (groupedUserIds.length > 0) {
+//       query._id = { $nin: groupedUserIds };
+//     }
+
+//     // ✅ Fetch users not in any group
 //     let users = await User.find(query)
 //       .populate('countryId', 'name')
 //       .populate('stateId', 'name')
@@ -309,7 +319,7 @@ exports.deleteGroup = async (req, res) => {
 //     }
 
 //     return res.status(200).json({
-//       message: 'Active users fetched successfully.',
+//       message: 'Active users fetched successfully (excluding already grouped users).',
 //       users: finalList
 //     });
 
@@ -319,9 +329,10 @@ exports.deleteGroup = async (req, res) => {
 //   }
 // };
 
+
 exports.getAllActiveUsers = async (req, res) => {
   try {
-    const { className } = req.query;
+    const { className, groupId } = req.query; 
 
     let query = { status: "yes" };
 
@@ -329,18 +340,27 @@ exports.getAllActiveUsers = async (req, res) => {
       query.className = className;
     }
 
-    // ✅ Fetch all userIds already in any group
+    // ✅ Step 1: Collect all userIds that are members of any group
     const groupedUsers = await UserExamGroup.find({}, "members");
-    const groupedUserIds = groupedUsers
-      .flatMap(g => g.members)
-      .map(id => id.toString());
+    const allGroupedUserIds = groupedUsers.flatMap(g => g.members.map(id => id.toString()));
 
-    // ✅ Exclude already grouped users
-    if (groupedUserIds.length > 0) {
-      query._id = { $nin: groupedUserIds };
+    // ✅ Step 2: Get members of the current group (if editing)
+    let currentGroupMemberIds = [];
+    if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
+      const currentGroup = await UserExamGroup.findById(groupId).select("members");
+      if (currentGroup) {
+        currentGroupMemberIds = currentGroup.members.map(id => id.toString());
+      }
     }
 
-    // ✅ Fetch users not in any group
+    // ✅ Step 3: Exclude all grouped users except the ones in current group
+    const excludeIds = allGroupedUserIds.filter(id => !currentGroupMemberIds.includes(id));
+
+    if (excludeIds.length > 0) {
+      query._id = { $nin: excludeIds };
+    }
+
+    // ✅ Step 4: Fetch users (remaining + current group)
     let users = await User.find(query)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
@@ -351,11 +371,9 @@ exports.getAllActiveUsers = async (req, res) => {
       });
 
     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
-
     let finalList = [];
 
     for (let user of users) {
-
       let classId = user.className;
       let classDetails = null;
 
@@ -388,7 +406,7 @@ exports.getAllActiveUsers = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: 'Active users fetched successfully (excluding already grouped users).',
+      message: 'Active users fetched successfully (excluding other groups, including current group users).',
       users: finalList
     });
 
