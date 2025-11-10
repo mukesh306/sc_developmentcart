@@ -6,7 +6,8 @@ const UserExamGroup = require("../models/userExamGroup");
 const User = require('../models/User');
 const College = require('../models/college');
 const School = require('../models/school');
-const Schoolercategory = require("../models/schoolershipcategory");
+// const Schoolercategory = require("../models/schoolershipcategory");
+
 exports.createGroup = async (req, res) => {
   try {
     const { memberIds, category, className } = req.body;
@@ -47,18 +48,23 @@ exports.createGroup = async (req, res) => {
 
 exports.AlluserExamGroups = async (req, res) => {
   try {
-    // ✅ Fetch all groups
-    const groups = await UserExamGroup.find()
-      .populate("members", "name email className")
-      .populate("category", "name") // ✅ populate category name
-      .sort({ createdAt: -1 });
+    const { className } = req.query;
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
+    // ✅ Build query
+    let query = {};
+    if (className && mongoose.Types.ObjectId.isValid(className)) {
+      query.className = className;
+    }
+
+    // ✅ Fetch groups based on className filter
+    const groups = await UserExamGroup.find(query)
+      .populate("category", "name")
+      .sort({ createdAt: -1 });
 
     let finalGroups = [];
 
     for (let group of groups) {
-      // ✅ Get className details like in getAllActiveUsers
+      // ✅ Get className details like before
       let classId = group.className;
       let classDetails = null;
 
@@ -66,28 +72,19 @@ exports.AlluserExamGroups = async (req, res) => {
         classDetails = (await School.findById(classId)) || (await College.findById(classId));
       }
 
-      // ✅ Count members
+      // ✅ Only return total member count
       const totalMembers = group.members ? group.members.length : 0;
 
-      // ✅ Prepare group response
-      const formattedGroup = {
+      finalGroups.push({
         _id: group._id,
         category: group.category ? group.category.name : "N/A",
         className: classDetails ? classDetails.name : "N/A",
         totalMembers,
-        members: group.members.map((m) => ({
-          _id: m._id,
-          name: m.name,
-          email: m.email,
-          className: m.className,
-        })),
         createdAt: group.createdAt,
-      };
-
-      finalGroups.push(formattedGroup);
+      });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Groups fetched successfully",
       totalGroups: finalGroups.length,
       groups: finalGroups,
