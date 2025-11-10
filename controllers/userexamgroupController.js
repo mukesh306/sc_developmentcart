@@ -415,3 +415,116 @@ exports.getAllActiveUsers = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+exports.getUserStates = async (req, res) => {
+  try {
+    const { className, groupId } = req.query;
+    let query = { status: "yes" };
+
+    if (className && mongoose.Types.ObjectId.isValid(className)) {
+      query.className = className;
+    }
+
+    // ✅ Step 1: Get grouped users
+    const groupedUsers = await UserExamGroup.find({}, "members");
+    const allGroupedUserIds = groupedUsers.flatMap(g => g.members.map(id => id.toString()));
+
+    // ✅ Step 2: Current group (if editing)
+    let currentGroupMemberIds = [];
+    if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
+      const currentGroup = await UserExamGroup.findById(groupId).select("members");
+      if (currentGroup) {
+        currentGroupMemberIds = currentGroup.members.map(id => id.toString());
+      }
+    }
+
+    // ✅ Step 3: Exclude already grouped users
+    const excludeIds = allGroupedUserIds.filter(id => !currentGroupMemberIds.includes(id));
+    if (excludeIds.length > 0) {
+      query._id = { $nin: excludeIds };
+    }
+
+    // ✅ Step 4: Fetch all users (only state)
+    const users = await User.find(query).select("stateId").populate("stateId", "name");
+
+    // ✅ Step 5: Extract unique states
+    const uniqueStatesMap = new Map();
+    for (let u of users) {
+      if (u.stateId && !uniqueStatesMap.has(u.stateId._id.toString())) {
+        uniqueStatesMap.set(u.stateId._id.toString(), {
+          _id: u.stateId._id,
+          name: u.stateId.name
+        });
+      }
+    }
+
+    const uniqueStates = Array.from(uniqueStatesMap.values());
+
+    return res.status(200).json({
+      message: "Unique states fetched successfully.",
+      states: uniqueStates
+    });
+  } catch (error) {
+    console.error("Get User States Error:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+
+exports.getUserCitiesByState = async (req, res) => {
+  try {
+    const { stateId, className, groupId } = req.query;
+    if (!stateId || !mongoose.Types.ObjectId.isValid(stateId)) {
+      return res.status(400).json({ message: "Valid stateId is required." });
+    }
+
+    let query = { status: "yes", stateId };
+
+    if (className && mongoose.Types.ObjectId.isValid(className)) {
+      query.className = className;
+    }
+
+    // ✅ Step 1: Get grouped users
+    const groupedUsers = await UserExamGroup.find({}, "members");
+    const allGroupedUserIds = groupedUsers.flatMap(g => g.members.map(id => id.toString()));
+
+    // ✅ Step 2: Current group (if editing)
+    let currentGroupMemberIds = [];
+    if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
+      const currentGroup = await UserExamGroup.findById(groupId).select("members");
+      if (currentGroup) {
+        currentGroupMemberIds = currentGroup.members.map(id => id.toString());
+      }
+    }
+
+    // ✅ Step 3: Exclude grouped users
+    const excludeIds = allGroupedUserIds.filter(id => !currentGroupMemberIds.includes(id));
+    if (excludeIds.length > 0) {
+      query._id = { $nin: excludeIds };
+    }
+
+    // ✅ Step 4: Fetch users (only city)
+    const users = await User.find(query).select("cityId").populate("cityId", "name");
+
+    // ✅ Step 5: Unique cities
+    const uniqueCitiesMap = new Map();
+    for (let u of users) {
+      if (u.cityId && !uniqueCitiesMap.has(u.cityId._id.toString())) {
+        uniqueCitiesMap.set(u.cityId._id.toString(), {
+          _id: u.cityId._id,
+          name: u.cityId.name
+        });
+      }
+    }
+
+    const uniqueCities = Array.from(uniqueCitiesMap.values());
+
+    return res.status(200).json({
+      message: "Cities fetched successfully for selected state.",
+      cities: uniqueCities
+    });
+  } catch (error) {
+    console.error("Get User Cities Error:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
