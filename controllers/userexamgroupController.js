@@ -329,36 +329,21 @@ exports.deleteGroup = async (req, res) => {
 //   }
 // };
 
-
 exports.getAllActiveUsers = async (req, res) => {
   try {
     const { className, groupId, stateId, cityId, category } = req.query;
 
     const allowedCategoryId = "6909f6ea193d765a50c836f9";
 
-    // ✅ If category is provided
-    if (category) {
-      if (category === allowedCategoryId) {
-        // 🔹 Bas category ka info dikhana hai
-        const categoryData = await Schoolercategory.findById(category).select("name _id status createdAt");
-        if (!categoryData) {
-          return res.status(404).json({ message: "Category not found." });
-        }
-
-        return res.status(200).json({
-          message: "Category fetched successfully.",
-          category: categoryData
-        });
-      } else {
-        // 🔹 Agar category allowed wali nahi hai → empty data
-        return res.status(200).json({
-          message: "No data for this category.",
-          category: null
-        });
-      }
+    // ✅ Agar category di gayi hai aur wo allowed wali nahi hai
+    if (category && category !== allowedCategoryId) {
+      return res.status(200).json({
+        message: "No users found for this category.",
+        users: []
+      });
     }
 
-    // ✅ If no category is provided → normal user logic chalega
+    // ✅ Normal logic (agar category nahi di gayi ho ya allowed wali di gayi ho)
     let query = { status: "yes" };
 
     // ✅ Filter by className
@@ -391,6 +376,7 @@ exports.getAllActiveUsers = async (req, res) => {
 
     // ✅ Step 3: Exclude all grouped users except the ones in current group
     const excludeIds = allGroupedUserIds.filter(id => !currentGroupMemberIds.includes(id));
+
     if (excludeIds.length > 0) {
       query._id = { $nin: excludeIds };
     }
@@ -450,6 +436,7 @@ exports.getAllActiveUsers = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
