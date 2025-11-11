@@ -1,3 +1,5 @@
+
+const mongoose = require('mongoose');
 const Schoolerexam = require("../models/Schoolerexam");
 const School = require("../models/school");      
 const College = require("../models/college");
