@@ -986,6 +986,119 @@ exports.calculateExamResult = async (req, res) => {
 
 
 
+// exports.topusers = async (req, res) => {
+//   try {
+//     const examId = req.params.id;
+
+//     if (!examId) {
+//       return res.status(400).json({ message: "examId required." });
+//     }
+
+//     // 1️⃣ Get exam for passout limit
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) {
+//       return res.status(404).json({ message: "Exam not found." });
+//     }
+
+//     // ✅ Passout limit (how many toppers per group)
+//     const passoutLimit = parseInt(exam.passout) || 1;
+
+//     // 2️⃣ Get all groups with members for this exam
+//     const groups = await ExamGroup.find({ examId }).populate(
+//       "members",
+//       "firstName lastName email"
+//     );
+
+//     if (!groups || groups.length === 0) {
+//       return res.status(200).json({
+//         message: "No groups found for this exam.",
+//         users: [],
+//       });
+//     }
+
+//     let allUsers = [];
+
+//     // 3️⃣ Collect top users from each group
+//     for (const group of groups) {
+//       const memberIds = group.members.map((m) => m._id);
+
+//       const scores = await ExamResult.find({
+//         examId,
+//         userId: { $in: memberIds },
+//       })
+//         .populate("userId", "firstName lastName email")
+//         .sort({ finalScore: -1 });
+
+//       // ✅ Pick top N users as per passout limit
+//       const topUsers = scores.slice(0, passoutLimit);
+//       allUsers.push(...topUsers);
+//     }
+
+//     // 4️⃣ Remove duplicate users (in case user exists in multiple groups)
+//     const uniqueUsers = [];
+//     const seen = new Set();
+
+//     for (const user of allUsers) {
+//       const userId = user.userId?._id?.toString();
+//       if (userId && !seen.has(userId)) {
+//         seen.add(userId);
+//         uniqueUsers.push(user);
+//       }
+//     }
+
+//     // 5️⃣ Calculate rank based on percentage across all users
+//     const allResults = await ExamResult.find({ examId })
+//       .select("userId percentage createdAt")
+//       .sort({ percentage: -1, createdAt: 1 })
+//       .lean();
+
+//     const ranks = new Map();
+//     allResults.forEach((result, index) => {
+//       ranks.set(result.userId.toString(), index + 1);
+//     });
+
+//     // 6️⃣ Attach rank and completion time to users
+//     for (let i = 0; i < uniqueUsers.length; i++) {
+//       const userId = uniqueUsers[i].userId?._id?.toString();
+//       const rank = ranks.get(userId) || null;
+
+//       uniqueUsers[i]._doc = {
+//         ...uniqueUsers[i]._doc,
+//         rank,
+//         Completiontime: uniqueUsers[i].Completiontime || null,
+//       };
+//     }
+
+//     // 7️⃣ Sort final list by rank (lowest rank = higher position)
+//     uniqueUsers.sort((a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999));
+
+//     // ✅ 8️⃣ Final Response
+//     return res.status(200).json({
+//       message: `Top ${passoutLimit} users fetched successfully for Exam "${exam.name || exam._id}".`,
+//       examId: exam._id,
+//       passoutLimit,
+//       users: uniqueUsers.map((u) => ({
+//         userId: u.userId?._id,
+//         firstName: u.userId?.firstName,
+//         lastName: u.userId?.lastName,
+//         email: u.userId?.email,
+//         finalScore: u.finalScore,
+//         percentage: u.percentage,
+//         rank: u._doc.rank,
+//         Completiontime: u._doc.Completiontime,
+//       })),
+//     });
+//   } catch (error) {
+//     console.error("🔥 Error in topusers:", error);
+//     return res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
+
 exports.topusers = async (req, res) => {
   try {
     const examId = req.params.id;
@@ -1072,7 +1185,31 @@ exports.topusers = async (req, res) => {
     // 7️⃣ Sort final list by rank (lowest rank = higher position)
     uniqueUsers.sort((a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999));
 
-    // ✅ 8️⃣ Final Response
+    // ✅ 8️⃣ Check if this exam is the last exam of its category
+    const lastExam = await Schoolerexam.findOne({ categoryId: exam.categoryId })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (lastExam && lastExam._id.toString() === examId.toString()) {
+      console.log("✅ This is the last exam of the category. Saving top users...");
+
+      // Save top users in CategoryTopUser collection
+      for (const u of uniqueUsers) {
+        await CategoryTopUser.findOneAndUpdate(
+          { userId: u.userId._id, examId, categoryId: exam.categoryId },
+          {
+            userId: u.userId._id,
+            examId,
+            categoryId: exam.categoryId,
+            percentage: u.percentage,
+            rank: u._doc.rank,
+          },
+          { upsert: true, new: true }
+        );
+      }
+    }
+
+    // ✅ 9️⃣ Final Response
     return res.status(200).json({
       message: `Top ${passoutLimit} users fetched successfully for Exam "${exam.name || exam._id}".`,
       examId: exam._id,
@@ -1096,8 +1233,6 @@ exports.topusers = async (req, res) => {
     });
   }
 };
-
-
 
 exports.Leaderboard = async (req, res) => {
   try {
