@@ -329,45 +329,31 @@ exports.deleteGroup = async (req, res) => {
 //   }
 // };
 
+
 exports.getAllActiveUsers = async (req, res) => {
   try {
-    const { className, groupId, stateId, cityId, category } = req.query;
+    const { className, groupId, stateId, cityId } = req.query;
 
-    // ✅ Fixed allowed category ID
-    const allowedCategoryId = "6909f6ea193d765a50c836f9";
+    let query = { status: "yes" };
 
-    // ✅ If category is passed and not matching the allowed one → return empty
-    if (category && category !== allowedCategoryId) {
-      return res.status(200).json({
-        message: "No users found — category not allowed.",
-        users: []
-      });
-    }
-
-    // ✅ Base query (always filtered by allowed category)
-    let query = {
-      status: "yes",
-      category: allowedCategoryId
-    };
-
-    // ✅ Optional filters
+    // ✅ Filter by className
     if (className && mongoose.Types.ObjectId.isValid(className)) {
       query.className = className;
     }
 
+    // ✅ Filter by state
     if (stateId && mongoose.Types.ObjectId.isValid(stateId)) {
       query.stateId = stateId;
     }
 
+    // ✅ Filter by city
     if (cityId && mongoose.Types.ObjectId.isValid(cityId)) {
       query.cityId = cityId;
     }
 
     // ✅ Step 1: Collect all userIds that are members of any group
     const groupedUsers = await UserExamGroup.find({}, "members");
-    const allGroupedUserIds = groupedUsers.flatMap(g =>
-      g.members.map(id => id.toString())
-    );
+    const allGroupedUserIds = groupedUsers.flatMap(g => g.members.map(id => id.toString()));
 
     // ✅ Step 2: Get members of the current group (if editing)
     let currentGroupMemberIds = [];
@@ -378,32 +364,24 @@ exports.getAllActiveUsers = async (req, res) => {
       }
     }
 
-    // ✅ Step 3: Exclude all grouped users except those in current group
-    const excludeIds = allGroupedUserIds.filter(
-      id => !currentGroupMemberIds.includes(id)
-    );
+    // ✅ Step 3: Exclude all grouped users except the ones in current group
+    const excludeIds = allGroupedUserIds.filter(id => !currentGroupMemberIds.includes(id));
 
     if (excludeIds.length > 0) {
       query._id = { $nin: excludeIds };
     }
 
-    // ✅ Step 4: Fetch users with populations
+    // ✅ Step 4: Fetch users
     let users = await User.find(query)
-      .populate("countryId", "name")
-      .populate("stateId", "name")
-      .populate("cityId", "name")
-      .populate("category", "name _id")
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
       .populate({
-        path: "updatedBy",
-        select: "email session startDate endDate endTime name role"
+        path: 'updatedBy',
+        select: 'email session startDate endDate endTime name role'
       });
 
-    // ✅ Build base URL for file paths
-    const baseUrl = `${req.protocol}://${req.get("host")}`.replace(
-      "http://",
-      "https://"
-    );
-
+    const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
     let finalList = [];
 
     for (let user of users) {
@@ -411,11 +389,9 @@ exports.getAllActiveUsers = async (req, res) => {
       let classDetails = null;
 
       if (mongoose.Types.ObjectId.isValid(classId)) {
-        classDetails =
-          (await School.findById(classId)) || (await College.findById(classId));
+        classDetails = (await School.findById(classId)) || (await College.findById(classId));
       }
 
-      // ✅ File path conversion
       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
         user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
       }
@@ -423,16 +399,13 @@ exports.getAllActiveUsers = async (req, res) => {
         user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
       }
 
-      // ✅ Format final user data
       const formattedUser = {
         ...user._doc,
-        country: user.countryId?.name || "",
-        state: user.stateId?.name || "",
-        city: user.cityId?.name || "",
-        categoryName: user.category?.name || "",
-        institutionName:
-          user.schoolName || user.collegeName || user.instituteName || "",
-        institutionType: user.studentType || "",
+        country: user.countryId?.name || '',
+        state: user.stateId?.name || '',
+        city: user.cityId?.name || '',
+        institutionName: user.schoolName || user.collegeName || user.instituteName || '',
+        institutionType: user.studentType || '',
         updatedBy: user.updatedBy || null
       };
 
@@ -443,17 +416,17 @@ exports.getAllActiveUsers = async (req, res) => {
       finalList.push(formattedUser);
     }
 
-    // ✅ Final response
     return res.status(200).json({
-      message:
-        "Active users fetched successfully (filtered by fixed category, state, city, and group).",
+      message: 'Active users fetched successfully (filtered by state, city, and excluding other groups).',
       users: finalList
     });
+
   } catch (error) {
-    console.error("Get Users Error:", error);
+    console.error('Get Users Error:', error);
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
