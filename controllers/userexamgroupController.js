@@ -329,6 +329,7 @@ exports.deleteGroup = async (req, res) => {
 //   }
 // };
 
+
 exports.getAllActiveUsers = async (req, res) => {
   try {
     const { className, groupId, stateId, cityId, category } = req.query;
@@ -436,10 +437,6 @@ exports.getAllActiveUsers = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
-
-
 
 
 

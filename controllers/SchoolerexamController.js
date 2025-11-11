@@ -283,25 +283,23 @@ exports.addQuestionsToExam = async (req, res) => {
 
 
 
+
 // exports.UsersExams = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
 //     const { category } = req.query;
 
-//     // 1️⃣ Get user class
 //     const user = await User.findById(userId).select("className");
 //     if (!user || !user.className) {
 //       return res.status(400).json({ message: "User class not found." });
 //     }
 
-//     // 2️⃣ Get all published exams of user class (sorted by order)
 //     let exams = await Schoolerexam.find({
 //       className: user.className,
-     
 //     })
 //       .populate("category", "name finalist")
 //       .populate("createdBy", "name email")
-//       .sort({ createdAt: 1 }); // oldest first (Exam 1 → Exam 2 → Exam 3...)
+//       .sort({ createdAt: 1 });
 
 //     if (!exams || exams.length === 0) {
 //       return res.status(200).json([]);
@@ -309,7 +307,6 @@ exports.addQuestionsToExam = async (req, res) => {
 
 //     const updatedExams = [];
 
-//     // 3️⃣ Prepare exams info with rank/result
 //     for (const exam of exams) {
 //       let classData =
 //         (await School.findById(exam.className).select("_id name className")) ||
@@ -363,14 +360,22 @@ exports.addQuestionsToExam = async (req, res) => {
 //         examObj.totalParticipants = 0;
 //       }
 
-//       examObj.status =
-//         examObj.percentage !== null && examObj.percentage >= 0 ? true : false;
+//       const passLimit = parseInt(exam.passout) || 1;
+//       if (examObj.rank !== null) {
+//         examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
+//       } else {
+//         examObj.result = null;
+//       }
+
+//       examObj.status = examObj.percentage !== null;
 //       examObj.publish = exam.publish;
+
+//       // ✅ BY DEFAULT ATTEND = TRUE
+//       examObj.attend = true;
 
 //       updatedExams.push(examObj);
 //     }
 
-//     // 4️⃣ Category filter (optional)
 //     let filteredExams = updatedExams;
 //     if (category) {
 //       filteredExams = filteredExams.filter(
@@ -378,38 +383,78 @@ exports.addQuestionsToExam = async (req, res) => {
 //       );
 //     }
 
-//     // 5️⃣ Visibility logic (Exam progression chain)
-//     let visibleExams = [];
+//     // ✅ FINAL ATTEND / LOCK LOGIC (CORRECTED)
+//     let stopNext = false;
+//     const now = new Date();
 
+//     for (let i = 0; i < filteredExams.length; i++) {
+//       const exam = filteredExams[i];
+
+//       const scheduledDateTime = new Date(
+//         `${exam.ScheduleDate} ${exam.ScheduleTime}`
+//       );
+
+//       // ✅ If exam is in future → always attend true
+//       if (scheduledDateTime > now) {
+//         exam.attend = true;
+//         continue;
+//       }
+
+//       // ✅ If previous exam missed or failed → lock next
+//       if (stopNext) {
+//         exam.attend = false;
+//         exam.publish = false;
+//         exam.rank = null;
+//         exam.correct = null;
+//         exam.finalScore = null;
+//         exam.percentage = null;
+//         exam.result = null;
+//         exam.status = false;
+//         continue;
+//       }
+
+//       // ✅ Missed exam (time passed + result null) → lock next exams
+//       if (scheduledDateTime < now && exam.result === null) {
+//         exam.attend = true; // missed exam itself remains attend = true
+//         stopNext = true;
+//         continue;
+//       }
+
+//       // ✅ Failed → lock next exams
+//       if (exam.result === "failed") {
+//         exam.attend = true;
+//         stopNext = true;
+//       } else {
+//         exam.attend = true;
+//       }
+//     }
+
+//     // ✅ VISIBILITY LOGIC SAME
+//     let visibleExams = [];
 //     for (let i = 0; i < filteredExams.length; i++) {
 //       const currentExam = filteredExams[i];
 
 //       if (i === 0) {
-//         // ✅ Exam 1 — visible to all
+//         currentExam.visible = true;
 //         visibleExams.push(currentExam);
-//       } else {
-//         const previousExam = filteredExams[i - 1];
-//         const passoutLimit = parseInt(previousExam.passout) || 1;
-
-//         // Get top users from previous exam
-//         const topResults = await ExamResult.find({ examId: previousExam._id })
-//           .sort({ percentage: -1, createdAt: 1 })
-//           .limit(passoutLimit)
-//           .select("userId")
-//           .lean();
-
-//         const topUserIds = topResults.map((r) => r.userId.toString());
-
-//         // ✅ Show current exam only if user is topper of previous exam
-//         if (topUserIds.includes(userId.toString())) {
-//           visibleExams.push(currentExam);
-//         } else {
-//           break; // ❌ Stop chain if user not topper — no further exams visible
-//         }
+//         continue;
 //       }
+
+//       const previousExam = filteredExams[i - 1];
+//       const passoutLimit = parseInt(previousExam.passout) || 1;
+
+//       const topResults = await ExamResult.find({ examId: previousExam._id })
+//         .sort({ percentage: -1, createdAt: 1 })
+//         .limit(passoutLimit)
+//         .select("userId")
+//         .lean();
+
+//       const topUserIds = topResults.map((r) => r.userId.toString());
+//       currentExam.visible = topUserIds.includes(userId.toString());
+
+//       visibleExams.push(currentExam);
 //     }
 
-//     // ✅ Final response
 //     return res.status(200).json(visibleExams);
 //   } catch (error) {
 //     console.error("🔥 Error fetching exams:", error);
@@ -425,11 +470,29 @@ exports.UsersExams = async (req, res) => {
     const userId = req.user._id;
     const { category } = req.query;
 
+    // ✅ 1️⃣ Get user's class
     const user = await User.findById(userId).select("className");
     if (!user || !user.className) {
       return res.status(400).json({ message: "User class not found." });
     }
 
+    // ✅ 2️⃣ Check if user is part of a UserExamGroup (class + optional category)
+    const groupQuery = {
+      className: user.className,
+      members: userId,
+    };
+    if (category && mongoose.Types.ObjectId.isValid(category)) {
+      groupQuery.category = category;
+    }
+
+    const isInGroup = await UserExamGroup.findOne(groupQuery).lean();
+
+    // ❌ 3️⃣ If user not in any group → return no exams
+    if (!isInGroup) {
+      return res.status(200).json([]);
+    }
+
+    // ✅ 4️⃣ Fetch exams normally
     let exams = await Schoolerexam.find({
       className: user.className,
     })
@@ -443,6 +506,7 @@ exports.UsersExams = async (req, res) => {
 
     const updatedExams = [];
 
+    // ✅ 5️⃣ Add logic (ranking, result, attend, etc.)
     for (const exam of exams) {
       let classData =
         (await School.findById(exam.className).select("_id name className")) ||
@@ -505,13 +569,12 @@ exports.UsersExams = async (req, res) => {
 
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
-
-      // ✅ BY DEFAULT ATTEND = TRUE
       examObj.attend = true;
 
       updatedExams.push(examObj);
     }
 
+    // ✅ 6️⃣ Filter by category (if provided)
     let filteredExams = updatedExams;
     if (category) {
       filteredExams = filteredExams.filter(
@@ -519,7 +582,7 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ✅ FINAL ATTEND / LOCK LOGIC (CORRECTED)
+    // ✅ 7️⃣ Lock / Attend logic
     let stopNext = false;
     const now = new Date();
 
@@ -530,13 +593,11 @@ exports.UsersExams = async (req, res) => {
         `${exam.ScheduleDate} ${exam.ScheduleTime}`
       );
 
-      // ✅ If exam is in future → always attend true
       if (scheduledDateTime > now) {
         exam.attend = true;
         continue;
       }
 
-      // ✅ If previous exam missed or failed → lock next
       if (stopNext) {
         exam.attend = false;
         exam.publish = false;
@@ -549,14 +610,12 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      // ✅ Missed exam (time passed + result null) → lock next exams
       if (scheduledDateTime < now && exam.result === null) {
-        exam.attend = true; // missed exam itself remains attend = true
+        exam.attend = true;
         stopNext = true;
         continue;
       }
 
-      // ✅ Failed → lock next exams
       if (exam.result === "failed") {
         exam.attend = true;
         stopNext = true;
@@ -565,7 +624,7 @@ exports.UsersExams = async (req, res) => {
       }
     }
 
-    // ✅ VISIBILITY LOGIC SAME
+    // ✅ 8️⃣ Visibility logic
     let visibleExams = [];
     for (let i = 0; i < filteredExams.length; i++) {
       const currentExam = filteredExams[i];
@@ -591,6 +650,7 @@ exports.UsersExams = async (req, res) => {
       visibleExams.push(currentExam);
     }
 
+    // ✅ 9️⃣ Final response
     return res.status(200).json(visibleExams);
   } catch (error) {
     console.error("🔥 Error fetching exams:", error);
@@ -600,7 +660,6 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
-
 
 
 
