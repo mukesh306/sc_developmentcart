@@ -333,9 +333,10 @@ exports.getAllActiveUsers = async (req, res) => {
   try {
     const { className, groupId, stateId, cityId, category } = req.query;
 
-    const allowedCategoryId = "6909f6ea193d765a50c836f9"; // ✅ Fixed allowed category
+    // ✅ Fixed allowed category ID
+    const allowedCategoryId = "6909f6ea193d765a50c836f9";
 
-    // ✅ If category is passed and not matching → return empty
+    // ✅ If category is passed and not matching the allowed one → return empty
     if (category && category !== allowedCategoryId) {
       return res.status(200).json({
         message: "No users found — category not allowed.",
@@ -343,7 +344,7 @@ exports.getAllActiveUsers = async (req, res) => {
       });
     }
 
-    // ✅ Base query (always filter by allowed category)
+    // ✅ Base query (always filtered by allowed category)
     let query = {
       status: "yes",
       category: allowedCategoryId
@@ -364,7 +365,9 @@ exports.getAllActiveUsers = async (req, res) => {
 
     // ✅ Step 1: Collect all userIds that are members of any group
     const groupedUsers = await UserExamGroup.find({}, "members");
-    const allGroupedUserIds = groupedUsers.flatMap(g => g.members.map(id => id.toString()));
+    const allGroupedUserIds = groupedUsers.flatMap(g =>
+      g.members.map(id => id.toString())
+    );
 
     // ✅ Step 2: Get members of the current group (if editing)
     let currentGroupMemberIds = [];
@@ -375,13 +378,16 @@ exports.getAllActiveUsers = async (req, res) => {
       }
     }
 
-    // ✅ Step 3: Exclude grouped users except current group users
-    const excludeIds = allGroupedUserIds.filter(id => !currentGroupMemberIds.includes(id));
+    // ✅ Step 3: Exclude all grouped users except those in current group
+    const excludeIds = allGroupedUserIds.filter(
+      id => !currentGroupMemberIds.includes(id)
+    );
+
     if (excludeIds.length > 0) {
       query._id = { $nin: excludeIds };
     }
 
-    // ✅ Step 4: Fetch users
+    // ✅ Step 4: Fetch users with populations
     let users = await User.find(query)
       .populate("countryId", "name")
       .populate("stateId", "name")
@@ -392,7 +398,12 @@ exports.getAllActiveUsers = async (req, res) => {
         select: "email session startDate endDate endTime name role"
       });
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
+    // ✅ Build base URL for file paths
+    const baseUrl = `${req.protocol}://${req.get("host")}`.replace(
+      "http://",
+      "https://"
+    );
+
     let finalList = [];
 
     for (let user of users) {
@@ -400,9 +411,11 @@ exports.getAllActiveUsers = async (req, res) => {
       let classDetails = null;
 
       if (mongoose.Types.ObjectId.isValid(classId)) {
-        classDetails = (await School.findById(classId)) || (await College.findById(classId));
+        classDetails =
+          (await School.findById(classId)) || (await College.findById(classId));
       }
 
+      // ✅ File path conversion
       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
         user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
       }
@@ -410,13 +423,15 @@ exports.getAllActiveUsers = async (req, res) => {
         user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
       }
 
+      // ✅ Format final user data
       const formattedUser = {
         ...user._doc,
         country: user.countryId?.name || "",
         state: user.stateId?.name || "",
         city: user.cityId?.name || "",
         categoryName: user.category?.name || "",
-        institutionName: user.schoolName || user.collegeName || user.instituteName || "",
+        institutionName:
+          user.schoolName || user.collegeName || user.instituteName || "",
         institutionType: user.studentType || "",
         updatedBy: user.updatedBy || null
       };
@@ -428,17 +443,17 @@ exports.getAllActiveUsers = async (req, res) => {
       finalList.push(formattedUser);
     }
 
+    // ✅ Final response
     return res.status(200).json({
-      message: "Active users fetched successfully (filtered by fixed category, state, city, and group).",
+      message:
+        "Active users fetched successfully (filtered by fixed category, state, city, and group).",
       users: finalList
     });
-
   } catch (error) {
     console.error("Get Users Error:", error);
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
