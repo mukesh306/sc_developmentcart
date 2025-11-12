@@ -1371,36 +1371,117 @@ exports.topusers = async (req, res) => {
 
 
 
+// exports.Leaderboard = async (req, res) => {
+//   try {
+//     const examId = req.params.id;
+//     const loggedInUserId = req.user?._id;
+//     if (!examId) return res.status(400).json({ message: "examId required." });
+
+//     // 1️⃣ Check exam
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) return res.status(404).json({ message: "Exam not found." });
+
+//     // 2️⃣ Get all exam results for this exam (all users who attempted)
+//     const allResults = await ExamResult.find({ examId })
+//       .populate("userId", "firstName lastName email")
+//       .sort({ percentage: -1, Completiontime: 1 });
+
+//     if (!allResults || allResults.length === 0) {
+//       return res.status(200).json({
+//         message: "No users have attempted this exam yet.",
+//         users: [],
+//       });
+//     }
+
+//     // 3️⃣ Assign ranks
+//     const rankedResults = allResults.map((result, index) => ({
+//       ...result._doc,
+//       rank: index + 1,
+//       Completiontime: result.Completiontime || null,
+//     }));
+
+//     // 4️⃣ Bring logged-in user to the top (without changing ranks)
+//     if (loggedInUserId) {
+//       const idx = rankedResults.findIndex(
+//         (r) =>
+//           r.userId &&
+//           (r.userId._id ? r.userId._id.toString() : r.userId.toString()) ===
+//             loggedInUserId.toString()
+//       );
+//       if (idx > -1) {
+//         const [tokenUser] = rankedResults.splice(idx, 1);
+//         rankedResults.unshift(tokenUser);
+//       }
+//     }
+
+//     // 5️⃣ Response
+//     return res.status(200).json({
+//       message: "All users fetched successfully.",
+//       users: rankedResults,
+//     });
+//   } catch (error) {
+//     console.error("Error in Leaderboard:", error);
+//     res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
 exports.Leaderboard = async (req, res) => {
   try {
     const examId = req.params.id;
     const loggedInUserId = req.user?._id;
-    if (!examId) return res.status(400).json({ message: "examId required." });
 
-    // 1️⃣ Check exam
+    if (!examId) {
+      return res.status(400).json({ message: "examId required." });
+    }
+
+    // 1️⃣ Check if exam exists
     const exam = await Schoolerexam.findById(examId);
-    if (!exam) return res.status(404).json({ message: "Exam not found." });
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found." });
+    }
 
-    // 2️⃣ Get all exam results for this exam (all users who attempted)
-    const allResults = await ExamResult.find({ examId })
+    // 2️⃣ Find the group where the logged-in user belongs (for this exam)
+    const loggedInUserGroup = await UserExamGroup.findOne({
+      examId,
+      users: loggedInUserId,
+    });
+
+    if (!loggedInUserGroup) {
+      return res.status(404).json({
+        message: "You are not assigned to any group for this exam.",
+      });
+    }
+
+    // 3️⃣ Get all users in that group
+    const groupUserIds = loggedInUserGroup.users.map((u) => u.toString());
+
+    // 4️⃣ Fetch results for only users of that group
+    const groupResults = await ExamResult.find({
+      examId,
+      userId: { $in: groupUserIds },
+    })
       .populate("userId", "firstName lastName email")
       .sort({ percentage: -1, Completiontime: 1 });
 
-    if (!allResults || allResults.length === 0) {
+    if (!groupResults || groupResults.length === 0) {
       return res.status(200).json({
-        message: "No users have attempted this exam yet.",
+        message: "No users have attempted this exam yet in your group.",
         users: [],
       });
     }
 
-    // 3️⃣ Assign ranks
-    const rankedResults = allResults.map((result, index) => ({
+    // 5️⃣ Assign ranks (same logic as before)
+    const rankedResults = groupResults.map((result, index) => ({
       ...result._doc,
       rank: index + 1,
       Completiontime: result.Completiontime || null,
     }));
 
-    // 4️⃣ Bring logged-in user to the top (without changing ranks)
+    // 6️⃣ Bring logged-in user to the top (without changing rank)
     if (loggedInUserId) {
       const idx = rankedResults.findIndex(
         (r) =>
@@ -1414,9 +1495,11 @@ exports.Leaderboard = async (req, res) => {
       }
     }
 
-    // 5️⃣ Response
+    // 7️⃣ Response (same structure as before)
     return res.status(200).json({
-      message: "All users fetched successfully.",
+      message: "Group leaderboard fetched successfully.",
+      groupId: loggedInUserGroup._id,
+      totalUsers: rankedResults.length,
       users: rankedResults,
     });
   } catch (error) {
