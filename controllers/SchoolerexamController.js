@@ -287,6 +287,7 @@ exports.addQuestionsToExam = async (req, res) => {
 
 
 
+
 // exports.UsersExams = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -298,7 +299,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //       return res.status(400).json({ message: "User class not found." });
 //     }
 
-//     // ✅ 2️⃣ Check if user is part of a UserExamGroup (class + optional category)
+//     // ✅ 2️⃣ Check if user is part of a UserExamGroup
 //     const groupQuery = {
 //       className: user.className,
 //       members: userId,
@@ -307,10 +308,10 @@ exports.addQuestionsToExam = async (req, res) => {
 //       groupQuery.category = category;
 //     }
 
-//     const isInGroup = await UserExamGroup.findOne(groupQuery).lean();
+//     const userExamGroup = await UserExamGroup.findOne(groupQuery).lean();
 
 //     // ❌ 3️⃣ If user not in any group → return no exams
-//     if (!isInGroup) {
+//     if (!userExamGroup) {
 //       return res.status(200).json([]);
 //     }
 
@@ -328,7 +329,7 @@ exports.addQuestionsToExam = async (req, res) => {
 
 //     const updatedExams = [];
 
-//     // ✅ 5️⃣ Add logic (ranking, result, attend, etc.)
+//     // ✅ 5️⃣ Process each exam
 //     for (const exam of exams) {
 //       let classData =
 //         (await School.findById(exam.className).select("_id name className")) ||
@@ -361,12 +362,24 @@ exports.addQuestionsToExam = async (req, res) => {
 //         examObj.percentage = null;
 //       }
 
-//       if (userResult) {
-//         const allResults = await ExamResult.find({ examId: exam._id })
+//       // ✅ Group-based rank calculation
+//       const userGroup = await ExamGroup.findOne({
+//         examId: exam._id,
+//         members: userId,
+//       }).lean();
+
+//       let allResults = [];
+//       if (userGroup) {
+//         allResults = await ExamResult.find({
+//           examId: exam._id,
+//           userId: { $in: userGroup.members },
+//         })
 //           .select("userId percentage createdAt")
 //           .sort({ percentage: -1, createdAt: 1 })
 //           .lean();
+//       }
 
+//       if (userResult && allResults.length > 0) {
 //         let rank = null;
 //         for (let i = 0; i < allResults.length; i++) {
 //           if (allResults[i].userId.toString() === userId.toString()) {
@@ -382,6 +395,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //         examObj.totalParticipants = 0;
 //       }
 
+//       // ✅ Pass/fail logic
 //       const passLimit = parseInt(exam.passout) || 1;
 //       if (examObj.rank !== null) {
 //         examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
@@ -460,7 +474,22 @@ exports.addQuestionsToExam = async (req, res) => {
 //       const previousExam = filteredExams[i - 1];
 //       const passoutLimit = parseInt(previousExam.passout) || 1;
 
-//       const topResults = await ExamResult.find({ examId: previousExam._id })
+//       // ✅ Group-based visibility: only within same group
+//       const userGroup = await ExamGroup.findOne({
+//         examId: previousExam._id,
+//         members: userId,
+//       }).lean();
+
+//       if (!userGroup) {
+//         currentExam.visible = false;
+//         visibleExams.push(currentExam);
+//         continue;
+//       }
+
+//       const topResults = await ExamResult.find({
+//         examId: previousExam._id,
+//         userId: { $in: userGroup.members },
+//       })
 //         .sort({ percentage: -1, createdAt: 1 })
 //         .limit(passoutLimit)
 //         .select("userId")
@@ -482,6 +511,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //     });
 //   }
 // };
+
 
 exports.UsersExams = async (req, res) => {
   try {
@@ -696,6 +726,23 @@ exports.UsersExams = async (req, res) => {
       visibleExams.push(currentExam);
     }
 
+    // ✅ 10️⃣ Eligibility logic
+    let failedFound = false;
+    for (let i = 0; i < visibleExams.length; i++) {
+      const exam = visibleExams[i];
+
+      if (failedFound) {
+        exam.isEligible = false;
+      } else {
+        exam.isEligible = true;
+      }
+
+      if (exam.result === "failed") {
+        failedFound = true;
+        exam.isEligible = false;
+      }
+    }
+
     // ✅ 9️⃣ Final response
     return res.status(200).json(visibleExams);
   } catch (error) {
@@ -706,6 +753,8 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
+
 
 
 exports.ExamQuestion = async (req, res) => {
