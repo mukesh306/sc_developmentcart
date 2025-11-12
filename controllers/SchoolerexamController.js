@@ -667,12 +667,6 @@ exports.UsersExams = async (req, res) => {
 
 
 
-
-
-
-
-
-
 exports.ExamQuestion = async (req, res) => {
   try {
     const exam = await Schoolerexam.findById(req.params.id)
@@ -702,13 +696,74 @@ exports.ExamQuestion = async (req, res) => {
 
 
 
+// exports.submitExamAnswer = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { examId, questionId, selectedAnswer, attemptId } = req.body;
+
+//     if (!examId || !questionId || !attemptId) {
+//       return res.status(400).json({ message: "examId, questionId, and attemptId are required." });
+//     }
+
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) {
+//       return res.status(404).json({ message: "Exam not found." });
+//     }
+
+//     // ✅ Auto-detect skip
+//     const isSkipped = !selectedAnswer || selectedAnswer === "";
+
+//     // ✅ Save / update answer
+//     await ExamAnswer.findOneAndUpdate(
+//       { userId, examId, questionId, attemptId },
+//       { 
+//         selectedAnswer: isSkipped ? null : selectedAnswer,
+//         skipped: isSkipped 
+//       },
+//       { upsert: true, new: true }
+//     );
+
+//     const groupSize = exam.seat;
+
+//     // ✅ Find the last group (highest groupNumber)
+//     let lastGroup = await ExamGroup.findOne({ examId }).sort({ groupNumber: -1 });
+
+//     if (!lastGroup || lastGroup.members.length >= groupSize) {
+//       // ✅ Create new group
+//       lastGroup = await ExamGroup.create({
+//         examId,
+//         groupNumber: lastGroup ? lastGroup.groupNumber + 1 : 1,
+//         members: [userId],
+//       });
+//     } else {
+//       // ✅ Add user to existing group if not already
+//       if (!lastGroup.members.includes(userId)) {
+//         lastGroup.members.push(userId);
+//         await lastGroup.save();
+//       }
+//     }
+
+//     return res.status(200).json({
+//       message: isSkipped ? "Question skipped successfully." : "Answer saved successfully.",
+//       attemptId,
+//       groupNumber: lastGroup.groupNumber,
+//       membersInGroup: lastGroup.members.length,
+//     });
+//   } catch (error) {
+//     console.error("Error in submitExamAnswer:", error);
+//     res.status(500).json({ message: "Internal server error.", error: error.message });
+//   }
+// };
+
 exports.submitExamAnswer = async (req, res) => {
   try {
     const userId = req.user._id;
     const { examId, questionId, selectedAnswer, attemptId } = req.body;
 
     if (!examId || !questionId || !attemptId) {
-      return res.status(400).json({ message: "examId, questionId, and attemptId are required." });
+      return res.status(400).json({
+        message: "examId, questionId, and attemptId are required.",
+      });
     }
 
     const exam = await Schoolerexam.findById(examId);
@@ -719,47 +774,89 @@ exports.submitExamAnswer = async (req, res) => {
     // ✅ Auto-detect skip
     const isSkipped = !selectedAnswer || selectedAnswer === "";
 
-    // ✅ Save / update answer
+    // ✅ Save / update answer (same as before)
     await ExamAnswer.findOneAndUpdate(
       { userId, examId, questionId, attemptId },
-      { 
+      {
         selectedAnswer: isSkipped ? null : selectedAnswer,
-        skipped: isSkipped 
+        skipped: isSkipped,
       },
       { upsert: true, new: true }
     );
 
     const groupSize = exam.seat;
+    let finalGroup;
 
-    // ✅ Find the last group (highest groupNumber)
-    let lastGroup = await ExamGroup.findOne({ examId }).sort({ groupNumber: -1 });
+    // ✅ Step 1: Check if user is in any UserExamGroup
+    const userGroup = await UserExamGroup.findOne({ members: userId });
 
-    if (!lastGroup || lastGroup.members.length >= groupSize) {
-      // ✅ Create new group
-      lastGroup = await ExamGroup.create({
+    if (userGroup) {
+      console.log(`✅ User ${userId} belongs to UserExamGroup ${userGroup._id}`);
+
+      // ✅ Step 2: Check if ExamGroup already exists for this group
+      finalGroup = await ExamGroup.findOne({
         examId,
-        groupNumber: lastGroup ? lastGroup.groupNumber + 1 : 1,
-        members: [userId],
+        members: { $in: userGroup.members },
       });
-    } else {
-      // ✅ Add user to existing group if not already
-      if (!lastGroup.members.includes(userId)) {
-        lastGroup.members.push(userId);
-        await lastGroup.save();
+
+      if (!finalGroup) {
+        const lastGroup = await ExamGroup.findOne({ examId }).sort({
+          groupNumber: -1,
+        });
+        finalGroup = await ExamGroup.create({
+          examId,
+          groupNumber: lastGroup ? lastGroup.groupNumber + 1 : 1,
+          members: userGroup.members,
+        });
+        console.log(`🆕 Created new ExamGroup for UserExamGroup ${userGroup._id}`);
+      } else {
+        console.log(`♻️ Existing ExamGroup reused for UserExamGroup ${userGroup._id}`);
       }
+    } else {
+      // ✅ Step 3: Original seat-based logic (unchanged)
+      let lastGroup = await ExamGroup.findOne({ examId }).sort({
+        groupNumber: -1,
+      });
+
+      if (!lastGroup || lastGroup.members.length >= groupSize) {
+        lastGroup = await ExamGroup.create({
+          examId,
+          groupNumber: lastGroup ? lastGroup.groupNumber + 1 : 1,
+          members: [userId],
+        });
+        console.log(`🆕 Created new ExamGroup (seat-based) for user ${userId}`);
+      } else {
+        if (!lastGroup.members.includes(userId)) {
+          lastGroup.members.push(userId);
+          await lastGroup.save();
+          console.log(`👥 Added user ${userId} to existing ExamGroup ${lastGroup._id}`);
+        }
+      }
+      finalGroup = lastGroup;
     }
 
+    // ✅ Step 4: Populate members (for response)
+    const populatedGroup = await ExamGroup.findById(finalGroup._id)
+      .populate("members", "name email _id")
+      .lean();
+
     return res.status(200).json({
-      message: isSkipped ? "Question skipped successfully." : "Answer saved successfully.",
+      message: isSkipped
+        ? "Question skipped successfully."
+        : "Answer saved successfully.",
       attemptId,
-      groupNumber: lastGroup.groupNumber,
-      membersInGroup: lastGroup.members.length,
+      groupNumber: populatedGroup.groupNumber,
+      membersInGroup: populatedGroup.members.length,
+      members: populatedGroup.members, // includes {_id, name, email}
     });
   } catch (error) {
-    console.error("Error in submitExamAnswer:", error);
-    res.status(500).json({ message: "Internal server error.", error: error.message });
+    console.error("❌ Error in submitExamAnswer:", error);
+    res
+      .status(500)
+      .json({ message: "Internal server error.", error: error.message });
   }
 };
+
 
 
 
