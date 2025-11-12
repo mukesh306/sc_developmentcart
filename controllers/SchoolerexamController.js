@@ -286,16 +286,35 @@ exports.addQuestionsToExam = async (req, res) => {
 
 
 
+
 // exports.UsersExams = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
 //     const { category } = req.query;
 
+//     // ✅ 1️⃣ Get user's class
 //     const user = await User.findById(userId).select("className");
 //     if (!user || !user.className) {
 //       return res.status(400).json({ message: "User class not found." });
 //     }
 
+//     // ✅ 2️⃣ Check if user is part of a UserExamGroup (class + optional category)
+//     const groupQuery = {
+//       className: user.className,
+//       members: userId,
+//     };
+//     if (category && mongoose.Types.ObjectId.isValid(category)) {
+//       groupQuery.category = category;
+//     }
+
+//     const isInGroup = await UserExamGroup.findOne(groupQuery).lean();
+
+//     // ❌ 3️⃣ If user not in any group → return no exams
+//     if (!isInGroup) {
+//       return res.status(200).json([]);
+//     }
+
+//     // ✅ 4️⃣ Fetch exams normally
 //     let exams = await Schoolerexam.find({
 //       className: user.className,
 //     })
@@ -309,6 +328,7 @@ exports.addQuestionsToExam = async (req, res) => {
 
 //     const updatedExams = [];
 
+//     // ✅ 5️⃣ Add logic (ranking, result, attend, etc.)
 //     for (const exam of exams) {
 //       let classData =
 //         (await School.findById(exam.className).select("_id name className")) ||
@@ -371,13 +391,12 @@ exports.addQuestionsToExam = async (req, res) => {
 
 //       examObj.status = examObj.percentage !== null;
 //       examObj.publish = exam.publish;
-
-//       // ✅ BY DEFAULT ATTEND = TRUE
 //       examObj.attend = true;
 
 //       updatedExams.push(examObj);
 //     }
 
+//     // ✅ 6️⃣ Filter by category (if provided)
 //     let filteredExams = updatedExams;
 //     if (category) {
 //       filteredExams = filteredExams.filter(
@@ -385,7 +404,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //       );
 //     }
 
-//     // ✅ FINAL ATTEND / LOCK LOGIC (CORRECTED)
+//     // ✅ 7️⃣ Lock / Attend logic
 //     let stopNext = false;
 //     const now = new Date();
 
@@ -396,13 +415,11 @@ exports.addQuestionsToExam = async (req, res) => {
 //         `${exam.ScheduleDate} ${exam.ScheduleTime}`
 //       );
 
-//       // ✅ If exam is in future → always attend true
 //       if (scheduledDateTime > now) {
 //         exam.attend = true;
 //         continue;
 //       }
 
-//       // ✅ If previous exam missed or failed → lock next
 //       if (stopNext) {
 //         exam.attend = false;
 //         exam.publish = false;
@@ -415,14 +432,12 @@ exports.addQuestionsToExam = async (req, res) => {
 //         continue;
 //       }
 
-//       // ✅ Missed exam (time passed + result null) → lock next exams
 //       if (scheduledDateTime < now && exam.result === null) {
-//         exam.attend = true; // missed exam itself remains attend = true
+//         exam.attend = true;
 //         stopNext = true;
 //         continue;
 //       }
 
-//       // ✅ Failed → lock next exams
 //       if (exam.result === "failed") {
 //         exam.attend = true;
 //         stopNext = true;
@@ -431,7 +446,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //       }
 //     }
 
-//     // ✅ VISIBILITY LOGIC SAME
+//     // ✅ 8️⃣ Visibility logic
 //     let visibleExams = [];
 //     for (let i = 0; i < filteredExams.length; i++) {
 //       const currentExam = filteredExams[i];
@@ -457,6 +472,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //       visibleExams.push(currentExam);
 //     }
 
+//     // ✅ 9️⃣ Final response
 //     return res.status(200).json(visibleExams);
 //   } catch (error) {
 //     console.error("🔥 Error fetching exams:", error);
@@ -466,7 +482,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //     });
 //   }
 // };
-
 
 exports.UsersExams = async (req, res) => {
   try {
@@ -479,7 +494,7 @@ exports.UsersExams = async (req, res) => {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // ✅ 2️⃣ Check if user is part of a UserExamGroup (class + optional category)
+    // ✅ 2️⃣ Check if user is part of a UserExamGroup
     const groupQuery = {
       className: user.className,
       members: userId,
@@ -488,10 +503,10 @@ exports.UsersExams = async (req, res) => {
       groupQuery.category = category;
     }
 
-    const isInGroup = await UserExamGroup.findOne(groupQuery).lean();
+    const userExamGroup = await UserExamGroup.findOne(groupQuery).lean();
 
     // ❌ 3️⃣ If user not in any group → return no exams
-    if (!isInGroup) {
+    if (!userExamGroup) {
       return res.status(200).json([]);
     }
 
@@ -509,7 +524,7 @@ exports.UsersExams = async (req, res) => {
 
     const updatedExams = [];
 
-    // ✅ 5️⃣ Add logic (ranking, result, attend, etc.)
+    // ✅ 5️⃣ Process each exam
     for (const exam of exams) {
       let classData =
         (await School.findById(exam.className).select("_id name className")) ||
@@ -542,12 +557,24 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      if (userResult) {
-        const allResults = await ExamResult.find({ examId: exam._id })
+      // ✅ Group-based rank calculation
+      const userGroup = await ExamGroup.findOne({
+        examId: exam._id,
+        members: userId,
+      }).lean();
+
+      let allResults = [];
+      if (userGroup) {
+        allResults = await ExamResult.find({
+          examId: exam._id,
+          userId: { $in: userGroup.members },
+        })
           .select("userId percentage createdAt")
           .sort({ percentage: -1, createdAt: 1 })
           .lean();
+      }
 
+      if (userResult && allResults.length > 0) {
         let rank = null;
         for (let i = 0; i < allResults.length; i++) {
           if (allResults[i].userId.toString() === userId.toString()) {
@@ -563,6 +590,7 @@ exports.UsersExams = async (req, res) => {
         examObj.totalParticipants = 0;
       }
 
+      // ✅ Pass/fail logic
       const passLimit = parseInt(exam.passout) || 1;
       if (examObj.rank !== null) {
         examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
@@ -641,7 +669,22 @@ exports.UsersExams = async (req, res) => {
       const previousExam = filteredExams[i - 1];
       const passoutLimit = parseInt(previousExam.passout) || 1;
 
-      const topResults = await ExamResult.find({ examId: previousExam._id })
+      // ✅ Group-based visibility: only within same group
+      const userGroup = await ExamGroup.findOne({
+        examId: previousExam._id,
+        members: userId,
+      }).lean();
+
+      if (!userGroup) {
+        currentExam.visible = false;
+        visibleExams.push(currentExam);
+        continue;
+      }
+
+      const topResults = await ExamResult.find({
+        examId: previousExam._id,
+        userId: { $in: userGroup.members },
+      })
         .sort({ percentage: -1, createdAt: 1 })
         .limit(passoutLimit)
         .select("userId")
@@ -663,7 +706,6 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
-
 
 
 exports.ExamQuestion = async (req, res) => {
