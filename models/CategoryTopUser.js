@@ -16,6 +16,12 @@ const categoryTopUserSchema = new mongoose.Schema({
     ref: "User",
     required: true,
   },
+   className: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Adminschool",
+        required: true,
+      },
+      
   percentage: {
     type: Number,
     default: 0,

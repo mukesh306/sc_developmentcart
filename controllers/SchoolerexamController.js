@@ -1219,6 +1219,7 @@ exports.calculateExamResult = async (req, res) => {
 //   }
 // };
 
+
 exports.topusers = async (req, res) => {
   try {
     const examId = req.params.id;
@@ -1233,13 +1234,12 @@ exports.topusers = async (req, res) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // ✅ Passout limit (how many toppers per group)
     const passoutLimit = parseInt(exam.passout) || 1;
 
-    // 2️⃣ Get all groups with members for this exam
+    // 2️⃣ Get all groups with members
     const groups = await ExamGroup.find({ examId }).populate(
       "members",
-      "firstName lastName email"
+      "firstName lastName email className"
     );
 
     if (!groups || groups.length === 0) {
@@ -1259,18 +1259,16 @@ exports.topusers = async (req, res) => {
         examId,
         userId: { $in: memberIds },
       })
-        .populate("userId", "firstName lastName email")
+        .populate("userId", "firstName lastName email className")
         .sort({ finalScore: -1 });
 
-      // ✅ Pick top N users as per passout limit
       const topUsers = scores.slice(0, passoutLimit);
       allUsers.push(...topUsers);
     }
 
-    // 4️⃣ Remove duplicate users (in case user exists in multiple groups)
+    // 4️⃣ Remove duplicates
     const uniqueUsers = [];
     const seen = new Set();
-
     for (const user of allUsers) {
       const userId = user.userId?._id?.toString();
       if (userId && !seen.has(userId)) {
@@ -1279,7 +1277,7 @@ exports.topusers = async (req, res) => {
       }
     }
 
-    // 5️⃣ Calculate rank based on percentage across all users
+    // 5️⃣ Rank calculation
     const allResults = await ExamResult.find({ examId })
       .select("userId percentage createdAt")
       .sort({ percentage: -1, createdAt: 1 })
@@ -1290,7 +1288,6 @@ exports.topusers = async (req, res) => {
       ranks.set(result.userId.toString(), index + 1);
     });
 
-    // 6️⃣ Attach rank and completion time to users
     for (let i = 0; i < uniqueUsers.length; i++) {
       const userId = uniqueUsers[i].userId?._id?.toString();
       const rank = ranks.get(userId) || null;
@@ -1302,10 +1299,9 @@ exports.topusers = async (req, res) => {
       };
     }
 
-    // 7️⃣ Sort final list by rank (lowest rank = higher position)
     uniqueUsers.sort((a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999));
 
-    // ✅ 8️⃣ Check if this exam is the last exam of its category
+    // 6️⃣ Check if last exam of category
     const lastExam = await Schoolerexam.findOne({ category: exam.category })
       .sort({ createdAt: -1 })
       .lean();
@@ -1313,13 +1309,12 @@ exports.topusers = async (req, res) => {
     if (lastExam && lastExam._id.toString() === examId.toString()) {
       console.log("✅ This is the last exam of the category. Saving top users...");
 
-      // 🆕 Only this part changed: Get next category instead of same one
+      // Get next category
       const allCategories = await Schoolercategory.find().sort({ createdAt: 1 }).lean();
       const currentIndex = allCategories.findIndex(
         (c) => c._id.toString() === exam.category.toString()
       );
 
-      // Get next category if exists, else keep current one
       const nextCategory =
         currentIndex !== -1 && currentIndex + 1 < allCategories.length
           ? allCategories[currentIndex + 1]
@@ -1327,14 +1322,17 @@ exports.topusers = async (req, res) => {
 
       const categoryToSave = nextCategory ? nextCategory._id : exam.category;
 
-      // Save top users in CategoryTopUser collection
+      // ✅ Save top users in CategoryTopUser with className
       for (const u of uniqueUsers) {
+        const classNameId = u.userId?.className || null; // ✅ extract user's className
+
         await CategoryTopUser.findOneAndUpdate(
           { userId: u.userId._id, examId, categoryId: categoryToSave },
           {
             userId: u.userId._id,
             examId,
-            categoryId: categoryToSave, // ✅ next category id (only change)
+            categoryId: categoryToSave,
+            className: classNameId, // ✅ added field
             percentage: u.percentage,
             rank: u._doc.rank,
           },
@@ -1343,7 +1341,7 @@ exports.topusers = async (req, res) => {
       }
     }
 
-    // ✅ 9️⃣ Final Response
+    // ✅ Response
     return res.status(200).json({
       message: `Top ${passoutLimit} users fetched successfully for Exam "${exam.name || exam._id}".`,
       examId: exam._id,
@@ -1354,6 +1352,7 @@ exports.topusers = async (req, res) => {
         firstName: u.userId?.firstName,
         lastName: u.userId?.lastName,
         email: u.userId?.email,
+        className: u.userId?.className || null, // ✅ also include in response
         finalScore: u.finalScore,
         percentage: u.percentage,
         rank: u._doc.rank,
@@ -1368,6 +1367,9 @@ exports.topusers = async (req, res) => {
     });
   }
 };
+
+
+
 
 exports.Leaderboard = async (req, res) => {
   try {
