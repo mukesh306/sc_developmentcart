@@ -366,9 +366,9 @@ exports.getAllActiveUsers = async (req, res) => {
     const { className, groupId, stateId, cityId, category } = req.query;
     const allowedCategoryId = "6909f6ea193d765a50c836f9";
 
-    // ✅ Case 1: Agar category id allowed wali nahi hai aur koi aur category id di gayi hai
+    // ✅ CASE 1: Agar category allowed wali nahi hai
     if (category && category !== allowedCategoryId) {
-      const topUsers = await CategoryTopUser.find({ categoryId: category })
+      let topUsers = await CategoryTopUser.find({ categoryId: category })
         .populate({
           path: "userId",
           populate: [
@@ -383,6 +383,52 @@ exports.getAllActiveUsers = async (req, res) => {
         })
         .populate("examId", "examName");
 
+      // ✅ Filter based on className, stateId, cityId (inside populated userId)
+      topUsers = topUsers.filter((record) => {
+        const user = record.userId;
+        if (!user) return false;
+
+        let match = true;
+
+        if (className && mongoose.Types.ObjectId.isValid(className)) {
+          match = match && user.className?.toString() === className.toString();
+        }
+
+        if (stateId && mongoose.Types.ObjectId.isValid(stateId)) {
+          match = match && user.stateId?._id?.toString() === stateId.toString();
+        }
+
+        if (cityId && mongoose.Types.ObjectId.isValid(cityId)) {
+          match = match && user.cityId?._id?.toString() === cityId.toString();
+        }
+
+        return match;
+      });
+
+      // ✅ Group logic (exclude users already in other groups)
+      const groupedUsers = await UserExamGroup.find({}, "members");
+      const allGroupedUserIds = groupedUsers.flatMap((g) =>
+        g.members.map((id) => id.toString())
+      );
+
+      let currentGroupMemberIds = [];
+      if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
+        const currentGroup = await UserExamGroup.findById(groupId).select("members");
+        if (currentGroup) {
+          currentGroupMemberIds = currentGroup.members.map((id) => id.toString());
+        }
+      }
+
+      const excludeIds = allGroupedUserIds.filter(
+        (id) => !currentGroupMemberIds.includes(id)
+      );
+
+      // ✅ Remove already grouped users
+      topUsers = topUsers.filter(
+        (record) => !excludeIds.includes(record.userId?._id?.toString())
+      );
+
+      // ✅ Format response
       const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
       let formattedUsers = [];
 
@@ -425,12 +471,12 @@ exports.getAllActiveUsers = async (req, res) => {
       }
 
       return res.status(200).json({
-        message: "Top users fetched successfully for this category.",
+        message: "Top users fetched successfully for this category (filtered).",
         users: formattedUsers,
       });
     }
 
-    // ✅ Case 2: Normal logic (existing)
+    // ✅ CASE 2: Normal logic (allowed category)
     let query = { status: "yes" };
 
     if (className && mongoose.Types.ObjectId.isValid(className)) {
