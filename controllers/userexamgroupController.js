@@ -361,7 +361,6 @@ exports.deleteGroup = async (req, res) => {
 // };
 
 
-
 exports.getAllActiveUsers = async (req, res) => {
   try {
     const { className, groupId, stateId, cityId, category } = req.query;
@@ -369,7 +368,13 @@ exports.getAllActiveUsers = async (req, res) => {
 
     // ✅ Case 1: Agar category id allowed wali nahi hai aur koi aur category id di gayi hai
     if (category && category !== allowedCategoryId) {
-      const topUsers = await CategoryTopUser.find({ categoryId: category })
+      // 👇 Filter by both categoryId and className (if provided)
+      let topUserFilter = { categoryId: category };
+      if (className && mongoose.Types.ObjectId.isValid(className)) {
+        topUserFilter.className = className;
+      }
+
+      const topUsers = await CategoryTopUser.find(topUserFilter)
         .populate({
           path: "userId",
           populate: [
@@ -519,6 +524,7 @@ exports.getAllActiveUsers = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 exports.getUserStates = async (req, res) => {
