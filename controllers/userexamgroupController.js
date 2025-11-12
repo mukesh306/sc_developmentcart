@@ -360,20 +360,17 @@ exports.deleteGroup = async (req, res) => {
 //   }
 // };
 
-
 exports.getAllActiveUsers = async (req, res) => {
   try {
     const { className, groupId, stateId, cityId, category } = req.query;
     const allowedCategoryId = "6909f6ea193d765a50c836f9";
 
-    // ✅ Agar category di gayi hai aur wo allowed wali nahi hai
+    // ✅ Case 1: Agar category id allowed wali nahi hai aur koi aur category id di gayi hai
     if (category && category !== allowedCategoryId) {
-      // ✅ CategoryTopUser se fetch karenge
-      let topUsers = await CategoryTopUser.find({ categoryId: category })
+      const topUsers = await CategoryTopUser.find({ categoryId: category })
         .populate({
           path: "userId",
           populate: [
-            { path: "className", select: "name" },
             { path: "countryId", select: "name" },
             { path: "stateId", select: "name" },
             { path: "cityId", select: "name" },
@@ -385,67 +382,54 @@ exports.getAllActiveUsers = async (req, res) => {
         })
         .populate("examId", "examName");
 
-      // ✅ Filter by className, stateId, cityId (from userId)
-      if (className || stateId || cityId) {
-        topUsers = topUsers.filter((record) => {
-          const user = record.userId;
-          if (!user) return false;
+      const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
+      let formattedUsers = [];
 
-          let match = true;
+      for (let record of topUsers) {
+        const user = record.userId;
+        if (!user) continue;
 
-          if (className && mongoose.Types.ObjectId.isValid(className)) {
-            match =
-              match &&
-              (user.className?._id?.toString() === className.toString() ||
-                user.className?.toString() === className.toString());
-          }
+        let classId = user.className;
+        let classDetails = null;
 
-          if (stateId && mongoose.Types.ObjectId.isValid(stateId)) {
-            match =
-              match &&
-              (user.stateId?._id?.toString() === stateId.toString() ||
-                user.stateId?.toString() === stateId.toString());
-          }
+        if (mongoose.Types.ObjectId.isValid(classId)) {
+          classDetails = (await School.findById(classId)) || (await College.findById(classId));
+        }
 
-          if (cityId && mongoose.Types.ObjectId.isValid(cityId)) {
-            match =
-              match &&
-              (user.cityId?._id?.toString() === cityId.toString() ||
-                user.cityId?.toString() === cityId.toString());
-          }
+        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+        }
+        if (user.marksheet && fs.existsSync(user.marksheet)) {
+          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+        }
 
-          return match;
-        });
-      }
-
-      // ✅ Format response
-      const users = topUsers.map((t) => {
-        const user = t.userId || {};
-        return {
-          _id: user._id,
-          firstName: user.firstName,
-          lastName: user.lastName,
-          email: user.email,
-          percentage: t.percentage,
-          rank: t.rank,
-          className: user.className?.name || "",
+        const formattedUser = {
+          ...user._doc,
+          percentage: record.percentage,
+          rank: record.rank,
+          exam: record.examId?.examName || "",
           country: user.countryId?.name || "",
           state: user.stateId?.name || "",
           city: user.cityId?.name || "",
-          institutionName:
-            user.schoolName || user.collegeName || user.instituteName || "",
+          institutionName: user.schoolName || user.collegeName || user.instituteName || "",
           institutionType: user.studentType || "",
           updatedBy: user.updatedBy || null,
         };
-      });
+
+        if (classDetails && classDetails.price != null) {
+          formattedUser.classOrYear = classDetails.name;
+        }
+
+        formattedUsers.push(formattedUser);
+      }
 
       return res.status(200).json({
-        message: "Top users fetched from CategoryTopUser (filtered).",
-        users,
+        message: "Top users fetched successfully for this category.",
+        users: formattedUsers,
       });
     }
 
-    // ✅ Agar allowed category (original logic)
+    // ✅ Case 2: Normal logic (existing)
     let query = { status: "yes" };
 
     if (className && mongoose.Types.ObjectId.isValid(className)) {
@@ -460,32 +444,26 @@ exports.getAllActiveUsers = async (req, res) => {
       query.cityId = cityId;
     }
 
-    // ✅ Collect all grouped users
+    // Step 1: Collect all grouped users
     const groupedUsers = await UserExamGroup.find({}, "members");
-    const allGroupedUserIds = groupedUsers.flatMap((g) =>
-      g.members.map((id) => id.toString())
-    );
+    const allGroupedUserIds = groupedUsers.flatMap((g) => g.members.map((id) => id.toString()));
 
-    // ✅ Current group members
+    // Step 2: Current group members
     let currentGroupMemberIds = [];
     if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
-      const currentGroup = await UserExamGroup.findById(groupId).select(
-        "members"
-      );
+      const currentGroup = await UserExamGroup.findById(groupId).select("members");
       if (currentGroup) {
         currentGroupMemberIds = currentGroup.members.map((id) => id.toString());
       }
     }
 
-    const excludeIds = allGroupedUserIds.filter(
-      (id) => !currentGroupMemberIds.includes(id)
-    );
-
+    // Step 3: Exclude grouped users except current group
+    const excludeIds = allGroupedUserIds.filter((id) => !currentGroupMemberIds.includes(id));
     if (excludeIds.length > 0) {
       query._id = { $nin: excludeIds };
     }
 
-    // ✅ Fetch users normally
+    // Step 4: Fetch users
     let users = await User.find(query)
       .populate("countryId", "name")
       .populate("stateId", "name")
@@ -495,11 +473,7 @@ exports.getAllActiveUsers = async (req, res) => {
         select: "email session startDate endDate endTime name role",
       });
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`.replace(
-      "http://",
-      "https://"
-    );
-
+    const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
     let finalList = [];
 
     for (let user of users) {
@@ -507,8 +481,7 @@ exports.getAllActiveUsers = async (req, res) => {
       let classDetails = null;
 
       if (mongoose.Types.ObjectId.isValid(classId)) {
-        classDetails =
-          (await School.findById(classId)) || (await College.findById(classId));
+        classDetails = (await School.findById(classId)) || (await College.findById(classId));
       }
 
       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
@@ -523,8 +496,7 @@ exports.getAllActiveUsers = async (req, res) => {
         country: user.countryId?.name || "",
         state: user.stateId?.name || "",
         city: user.cityId?.name || "",
-        institutionName:
-          user.schoolName || user.collegeName || user.instituteName || "",
+        institutionName: user.schoolName || user.collegeName || user.instituteName || "",
         institutionType: user.studentType || "",
         updatedBy: user.updatedBy || null,
       };
@@ -537,8 +509,7 @@ exports.getAllActiveUsers = async (req, res) => {
     }
 
     return res.status(200).json({
-      message:
-        "Active users fetched successfully (filtered by state, city, and excluding other groups).",
+      message: "Active users fetched successfully (filtered by state, city, and excluding other groups).",
       users: finalList,
     });
   } catch (error) {
@@ -546,7 +517,6 @@ exports.getAllActiveUsers = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 exports.getUserStates = async (req, res) => {
