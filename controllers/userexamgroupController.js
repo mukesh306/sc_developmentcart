@@ -360,18 +360,18 @@ exports.deleteGroup = async (req, res) => {
 //   }
 // };
 
-
 exports.getAllActiveUsers = async (req, res) => {
   try {
     const { className, groupId, stateId, cityId, category } = req.query;
     const allowedCategoryId = "6909f6ea193d765a50c836f9";
 
-    // ✅ CASE 1: Agar category allowed wali nahi hai
+    // ✅ CASE 1: If category is NOT allowed category (i.e. different category)
     if (category && category !== allowedCategoryId) {
       let topUsers = await CategoryTopUser.find({ categoryId: category })
         .populate({
           path: "userId",
           populate: [
+            { path: "className", select: "name" }, // ✅ Added to allow className filter
             { path: "countryId", select: "name" },
             { path: "stateId", select: "name" },
             { path: "cityId", select: "name" },
@@ -383,21 +383,27 @@ exports.getAllActiveUsers = async (req, res) => {
         })
         .populate("examId", "examName");
 
-      // ✅ Filter based on className, stateId, cityId (inside populated userId)
+      // ✅ Filter based on className, stateId, cityId
       topUsers = topUsers.filter((record) => {
         const user = record.userId;
         if (!user) return false;
 
         let match = true;
 
+        // ✅ className filter
         if (className && mongoose.Types.ObjectId.isValid(className)) {
-          match = match && user.className?.toString() === className.toString();
+          match =
+            match &&
+            (user.className?._id?.toString() === className.toString() ||
+              user.className?.toString() === className.toString());
         }
 
+        // ✅ state filter
         if (stateId && mongoose.Types.ObjectId.isValid(stateId)) {
           match = match && user.stateId?._id?.toString() === stateId.toString();
         }
 
+        // ✅ city filter
         if (cityId && mongoose.Types.ObjectId.isValid(cityId)) {
           match = match && user.cityId?._id?.toString() === cityId.toString();
         }
@@ -405,7 +411,7 @@ exports.getAllActiveUsers = async (req, res) => {
         return match;
       });
 
-      // ✅ Group logic (exclude users already in other groups)
+      // ✅ Group filtering (exclude users already in other groups)
       const groupedUsers = await UserExamGroup.find({}, "members");
       const allGroupedUserIds = groupedUsers.flatMap((g) =>
         g.members.map((id) => id.toString())
@@ -436,7 +442,7 @@ exports.getAllActiveUsers = async (req, res) => {
         const user = record.userId;
         if (!user) continue;
 
-        let classId = user.className;
+        let classId = user.className?._id || user.className;
         let classDetails = null;
 
         if (mongoose.Types.ObjectId.isValid(classId)) {
