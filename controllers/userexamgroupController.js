@@ -7,7 +7,8 @@ const User = require('../models/User');
 const College = require('../models/college');
 const School = require('../models/school');
 const Schoolercategory = require("../models/schoolershipcategory");
-
+const UserExamGroup = require("../models/userExamGroup");
+const CategoryTopUser = require("../models/CategoryTopUser");
 exports.createGroup = async (req, res) => {
   try {
     const { memberIds, category, className } = req.body;
@@ -250,43 +251,73 @@ exports.deleteGroup = async (req, res) => {
   }
 };
 
+
 // exports.getAllActiveUsers = async (req, res) => {
 //   try {
-//     const { className } = req.query;
+//     const { className, groupId, stateId, cityId, category } = req.query;
 
+//     const allowedCategoryId = "6909f6ea193d765a50c836f9";
+
+//     // ✅ Agar category di gayi hai aur wo allowed wali nahi hai
+//     if (category && category !== allowedCategoryId) {
+//       return res.status(200).json({
+//         message: "No users found for this category.",
+//         users: []
+//       });
+//     }
+
+//     // ✅ Normal logic (agar category nahi di gayi ho ya allowed wali di gayi ho)
 //     let query = { status: "yes" };
 
+//     // ✅ Filter by className
 //     if (className && mongoose.Types.ObjectId.isValid(className)) {
 //       query.className = className;
 //     }
 
-//     // ✅ Fetch all userIds already in any group
-//     const groupedUsers = await UserExamGroup.find({}, "members");
-//     const groupedUserIds = groupedUsers
-//       .flatMap(g => g.members)
-//       .map(id => id.toString());
-
-//     // ✅ Exclude already grouped users
-//     if (groupedUserIds.length > 0) {
-//       query._id = { $nin: groupedUserIds };
+//     // ✅ Filter by state
+//     if (stateId && mongoose.Types.ObjectId.isValid(stateId)) {
+//       query.stateId = stateId;
 //     }
 
-//     // ✅ Fetch users not in any group
+//     // ✅ Filter by city
+//     if (cityId && mongoose.Types.ObjectId.isValid(cityId)) {
+//       query.cityId = cityId;
+//     }
+
+//     // ✅ Step 1: Collect all userIds that are members of any group
+//     const groupedUsers = await UserExamGroup.find({}, "members");
+//     const allGroupedUserIds = groupedUsers.flatMap(g => g.members.map(id => id.toString()));
+
+//     // ✅ Step 2: Get members of the current group (if editing)
+//     let currentGroupMemberIds = [];
+//     if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
+//       const currentGroup = await UserExamGroup.findById(groupId).select("members");
+//       if (currentGroup) {
+//         currentGroupMemberIds = currentGroup.members.map(id => id.toString());
+//       }
+//     }
+
+//     // ✅ Step 3: Exclude all grouped users except the ones in current group
+//     const excludeIds = allGroupedUserIds.filter(id => !currentGroupMemberIds.includes(id));
+
+//     if (excludeIds.length > 0) {
+//       query._id = { $nin: excludeIds };
+//     }
+
+//     // ✅ Step 4: Fetch users
 //     let users = await User.find(query)
-//       .populate('countryId', 'name')
-//       .populate('stateId', 'name')
-//       .populate('cityId', 'name')
+//       .populate("countryId", "name")
+//       .populate("stateId", "name")
+//       .populate("cityId", "name")
 //       .populate({
-//         path: 'updatedBy',
-//         select: 'email session startDate endDate endTime name role'
+//         path: "updatedBy",
+//         select: "email session startDate endDate endTime name role"
 //       });
 
-//     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
-
+//     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
 //     let finalList = [];
 
 //     for (let user of users) {
-
 //       let classId = user.className;
 //       let classDetails = null;
 
@@ -303,11 +334,11 @@ exports.deleteGroup = async (req, res) => {
 
 //       const formattedUser = {
 //         ...user._doc,
-//         country: user.countryId?.name || '',
-//         state: user.stateId?.name || '',
-//         city: user.cityId?.name || '',
-//         institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-//         institutionType: user.studentType || '',
+//         country: user.countryId?.name || "",
+//         state: user.stateId?.name || "",
+//         city: user.cityId?.name || "",
+//         institutionName: user.schoolName || user.collegeName || user.instituteName || "",
+//         institutionType: user.studentType || "",
 //         updatedBy: user.updatedBy || null
 //       };
 
@@ -319,12 +350,12 @@ exports.deleteGroup = async (req, res) => {
 //     }
 
 //     return res.status(200).json({
-//       message: 'Active users fetched successfully (excluding already grouped users).',
+//       message: "Active users fetched successfully (filtered by state, city, and excluding other groups).",
 //       users: finalList
 //     });
 
 //   } catch (error) {
-//     console.error('Get Users Error:', error);
+//     console.error("Get Users Error:", error);
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
@@ -333,63 +364,114 @@ exports.deleteGroup = async (req, res) => {
 exports.getAllActiveUsers = async (req, res) => {
   try {
     const { className, groupId, stateId, cityId, category } = req.query;
-
     const allowedCategoryId = "6909f6ea193d765a50c836f9";
 
-    // ✅ Agar category di gayi hai aur wo allowed wali nahi hai
+    // ✅ Case 1: Agar category id allowed wali nahi hai aur koi aur category id di gayi hai
     if (category && category !== allowedCategoryId) {
+      const topUsers = await CategoryTopUser.find({ categoryId: category })
+        .populate({
+          path: "userId",
+          populate: [
+            { path: "countryId", select: "name" },
+            { path: "stateId", select: "name" },
+            { path: "cityId", select: "name" },
+            {
+              path: "updatedBy",
+              select: "email session startDate endDate endTime name role",
+            },
+          ],
+        })
+        .populate("examId", "examName");
+
+      const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
+      let formattedUsers = [];
+
+      for (let record of topUsers) {
+        const user = record.userId;
+        if (!user) continue;
+
+        let classId = user.className;
+        let classDetails = null;
+
+        if (mongoose.Types.ObjectId.isValid(classId)) {
+          classDetails = (await School.findById(classId)) || (await College.findById(classId));
+        }
+
+        if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+          user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+        }
+        if (user.marksheet && fs.existsSync(user.marksheet)) {
+          user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+        }
+
+        const formattedUser = {
+          ...user._doc,
+          percentage: record.percentage,
+          rank: record.rank,
+          exam: record.examId?.examName || "",
+          country: user.countryId?.name || "",
+          state: user.stateId?.name || "",
+          city: user.cityId?.name || "",
+          institutionName: user.schoolName || user.collegeName || user.instituteName || "",
+          institutionType: user.studentType || "",
+          updatedBy: user.updatedBy || null,
+        };
+
+        if (classDetails && classDetails.price != null) {
+          formattedUser.classOrYear = classDetails.name;
+        }
+
+        formattedUsers.push(formattedUser);
+      }
+
       return res.status(200).json({
-        message: "No users found for this category.",
-        users: []
+        message: "Top users fetched successfully for this category.",
+        users: formattedUsers,
       });
     }
 
-    // ✅ Normal logic (agar category nahi di gayi ho ya allowed wali di gayi ho)
+    // ✅ Case 2: Normal logic (existing)
     let query = { status: "yes" };
 
-    // ✅ Filter by className
     if (className && mongoose.Types.ObjectId.isValid(className)) {
       query.className = className;
     }
 
-    // ✅ Filter by state
     if (stateId && mongoose.Types.ObjectId.isValid(stateId)) {
       query.stateId = stateId;
     }
 
-    // ✅ Filter by city
     if (cityId && mongoose.Types.ObjectId.isValid(cityId)) {
       query.cityId = cityId;
     }
 
-    // ✅ Step 1: Collect all userIds that are members of any group
+    // Step 1: Collect all grouped users
     const groupedUsers = await UserExamGroup.find({}, "members");
-    const allGroupedUserIds = groupedUsers.flatMap(g => g.members.map(id => id.toString()));
+    const allGroupedUserIds = groupedUsers.flatMap((g) => g.members.map((id) => id.toString()));
 
-    // ✅ Step 2: Get members of the current group (if editing)
+    // Step 2: Current group members
     let currentGroupMemberIds = [];
     if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
       const currentGroup = await UserExamGroup.findById(groupId).select("members");
       if (currentGroup) {
-        currentGroupMemberIds = currentGroup.members.map(id => id.toString());
+        currentGroupMemberIds = currentGroup.members.map((id) => id.toString());
       }
     }
 
-    // ✅ Step 3: Exclude all grouped users except the ones in current group
-    const excludeIds = allGroupedUserIds.filter(id => !currentGroupMemberIds.includes(id));
-
+    // Step 3: Exclude grouped users except current group
+    const excludeIds = allGroupedUserIds.filter((id) => !currentGroupMemberIds.includes(id));
     if (excludeIds.length > 0) {
       query._id = { $nin: excludeIds };
     }
 
-    // ✅ Step 4: Fetch users
+    // Step 4: Fetch users
     let users = await User.find(query)
       .populate("countryId", "name")
       .populate("stateId", "name")
       .populate("cityId", "name")
       .populate({
         path: "updatedBy",
-        select: "email session startDate endDate endTime name role"
+        select: "email session startDate endDate endTime name role",
       });
 
     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
@@ -417,7 +499,7 @@ exports.getAllActiveUsers = async (req, res) => {
         city: user.cityId?.name || "",
         institutionName: user.schoolName || user.collegeName || user.instituteName || "",
         institutionType: user.studentType || "",
-        updatedBy: user.updatedBy || null
+        updatedBy: user.updatedBy || null,
       };
 
       if (classDetails && classDetails.price != null) {
@@ -429,9 +511,8 @@ exports.getAllActiveUsers = async (req, res) => {
 
     return res.status(200).json({
       message: "Active users fetched successfully (filtered by state, city, and excluding other groups).",
-      users: finalList
+      users: finalList,
     });
-
   } catch (error) {
     console.error("Get Users Error:", error);
     return res.status(500).json({ message: error.message });
