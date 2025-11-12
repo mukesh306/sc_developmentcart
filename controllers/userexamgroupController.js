@@ -6,9 +6,8 @@ const UserExamGroup = require("../models/userExamGroup");
 const User = require('../models/User');
 const College = require('../models/college');
 const School = require('../models/school');
-const Schoolercategory = require("../models/schoolershipcategory");
-const UserExamGroup = require("../models/userExamGroup");
-const CategoryTopUser = require("../models/CategoryTopUser");
+// const Schoolercategory = require("../models/schoolershipcategory");
+const CategoryTopUser = require('../models/CategoryTopUser');
 
 exports.createGroup = async (req, res) => {
   try {
