@@ -1741,6 +1741,91 @@ exports.getAllExamGroups = async (req, res) => {
 };
 
 
+// exports.schoolerShipPrizes = async (req, res) => {
+//   try {
+//     const userId = req.user?._id;
+
+//     if (!userId) {
+//       return res.status(401).json({ message: "Unauthorized" });
+//     }
+
+//     // ✅ All Categories
+//     const categories = await Schoolercategory.find();
+
+//     let result = [];
+
+//     for (const category of categories) {
+//       // ✅ Last exam of category
+//       const lastExam = await Schoolerexam.findOne({ category: category._id }).sort({ createdAt: -1 });
+
+
+//       let status = false; // ❗ default → user is not winner
+//       let percentage = null;
+//       let finalScore = null;
+//       let examId = null;
+
+//       if (lastExam) {
+//         examId = lastExam._id;
+
+//         const passoutLimit = parseInt(lastExam.passout) || 1;
+
+//         const groups = await ExamGroup.find({ examId: lastExam._id }).populate("members", "_id");
+
+//         let allTopUsers = [];
+
+//         for (const group of groups) {
+//           const memberIds = group.members.map((m) => m._id);
+
+//           const scores = await ExamResult.find({
+//             examId: lastExam._id,
+//             userId: { $in: memberIds }
+//           })
+//             .select("userId percentage finalScore")
+//             .sort({ finalScore: -1 });
+
+//           const topUsers = scores.slice(0, passoutLimit);
+//           allTopUsers.push(...topUsers);
+//         }
+
+//         // ✅ unique list
+//         const unique = [...new Map(allTopUsers.map(u => [u.userId.toString(), u])).values()];
+
+//         // ✅ Check if user is winner
+//         const isWinner = unique.find(u => u.userId.toString() === userId.toString());
+
+//         if (isWinner) {
+//           status = true;
+//           percentage = isWinner.percentage;
+//           finalScore = isWinner.finalScore;
+//         }
+//       }
+//       // ✅ Push result for EVERY category
+//       result.push({
+//         categoryId: category._id,
+//         categoryName: category.name,
+//         prize: category.price,
+//         examId,
+//         status,           // ⭐ true or false
+//         percentage,
+//         finalScore
+//       });
+//     }
+
+//     return res.status(200).json({
+//       message: "User category prize status fetched successfully.",
+//       userId,
+//       totalCategories: result.length,
+//       categories: result,
+//     });
+
+//   } catch (error) {
+//     console.error("🔥 Error:", error);
+//     res.status(500).json({ message: "Server Error", error: error.message });
+//   }
+// };
+
+
+
 exports.schoolerShipPrizes = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -1753,11 +1838,11 @@ exports.schoolerShipPrizes = async (req, res) => {
     const categories = await Schoolercategory.find();
 
     let result = [];
+    let totalPrizeAmount = 0; // ✅ To store total prize of categories where status = true
 
     for (const category of categories) {
       // ✅ Last exam of category
       const lastExam = await Schoolerexam.findOne({ category: category._id }).sort({ createdAt: -1 });
-
 
       let status = false; // ❗ default → user is not winner
       let percentage = null;
@@ -1797,8 +1882,10 @@ exports.schoolerShipPrizes = async (req, res) => {
           status = true;
           percentage = isWinner.percentage;
           finalScore = isWinner.finalScore;
+          totalPrizeAmount += Number(category.price) || 0; // ✅ Add prize to total
         }
       }
+
       // ✅ Push result for EVERY category
       result.push({
         categoryId: category._id,
@@ -1815,6 +1902,7 @@ exports.schoolerShipPrizes = async (req, res) => {
       message: "User category prize status fetched successfully.",
       userId,
       totalCategories: result.length,
+      totalPrizeAmount, // ✅ total prize of all true statuses
       categories: result,
     });
 
