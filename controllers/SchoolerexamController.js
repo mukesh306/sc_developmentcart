@@ -512,7 +512,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -534,7 +533,6 @@ exports.UsersExams = async (req, res) => {
         members: userId,
       }).lean();
     } else {
-      // fallback if category not provided — latest group
       userExamGroup = await UserExamGroup.findOne({
         className: user.className,
         members: userId,
@@ -543,12 +541,11 @@ exports.UsersExams = async (req, res) => {
         .lean();
     }
 
-    // ❌ 3️⃣ If user not in any group → return no exams
     if (!userExamGroup) {
       return res.status(200).json([]);
     }
 
-    // ✅ 4️⃣ Fetch exams normally
+    // ✅ 3️⃣ Fetch all exams for user's class
     let exams = await Schoolerexam.find({
       className: user.className,
     })
@@ -556,13 +553,11 @@ exports.UsersExams = async (req, res) => {
       .populate("createdBy", "name email")
       .sort({ createdAt: 1 });
 
-    if (!exams || exams.length === 0) {
-      return res.status(200).json([]);
-    }
+    if (!exams?.length) return res.status(200).json([]);
 
     const updatedExams = [];
 
-    // ✅ 5️⃣ Process each exam
+    // ✅ 4️⃣ Process each exam
     for (const exam of exams) {
       let classData =
         (await School.findById(exam.className).select("_id name className")) ||
@@ -573,19 +568,17 @@ exports.UsersExams = async (req, res) => {
         ? { _id: classData._id, name: classData.className || classData.name }
         : null;
 
-      examObj.totalQuestions = exam.topicQuestions
-        ? exam.topicQuestions.length
-        : 0;
+      examObj.totalQuestions = exam.topicQuestions?.length || 0;
 
       const userResult = await ExamResult.findOne({
-        userId,
-        examId: exam._id,
+        userId: mongoose.Types.ObjectId(userId),
+        examId: mongoose.Types.ObjectId(exam._id),
       })
         .select("correct finalScore percentage createdAt")
         .lean();
 
-      examObj.correct = userResult ? userResult.correct : null;
-      examObj.finalScore = userResult ? userResult.finalScore : null;
+      examObj.correct = userResult?.correct ?? null;
+      examObj.finalScore = userResult?.finalScore ?? null;
 
       if (userResult && examObj.totalQuestions > 0) {
         examObj.percentage = parseFloat(
@@ -595,17 +588,16 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // ✅ Group-based rank calculation (category-wise)
+      // ✅ Group-based rank calculation (category independent)
       const userGroup = await ExamGroup.findOne({
-        examId: exam._id,
-        category: exam.category?._id, // ✅ restrict by same category
-        members: userId,
+        examId: mongoose.Types.ObjectId(exam._id),
+        members: mongoose.Types.ObjectId(userId),
       }).lean();
 
       let allResults = [];
       if (userGroup) {
         allResults = await ExamResult.find({
-          examId: exam._id,
+          examId: mongoose.Types.ObjectId(exam._id),
           userId: { $in: userGroup.members },
         })
           .select("userId percentage createdAt")
@@ -614,15 +606,11 @@ exports.UsersExams = async (req, res) => {
       }
 
       if (userResult && allResults.length > 0) {
-        let rank = null;
-        for (let i = 0; i < allResults.length; i++) {
-          if (allResults[i].userId.toString() === userId.toString()) {
-            rank = i + 1;
-            break;
-          }
-        }
-
-        examObj.rank = rank;
+        const rank =
+          allResults.findIndex(
+            (r) => r.userId.toString() === userId.toString()
+          ) + 1;
+        examObj.rank = rank > 0 ? rank : null;
         examObj.totalParticipants = allResults.length;
       } else {
         examObj.rank = null;
@@ -631,11 +619,12 @@ exports.UsersExams = async (req, res) => {
 
       // ✅ Pass/fail logic
       const passLimit = parseInt(exam.passout) || 1;
-      if (examObj.rank !== null) {
-        examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
-      } else {
-        examObj.result = null;
-      }
+      examObj.result =
+        examObj.rank !== null
+          ? examObj.rank <= passLimit
+            ? "passed"
+            : "failed"
+          : null;
 
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
@@ -644,7 +633,7 @@ exports.UsersExams = async (req, res) => {
       updatedExams.push(examObj);
     }
 
-    // ✅ 6️⃣ Filter by category (if provided)
+    // ✅ 5️⃣ Apply category filter after processing
     let filteredExams = updatedExams;
     if (category) {
       filteredExams = filteredExams.filter(
@@ -652,13 +641,11 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ✅ 7️⃣ Lock / Attend logic
+    // ✅ 6️⃣ Lock / Attend logic
     let stopNext = false;
     const now = new Date();
 
-    for (let i = 0; i < filteredExams.length; i++) {
-      const exam = filteredExams[i];
-
+    for (const exam of filteredExams) {
       const scheduledDateTime = new Date(
         `${exam.ScheduleDate} ${exam.ScheduleTime}`
       );
@@ -669,14 +656,16 @@ exports.UsersExams = async (req, res) => {
       }
 
       if (stopNext) {
-        exam.attend = false;
-        exam.publish = false;
-        exam.rank = null;
-        exam.correct = null;
-        exam.finalScore = null;
-        exam.percentage = null;
-        exam.result = null;
-        exam.status = false;
+        Object.assign(exam, {
+          attend: false,
+          publish: false,
+          rank: null,
+          correct: null,
+          finalScore: null,
+          percentage: null,
+          result: null,
+          status: false,
+        });
         continue;
       }
 
@@ -694,14 +683,18 @@ exports.UsersExams = async (req, res) => {
       }
     }
 
-    // ✅ 8️⃣ Visibility logic (category-wise)
+    // ✅ 7️⃣ Visibility + Eligibility
     let visibleExams = [];
+    let failedFound = false;
+
     for (let i = 0; i < filteredExams.length; i++) {
       const currentExam = filteredExams[i];
 
       if (i === 0) {
         currentExam.visible = true;
+        currentExam.isEligible = !failedFound;
         visibleExams.push(currentExam);
+        if (currentExam.result === "failed") failedFound = true;
         continue;
       }
 
@@ -710,49 +703,31 @@ exports.UsersExams = async (req, res) => {
 
       const userGroup = await ExamGroup.findOne({
         examId: previousExam._id,
-        category: previousExam.category?._id, // ✅ same category check
         members: userId,
       }).lean();
 
       if (!userGroup) {
         currentExam.visible = false;
-        visibleExams.push(currentExam);
-        continue;
+      } else {
+        const topResults = await ExamResult.find({
+          examId: previousExam._id,
+          userId: { $in: userGroup.members },
+        })
+          .sort({ percentage: -1, createdAt: 1 })
+          .limit(passoutLimit)
+          .select("userId")
+          .lean();
+
+        const topUserIds = topResults.map((r) => r.userId.toString());
+        currentExam.visible = topUserIds.includes(userId.toString());
       }
 
-      const topResults = await ExamResult.find({
-        examId: previousExam._id,
-        userId: { $in: userGroup.members },
-      })
-        .sort({ percentage: -1, createdAt: 1 })
-        .limit(passoutLimit)
-        .select("userId")
-        .lean();
-
-      const topUserIds = topResults.map((r) => r.userId.toString());
-      currentExam.visible = topUserIds.includes(userId.toString());
+      currentExam.isEligible = !failedFound;
+      if (currentExam.result === "failed") failedFound = true;
 
       visibleExams.push(currentExam);
     }
 
-    // ✅ 9️⃣ Eligibility logic
-    let failedFound = false;
-    for (let i = 0; i < visibleExams.length; i++) {
-      const exam = visibleExams[i];
-
-      if (failedFound) {
-        exam.isEligible = false;
-      } else {
-        exam.isEligible = true;
-      }
-
-      if (exam.result === "failed") {
-        failedFound = true;
-        exam.isEligible = false;
-      }
-    }
-
-    // ✅ 🔟 Final response
     return res.status(200).json(visibleExams);
   } catch (error) {
     console.error("🔥 Error fetching exams:", error);
