@@ -186,7 +186,6 @@ exports.createSchoolergroup = async (req, res) => {
 //   }
 // };
 
-
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const userId = req.user._id; // ✅ Logged-in user
@@ -212,23 +211,20 @@ exports.getAllSchoolergroups = async (req, res) => {
         // ✅ Default status = false
         categoryObj.status = false;
 
+        // ✅ Category unlocked if previous category passed
         if (allowNext === true) {
-          categoryObj.status = true; // First unlocked or last passed category
+          categoryObj.status = true;
         }
 
         if (latestExam) {
-          // ✅ 🔁 CHANGED PART: check topper from CategoryTopUser instead of ExamResult
+          // ✅ Check topper in this category
           const userTop = await CategoryTopUser.findOne({
             userId,
             categoryId: category._id,
           });
 
-          // ✅ If user topped → next category unlock hoga
-          if (userTop) {
-            allowNext = true;
-          } else {
-            allowNext = false;
-          }
+          // ⚡️ FIXED: unlock NEXT category (not this one)
+          allowNext = !!userTop; 
         } else {
           // ✅ Agar exam hi nahi hua → pehli category open, baaki close
           if (updatedCategories.length === 0) allowNext = true;
