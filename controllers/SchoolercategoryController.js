@@ -186,6 +186,7 @@ exports.createSchoolergroup = async (req, res) => {
 //   }
 // };
 
+
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const userId = req.user._id; // ✅ Logged-in user
