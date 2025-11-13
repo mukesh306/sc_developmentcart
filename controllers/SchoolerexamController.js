@@ -523,24 +523,16 @@ exports.UsersExams = async (req, res) => {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // ✅ 2️⃣ Get correct UserExamGroup (strict by category)
-    let userExamGroup = null;
-
+    // ✅ 2️⃣ Check if user is part of a UserExamGroup
+    const groupQuery = {
+      className: user.className,
+      members: userId,
+    };
     if (category && mongoose.Types.ObjectId.isValid(category)) {
-      userExamGroup = await UserExamGroup.findOne({
-        className: user.className,
-        category: category,
-        members: userId,
-      }).lean();
-    } else {
-      // fallback if category not provided — latest group
-      userExamGroup = await UserExamGroup.findOne({
-        className: user.className,
-        members: userId,
-      })
-        .sort({ createdAt: -1 })
-        .lean();
+      groupQuery.category = category;
     }
+
+    const userExamGroup = await UserExamGroup.findOne(groupQuery).lean();
 
     // ❌ 3️⃣ If user not in any group → return no exams
     if (!userExamGroup) {
@@ -576,7 +568,6 @@ exports.UsersExams = async (req, res) => {
         ? exam.topicQuestions.length
         : 0;
 
-      // ✅ Get user’s result
       const userResult = await ExamResult.findOne({
         userId,
         examId: exam._id,
@@ -595,10 +586,9 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // ✅ Group-based rank calculation (category-wise)
-      const userGroup = await UserExamGroup.findOne({
+      // ✅ Group-based rank calculation
+      const userGroup = await ExamGroup.findOne({
         examId: exam._id,
-        category: exam.category?._id, // restrict to same category
         members: userId,
       }).lean();
 
@@ -614,10 +604,15 @@ exports.UsersExams = async (req, res) => {
       }
 
       if (userResult && allResults.length > 0) {
-        const rankIndex = allResults.findIndex(
-          (r) => r.userId.toString() === userId.toString()
-        );
-        examObj.rank = rankIndex !== -1 ? rankIndex + 1 : null;
+        let rank = null;
+        for (let i = 0; i < allResults.length; i++) {
+          if (allResults[i].userId.toString() === userId.toString()) {
+            rank = i + 1;
+            break;
+          }
+        }
+
+        examObj.rank = rank;
         examObj.totalParticipants = allResults.length;
       } else {
         examObj.rank = null;
@@ -689,7 +684,7 @@ exports.UsersExams = async (req, res) => {
       }
     }
 
-    // ✅ 8️⃣ Visibility logic (category-wise)
+    // ✅ 8️⃣ Visibility logic
     let visibleExams = [];
     for (let i = 0; i < filteredExams.length; i++) {
       const currentExam = filteredExams[i];
@@ -703,13 +698,13 @@ exports.UsersExams = async (req, res) => {
       const previousExam = filteredExams[i - 1];
       const passoutLimit = parseInt(previousExam.passout) || 1;
 
-      const prevGroup = await UserExamGroup.findOne({
+      // ✅ Group-based visibility: only within same group
+      const userGroup = await ExamGroup.findOne({
         examId: previousExam._id,
-        category: previousExam.category?._id, // same category check
         members: userId,
       }).lean();
 
-      if (!prevGroup) {
+      if (!userGroup) {
         currentExam.visible = false;
         visibleExams.push(currentExam);
         continue;
@@ -717,7 +712,7 @@ exports.UsersExams = async (req, res) => {
 
       const topResults = await ExamResult.find({
         examId: previousExam._id,
-        userId: { $in: prevGroup.members },
+        userId: { $in: userGroup.members },
       })
         .sort({ percentage: -1, createdAt: 1 })
         .limit(passoutLimit)
@@ -730,7 +725,7 @@ exports.UsersExams = async (req, res) => {
       visibleExams.push(currentExam);
     }
 
-    // ✅ 9️⃣ Eligibility logic
+    // ✅ 10️⃣ Eligibility logic
     let failedFound = false;
     for (let i = 0; i < visibleExams.length; i++) {
       const exam = visibleExams[i];
@@ -747,7 +742,7 @@ exports.UsersExams = async (req, res) => {
       }
     }
 
-    // ✅ 🔟 Final response
+    // ✅ 9️⃣ Final response
     return res.status(200).json(visibleExams);
   } catch (error) {
     console.error("🔥 Error fetching exams:", error);
