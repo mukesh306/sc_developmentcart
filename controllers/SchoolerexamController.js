@@ -1539,6 +1539,7 @@ exports.topusers = async (req, res) => {
 //   }
 // };
 
+
 exports.Leaderboard = async (req, res) => {
   try {
     const examId = req.params.id;
@@ -1548,25 +1549,27 @@ exports.Leaderboard = async (req, res) => {
       return res.status(400).json({ message: "examId required." });
     }
 
-    // 1️⃣ Find exam
-    const exam = await Schoolerexam.findById(examId);
+    // 1️⃣ Find exam (to get category and class)
+    const exam = await Schoolerexam.findById(examId).populate("category className");
     if (!exam) {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // 2️⃣ Find logged-in user's group from userexamGroup collection
+    // 2️⃣ Find logged-in user's group for this exam's category & class
     const userGroup = await UserExamGroup.findOne({
       members: loggedInUserId,
+      category: exam.category?._id,   // ✅ ensure same category
+      className: exam.className?._id, // ✅ ensure same class (if applicable)
     });
 
     if (!userGroup) {
       return res.status(200).json({
-        message: "You are not assigned to any group for this exam.",
+        message: "You are not assigned to any group for this category.",
         users: [],
       });
     }
 
-    // 3️⃣ Fetch exam results only for users in the same group
+    // 3️⃣ Fetch exam results only for users in that same group
     const allResults = await ExamResult.find({
       examId,
       userId: { $in: userGroup.members },
@@ -1581,14 +1584,14 @@ exports.Leaderboard = async (req, res) => {
       });
     }
 
-    // 4️⃣ Assign ranks (based on score and time)
+    // 4️⃣ Assign ranks
     const rankedResults = allResults.map((result, index) => ({
       ...result._doc,
       rank: index + 1,
       Completiontime: result.Completiontime || null,
     }));
 
-    // 5️⃣ Bring logged-in user to the top (without changing ranks)
+    // 5️⃣ Bring logged-in user to top (without changing rank order)
     if (loggedInUserId) {
       const idx = rankedResults.findIndex(
         (r) =>
@@ -1605,8 +1608,8 @@ exports.Leaderboard = async (req, res) => {
     // 6️⃣ Send response
     return res.status(200).json({
       message: "Group leaderboard fetched successfully.",
-      className: userGroup.className, // ✅ additional useful info
-      category: userGroup.category,
+      category: exam.category?.name || "N/A",
+      className: exam.className?.name || "N/A",
       users: rankedResults,
     });
   } catch (error) {
@@ -1617,7 +1620,6 @@ exports.Leaderboard = async (req, res) => {
     });
   }
 };
-
 
 
 
