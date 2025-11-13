@@ -517,13 +517,13 @@ exports.UsersExams = async (req, res) => {
     const userId = req.user._id;
     const { category } = req.query;
 
-    // ✅ 1️⃣ Get user's class
+    //  Get user's class
     const user = await User.findById(userId).select("className");
     if (!user || !user.className) {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // ✅ 2️⃣ Get correct UserExamGroup (strict by category)
+    //  Get correct UserExamGroup (strict by category)
     let userExamGroup = null;
 
     if (category && mongoose.Types.ObjectId.isValid(category)) {
