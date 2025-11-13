@@ -1799,7 +1799,6 @@ exports.schoolerShipPrizes = async (req, res) => {
           finalScore = isWinner.finalScore;
         }
       }
-wwwFameTots
       // ✅ Push result for EVERY category
       result.push({
         categoryId: category._id,
