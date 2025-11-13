@@ -211,29 +211,23 @@ exports.getAllSchoolergroups = async (req, res) => {
         // ✅ Default locked
         categoryObj.status = false;
 
-        // ✅ Category unlocked if previous category passed
-        if (allowNext === true) {
+        // ✅ First category always open
+        if (updatedCategories.length === 0) {
           categoryObj.status = true;
         }
 
-        // ✅ Check if user already topped in this category anytime before
+        // ✅ Check if user already topped in this category
         const userTop = await CategoryTopUser.findOne({
           userId,
           categoryId: category._id,
         });
 
-        if (latestExam) {
-          // ✅ Always keep this category unlocked if user topped here before
-          if (userTop) {
-            categoryObj.status = true; // user can always click this category again
-            allowNext = true; // and next category unlocks too
-          } else {
-            allowNext = false;
-          }
+        // ✅ Only topper categories remain open
+        if (userTop) {
+          categoryObj.status = true; // user can always click this category
         } else {
-          // ✅ Agar exam hi nahi hua → pehli category open, baaki close
-          if (updatedCategories.length === 0) allowNext = true;
-          else allowNext = false;
+          // once a non-topper category reached, next ones stay locked
+          allowNext = false;
         }
 
         updatedCategories.push(categoryObj);
@@ -243,9 +237,12 @@ exports.getAllSchoolergroups = async (req, res) => {
     res.status(200).json(updatedCategories);
   } catch (error) {
     console.error("❌ Error fetching categories:", error);
-    res.status(500).json({ message: "Error fetching categories.", error: error.message });
+    res
+      .status(500)
+      .json({ message: "Error fetching categories.", error: error.message });
   }
 };
+
 
 
 
