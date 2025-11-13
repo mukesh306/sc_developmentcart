@@ -512,6 +512,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -586,11 +587,20 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // ✅ Group-based rank calculation
-      const userGroup = await ExamGroup.findOne({
-        examId: exam._id,
+      // ✅ Group-based rank calculation (same as Leaderboard)
+      const examCategoryId = exam.category?._id;
+      let userGroup = await UserExamGroup.findOne({
         members: userId,
+        category: examCategoryId,
       }).lean();
+
+      if (!userGroup) {
+        userGroup = await UserExamGroup.findOne({
+          members: userId,
+        })
+          .sort({ createdAt: -1 })
+          .lean();
+      }
 
       let allResults = [];
       if (userGroup) {
@@ -598,8 +608,8 @@ exports.UsersExams = async (req, res) => {
           examId: exam._id,
           userId: { $in: userGroup.members },
         })
-          .select("userId percentage createdAt")
-          .sort({ percentage: -1, createdAt: 1 })
+          .select("userId percentage Completiontime")
+          .sort({ percentage: -1, Completiontime: 1 })
           .lean();
       }
 
