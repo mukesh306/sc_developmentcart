@@ -208,7 +208,7 @@ exports.getAllSchoolergroups = async (req, res) => {
         // ✅ Set seat value
         categoryObj.seat = latestExam?.passout ?? category.groupSize;
 
-        // ✅ Default status = false
+        // ✅ Default locked
         categoryObj.status = false;
 
         // ✅ Category unlocked if previous category passed
@@ -216,15 +216,20 @@ exports.getAllSchoolergroups = async (req, res) => {
           categoryObj.status = true;
         }
 
-        if (latestExam) {
-          // ✅ Check topper in this category
-          const userTop = await CategoryTopUser.findOne({
-            userId,
-            categoryId: category._id,
-          });
+        // ✅ Check if user already topped in this category anytime before
+        const userTop = await CategoryTopUser.findOne({
+          userId,
+          categoryId: category._id,
+        });
 
-          // ⚡️ FIXED: unlock NEXT category (not this one)
-          allowNext = !!userTop; 
+        if (latestExam) {
+          // ✅ Always keep this category unlocked if user topped here before
+          if (userTop) {
+            categoryObj.status = true; // user can always click this category again
+            allowNext = true; // and next category unlocks too
+          } else {
+            allowNext = false;
+          }
         } else {
           // ✅ Agar exam hi nahi hua → pehli category open, baaki close
           if (updatedCategories.length === 0) allowNext = true;
@@ -241,6 +246,7 @@ exports.getAllSchoolergroups = async (req, res) => {
     res.status(500).json({ message: "Error fetching categories.", error: error.message });
   }
 };
+
 
 
 
