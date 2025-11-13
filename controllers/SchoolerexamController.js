@@ -512,7 +512,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -530,7 +529,7 @@ exports.UsersExams = async (req, res) => {
     if (category && mongoose.Types.ObjectId.isValid(category)) {
       userExamGroup = await UserExamGroup.findOne({
         className: user.className,
-        category: new mongoose.Types.ObjectId(category),
+        category: category,
         members: userId,
       }).lean();
     } else {
@@ -597,17 +596,15 @@ exports.UsersExams = async (req, res) => {
 
       // ✅ Group-based rank calculation (category-wise)
       const userGroup = await ExamGroup.findOne({
-        examId: new mongoose.Types.ObjectId(exam._id),
-        category: exam.category?._id
-          ? new mongoose.Types.ObjectId(exam.category._id)
-          : null,
+        examId: exam._id,
+        category: exam.category?._id, // ✅ restrict by same category
         members: userId,
       }).lean();
 
       let allResults = [];
       if (userGroup) {
         allResults = await ExamResult.find({
-          examId: new mongoose.Types.ObjectId(exam._id),
+          examId: exam._id,
           userId: { $in: userGroup.members },
         })
           .select("userId percentage createdAt")
@@ -660,6 +657,7 @@ exports.UsersExams = async (req, res) => {
 
     for (let i = 0; i < filteredExams.length; i++) {
       const exam = filteredExams[i];
+
       const scheduledDateTime = new Date(
         `${exam.ScheduleDate} ${exam.ScheduleTime}`
       );
@@ -710,10 +708,8 @@ exports.UsersExams = async (req, res) => {
       const passoutLimit = parseInt(previousExam.passout) || 1;
 
       const userGroup = await ExamGroup.findOne({
-        examId: new mongoose.Types.ObjectId(previousExam._id),
-        category: previousExam.category?._id
-          ? new mongoose.Types.ObjectId(previousExam.category._id)
-          : null,
+        examId: previousExam._id,
+        category: previousExam.category?._id, // ✅ same category check
         members: userId,
       }).lean();
 
@@ -724,7 +720,7 @@ exports.UsersExams = async (req, res) => {
       }
 
       const topResults = await ExamResult.find({
-        examId: new mongoose.Types.ObjectId(previousExam._id),
+        examId: previousExam._id,
         userId: { $in: userGroup.members },
       })
         .sort({ percentage: -1, createdAt: 1 })
@@ -765,6 +761,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
