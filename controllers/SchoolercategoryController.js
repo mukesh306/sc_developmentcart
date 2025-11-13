@@ -2,6 +2,7 @@ const Schoolercategory = require("../models/schoolershipcategory");
 const Schoolergroup = require("../models/Schoolergroup");
 const Schoolerexam = require("../models/Schoolerexam");
 const ExamResult = require("../models/examResult");
+const CategoryTopUser = require("../models/CategoryTopUser");
 
 exports.createSchoolercategory = async (req, res) => {
   try {
