@@ -524,16 +524,24 @@ exports.UsersExams = async (req, res) => {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // ✅ 2️⃣ Check if user is part of a UserExamGroup
-    const groupQuery = {
-      className: user.className,
-      members: userId,
-    };
-    if (category && mongoose.Types.ObjectId.isValid(category)) {
-      groupQuery.category = category;
-    }
+    // ✅ 2️⃣ Get correct UserExamGroup (strict by category)
+    let userExamGroup = null;
 
-    const userExamGroup = await UserExamGroup.findOne(groupQuery).lean();
+    if (category && mongoose.Types.ObjectId.isValid(category)) {
+      userExamGroup = await UserExamGroup.findOne({
+        className: user.className,
+        category: category,
+        members: userId,
+      }).lean();
+    } else {
+      // fallback if category not provided — latest group
+      userExamGroup = await UserExamGroup.findOne({
+        className: user.className,
+        members: userId,
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+    }
 
     // ❌ 3️⃣ If user not in any group → return no exams
     if (!userExamGroup) {
@@ -587,9 +595,10 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // ✅ Group-based rank calculation
+      // ✅ Group-based rank calculation (category-wise)
       const userGroup = await ExamGroup.findOne({
         examId: exam._id,
+        category: exam.category?._id, // ✅ restrict by same category
         members: userId,
       }).lean();
 
@@ -685,7 +694,7 @@ exports.UsersExams = async (req, res) => {
       }
     }
 
-    // ✅ 8️⃣ Visibility logic
+    // ✅ 8️⃣ Visibility logic (category-wise)
     let visibleExams = [];
     for (let i = 0; i < filteredExams.length; i++) {
       const currentExam = filteredExams[i];
@@ -699,9 +708,9 @@ exports.UsersExams = async (req, res) => {
       const previousExam = filteredExams[i - 1];
       const passoutLimit = parseInt(previousExam.passout) || 1;
 
-      // ✅ Group-based visibility: only within same group
       const userGroup = await ExamGroup.findOne({
         examId: previousExam._id,
+        category: previousExam.category?._id, // ✅ same category check
         members: userId,
       }).lean();
 
@@ -726,7 +735,7 @@ exports.UsersExams = async (req, res) => {
       visibleExams.push(currentExam);
     }
 
-    // ✅ 10️⃣ Eligibility logic
+    // ✅ 9️⃣ Eligibility logic
     let failedFound = false;
     for (let i = 0; i < visibleExams.length; i++) {
       const exam = visibleExams[i];
@@ -743,7 +752,7 @@ exports.UsersExams = async (req, res) => {
       }
     }
 
-    // ✅ 9️⃣ Final response
+    // ✅ 🔟 Final response
     return res.status(200).json(visibleExams);
   } catch (error) {
     console.error("🔥 Error fetching exams:", error);
@@ -753,6 +762,9 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
+
+
 
 
 
@@ -1551,15 +1563,25 @@ exports.Leaderboard = async (req, res) => {
     }
 
     // 1️⃣ Find exam
-    const exam = await Schoolerexam.findById(examId);
+    const exam = await Schoolerexam.findById(examId).populate("category", "name");
     if (!exam) {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // 2️⃣ Find logged-in user's group from userexamGroup collection
-    const userGroup = await UserExamGroup.findOne({
+    // 2️⃣ Find user's group strictly for this exam's category
+    let userGroup = await UserExamGroup.findOne({
       members: loggedInUserId,
-    });
+      category: exam.category?._id, // ✅ restrict group to same category
+    }).lean();
+
+    // If not found, optionally fallback to latest group (same class)
+    if (!userGroup) {
+      userGroup = await UserExamGroup.findOne({
+        members: loggedInUserId,
+      })
+        .sort({ createdAt: -1 })
+        .lean();
+    }
 
     if (!userGroup) {
       return res.status(200).json({
@@ -1607,7 +1629,7 @@ exports.Leaderboard = async (req, res) => {
     // 6️⃣ Send response
     return res.status(200).json({
       message: "Group leaderboard fetched successfully.",
-      className: userGroup.className, // ✅ additional useful info
+      className: userGroup.className,
       category: userGroup.category,
       users: rankedResults,
     });
@@ -1619,6 +1641,8 @@ exports.Leaderboard = async (req, res) => {
     });
   }
 };
+
+
 
 
 
