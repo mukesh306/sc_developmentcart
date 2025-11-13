@@ -1459,6 +1459,86 @@ exports.topusers = async (req, res) => {
   }
 };
 
+
+// exports.Leaderboard = async (req, res) => {
+//   try {
+//     const examId = req.params.id;
+//     const loggedInUserId = req.user?._id;
+
+//     if (!examId) {
+//       return res.status(400).json({ message: "examId required." });
+//     }
+
+//     // 1️⃣ Find exam
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) {
+//       return res.status(404).json({ message: "Exam not found." });
+//     }
+
+//     // 2️⃣ Find logged-in user's group for this exam
+//     const userGroup = await ExamGroup.findOne({
+//       examId,
+//       members: loggedInUserId,
+//     });
+
+//     if (!userGroup) {
+//       return res.status(200).json({
+//         message: "You are not assigned to any group for this exam.",
+//         users: [],
+//       });
+//     }
+
+//     // 3️⃣ Fetch exam results only for users in the same group
+//     const allResults = await ExamResult.find({
+//       examId,
+//       userId: { $in: userGroup.members },
+//     })
+//       .populate("userId", "firstName lastName email")
+//       .sort({ percentage: -1, Completiontime: 1 });
+
+//     if (!allResults || allResults.length === 0) {
+//       return res.status(200).json({
+//         message: "No users from your group have attempted this exam yet.",
+//         users: [],
+//       });
+//     }
+
+//     // 4️⃣ Assign ranks (based on score and time)
+//     const rankedResults = allResults.map((result, index) => ({
+//       ...result._doc,
+//       rank: index + 1,
+//       Completiontime: result.Completiontime || null,
+//     }));
+
+//     // 5️⃣ Bring logged-in user to the top (without changing ranks)
+//     if (loggedInUserId) {
+//       const idx = rankedResults.findIndex(
+//         (r) =>
+//           r.userId &&
+//           (r.userId._id ? r.userId._id.toString() : r.userId.toString()) ===
+//             loggedInUserId.toString()
+//       );
+//       if (idx > -1) {
+//         const [loggedUser] = rankedResults.splice(idx, 1);
+//         rankedResults.unshift(loggedUser);
+//       }
+//     }
+
+//     // 6️⃣ Send response
+//     return res.status(200).json({
+//       message: "Group leaderboard fetched successfully.",
+//       groupNumber: userGroup.groupNumber,
+//       users: rankedResults,
+//     });
+//   } catch (error) {
+//     console.error("Error in Leaderboard:", error);
+//     res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
 exports.Leaderboard = async (req, res) => {
   try {
     const examId = req.params.id;
@@ -1474,9 +1554,8 @@ exports.Leaderboard = async (req, res) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // 2️⃣ Find logged-in user's group for this exam
-    const userGroup = await ExamGroup.findOne({
-      examId,
+    // 2️⃣ Find logged-in user's group from userexamGroup collection
+    const userGroup = await UserExamGroup.findOne({
       members: loggedInUserId,
     });
 
@@ -1526,7 +1605,8 @@ exports.Leaderboard = async (req, res) => {
     // 6️⃣ Send response
     return res.status(200).json({
       message: "Group leaderboard fetched successfully.",
-      groupNumber: userGroup.groupNumber,
+      className: userGroup.className, // ✅ additional useful info
+      category: userGroup.category,
       users: rankedResults,
     });
   } catch (error) {
@@ -1537,6 +1617,7 @@ exports.Leaderboard = async (req, res) => {
     });
   }
 };
+
 
 
 
