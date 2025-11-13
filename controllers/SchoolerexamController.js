@@ -576,6 +576,7 @@ exports.UsersExams = async (req, res) => {
         ? exam.topicQuestions.length
         : 0;
 
+      // ✅ Get user’s result
       const userResult = await ExamResult.findOne({
         userId,
         examId: exam._id,
@@ -595,9 +596,9 @@ exports.UsersExams = async (req, res) => {
       }
 
       // ✅ Group-based rank calculation (category-wise)
-      const userGroup = await ExamGroup.findOne({
+      const userGroup = await UserExamGroup.findOne({
         examId: exam._id,
-        category: exam.category?._id, // ✅ restrict by same category
+        category: exam.category?._id, // restrict to same category
         members: userId,
       }).lean();
 
@@ -613,15 +614,10 @@ exports.UsersExams = async (req, res) => {
       }
 
       if (userResult && allResults.length > 0) {
-        let rank = null;
-        for (let i = 0; i < allResults.length; i++) {
-          if (allResults[i].userId.toString() === userId.toString()) {
-            rank = i + 1;
-            break;
-          }
-        }
-
-        examObj.rank = rank;
+        const rankIndex = allResults.findIndex(
+          (r) => r.userId.toString() === userId.toString()
+        );
+        examObj.rank = rankIndex !== -1 ? rankIndex + 1 : null;
         examObj.totalParticipants = allResults.length;
       } else {
         examObj.rank = null;
@@ -707,13 +703,13 @@ exports.UsersExams = async (req, res) => {
       const previousExam = filteredExams[i - 1];
       const passoutLimit = parseInt(previousExam.passout) || 1;
 
-      const userGroup = await ExamGroup.findOne({
+      const prevGroup = await UserExamGroup.findOne({
         examId: previousExam._id,
-        category: previousExam.category?._id, // ✅ same category check
+        category: previousExam.category?._id, // same category check
         members: userId,
       }).lean();
 
-      if (!userGroup) {
+      if (!prevGroup) {
         currentExam.visible = false;
         visibleExams.push(currentExam);
         continue;
@@ -721,7 +717,7 @@ exports.UsersExams = async (req, res) => {
 
       const topResults = await ExamResult.find({
         examId: previousExam._id,
-        userId: { $in: userGroup.members },
+        userId: { $in: prevGroup.members },
       })
         .sort({ percentage: -1, createdAt: 1 })
         .limit(passoutLimit)
