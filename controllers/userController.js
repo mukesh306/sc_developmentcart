@@ -1290,3 +1290,121 @@ exports.getUserHistories = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+exports.userforAdmin = async (req, res) => {
+  try {
+    const adminId = req.user._id;
+
+    // 0) Admin session fetch
+    const admin = await User.findById(adminId).select("startDate endDate session");
+    if (!admin) {
+      return res.status(404).json({ message: "Admin not found." });
+    }
+
+    if (!admin.startDate || !admin.endDate) {
+      return res.status(400).json({ message: "Admin session dates missing." });
+    }
+
+    const adminStart = moment(admin.startDate, "DD-MM-YYYY", true).startOf("day");
+    const adminEnd = moment(admin.endDate, "DD-MM-YYYY", true).endOf("day");
+
+    if (!adminStart.isValid() || !adminEnd.isValid()) {
+      return res.status(400).json({ message: "Invalid admin session date format." });
+    }
+
+    // 1) Fetch all users with populate
+    let users = await User.find()
+      .populate("countryId", "name")
+      .populate("stateId", "name")
+      .populate("cityId", "name")
+      .populate({
+        path: "updatedBy",
+        select: "email session startDate endDate endTime name role",
+      });
+
+    const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
+
+    const finalUsers = [];
+
+    for (let user of users) {
+      // Skip those not in admin session range
+      if (!user.startDate || !user.endDate) continue;
+
+      const userStart = moment(user.startDate, "DD-MM-YYYY", true).startOf("day");
+      const userEnd = moment(user.endDate, "DD-MM-YYYY", true).endOf("day");
+
+      if (!userStart.isValid() || !userEnd.isValid()) continue;
+
+      // ❗ Filter: only users fully inside admin session
+      if (!(userStart.isSameOrAfter(adminStart) && userEnd.isSameOrBefore(adminEnd))) {
+        continue;
+      }
+
+      let classDetails = null;
+
+      // Class details
+      if (mongoose.Types.ObjectId.isValid(user.className)) {
+        classDetails =
+          (await School.findById(user.className)) ||
+          (await College.findById(user.className));
+      }
+
+      // File URL convert
+      if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+        user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+      }
+      if (user.marksheet && fs.existsSync(user.marksheet)) {
+        user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+      }
+
+      // Invalid classDetails → null
+      if (!classDetails || classDetails.price == null) {
+        user.className = null;
+      }
+
+      // Sync updatedBy session fields
+      if (user.updatedBy && typeof user.updatedBy === "object") {
+        if (user.updatedBy.session) user.session = user.updatedBy.session;
+        if (user.updatedBy.startDate) user.startDate = user.updatedBy.startDate;
+        if (user.updatedBy.endDate) user.endDate = user.updatedBy.endDate;
+      }
+
+      // Session expiry — update status
+      if (user.updatedBy?.endDate) {
+        const rawEndDate = String(user.updatedBy.endDate).trim();
+        const endDate = moment.tz(rawEndDate, "DD-MM-YYYY", "Asia/Kolkata").endOf("day");
+        const currentDate = moment.tz("Asia/Kolkata");
+
+        if (endDate.isValid() && currentDate.isSameOrAfter(endDate)) {
+          user.status = "no";
+        }
+      }
+
+      // Final formatting
+      const formattedUser = {
+        ...user._doc,
+        country: user.countryId?.name || "",
+        state: user.stateId?.name || "",
+        city: user.cityId?.name || "",
+        institutionName:
+          user.schoolName || user.collegeName || user.instituteName || "",
+        institutionType: user.studentType || "",
+        updatedBy: user.updatedBy || null,
+      };
+
+      if (classDetails && classDetails.price != null) {
+        formattedUser.classOrYear = classDetails.name;
+      }
+
+      finalUsers.push(formattedUser);
+    }
+
+    return res.status(200).json({
+      message: "Users filtered by admin session fetched successfully.",
+      users: finalUsers,
+    });
+  } catch (error) {
+    console.error("Get All Users Error:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
