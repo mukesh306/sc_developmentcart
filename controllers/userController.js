@@ -1481,7 +1481,6 @@ async function getUserExamHistory(userId, className) {
   return examHistory;
 }
 
-
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -1533,7 +1532,7 @@ exports.userforAdmin = async (req, res) => {
           (await College.findById(user.className));
       }
 
-      // ⭐ File paths convert to URLs
+      // ⭐ File Paths → URLs
       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
         user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
       }
@@ -1554,12 +1553,15 @@ exports.userforAdmin = async (req, res) => {
         classOrYear: classDetails?.name || "",
       };
 
-      // ⭐ Fetch Exam History with Rank, Passout, Score etc.
+      // ⭐ Fetch Exam History
       const examHistory = await getUserExamHistory(user._id, user.className);
-      formattedUser.exams = examHistory;
 
-      // ⭐ Latest Exam Summary
+      formattedUser.exams = examHistory;
+      formattedUser.examCount = examHistory.length;  // ⭐ EXAM COUNT ADDED
+
+      // ⭐ Latest Exam
       const latest = examHistory.length ? examHistory[examHistory.length - 1] : null;
+
       const result = latest?.result || "not attempted";
       const finalScore = latest?.finalScore || 0;
 
@@ -1580,6 +1582,7 @@ exports.userforAdmin = async (req, res) => {
             visible,
             isEligible,
             finalScore,
+            examCount: examHistory.length  // ⭐ EXAM COUNT SAVE IN DB
           },
         },
         { new: true, upsert: true }
@@ -1598,4 +1601,5 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
