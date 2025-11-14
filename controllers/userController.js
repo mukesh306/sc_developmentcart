@@ -1423,13 +1423,12 @@ exports.getUserHistories = async (req, res) => {
 
 
 
-
 async function getUserExamHistory(userId, className) {
   const exams = await Schoolerexam.find({ className })
     .populate("category", "name")
     .sort({ createdAt: 1 });
 
-  const examHistory = [];
+  const finalExams = [];
 
   for (const exam of exams) {
     const result = await ExamResult.findOne({ userId, examId: exam._id }).lean();
@@ -1438,7 +1437,6 @@ async function getUserExamHistory(userId, className) {
     const finalScore = result?.finalScore || 0;
     const passed = result && finalScore >= (exam.passout || 1);
 
-    // ⭐ Rank Calculation (Only from same class exam results)
     const allResults = await ExamResult.find({ examId: exam._id })
       .select("userId finalScore percentage")
       .sort({ percentage: -1 })
@@ -1454,7 +1452,7 @@ async function getUserExamHistory(userId, className) {
       }
     }
 
-    examHistory.push({
+    const examObj = {
       examId: exam._id,
       examName: exam.examName,
       categoryName: exam.category?.name || "",
@@ -1467,20 +1465,29 @@ async function getUserExamHistory(userId, className) {
           : 0,
       rank,
       totalParticipants: allResults.length,
-
-      status: !!result,
       result: result
         ? passed
           ? "passed"
           : "failed"
         : "not attempted",
-
       passout: exam.passout,
-      createdAt: exam.createdAt,
+      createdAt: exam.createdAt
+    };
+
+    // 1️⃣ FULL EXAM ENTRY
+    finalExams.push({
+      type: exam.examName,
+      ...examObj,
+    });
+
+    // 2️⃣ ONLY STATUS ENTRY
+    finalExams.push({
+      type: `${exam.examName} Status`,
+      status: !!result,
     });
   }
 
-  return examHistory;
+  return finalExams;
 }
 
 exports.userforAdmin = async (req, res) => {
@@ -1488,7 +1495,6 @@ exports.userforAdmin = async (req, res) => {
     const adminId = req.user._id;
     const { className } = req.query;
 
-    // ⭐ Check Admin Session
     const admin = await Admin1.findById(adminId).select("startDate endDate session");
     if (!admin) return res.status(404).json({ message: "Admin not found." });
 
@@ -1499,7 +1505,6 @@ exports.userforAdmin = async (req, res) => {
     const adminStart = moment(admin.startDate, "DD-MM-YYYY", true).startOf("day");
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY", true).endOf("day");
 
-    // ⭐ Filter: ClassName optional
     const filterQuery = {};
     if (className) filterQuery.className = className;
 
@@ -1518,7 +1523,6 @@ exports.userforAdmin = async (req, res) => {
     for (let user of users) {
       if (!user.startDate || !user.endDate) continue;
 
-      // ⭐ Session Match
       const userStart = moment(user.startDate, "DD-MM-YYYY", true).startOf("day");
       const userEnd = moment(user.endDate, "DD-MM-YYYY", true).endOf("day");
 
@@ -1526,7 +1530,6 @@ exports.userforAdmin = async (req, res) => {
         continue;
       }
 
-      // ⭐ Class / School / College details
       let classDetails = null;
       if (mongoose.Types.ObjectId.isValid(user.className)) {
         classDetails =
@@ -1534,7 +1537,6 @@ exports.userforAdmin = async (req, res) => {
           (await College.findById(user.className));
       }
 
-      // ⭐ File Paths → URLs
       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
         user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
       }
@@ -1543,7 +1545,6 @@ exports.userforAdmin = async (req, res) => {
         user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
       }
 
-      // ⭐ Prepare final user object
       const formattedUser = {
         ...user._doc,
         country: user.countryId?.name || "",
@@ -1555,14 +1556,14 @@ exports.userforAdmin = async (req, res) => {
         classOrYear: classDetails?.name || "",
       };
 
-      // ⭐ Fetch Exam History
+      // ⭐ GET EXAM HISTORY (Now with 2 entries per exam)
       const examHistory = await getUserExamHistory(user._id, user.className);
 
       formattedUser.exams = examHistory;
-      formattedUser.examCount = examHistory.length;  // ⭐ EXAM COUNT ADDED
+      formattedUser.examCount = examHistory.length / 2; // Because 2 entries per exam
 
-      // ⭐ Latest Exam
-      const latest = examHistory.length ? examHistory[examHistory.length - 1] : null;
+      // Latest Exam (from full entries only)
+      const latest = examHistory.filter(e => !e.type.includes("Status")).pop() || null;
 
       const result = latest?.result || "not attempted";
       const finalScore = latest?.finalScore || 0;
@@ -1572,7 +1573,6 @@ exports.userforAdmin = async (req, res) => {
       const visible = true;
       const isEligible = result === "passed";
 
-      // ⭐ Save Into UserForAdmin Table
       await UserForAdmin.findOneAndUpdate(
         { userId: user._id },
         {
@@ -1584,7 +1584,7 @@ exports.userforAdmin = async (req, res) => {
             visible,
             isEligible,
             finalScore,
-            examCount: examHistory.length  // ⭐ EXAM COUNT SAVE IN DB
+            examCount: formattedUser.examCount,
           },
         },
         { new: true, upsert: true }
