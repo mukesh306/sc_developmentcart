@@ -1419,6 +1419,9 @@ exports.getUserHistories = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
+
+
+
 async function getUserExamHistory(userId, className) {
   const exams = await Schoolerexam.find({ className })
     .populate("category", "name")
@@ -1427,14 +1430,27 @@ async function getUserExamHistory(userId, className) {
   const examHistory = [];
 
   for (const exam of exams) {
-    const result = await ExamResult.findOne({
-      userId,
-      examId: exam._id,
-    }).lean();
+    const result = await ExamResult.findOne({ userId, examId: exam._id }).lean();
 
     const totalQuestions = exam.topicQuestions?.length || 0;
     const finalScore = result?.finalScore || 0;
     const passed = result && finalScore >= (exam.passout || 1);
+
+    // ⭐ Rank Calculation (Only from same class exam results)
+    const allResults = await ExamResult.find({ examId: exam._id })
+      .select("userId finalScore percentage")
+      .sort({ percentage: -1 })
+      .lean();
+
+    let rank = null;
+    if (result) {
+      for (let i = 0; i < allResults.length; i++) {
+        if (String(allResults[i].userId) === String(userId)) {
+          rank = i + 1;
+          break;
+        }
+      }
+    }
 
     examHistory.push({
       examId: exam._id,
@@ -1447,14 +1463,17 @@ async function getUserExamHistory(userId, className) {
         result && totalQuestions > 0
           ? parseFloat(((finalScore / totalQuestions) * 100).toFixed(2))
           : 0,
+      rank,
+      totalParticipants: allResults.length,
 
-      status: !!result, // attempted or not
+      status: !!result,
       result: result
         ? passed
           ? "passed"
           : "failed"
         : "not attempted",
 
+      passout: exam.passout,
       createdAt: exam.createdAt,
     });
   }
@@ -1462,12 +1481,13 @@ async function getUserExamHistory(userId, className) {
   return examHistory;
 }
 
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
     const { className } = req.query;
 
-    // Validate admin session
+    // ⭐ Check Admin Session
     const admin = await Admin1.findById(adminId).select("startDate endDate session");
     if (!admin) return res.status(404).json({ message: "Admin not found." });
 
@@ -1478,10 +1498,11 @@ exports.userforAdmin = async (req, res) => {
     const adminStart = moment(admin.startDate, "DD-MM-YYYY", true).startOf("day");
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY", true).endOf("day");
 
-    let filterQuery = {};
+    // ⭐ Filter: ClassName optional
+    const filterQuery = {};
     if (className) filterQuery.className = className;
 
-    let users = await User.find(filterQuery)
+    const users = await User.find(filterQuery)
       .populate("countryId", "name")
       .populate("stateId", "name")
       .populate("cityId", "name")
@@ -1491,12 +1512,12 @@ exports.userforAdmin = async (req, res) => {
       });
 
     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
-
     const finalUsers = [];
 
     for (let user of users) {
       if (!user.startDate || !user.endDate) continue;
 
+      // ⭐ Session Match
       const userStart = moment(user.startDate, "DD-MM-YYYY", true).startOf("day");
       const userEnd = moment(user.endDate, "DD-MM-YYYY", true).endOf("day");
 
@@ -1504,21 +1525,24 @@ exports.userforAdmin = async (req, res) => {
         continue;
       }
 
+      // ⭐ Class / School / College details
       let classDetails = null;
-
       if (mongoose.Types.ObjectId.isValid(user.className)) {
         classDetails =
           (await School.findById(user.className)) ||
           (await College.findById(user.className));
       }
 
+      // ⭐ File paths convert to URLs
       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
         user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
       }
+
       if (user.marksheet && fs.existsSync(user.marksheet)) {
         user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
       }
 
+      // ⭐ Prepare final user object
       const formattedUser = {
         ...user._doc,
         country: user.countryId?.name || "",
@@ -1530,13 +1554,12 @@ exports.userforAdmin = async (req, res) => {
         classOrYear: classDetails?.name || "",
       };
 
-      // ⭐ exam history
+      // ⭐ Fetch Exam History with Rank, Passout, Score etc.
       const examHistory = await getUserExamHistory(user._id, user.className);
       formattedUser.exams = examHistory;
 
-      // ⭐ Latest exam (for summary fields)
+      // ⭐ Latest Exam Summary
       const latest = examHistory.length ? examHistory[examHistory.length - 1] : null;
-
       const result = latest?.result || "not attempted";
       const finalScore = latest?.finalScore || 0;
 
@@ -1545,7 +1568,7 @@ exports.userforAdmin = async (req, res) => {
       const visible = true;
       const isEligible = result === "passed";
 
-      // ⭐ Save or Update UserForAdmin Table
+      // ⭐ Save Into UserForAdmin Table
       await UserForAdmin.findOneAndUpdate(
         { userId: user._id },
         {
