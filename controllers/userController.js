@@ -1295,8 +1295,9 @@ exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
 
-    // 0) Admin session fetch
-    const admin = await User.findById(adminId).select("startDate endDate session");
+    // 0) Fetch admin from Admin1 model
+    const admin = await Admin1.findById(adminId).select("startDate endDate session");
+
     if (!admin) {
       return res.status(404).json({ message: "Admin not found." });
     }
@@ -1305,6 +1306,7 @@ exports.userforAdmin = async (req, res) => {
       return res.status(400).json({ message: "Admin session dates missing." });
     }
 
+    // Convert admin session dates into moment objects
     const adminStart = moment(admin.startDate, "DD-MM-YYYY", true).startOf("day");
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY", true).endOf("day");
 
@@ -1327,7 +1329,7 @@ exports.userforAdmin = async (req, res) => {
     const finalUsers = [];
 
     for (let user of users) {
-      // Skip those not in admin session range
+      // Skip user if missing session dates
       if (!user.startDate || !user.endDate) continue;
 
       const userStart = moment(user.startDate, "DD-MM-YYYY", true).startOf("day");
@@ -1335,21 +1337,20 @@ exports.userforAdmin = async (req, res) => {
 
       if (!userStart.isValid() || !userEnd.isValid()) continue;
 
-      // ❗ Filter: only users fully inside admin session
+      // Only include users inside admin session range
       if (!(userStart.isSameOrAfter(adminStart) && userEnd.isSameOrBefore(adminEnd))) {
         continue;
       }
 
+      // Class details (School or College)
       let classDetails = null;
-
-      // Class details
       if (mongoose.Types.ObjectId.isValid(user.className)) {
         classDetails =
           (await School.findById(user.className)) ||
           (await College.findById(user.className));
       }
 
-      // File URL convert
+      // Convert file paths to URLs
       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
         user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
       }
@@ -1357,7 +1358,7 @@ exports.userforAdmin = async (req, res) => {
         user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
       }
 
-      // Invalid classDetails → null
+      // If classDetails invalid → set to null
       if (!classDetails || classDetails.price == null) {
         user.className = null;
       }
@@ -1369,7 +1370,7 @@ exports.userforAdmin = async (req, res) => {
         if (user.updatedBy.endDate) user.endDate = user.updatedBy.endDate;
       }
 
-      // Session expiry — update status
+      // Session expiry check
       if (user.updatedBy?.endDate) {
         const rawEndDate = String(user.updatedBy.endDate).trim();
         const endDate = moment.tz(rawEndDate, "DD-MM-YYYY", "Asia/Kolkata").endOf("day");
@@ -1380,7 +1381,7 @@ exports.userforAdmin = async (req, res) => {
         }
       }
 
-      // Final formatting
+      // Prepare final formatted user object
       const formattedUser = {
         ...user._doc,
         country: user.countryId?.name || "",
