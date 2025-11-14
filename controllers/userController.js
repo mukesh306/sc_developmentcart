@@ -1419,6 +1419,7 @@ exports.getUserHistories = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
+
 async function getUserExamHistory(userId, className) {
   const exams = await Schoolerexam.find({ className })
     .populate("category", "name")
@@ -1477,9 +1478,7 @@ exports.userforAdmin = async (req, res) => {
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY", true).endOf("day");
 
     let filterQuery = {};
-    if (className) {
-      filterQuery.className = className;
-    }
+    if (className) filterQuery.className = className;
 
     let users = await User.find(filterQuery)
       .populate("countryId", "name")
@@ -1490,7 +1489,8 @@ exports.userforAdmin = async (req, res) => {
         select: "email session startDate endDate endTime name role",
       });
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
+    const baseUrl = `${req.protocol}://${req.get("host")}`
+      .replace("http://", "https://");
 
     const finalUsers = [];
 
@@ -1523,8 +1523,7 @@ exports.userforAdmin = async (req, res) => {
         country: user.countryId?.name || "",
         state: user.stateId?.name || "",
         city: user.cityId?.name || "",
-        institutionName:
-          user.schoolName || user.collegeName || user.instituteName || "",
+        institutionName: user.schoolName || user.collegeName || user.instituteName || "",
         institutionType: user.studentType || "",
         updatedBy: user.updatedBy || null,
       };
@@ -1533,14 +1532,35 @@ exports.userforAdmin = async (req, res) => {
         formattedUser.classOrYear = classDetails.name;
       }
 
-      // ⭐ Add Exam History
+      // ⭐ Get Exam History
       const examHistory = await getUserExamHistory(user._id, user.className);
       formattedUser.exams = examHistory;
 
-      // ⭐ Save / Update in UserForAdmin
+      // ⭐ Extract Required Fields for UserForAdmin Table
+      let latestExam = examHistory.length ? examHistory[examHistory.length - 1] : null;
+
+      let result = latestExam?.result || "not attempted";
+      let finalScore = latestExam?.finalScore || 0;
+
+      let status = result === "passed" || result === "failed";
+      let attend = !!latestExam;
+      let visible = true; 
+      let isEligible = result === "passed";
+
+      // ⭐ Save / Update UserForAdmin Table
       await UserForAdmin.findOneAndUpdate(
         { userId: user._id },
-        { $set: { responseData: formattedUser } },
+        {
+          $set: {
+            responseData: formattedUser,
+            result,
+            status,
+            attend,
+            visible,
+            isEligible,
+            finalScore,
+          }
+        },
         { new: true, upsert: true }
       );
 
@@ -1548,7 +1568,7 @@ exports.userforAdmin = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: "Users data saved/updated successfully.",
+      message: "Users saved & updated successfully",
       users: finalUsers,
     });
 
