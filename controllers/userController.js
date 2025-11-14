@@ -1420,6 +1420,10 @@ exports.getUserHistories = async (req, res) => {
 //   }
 // };
 
+
+
+
+
 async function getUserExamHistory(userId, className) {
   const exams = await Schoolerexam.find({ className })
     .populate("category", "name")
@@ -1434,7 +1438,7 @@ async function getUserExamHistory(userId, className) {
     const finalScore = result?.finalScore || 0;
     const passed = result && finalScore >= (exam.passout || 1);
 
-    // ⭐ Rank Calculation
+    // ⭐ Rank Calculation (Only from same class exam results)
     const allResults = await ExamResult.find({ examId: exam._id })
       .select("userId finalScore percentage")
       .sort({ percentage: -1 })
@@ -1478,11 +1482,13 @@ async function getUserExamHistory(userId, className) {
 
   return examHistory;
 }
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
     const { className } = req.query;
 
+    // ⭐ Check Admin Session
     const admin = await Admin1.findById(adminId).select("startDate endDate session");
     if (!admin) return res.status(404).json({ message: "Admin not found." });
 
@@ -1493,6 +1499,7 @@ exports.userforAdmin = async (req, res) => {
     const adminStart = moment(admin.startDate, "DD-MM-YYYY", true).startOf("day");
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY", true).endOf("day");
 
+    // ⭐ Filter: ClassName optional
     const filterQuery = {};
     if (className) filterQuery.className = className;
 
@@ -1511,6 +1518,7 @@ exports.userforAdmin = async (req, res) => {
     for (let user of users) {
       if (!user.startDate || !user.endDate) continue;
 
+      // ⭐ Session Match
       const userStart = moment(user.startDate, "DD-MM-YYYY", true).startOf("day");
       const userEnd = moment(user.endDate, "DD-MM-YYYY", true).endOf("day");
 
@@ -1518,6 +1526,7 @@ exports.userforAdmin = async (req, res) => {
         continue;
       }
 
+      // ⭐ Class / School / College details
       let classDetails = null;
       if (mongoose.Types.ObjectId.isValid(user.className)) {
         classDetails =
@@ -1525,6 +1534,7 @@ exports.userforAdmin = async (req, res) => {
           (await College.findById(user.className));
       }
 
+      // ⭐ File Paths → URLs
       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
         user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
       }
@@ -1533,6 +1543,7 @@ exports.userforAdmin = async (req, res) => {
         user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
       }
 
+      // ⭐ Prepare final user object
       const formattedUser = {
         ...user._doc,
         country: user.countryId?.name || "",
@@ -1544,17 +1555,15 @@ exports.userforAdmin = async (req, res) => {
         classOrYear: classDetails?.name || "",
       };
 
-      // ⭐ OLD detailed exam history
+      // ⭐ Fetch Exam History
       const examHistory = await getUserExamHistory(user._id, user.className);
 
-      // ⭐ NEW type + status format
-      const typeStatusHistory = await getUserExamTypeStatus(user._id, user.className);
-
       formattedUser.exams = examHistory;
-      formattedUser.typeStatus = typeStatusHistory;
-      formattedUser.examCount = examHistory.length;
+      formattedUser.examCount = examHistory.length;  // ⭐ EXAM COUNT ADDED
 
+      // ⭐ Latest Exam
       const latest = examHistory.length ? examHistory[examHistory.length - 1] : null;
+
       const result = latest?.result || "not attempted";
       const finalScore = latest?.finalScore || 0;
 
@@ -1563,6 +1572,7 @@ exports.userforAdmin = async (req, res) => {
       const visible = true;
       const isEligible = result === "passed";
 
+      // ⭐ Save Into UserForAdmin Table
       await UserForAdmin.findOneAndUpdate(
         { userId: user._id },
         {
@@ -1574,8 +1584,7 @@ exports.userforAdmin = async (req, res) => {
             visible,
             isEligible,
             finalScore,
-            examCount: examHistory.length,
-            typeStatus: typeStatusHistory
+            examCount: examHistory.length  // ⭐ EXAM COUNT SAVE IN DB
           },
         },
         { new: true, upsert: true }
@@ -1594,7 +1603,5 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
 
 
