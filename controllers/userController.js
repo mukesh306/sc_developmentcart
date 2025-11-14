@@ -1419,7 +1419,6 @@ exports.getUserHistories = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
-
 async function getUserExamHistory(userId, className) {
   const exams = await Schoolerexam.find({ className })
     .populate("category", "name")
@@ -1433,7 +1432,9 @@ async function getUserExamHistory(userId, className) {
       examId: exam._id,
     }).lean();
 
-    let totalQuestions = exam.topicQuestions?.length || 0;
+    const totalQuestions = exam.topicQuestions?.length || 0;
+    const finalScore = result?.finalScore || 0;
+    const passed = result && finalScore >= (exam.passout || 1);
 
     examHistory.push({
       examId: exam._id,
@@ -1441,18 +1442,19 @@ async function getUserExamHistory(userId, className) {
       categoryName: exam.category?.name || "",
       totalQuestions,
       correct: result?.correct || 0,
-      finalScore: result?.finalScore || 0,
+      finalScore,
       percentage:
         result && totalQuestions > 0
-          ? parseFloat(((result.finalScore / totalQuestions) * 100).toFixed(2))
+          ? parseFloat(((finalScore / totalQuestions) * 100).toFixed(2))
           : 0,
-      status: !!result,
-      result:
-        result && result.finalScore >= (exam.passout || 1)
+
+      status: !!result, // attempted or not
+      result: result
+        ? passed
           ? "passed"
-          : result
-          ? "failed"
-          : "not attempted",
+          : "failed"
+        : "not attempted",
+
       createdAt: exam.createdAt,
     });
   }
@@ -1465,10 +1467,9 @@ exports.userforAdmin = async (req, res) => {
     const adminId = req.user._id;
     const { className } = req.query;
 
+    // Validate admin session
     const admin = await Admin1.findById(adminId).select("startDate endDate session");
-    if (!admin) {
-      return res.status(404).json({ message: "Admin not found." });
-    }
+    if (!admin) return res.status(404).json({ message: "Admin not found." });
 
     if (!admin.startDate || !admin.endDate) {
       return res.status(400).json({ message: "Admin session dates missing." });
@@ -1489,8 +1490,7 @@ exports.userforAdmin = async (req, res) => {
         select: "email session startDate endDate endTime name role",
       });
 
-    const baseUrl = `${req.protocol}://${req.get("host")}`
-      .replace("http://", "https://");
+    const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
 
     const finalUsers = [];
 
@@ -1505,6 +1505,7 @@ exports.userforAdmin = async (req, res) => {
       }
 
       let classDetails = null;
+
       if (mongoose.Types.ObjectId.isValid(user.className)) {
         classDetails =
           (await School.findById(user.className)) ||
@@ -1526,28 +1527,25 @@ exports.userforAdmin = async (req, res) => {
         institutionName: user.schoolName || user.collegeName || user.instituteName || "",
         institutionType: user.studentType || "",
         updatedBy: user.updatedBy || null,
+        classOrYear: classDetails?.name || "",
       };
 
-      if (classDetails && classDetails.price != null) {
-        formattedUser.classOrYear = classDetails.name;
-      }
-
-      // ⭐ Get Exam History
+      // ⭐ exam history
       const examHistory = await getUserExamHistory(user._id, user.className);
       formattedUser.exams = examHistory;
 
-      // ⭐ Extract Required Fields for UserForAdmin Table
-      let latestExam = examHistory.length ? examHistory[examHistory.length - 1] : null;
+      // ⭐ Latest exam (for summary fields)
+      const latest = examHistory.length ? examHistory[examHistory.length - 1] : null;
 
-      let result = latestExam?.result || "not attempted";
-      let finalScore = latestExam?.finalScore || 0;
+      const result = latest?.result || "not attempted";
+      const finalScore = latest?.finalScore || 0;
 
-      let status = result === "passed" || result === "failed";
-      let attend = !!latestExam;
-      let visible = true; 
-      let isEligible = result === "passed";
+      const status = result === "passed" || result === "failed";
+      const attend = !!latest;
+      const visible = true;
+      const isEligible = result === "passed";
 
-      // ⭐ Save / Update UserForAdmin Table
+      // ⭐ Save or Update UserForAdmin Table
       await UserForAdmin.findOneAndUpdate(
         { userId: user._id },
         {
@@ -1559,7 +1557,7 @@ exports.userforAdmin = async (req, res) => {
             visible,
             isEligible,
             finalScore,
-          }
+          },
         },
         { new: true, upsert: true }
       );
@@ -1577,3 +1575,4 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
