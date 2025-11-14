@@ -1421,64 +1421,52 @@ exports.getUserHistories = async (req, res) => {
 // };
 
 
-
 async function getUserExamHistory(userId, className) {
   const exams = await Schoolerexam.find({ className })
     .populate("category", "name")
     .sort({ createdAt: 1 });
 
-  const examHistory = [];
+  const formatted = [];
 
   for (const exam of exams) {
-    const result = await ExamResult.findOne({ userId, examId: exam._id }).lean();
+    const result = await ExamResult.findOne({
+      userId,
+      examId: exam._id,
+    }).lean();
 
     const totalQuestions = exam.topicQuestions?.length || 0;
     const finalScore = result?.finalScore || 0;
+
     const passed = result && finalScore >= (exam.passout || 1);
 
-    // ⭐ Rank Calculation (Only from same class exam results)
-    const allResults = await ExamResult.find({ examId: exam._id })
-      .select("userId finalScore percentage")
-      .sort({ percentage: -1 })
-      .lean();
+    // ⭐ MAIN EXAM STATUS
+    const mainStatus =
+      !result
+        ? "To Be Scheduled"
+        : "Completed";
 
-    let rank = null;
-    if (result) {
-      for (let i = 0; i < allResults.length; i++) {
-        if (String(allResults[i].userId) === String(userId)) {
-          rank = i + 1;
-          break;
-        }
-      }
-    }
+    // ⭐ ELIGIBILITY STATUS
+    const eligibilityStatus =
+      !result
+        ? "Not Eligible"
+        : passed
+        ? "Passed"
+        : "Failed";
 
-    examHistory.push({
-      examId: exam._id,
-      examName: exam.examName,
-      categoryName: exam.category?.name || "",
-      totalQuestions,
-      correct: result?.correct || 0,
-      finalScore,
-      percentage:
-        result && totalQuestions > 0
-          ? parseFloat(((finalScore / totalQuestions) * 100).toFixed(2))
-          : 0,
-      rank,
-      totalParticipants: allResults.length,
+    // ⭐ FIRST ROW → Exam Name Row
+    formatted.push({
+      type: exam.examName,
+      status: mainStatus,
+    });
 
-      status: !!result,
-      result: result
-        ? passed
-          ? "passed"
-          : "failed"
-        : "not attempted",
-
-      passout: exam.passout,
-      createdAt: exam.createdAt,
+    // ⭐ SECOND ROW → Exam Status Row
+    formatted.push({
+      type: `${exam.examName} Status`,
+      status: eligibilityStatus,
     });
   }
 
-  return examHistory;
+  return formatted;
 }
 
 exports.userforAdmin = async (req, res) => {
@@ -1553,22 +1541,21 @@ exports.userforAdmin = async (req, res) => {
         classOrYear: classDetails?.name || "",
       };
 
-      // ⭐ Fetch Exam History
+      // ⭐ Fetch Exam History (New Format)
       const examHistory = await getUserExamHistory(user._id, user.className);
 
       formattedUser.exams = examHistory;
-      formattedUser.examCount = examHistory.length;  // ⭐ EXAM COUNT ADDED
+      formattedUser.examCount = examHistory.length;
 
-      // ⭐ Latest Exam
-      const latest = examHistory.length ? examHistory[examHistory.length - 1] : null;
+      // ⭐ Evaluate final result
+      const last = examHistory[examHistory.length - 1] || null;
+      const result = last?.status || "Not Eligible";
 
-      const result = latest?.result || "not attempted";
-      const finalScore = latest?.finalScore || 0;
-
-      const status = result === "passed" || result === "failed";
-      const attend = !!latest;
+      // ⭐ User final summary
+      const status = result === "Passed" || result === "Failed";
+      const attend = examHistory.length > 0;
       const visible = true;
-      const isEligible = result === "passed";
+      const isEligible = result === "Passed";
 
       // ⭐ Save Into UserForAdmin Table
       await UserForAdmin.findOneAndUpdate(
@@ -1581,8 +1568,7 @@ exports.userforAdmin = async (req, res) => {
             attend,
             visible,
             isEligible,
-            finalScore,
-            examCount: examHistory.length  // ⭐ EXAM COUNT SAVE IN DB
+            examCount: examHistory.length,
           },
         },
         { new: true, upsert: true }
@@ -1601,5 +1587,6 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
