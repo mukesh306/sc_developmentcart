@@ -8,7 +8,8 @@ const nodemailer = require('nodemailer');
 const Admin1 = require('../models/admin1'); 
 const UserHistory = require('../models/UserHistory');
 const UserForAdmin = require("../models/userforAdmin");
-
+const ExamResult = require('../models/examResult');
+const Schoolerexam = require('../models/Schoolerexam');
 const fs = require('fs');
 const path = require('path');
 // const moment = require('moment');
@@ -1418,13 +1419,51 @@ exports.getUserHistories = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
+async function getUserExamHistory(userId, className) {
+  const exams = await Schoolerexam.find({ className })
+    .populate("category", "name")
+    .sort({ createdAt: 1 });
+
+  const examHistory = [];
+
+  for (const exam of exams) {
+    const result = await ExamResult.findOne({
+      userId,
+      examId: exam._id,
+    }).lean();
+
+    let totalQuestions = exam.topicQuestions?.length || 0;
+
+    examHistory.push({
+      examId: exam._id,
+      examName: exam.examName,
+      categoryName: exam.category?.name || "",
+      totalQuestions,
+      correct: result?.correct || 0,
+      finalScore: result?.finalScore || 0,
+      percentage:
+        result && totalQuestions > 0
+          ? parseFloat(((result.finalScore / totalQuestions) * 100).toFixed(2))
+          : 0,
+      status: !!result,
+      result:
+        result && result.finalScore >= (exam.passout || 1)
+          ? "passed"
+          : result
+          ? "failed"
+          : "not attempted",
+      createdAt: exam.createdAt,
+    });
+  }
+
+  return examHistory;
+}
 
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
     const { className } = req.query;
 
-    // 0) Fetch Admin session
     const admin = await Admin1.findById(adminId).select("startDate endDate session");
     if (!admin) {
       return res.status(404).json({ message: "Admin not found." });
@@ -1437,17 +1476,11 @@ exports.userforAdmin = async (req, res) => {
     const adminStart = moment(admin.startDate, "DD-MM-YYYY", true).startOf("day");
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY", true).endOf("day");
 
-    if (!adminStart.isValid() || !adminEnd.isValid()) {
-      return res.status(400).json({ message: "Invalid admin session date format." });
-    }
-
-    // CLASS FILTER
     let filterQuery = {};
     if (className) {
       filterQuery.className = className;
     }
 
-    // 1) Fetch users
     let users = await User.find(filterQuery)
       .populate("countryId", "name")
       .populate("stateId", "name")
@@ -1467,8 +1500,6 @@ exports.userforAdmin = async (req, res) => {
       const userStart = moment(user.startDate, "DD-MM-YYYY", true).startOf("day");
       const userEnd = moment(user.endDate, "DD-MM-YYYY", true).endOf("day");
 
-      if (!userStart.isValid() || !userEnd.isValid()) continue;
-
       if (!(userStart.isSameOrAfter(adminStart) && userEnd.isSameOrBefore(adminEnd))) {
         continue;
       }
@@ -1487,26 +1518,6 @@ exports.userforAdmin = async (req, res) => {
         user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
       }
 
-      if (!classDetails || classDetails.price == null) {
-        user.className = null;
-      }
-
-      if (user.updatedBy && typeof user.updatedBy === "object") {
-        if (user.updatedBy.session) user.session = user.updatedBy.session;
-        if (user.updatedBy.startDate) user.startDate = user.updatedBy.startDate;
-        if (user.updatedBy.endDate) user.endDate = user.updatedBy.endDate;
-      }
-
-      if (user.updatedBy?.endDate) {
-        const rawEndDate = String(user.updatedBy.endDate).trim();
-        const endDate = moment.tz(rawEndDate, "DD-MM-YYYY", "Asia/Kolkata").endOf("day");
-        const currentDate = moment.tz("Asia/Kolkata");
-
-        if (endDate.isValid() && currentDate.isSameOrAfter(endDate)) {
-          user.status = "no";
-        }
-      }
-
       const formattedUser = {
         ...user._doc,
         country: user.countryId?.name || "",
@@ -1522,23 +1533,27 @@ exports.userforAdmin = async (req, res) => {
         formattedUser.classOrYear = classDetails.name;
       }
 
-      // ⭐⭐⭐ SAVE OR UPDATE IN userforAdmin ⭐⭐⭐
+      // ⭐ Add Exam History
+      const examHistory = await getUserExamHistory(user._id, user.className);
+      formattedUser.exams = examHistory;
+
+      // ⭐ Save / Update in UserForAdmin
       await UserForAdmin.findOneAndUpdate(
-        { userId: user._id },                // find same user
+        { userId: user._id },
         { $set: { responseData: formattedUser } },
-        { new: true, upsert: true }          // create if not exists
+        { new: true, upsert: true }
       );
 
       finalUsers.push(formattedUser);
     }
 
     return res.status(200).json({
-      message: "Users filtered by admin session fetched & saved successfully.",
+      message: "Users data saved/updated successfully.",
       users: finalUsers,
     });
 
   } catch (error) {
-    console.error("Get All Users Error:", error);
+    console.error("userforAdmin Error:", error);
     return res.status(500).json({ message: error.message });
   }
 };

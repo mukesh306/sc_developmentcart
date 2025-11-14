@@ -9,7 +9,7 @@ const userForAdminSchema = new mongoose.Schema(
       unique: true,
     },
 
-    // Entire formatted response will be stored here
+    
     responseData: {
       type: Object,
       default: {},
