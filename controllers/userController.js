@@ -1291,9 +1291,11 @@ exports.getUserHistories = async (req, res) => {
   }
 };
 
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
+    const { className } = req.query; // ⭐ ONLY NEW LINE
 
     // 0) Fetch admin from Admin1 model
     const admin = await Admin1.findById(adminId).select("startDate endDate session");
@@ -1314,8 +1316,14 @@ exports.userforAdmin = async (req, res) => {
       return res.status(400).json({ message: "Invalid admin session date format." });
     }
 
+    // ⭐ APPLY CLASS FILTER (ONLY CHANGE)
+    let filterQuery = {};
+    if (className) {
+      filterQuery.className = className;
+    }
+
     // 1) Fetch all users with populate
-    let users = await User.find()
+    let users = await User.find(filterQuery)
       .populate("countryId", "name")
       .populate("stateId", "name")
       .populate("cityId", "name")
@@ -1409,3 +1417,4 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
