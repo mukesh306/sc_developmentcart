@@ -7,6 +7,7 @@ const mongoose = require('mongoose');
 const nodemailer = require('nodemailer');
 const Admin1 = require('../models/admin1'); 
 const UserHistory = require('../models/UserHistory');
+const UserForAdmin = require("../models/userforAdmin");
 
 const fs = require('fs');
 const path = require('path');
@@ -1292,14 +1293,139 @@ exports.getUserHistories = async (req, res) => {
 };
 
 
+// exports.userforAdmin = async (req, res) => {
+//   try {
+//     const adminId = req.user._id;
+//     const { className } = req.query; 
+
+//     // 0) Fetch admin from Admin1 model
+//     const admin = await Admin1.findById(adminId).select("startDate endDate session");
+
+//     if (!admin) {
+//       return res.status(404).json({ message: "Admin not found." });
+//     }
+
+//     if (!admin.startDate || !admin.endDate) {
+//       return res.status(400).json({ message: "Admin session dates missing." });
+//     }
+
+//     // Convert admin session dates into moment objects
+//     const adminStart = moment(admin.startDate, "DD-MM-YYYY", true).startOf("day");
+//     const adminEnd = moment(admin.endDate, "DD-MM-YYYY", true).endOf("day");
+
+//     if (!adminStart.isValid() || !adminEnd.isValid()) {
+//       return res.status(400).json({ message: "Invalid admin session date format." });
+//     }
+
+//     // ⭐ APPLY CLASS FILTER (ONLY CHANGE)
+//     let filterQuery = {};
+//     if (className) {
+//       filterQuery.className = className;
+//     }
+
+//     // 1) Fetch all users with populate
+//     let users = await User.find(filterQuery)
+//       .populate("countryId", "name")
+//       .populate("stateId", "name")
+//       .populate("cityId", "name")
+//       .populate({
+//         path: "updatedBy",
+//         select: "email session startDate endDate endTime name role",
+//       });
+
+//     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
+
+//     const finalUsers = [];
+
+//     for (let user of users) {
+//       // Skip user if missing session dates
+//       if (!user.startDate || !user.endDate) continue;
+
+//       const userStart = moment(user.startDate, "DD-MM-YYYY", true).startOf("day");
+//       const userEnd = moment(user.endDate, "DD-MM-YYYY", true).endOf("day");
+
+//       if (!userStart.isValid() || !userEnd.isValid()) continue;
+
+//       // Only include users inside admin session range
+//       if (!(userStart.isSameOrAfter(adminStart) && userEnd.isSameOrBefore(adminEnd))) {
+//         continue;
+//       }
+
+//       // Class details (School or College)
+//       let classDetails = null;
+//       if (mongoose.Types.ObjectId.isValid(user.className)) {
+//         classDetails =
+//           (await School.findById(user.className)) ||
+//           (await College.findById(user.className));
+//       }
+
+//       // Convert file paths to URLs
+//       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//         user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//       }
+//       if (user.marksheet && fs.existsSync(user.marksheet)) {
+//         user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//       }
+
+//       // If classDetails invalid → set to null
+//       if (!classDetails || classDetails.price == null) {
+//         user.className = null;
+//       }
+
+//       // Sync updatedBy session fields
+//       if (user.updatedBy && typeof user.updatedBy === "object") {
+//         if (user.updatedBy.session) user.session = user.updatedBy.session;
+//         if (user.updatedBy.startDate) user.startDate = user.updatedBy.startDate;
+//         if (user.updatedBy.endDate) user.endDate = user.updatedBy.endDate;
+//       }
+
+//       // Session expiry check
+//       if (user.updatedBy?.endDate) {
+//         const rawEndDate = String(user.updatedBy.endDate).trim();
+//         const endDate = moment.tz(rawEndDate, "DD-MM-YYYY", "Asia/Kolkata").endOf("day");
+//         const currentDate = moment.tz("Asia/Kolkata");
+
+//         if (endDate.isValid() && currentDate.isSameOrAfter(endDate)) {
+//           user.status = "no";
+//         }
+//       }
+
+//       // Prepare final formatted user object
+//       const formattedUser = {
+//         ...user._doc,
+//         country: user.countryId?.name || "",
+//         state: user.stateId?.name || "",
+//         city: user.cityId?.name || "",
+//         institutionName:
+//           user.schoolName || user.collegeName || user.instituteName || "",
+//         institutionType: user.studentType || "",
+//         updatedBy: user.updatedBy || null,
+//       };
+
+//       if (classDetails && classDetails.price != null) {
+//         formattedUser.classOrYear = classDetails.name;
+//       }
+
+//       finalUsers.push(formattedUser);
+//     }
+
+//     return res.status(200).json({
+//       message: "Users filtered by admin session fetched successfully.",
+//       users: finalUsers,
+//     });
+//   } catch (error) {
+//     console.error("Get All Users Error:", error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
-    const { className } = req.query; // ⭐ ONLY NEW LINE
+    const { className } = req.query;
 
-    // 0) Fetch admin from Admin1 model
+    // 0) Fetch Admin session
     const admin = await Admin1.findById(adminId).select("startDate endDate session");
-
     if (!admin) {
       return res.status(404).json({ message: "Admin not found." });
     }
@@ -1308,7 +1434,6 @@ exports.userforAdmin = async (req, res) => {
       return res.status(400).json({ message: "Admin session dates missing." });
     }
 
-    // Convert admin session dates into moment objects
     const adminStart = moment(admin.startDate, "DD-MM-YYYY", true).startOf("day");
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY", true).endOf("day");
 
@@ -1316,13 +1441,13 @@ exports.userforAdmin = async (req, res) => {
       return res.status(400).json({ message: "Invalid admin session date format." });
     }
 
-    // ⭐ APPLY CLASS FILTER (ONLY CHANGE)
+    // CLASS FILTER
     let filterQuery = {};
     if (className) {
       filterQuery.className = className;
     }
 
-    // 1) Fetch all users with populate
+    // 1) Fetch users
     let users = await User.find(filterQuery)
       .populate("countryId", "name")
       .populate("stateId", "name")
@@ -1337,7 +1462,6 @@ exports.userforAdmin = async (req, res) => {
     const finalUsers = [];
 
     for (let user of users) {
-      // Skip user if missing session dates
       if (!user.startDate || !user.endDate) continue;
 
       const userStart = moment(user.startDate, "DD-MM-YYYY", true).startOf("day");
@@ -1345,12 +1469,10 @@ exports.userforAdmin = async (req, res) => {
 
       if (!userStart.isValid() || !userEnd.isValid()) continue;
 
-      // Only include users inside admin session range
       if (!(userStart.isSameOrAfter(adminStart) && userEnd.isSameOrBefore(adminEnd))) {
         continue;
       }
 
-      // Class details (School or College)
       let classDetails = null;
       if (mongoose.Types.ObjectId.isValid(user.className)) {
         classDetails =
@@ -1358,7 +1480,6 @@ exports.userforAdmin = async (req, res) => {
           (await College.findById(user.className));
       }
 
-      // Convert file paths to URLs
       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
         user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
       }
@@ -1366,19 +1487,16 @@ exports.userforAdmin = async (req, res) => {
         user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
       }
 
-      // If classDetails invalid → set to null
       if (!classDetails || classDetails.price == null) {
         user.className = null;
       }
 
-      // Sync updatedBy session fields
       if (user.updatedBy && typeof user.updatedBy === "object") {
         if (user.updatedBy.session) user.session = user.updatedBy.session;
         if (user.updatedBy.startDate) user.startDate = user.updatedBy.startDate;
         if (user.updatedBy.endDate) user.endDate = user.updatedBy.endDate;
       }
 
-      // Session expiry check
       if (user.updatedBy?.endDate) {
         const rawEndDate = String(user.updatedBy.endDate).trim();
         const endDate = moment.tz(rawEndDate, "DD-MM-YYYY", "Asia/Kolkata").endOf("day");
@@ -1389,7 +1507,6 @@ exports.userforAdmin = async (req, res) => {
         }
       }
 
-      // Prepare final formatted user object
       const formattedUser = {
         ...user._doc,
         country: user.countryId?.name || "",
@@ -1405,16 +1522,23 @@ exports.userforAdmin = async (req, res) => {
         formattedUser.classOrYear = classDetails.name;
       }
 
+      // ⭐⭐⭐ SAVE OR UPDATE IN userforAdmin ⭐⭐⭐
+      await UserForAdmin.findOneAndUpdate(
+        { userId: user._id },                // find same user
+        { $set: { responseData: formattedUser } },
+        { new: true, upsert: true }          // create if not exists
+      );
+
       finalUsers.push(formattedUser);
     }
 
     return res.status(200).json({
-      message: "Users filtered by admin session fetched successfully.",
+      message: "Users filtered by admin session fetched & saved successfully.",
       users: finalUsers,
     });
+
   } catch (error) {
     console.error("Get All Users Error:", error);
     return res.status(500).json({ message: error.message });
   }
 };
-
