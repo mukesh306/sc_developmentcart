@@ -1553,7 +1553,7 @@ exports.userforAdmin = async (req, res) => {
     const adminId = req.user._id;
     let { className, stateId, cityId } = req.query;
 
-    // 1️⃣ Validate Admin
+   
     const admin = await Admin1.findById(adminId).select("startDate endDate");
     if (!admin) return res.status(404).json({ message: "Admin not found." });
 
@@ -1563,11 +1563,11 @@ exports.userforAdmin = async (req, res) => {
     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
 
-    // 2️⃣ Build Filter Query
+   
     let filterQuery = {};
     if (className) filterQuery.className = className;
 
-    // Multiple states support
+    
     if (stateId) {
       if (Array.isArray(stateId)) {
         filterQuery.stateId = { $in: stateId };
@@ -1578,7 +1578,7 @@ exports.userforAdmin = async (req, res) => {
       }
     }
 
-    // Multiple cities support
+    
     if (cityId) {
       if (Array.isArray(cityId)) {
         filterQuery.cityId = { $in: cityId };
@@ -1589,7 +1589,7 @@ exports.userforAdmin = async (req, res) => {
       }
     }
 
-    // 3️⃣ Fetch Users
+    
     const users = await User.find(filterQuery)
       .populate("countryId", "name")
       .populate("stateId", "name")
@@ -1610,7 +1610,7 @@ exports.userforAdmin = async (req, res) => {
       if (!userStart.isSameOrAfter(adminStart) || !userEnd.isSameOrBefore(adminEnd))
         continue;
 
-      // Class Details
+     
       let classDetails = null;
       if (mongoose.Types.ObjectId.isValid(user.className)) {
         classDetails =
@@ -1618,7 +1618,7 @@ exports.userforAdmin = async (req, res) => {
           (await College.findById(user.className));
       }
 
-      // File URL Setter
+      
       const setFileUrl = (filePath) =>
         filePath && fs.existsSync(filePath)
           ? `${baseUrl}/uploads/${path.basename(filePath)}`
@@ -1627,7 +1627,7 @@ exports.userforAdmin = async (req, res) => {
       user.aadharCard = setFileUrl(user.aadharCard);
       user.marksheet = setFileUrl(user.marksheet);
 
-      // User Exam Status
+     
       const userExamStatus = await ExamUserStatus.find({ userId: user._id })
         .populate({
           path: "examId",
@@ -1636,18 +1636,18 @@ exports.userforAdmin = async (req, res) => {
         })
         .lean();
 
-      // Detect Category
+      
       let userCategory = "";
       if (userExamStatus.length > 0) {
         userCategory = userExamStatus[0]?.examId?.category?.name || "";
       }
 
-      // Build Exams Output
+      
       let exams = [];
       let examIndex = 1;
       let failedFound = false;
 
-      // 🔥 Step A: Add REAL exams first
+    
       for (let ex of userExamStatus) {
         const categoryName = ex.examId?.category?.name || "";
 
@@ -1689,7 +1689,6 @@ exports.userforAdmin = async (req, res) => {
         examIndex++;
       }
 
-      // 🔥 Step B: Add BLANK exams until total = max(realCount, defaultExamCount)
       const realExamCount = userExamStatus.length;
       const totalRequired = Math.max(defaultExamCount, realExamCount);
 
