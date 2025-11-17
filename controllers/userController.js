@@ -1297,13 +1297,12 @@ exports.getUserHistories = async (req, res) => {
 
 
 
-
 // exports.userforAdmin = async (req, res) => {
 //   try {
 //     const adminId = req.user._id;
 //     const { className } = req.query;
 
-  
+//     // 1️⃣ Validate Admin
 //     const admin = await Admin1.findById(adminId).select("startDate endDate");
 //     if (!admin) return res.status(404).json({ message: "Admin not found." });
 
@@ -1313,7 +1312,7 @@ exports.getUserHistories = async (req, res) => {
 //     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
 //     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
 
-    
+//     // 2️⃣ Filter Users
 //     const filterQuery = className ? { className } : {};
 
 //     const users = await User.find(filterQuery)
@@ -1324,9 +1323,21 @@ exports.getUserHistories = async (req, res) => {
 
 //     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
 
+//     // 🔥 STEP 1: Get MAX exam count among all users
+//     const allExamCounts = await Promise.all(
+//       users.map(async (u) => {
+//         const count = await ExamUserStatus.countDocuments({ userId: u._id });
+//         return count;
+//       })
+//     );
+
+//     const maxExamCount = Math.max(...allExamCounts);
+
+//     // Final Users
 //     let finalUsers = [];
 
 //     for (let user of users) {
+
 //       if (!user.startDate || !user.endDate) continue;
 
 //       const userStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
@@ -1335,7 +1346,7 @@ exports.getUserHistories = async (req, res) => {
 //       if (!userStart.isSameOrAfter(adminStart) || !userEnd.isSameOrBefore(adminEnd))
 //         continue;
 
-      
+//       // Class Details
 //       let classDetails = null;
 //       if (mongoose.Types.ObjectId.isValid(user.className)) {
 //         classDetails =
@@ -1343,7 +1354,7 @@ exports.getUserHistories = async (req, res) => {
 //           (await College.findById(user.className));
 //       }
 
-    
+//       // File URL Setter
 //       const setFileUrl = (filePath) =>
 //         filePath && fs.existsSync(filePath)
 //           ? `${baseUrl}/uploads/${path.basename(filePath)}`
@@ -1352,21 +1363,22 @@ exports.getUserHistories = async (req, res) => {
 //       user.aadharCard = setFileUrl(user.aadharCard);
 //       user.marksheet = setFileUrl(user.marksheet);
 
-      
+//       // User Exam Status
 //       const userExamStatus = await ExamUserStatus.find({ userId: user._id })
 //         .populate({
 //           path: "examId",
 //           select: "title category",
-//           populate: { path: "category", select: "name" }
+//           populate: { path: "category", select: "name" },
 //         })
 //         .lean();
 
-      
+//       // Detect Category
 //       let userCategory = "";
 //       if (userExamStatus.length > 0) {
 //         userCategory = userExamStatus[0]?.examId?.category?.name || "";
 //       }
 
+//       // Build Exams Output
 //       let exams = [];
 //       let examIndex = 1;
 //       let failedFound = false;
@@ -1385,7 +1397,8 @@ exports.getUserHistories = async (req, res) => {
 //             statesType = "Scheduled";
 //           } else if (
 //             ex.publish &&
-//             (ex.result?.toLowerCase() === "passed" || ex.result?.toLowerCase() === "failed")
+//             (ex.result?.toLowerCase() === "passed" ||
+//               ex.result?.toLowerCase() === "failed")
 //           ) {
 //             statesType = "Completed";
 //           }
@@ -1415,6 +1428,29 @@ exports.getUserHistories = async (req, res) => {
 //         examIndex++;
 //       }
 
+//       // 🔥 STEP 2: Add EMPTY EXAMS if user has less exams than max
+//       while (examIndex <= maxExamCount) {
+//         exams.push({
+//           type: `Exam ${examIndex}`,
+//           category: "",
+//           status: null,
+//           publish: null,
+//           attend: null,
+//           visible: null,
+//           isEligible: null,
+//           statesType: null,
+//         });
+
+//         exams.push({
+//           type: `Exam ${examIndex} Status`,
+//           result: null,
+//           statesType: null,
+//         });
+
+//         examIndex++;
+//       }
+
+//       // Push Final User Data
 //       finalUsers.push({
 //         ...user._doc,
 //         country: user.countryId?.name || "",
@@ -1425,7 +1461,7 @@ exports.getUserHistories = async (req, res) => {
 //         institutionType: user.studentType || "",
 //         classOrYear: classDetails?.name || "",
 //         updatedBy: user.updatedBy || null,
-//         category: userCategory, 
+//         category: userCategory,
 //         exams,
 //       });
 //     }
@@ -1434,7 +1470,6 @@ exports.getUserHistories = async (req, res) => {
 //       message: "Users fetched successfully",
 //       users: finalUsers,
 //     });
-
 //   } catch (error) {
 //     console.error("userforAdmin Error:", error);
 //     res.status(500).json({ message: error.message });
@@ -1467,17 +1502,9 @@ exports.userforAdmin = async (req, res) => {
 
     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
 
-    // 🔥 STEP 1: Get MAX exam count among all users
-    const allExamCounts = await Promise.all(
-      users.map(async (u) => {
-        const count = await ExamUserStatus.countDocuments({ userId: u._id });
-        return count;
-      })
-    );
+    // Minimum exams every user must have
+    const defaultExamCount = 3;
 
-    const maxExamCount = Math.max(...allExamCounts);
-
-    // Final Users
     let finalUsers = [];
 
     for (let user of users) {
@@ -1527,6 +1554,7 @@ exports.userforAdmin = async (req, res) => {
       let examIndex = 1;
       let failedFound = false;
 
+      // 🔥 Step A: Add REAL exams first
       for (let ex of userExamStatus) {
         const categoryName = ex.examId?.category?.name || "";
 
@@ -1572,8 +1600,11 @@ exports.userforAdmin = async (req, res) => {
         examIndex++;
       }
 
-      // 🔥 STEP 2: Add EMPTY EXAMS if user has less exams than max
-      while (examIndex <= maxExamCount) {
+      // 🔥 Step B: Add BLANK exams until total = max(realCount, 3)
+      let realExamCount = userExamStatus.length;
+      let totalRequired = Math.max(defaultExamCount, realExamCount);
+
+      while (examIndex <= totalRequired) {
         exams.push({
           type: `Exam ${examIndex}`,
           category: "",
@@ -1594,7 +1625,7 @@ exports.userforAdmin = async (req, res) => {
         examIndex++;
       }
 
-      // Push Final User Data
+      // Final User Struct
       finalUsers.push({
         ...user._doc,
         country: user.countryId?.name || "",
@@ -1619,4 +1650,3 @@ exports.userforAdmin = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
