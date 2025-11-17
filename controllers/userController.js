@@ -1417,7 +1417,6 @@ exports.getUserHistories = async (req, res) => {
 //   }
 // };
 
-
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -1452,7 +1451,8 @@ exports.userforAdmin = async (req, res) => {
       const userStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
       const userEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
 
-      if (!userStart.isSameOrAfter(adminStart) || !userEnd.isSameOrBefore(adminEnd)) continue;
+      if (!userStart.isSameOrAfter(adminStart) || !userEnd.isSameOrBefore(adminEnd))
+        continue;
 
       // Class details
       let classDetails = null;
@@ -1480,20 +1480,24 @@ exports.userforAdmin = async (req, res) => {
         })
         .lean();
 
+      // ⭐ NEW — Category outside exams
+      let userCategory = "";
+      if (userExamStatus.length > 0) {
+        userCategory = userExamStatus[0]?.examId?.category?.name || "";
+      }
+
       let exams = [];
       let examIndex = 1;
-      let failedFound = false; // 👉 अगर fail मिला तो आगे वाले exams को Not Eligible देना है
+      let failedFound = false;
 
       for (let ex of userExamStatus) {
         const categoryName = ex.examId?.category?.name || "";
 
         let statesType = "";
 
-        // ❌ अगर पहले कहीं failed मिल चुका है
         if (failedFound) {
           statesType = "Not Eligible";
         } else {
-          // Normal rule apply
           if (!ex.publish) {
             statesType = "To Be Scheduled";
           } else if (ex.publish && (!ex.result || ex.result === "")) {
@@ -1506,12 +1510,10 @@ exports.userforAdmin = async (req, res) => {
           }
         }
 
-        // अगर इस exam का result failed है → आगे वाले exams को Not Eligible बनाना है
         if (ex.result?.toLowerCase() === "failed") {
           failedFound = true;
         }
 
-        // MAIN EXAM ENTRY
         exams.push({
           type: `Exam ${examIndex}`,
           category: categoryName,
@@ -1523,7 +1525,6 @@ exports.userforAdmin = async (req, res) => {
           statesType,
         });
 
-        // STATUS ENTRY
         exams.push({
           type: `Exam ${examIndex} Status`,
           result: ex.result || "",
@@ -1543,6 +1544,7 @@ exports.userforAdmin = async (req, res) => {
         institutionType: user.studentType || "",
         classOrYear: classDetails?.name || "",
         updatedBy: user.updatedBy || null,
+        category: userCategory, // ⭐ Added here
         exams,
       });
     }
@@ -1557,5 +1559,6 @@ exports.userforAdmin = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
