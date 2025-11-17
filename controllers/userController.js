@@ -1296,11 +1296,10 @@ exports.getUserHistories = async (req, res) => {
   }
 };
 
+
 exports.getStatesFromUsers = async (req, res) => {
   try {
-    // 1) Get all users with stateId
     const users = await User.find({ stateId: { $ne: null } }).select("stateId");
-
     if (!users.length) {
       return res.status(200).json({
         message: "No users with stateId found",
@@ -1308,13 +1307,11 @@ exports.getStatesFromUsers = async (req, res) => {
       });
     }
 
-    // 2) Extract unique state IDs
     const uniqueStateIds = [...new Set(users.map(u => u.stateId.toString()))];
 
-    // 3) Fetch states from Location collection
     const states = await Location.find({
       _id: { $in: uniqueStateIds },
-      type: "state" // assuming Location has field `type` with values "state" or "city"
+      type: "state" 
     }).select("_id name");
 
     return res.status(200).json({
@@ -1368,6 +1365,67 @@ exports.getCitiesFromUsers = async (req, res) => {
   }
 };
 
+// 🔥 Get Categories From Users Only (Unique)
+exports.getCategoriesFromUsers = async (req, res) => {
+  try {
+    let { className, stateId, cityId } = req.query;
+
+    // 1️⃣ Build Filter Query for users
+    let filterQuery = {};
+    if (className) filterQuery.className = className;
+
+    if (stateId) {
+      if (Array.isArray(stateId)) filterQuery.stateId = { $in: stateId };
+      else if (stateId.includes(",")) filterQuery.stateId = { $in: stateId.split(",") };
+      else filterQuery.stateId = stateId;
+    }
+
+    if (cityId) {
+      if (Array.isArray(cityId)) filterQuery.cityId = { $in: cityId };
+      else if (cityId.includes(",")) filterQuery.cityId = { $in: cityId.split(",") };
+      else filterQuery.cityId = cityId;
+    }
+
+    // 2️⃣ Fetch Users
+    const users = await User.find(filterQuery).select("_id");
+
+    if (!users.length) {
+      return res.status(200).json({ message: "No users found", categories: [] });
+    }
+
+    const userIds = users.map((u) => u._id);
+
+    // 3️⃣ Fetch ExamUserStatus for these users
+    const examStatuses = await ExamUserStatus.find({ userId: { $in: userIds } })
+      .populate({
+        path: "examId",
+        select: "category",
+        populate: { path: "category", select: "_id name" },
+      })
+      .lean();
+
+    // 4️⃣ Extract unique categories
+    const uniqueCategoriesMap = {};
+    examStatuses.forEach((ex) => {
+      if (ex.examId?.category?._id) {
+        uniqueCategoriesMap[ex.examId.category._id] = {
+          _id: ex.examId.category._id,
+          name: ex.examId.category.name,
+        };
+      }
+    });
+
+    const uniqueCategories = Object.values(uniqueCategoriesMap);
+
+    return res.status(200).json({
+      message: "User-based categories fetched successfully",
+      categories: uniqueCategories,
+    });
+  } catch (error) {
+    console.error("getCategoriesFromUsers Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
 
 // exports.userforAdmin = async (req, res) => {

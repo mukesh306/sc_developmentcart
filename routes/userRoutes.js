@@ -46,6 +46,8 @@ router.post(
   router.get('/userforAdmin',auth, userController.userforAdmin );
   router.get("/user-states", userController.getStatesFromUsers);
 router.get("/user-cities", userController.getCitiesFromUsers);
+router.get("/user-categories", userController.getCategoriesFromUsers);
+
 
   
 router.get('/verify-token', (req, res) => {
