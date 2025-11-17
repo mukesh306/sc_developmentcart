@@ -1385,7 +1385,6 @@ exports.getUserHistories = async (req, res) => {
 //   }
 // };
 
-
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -1434,7 +1433,7 @@ exports.userforAdmin = async (req, res) => {
           (await College.findById(user.className));
       }
 
-      // 4️⃣ Attach File URLs Cleaner
+      // 4️⃣ File URL Cleaner
       const setFileUrl = (filePath) =>
         filePath && fs.existsSync(filePath)
           ? `${baseUrl}/uploads/${path.basename(filePath)}`
@@ -1443,18 +1442,27 @@ exports.userforAdmin = async (req, res) => {
       user.aadharCard = setFileUrl(user.aadharCard);
       user.marksheet = setFileUrl(user.marksheet);
 
-      // 5️⃣ Fetch All Exam Status (Fast)
+      // 5️⃣ Fetch All Exam Status + Category Name
       const userExamStatus = await ExamUserStatus.find({ userId: user._id })
-        .populate("examId", "title")  
+        .populate({
+          path: "examId",
+          select: "title category",
+          populate: {
+            path: "category",
+            select: "name"
+          }
+        })
         .lean();
 
       const exams = [];
 
       for (let ex of userExamStatus) {
         const examTitle = ex.examId?.title || "Exam";
+        const categoryName = ex.examId?.category?.name || "";
 
+        // 🔹 Main Exam Entry
         exams.push({
-          type: examTitle,
+          type: `${examTitle} - ${categoryName}`,
           status: ex.status,
           publish: ex.publish,
           attend: ex.attend,
@@ -1462,8 +1470,9 @@ exports.userforAdmin = async (req, res) => {
           isEligible: ex.isEligible
         });
 
+        // 🔹 Exam Status Entry
         exams.push({
-          type: `${examTitle} Status`,
+          type: `${examTitle} - ${categoryName} Status`,
           result: ex.result || ""
         });
       }
@@ -1492,3 +1501,4 @@ exports.userforAdmin = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
