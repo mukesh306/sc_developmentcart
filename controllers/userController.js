@@ -1328,26 +1328,30 @@ exports.getStatesFromUsers = async (req, res) => {
   }
 };
 
-
 exports.getCitiesFromUsers = async (req, res) => {
   try {
-    const { stateId } = req.params;
+    let { stateId } = req.query; // अब query parameter के रूप में multiple stateIds ले सकते हैं
 
     if (!stateId) {
-      return res.status(400).json({ message: "stateId is required" });
+      return res.status(400).json({ message: "stateId(s) are required" });
     }
 
-    
-    const users = await User.find({ stateId }).select("cityId");
+    // अगर एक string आए तो array में बदलो
+    if (!Array.isArray(stateId)) {
+      stateId = stateId.split(","); // comma separated: stateId=64s1,64s2
+    }
+
+    // 1) Users with these states
+    const users = await User.find({ stateId: { $in: stateId } }).select("cityId");
 
     if (!users.length) {
-      return res.status(200).json({ message: "No cities found for this state", cities: [] });
+      return res.status(200).json({ message: "No cities found for these states", cities: [] });
     }
 
-   
+    // 2) Unique city IDs
     const uniqueCityIds = [...new Set(users.map(u => u.cityId?.toString()).filter(Boolean))];
 
-  
+    // 3) Fetch cities from Location collection
     const cities = await Location.find({
       _id: { $in: uniqueCityIds },
       type: "city"
