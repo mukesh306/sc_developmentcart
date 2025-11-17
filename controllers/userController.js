@@ -1417,6 +1417,7 @@ exports.getUserHistories = async (req, res) => {
 //   }
 // };
 
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
