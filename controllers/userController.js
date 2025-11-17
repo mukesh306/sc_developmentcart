@@ -1354,6 +1354,7 @@ exports.getCitiesFromUsers = async (req, res) => {
 };
 
 
+
 // exports.userforAdmin = async (req, res) => {
 //   try {
 //     const adminId = req.user._id;
@@ -1380,17 +1381,9 @@ exports.getCitiesFromUsers = async (req, res) => {
 
 //     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
 
-//     // 🔥 STEP 1: Get MAX exam count among all users
-//     const allExamCounts = await Promise.all(
-//       users.map(async (u) => {
-//         const count = await ExamUserStatus.countDocuments({ userId: u._id });
-//         return count;
-//       })
-//     );
+//     // Minimum exams every user must have
+//     const defaultExamCount = 3;
 
-//     const maxExamCount = Math.max(...allExamCounts);
-
-//     // Final Users
 //     let finalUsers = [];
 
 //     for (let user of users) {
@@ -1440,6 +1433,7 @@ exports.getCitiesFromUsers = async (req, res) => {
 //       let examIndex = 1;
 //       let failedFound = false;
 
+//       // 🔥 Step A: Add REAL exams first
 //       for (let ex of userExamStatus) {
 //         const categoryName = ex.examId?.category?.name || "";
 
@@ -1485,8 +1479,11 @@ exports.getCitiesFromUsers = async (req, res) => {
 //         examIndex++;
 //       }
 
-//       // 🔥 STEP 2: Add EMPTY EXAMS if user has less exams than max
-//       while (examIndex <= maxExamCount) {
+//       // 🔥 Step B: Add BLANK exams until total = max(realCount, 3)
+//       let realExamCount = userExamStatus.length;
+//       let totalRequired = Math.max(defaultExamCount, realExamCount);
+
+//       while (examIndex <= totalRequired) {
 //         exams.push({
 //           type: `Exam ${examIndex}`,
 //           category: "",
@@ -1507,7 +1504,7 @@ exports.getCitiesFromUsers = async (req, res) => {
 //         examIndex++;
 //       }
 
-//       // Push Final User Data
+//       // Final User Struct
 //       finalUsers.push({
 //         ...user._doc,
 //         country: user.countryId?.name || "",
@@ -1533,13 +1530,10 @@ exports.getCitiesFromUsers = async (req, res) => {
 //   }
 // };
 
-
-
-
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
-    const { className } = req.query;
+    const { className, stateId, cityId } = req.query; // ← added stateId & cityId
 
     // 1️⃣ Validate Admin
     const admin = await Admin1.findById(adminId).select("startDate endDate");
@@ -1551,8 +1545,11 @@ exports.userforAdmin = async (req, res) => {
     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
 
-    // 2️⃣ Filter Users
-    const filterQuery = className ? { className } : {};
+    // 2️⃣ Build Filter Query
+    let filterQuery = {};
+    if (className) filterQuery.className = className;
+    if (stateId) filterQuery.stateId = stateId;
+    if (cityId) filterQuery.cityId = cityId;
 
     const users = await User.find(filterQuery)
       .populate("countryId", "name")
@@ -1568,7 +1565,6 @@ exports.userforAdmin = async (req, res) => {
     let finalUsers = [];
 
     for (let user of users) {
-
       if (!user.startDate || !user.endDate) continue;
 
       const userStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
