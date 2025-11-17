@@ -45,7 +45,7 @@ router.post(
   router.get('/getUserHistory', userController.getUserHistories );
   router.get('/userforAdmin',auth, userController.userforAdmin );
   router.get("/user-states", userController.getStatesFromUsers);
-router.get("/user-cities/:stateId", userController.getCitiesFromUsers);
+router.get("/user-cities", userController.getCitiesFromUsers);
 
   
 router.get('/verify-token', (req, res) => {
