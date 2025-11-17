@@ -1301,156 +1301,12 @@ exports.getUserHistories = async (req, res) => {
 
 
 
-// exports.userforAdmin = async (req, res) => {
-//   try {
-//     const adminId = req.user._id;
-//     const { className } = req.query;
-
-//     // 1️⃣ Validate Admin
-//     const admin = await Admin1.findById(adminId).select("startDate endDate");
-//     if (!admin) return res.status(404).json({ message: "Admin not found." });
-
-//     if (!admin.startDate || !admin.endDate)
-//       return res.status(400).json({ message: "Admin session dates missing." });
-
-//     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
-//     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
-
-//     // 2️⃣ User Filter
-//     const filterQuery = className ? { className } : {};
-
-//     const users = await User.find(filterQuery)
-//       .populate("countryId", "name")
-//       .populate("stateId", "name")
-//       .populate("cityId", "name")
-//       .populate("updatedBy", "email session startDate endDate name role");
-
-//     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
-
-//     let finalUsers = [];
-
-//     for (let user of users) {
-//       if (!user.startDate || !user.endDate) continue;
-
-//       const userStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
-//       const userEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
-
-//       if (!userStart.isSameOrAfter(adminStart) || !userEnd.isSameOrBefore(adminEnd))
-//         continue;
-
-//       // Class details
-//       let classDetails = null;
-//       if (mongoose.Types.ObjectId.isValid(user.className)) {
-//         classDetails =
-//           (await School.findById(user.className)) ||
-//           (await College.findById(user.className));
-//       }
-
-//       // File URL Cleaner
-//       const setFileUrl = (filePath) =>
-//         filePath && fs.existsSync(filePath)
-//           ? `${baseUrl}/uploads/${path.basename(filePath)}`
-//           : "";
-
-//       user.aadharCard = setFileUrl(user.aadharCard);
-//       user.marksheet = setFileUrl(user.marksheet);
-
-//       // Fetch exams
-//       const userExamStatus = await ExamUserStatus.find({ userId: user._id })
-//         .populate({
-//           path: "examId",
-//           select: "title category",
-//           populate: { path: "category", select: "name" }
-//         })
-//         .lean();
-
-//       // ⭐ NEW — Category outside exams
-//       let userCategory = "";
-//       if (userExamStatus.length > 0) {
-//         userCategory = userExamStatus[0]?.examId?.category?.name || "";
-//       }
-
-//       let exams = [];
-//       let examIndex = 1;
-//       let failedFound = false;
-
-//       for (let ex of userExamStatus) {
-//         const categoryName = ex.examId?.category?.name || "";
-
-//         let statesType = "";
-
-//         if (failedFound) {
-//           statesType = "Not Eligible";
-//         } else {
-//           if (!ex.publish) {
-//             statesType = "To Be Scheduled";
-//           } else if (ex.publish && (!ex.result || ex.result === "")) {
-//             statesType = "Scheduled";
-//           } else if (
-//             ex.publish &&
-//             (ex.result?.toLowerCase() === "passed" || ex.result?.toLowerCase() === "failed")
-//           ) {
-//             statesType = "Completed";
-//           }
-//         }
-
-//         if (ex.result?.toLowerCase() === "failed") {
-//           failedFound = true;
-//         }
-
-//         exams.push({
-//           type: `Exam ${examIndex}`,
-//           category: categoryName,
-//           status: ex.status,
-//           publish: ex.publish,
-//           attend: ex.attend,
-//           visible: ex.visible,
-//           isEligible: ex.isEligible,
-//           statesType,
-//         });
-
-//         exams.push({
-//           type: `Exam ${examIndex} Status`,
-//           result: ex.result || "",
-//           statesType,
-//         });
-
-//         examIndex++;
-//       }
-
-//       finalUsers.push({
-//         ...user._doc,
-//         country: user.countryId?.name || "",
-//         state: user.stateId?.name || "",
-//         city: user.cityId?.name || "",
-//         institutionName:
-//           user.schoolName || user.collegeName || user.instituteName || "",
-//         institutionType: user.studentType || "",
-//         classOrYear: classDetails?.name || "",
-//         updatedBy: user.updatedBy || null,
-//         category: userCategory, // ⭐ Added here
-//         exams,
-//       });
-//     }
-
-//     return res.status(200).json({
-//       message: "Users fetched successfully",
-//       users: finalUsers,
-//     });
-
-//   } catch (error) {
-//     console.error("userforAdmin Error:", error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
-
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
     const { className } = req.query;
 
-    // 1️⃣ Validate Admin
+  
     const admin = await Admin1.findById(adminId).select("startDate endDate");
     if (!admin) return res.status(404).json({ message: "Admin not found." });
 
@@ -1460,7 +1316,7 @@ exports.userforAdmin = async (req, res) => {
     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
 
-    // 2️⃣ User Filter
+    
     const filterQuery = className ? { className } : {};
 
     const users = await User.find(filterQuery)
@@ -1482,7 +1338,7 @@ exports.userforAdmin = async (req, res) => {
       if (!userStart.isSameOrAfter(adminStart) || !userEnd.isSameOrBefore(adminEnd))
         continue;
 
-      // Class details
+      
       let classDetails = null;
       if (mongoose.Types.ObjectId.isValid(user.className)) {
         classDetails =
@@ -1490,7 +1346,7 @@ exports.userforAdmin = async (req, res) => {
           (await College.findById(user.className));
       }
 
-      // File URL Cleaner
+    
       const setFileUrl = (filePath) =>
         filePath && fs.existsSync(filePath)
           ? `${baseUrl}/uploads/${path.basename(filePath)}`
@@ -1499,7 +1355,7 @@ exports.userforAdmin = async (req, res) => {
       user.aadharCard = setFileUrl(user.aadharCard);
       user.marksheet = setFileUrl(user.marksheet);
 
-      // Fetch exams
+      
       const userExamStatus = await ExamUserStatus.find({ userId: user._id })
         .populate({
           path: "examId",
@@ -1508,7 +1364,7 @@ exports.userforAdmin = async (req, res) => {
         })
         .lean();
 
-      // ⭐ NEW — Category outside exams
+      
       let userCategory = "";
       if (userExamStatus.length > 0) {
         userCategory = userExamStatus[0]?.examId?.category?.name || "";
@@ -1572,40 +1428,10 @@ exports.userforAdmin = async (req, res) => {
         institutionType: user.studentType || "",
         classOrYear: classDetails?.name || "",
         updatedBy: user.updatedBy || null,
-        category: userCategory,
+        category: userCategory, 
         exams,
       });
     }
-
-    // ⭐⭐⭐ NORMALIZE EXAM COUNTS (Add Missing Exams)
-    if (finalUsers.length > 0) {
-      const maxExams = Math.max(...finalUsers.map(u => u.exams.length));
-
-      for (let user of finalUsers) {
-        while (user.exams.length < maxExams) {
-
-          user.exams.push({
-            type: `Exam ${user.exams.length + 1}`,
-            category: "",
-            status: null,
-            publish: null,
-            attend: null,
-            visible: null,
-            isEligible: null,
-            statesType: "Not Attempted",
-          });
-
-          user.exams.push({
-            type: `Exam ${user.exams.length + 1} Status`,
-            result: "",
-            statesType: "Not Attempted",
-          });
-
-        }
-      }
-    }
-    // ⭐⭐⭐ END NORMALIZATION
-
 
     return res.status(200).json({
       message: "Users fetched successfully",
@@ -1617,4 +1443,5 @@ exports.userforAdmin = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
