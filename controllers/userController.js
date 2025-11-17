@@ -1446,17 +1446,14 @@ exports.userforAdmin = async (req, res) => {
     let finalUsers = [];
 
     for (let user of users) {
-
-      // Skip if user has no session
       if (!user.startDate || !user.endDate) continue;
 
       const userStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
       const userEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
 
-      // user must be inside admin session
       if (!userStart.isSameOrAfter(adminStart) || !userEnd.isSameOrBefore(adminEnd)) continue;
 
-      // Fetch class details
+      // Class details
       let classDetails = null;
       if (mongoose.Types.ObjectId.isValid(user.className)) {
         classDetails =
@@ -1473,7 +1470,7 @@ exports.userforAdmin = async (req, res) => {
       user.aadharCard = setFileUrl(user.aadharCard);
       user.marksheet = setFileUrl(user.marksheet);
 
-      // Fetch all exams + category
+      // Fetch exams
       const userExamStatus = await ExamUserStatus.find({ userId: user._id })
         .populate({
           path: "examId",
@@ -1482,25 +1479,35 @@ exports.userforAdmin = async (req, res) => {
         })
         .lean();
 
-      // -------------- EXAM RESPONSE FINAL FORMAT --------------
       let exams = [];
-      let examIndex = 1; // Exam 1, Exam 2, Exam 3...
+      let examIndex = 1;
+      let failedFound = false; // 👉 अगर fail मिला तो आगे वाले exams को Not Eligible देना है
 
       for (let ex of userExamStatus) {
         const categoryName = ex.examId?.category?.name || "";
 
-        // Determine statesType
         let statesType = "";
-        if (!ex.publish) {
-          statesType = "To Be Scheduled";
-        } else if (ex.publish && (!ex.result || ex.result === "")) {
-          statesType = "Scheduled";
-        } else if (
-          ex.publish &&
-          (ex.result?.toLowerCase() === "passed" ||
-            ex.result?.toLowerCase() === "failed")
-        ) {
-          statesType = "Completed";
+
+        // ❌ अगर पहले कहीं failed मिल चुका है
+        if (failedFound) {
+          statesType = "Not Eligible";
+        } else {
+          // Normal rule apply
+          if (!ex.publish) {
+            statesType = "To Be Scheduled";
+          } else if (ex.publish && (!ex.result || ex.result === "")) {
+            statesType = "Scheduled";
+          } else if (
+            ex.publish &&
+            (ex.result?.toLowerCase() === "passed" || ex.result?.toLowerCase() === "failed")
+          ) {
+            statesType = "Completed";
+          }
+        }
+
+        // अगर इस exam का result failed है → आगे वाले exams को Not Eligible बनाना है
+        if (ex.result?.toLowerCase() === "failed") {
+          failedFound = true;
         }
 
         // MAIN EXAM ENTRY
@@ -1524,9 +1531,7 @@ exports.userforAdmin = async (req, res) => {
 
         examIndex++;
       }
-      // ---------------------------------------------------------
 
-      // Final user object
       finalUsers.push({
         ...user._doc,
         country: user.countryId?.name || "",
@@ -1551,4 +1556,5 @@ exports.userforAdmin = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
 
