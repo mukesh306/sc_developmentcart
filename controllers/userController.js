@@ -1370,10 +1370,11 @@ exports.getCitiesFromUsers = async (req, res) => {
 
 
 
+
 // exports.userforAdmin = async (req, res) => {
 //   try {
 //     const adminId = req.user._id;
-//     const { className } = req.query;
+//     const { className, stateId, cityId } = req.query; // ← added stateId & cityId
 
 //     // 1️⃣ Validate Admin
 //     const admin = await Admin1.findById(adminId).select("startDate endDate");
@@ -1385,8 +1386,11 @@ exports.getCitiesFromUsers = async (req, res) => {
 //     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
 //     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
 
-//     // 2️⃣ Filter Users
-//     const filterQuery = className ? { className } : {};
+//     // 2️⃣ Build Filter Query
+//     let filterQuery = {};
+//     if (className) filterQuery.className = className;
+//     if (stateId) filterQuery.stateId = stateId;
+//     if (cityId) filterQuery.cityId = cityId;
 
 //     const users = await User.find(filterQuery)
 //       .populate("countryId", "name")
@@ -1402,7 +1406,6 @@ exports.getCitiesFromUsers = async (req, res) => {
 //     let finalUsers = [];
 
 //     for (let user of users) {
-
 //       if (!user.startDate || !user.endDate) continue;
 
 //       const userStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
@@ -1548,7 +1551,7 @@ exports.getCitiesFromUsers = async (req, res) => {
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
-    const { className, stateId, cityId } = req.query; // ← added stateId & cityId
+    let { className, stateId, cityId } = req.query;
 
     // 1️⃣ Validate Admin
     const admin = await Admin1.findById(adminId).select("startDate endDate");
@@ -1563,9 +1566,30 @@ exports.userforAdmin = async (req, res) => {
     // 2️⃣ Build Filter Query
     let filterQuery = {};
     if (className) filterQuery.className = className;
-    if (stateId) filterQuery.stateId = stateId;
-    if (cityId) filterQuery.cityId = cityId;
 
+    // Multiple states support
+    if (stateId) {
+      if (Array.isArray(stateId)) {
+        filterQuery.stateId = { $in: stateId };
+      } else if (stateId.includes(",")) {
+        filterQuery.stateId = { $in: stateId.split(",") };
+      } else {
+        filterQuery.stateId = stateId;
+      }
+    }
+
+    // Multiple cities support
+    if (cityId) {
+      if (Array.isArray(cityId)) {
+        filterQuery.cityId = { $in: cityId };
+      } else if (cityId.includes(",")) {
+        filterQuery.cityId = { $in: cityId.split(",") };
+      } else {
+        filterQuery.cityId = cityId;
+      }
+    }
+
+    // 3️⃣ Fetch Users
     const users = await User.find(filterQuery)
       .populate("countryId", "name")
       .populate("stateId", "name")
@@ -1574,9 +1598,7 @@ exports.userforAdmin = async (req, res) => {
 
     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
 
-    // Minimum exams every user must have
     const defaultExamCount = 3;
-
     let finalUsers = [];
 
     for (let user of users) {
@@ -1630,7 +1652,6 @@ exports.userforAdmin = async (req, res) => {
         const categoryName = ex.examId?.category?.name || "";
 
         let statesType = "";
-
         if (failedFound) {
           statesType = "Not Eligible";
         } else {
@@ -1640,16 +1661,13 @@ exports.userforAdmin = async (req, res) => {
             statesType = "Scheduled";
           } else if (
             ex.publish &&
-            (ex.result?.toLowerCase() === "passed" ||
-              ex.result?.toLowerCase() === "failed")
+            (ex.result?.toLowerCase() === "passed" || ex.result?.toLowerCase() === "failed")
           ) {
             statesType = "Completed";
           }
         }
 
-        if (ex.result?.toLowerCase() === "failed") {
-          failedFound = true;
-        }
+        if (ex.result?.toLowerCase() === "failed") failedFound = true;
 
         exams.push({
           type: `Exam ${examIndex}`,
@@ -1671,9 +1689,9 @@ exports.userforAdmin = async (req, res) => {
         examIndex++;
       }
 
-      // 🔥 Step B: Add BLANK exams until total = max(realCount, 3)
-      let realExamCount = userExamStatus.length;
-      let totalRequired = Math.max(defaultExamCount, realExamCount);
+      // 🔥 Step B: Add BLANK exams until total = max(realCount, defaultExamCount)
+      const realExamCount = userExamStatus.length;
+      const totalRequired = Math.max(defaultExamCount, realExamCount);
 
       while (examIndex <= totalRequired) {
         exams.push({
@@ -1702,8 +1720,7 @@ exports.userforAdmin = async (req, res) => {
         country: user.countryId?.name || "",
         state: user.stateId?.name || "",
         city: user.cityId?.name || "",
-        institutionName:
-          user.schoolName || user.collegeName || user.instituteName || "",
+        institutionName: user.schoolName || user.collegeName || user.instituteName || "",
         institutionType: user.studentType || "",
         classOrYear: classDetails?.name || "",
         updatedBy: user.updatedBy || null,
