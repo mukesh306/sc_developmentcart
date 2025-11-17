@@ -1365,12 +1365,12 @@ exports.getCitiesFromUsers = async (req, res) => {
   }
 };
 
-// 🔥 Get Categories From Users Only (Unique)
+
 exports.getCategoriesFromUsers = async (req, res) => {
   try {
     let { className, stateId, cityId } = req.query;
 
-    // 1️⃣ Build Filter Query for users
+   
     let filterQuery = {};
     if (className) filterQuery.className = className;
 
