@@ -1295,6 +1295,63 @@ exports.getUserHistories = async (req, res) => {
   }
 };
 
+// 🔥 Get States From USERS Only (Unique)
+exports.getStatesFromUsers = async (req, res) => {
+  try {
+    // 1) Get all users with stateId
+    const users = await User.find().select("stateId");
+
+    // 2) Extract unique state IDs
+    const uniqueStateIds = [
+      ...new Set(users.map(u => u.stateId?.toString()).filter(Boolean))
+    ];
+
+    // 3) Fetch states based on unique IDs
+    const states = await State.find({ _id: { $in: uniqueStateIds } })
+      .select("_id name");
+
+    return res.status(200).json({
+      message: "User-based states fetched successfully",
+      states
+    });
+
+  } catch (error) {
+    console.error("getStatesFromUsers Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
+// 🔥 Get Cities From USERS based on selected State
+exports.getCitiesFromUsers = async (req, res) => {
+  try {
+    const { stateId } = req.params;
+
+    if (!stateId) {
+      return res.status(400).json({ message: "stateId is required" });
+    }
+
+    // 1) Users with this state
+    const users = await User.find({ stateId }).select("cityId");
+
+    // 2) Unique city IDs
+    const uniqueCityIds = [
+      ...new Set(users.map(u => u.cityId?.toString()).filter(Boolean))
+    ];
+
+    // 3) Fetch only those cities
+    const cities = await City.find({ _id: { $in: uniqueCityIds } })
+      .select("_id name");
+
+    return res.status(200).json({
+      message: "User-based cities fetched successfully",
+      cities
+    });
+
+  } catch (error) {
+    console.error("getCitiesFromUsers Error:", error);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
 
 
 // exports.userforAdmin = async (req, res) => {
@@ -1475,6 +1532,9 @@ exports.getUserHistories = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
+
+
+
 
 exports.userforAdmin = async (req, res) => {
   try {

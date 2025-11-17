@@ -44,6 +44,9 @@ router.post(
   router.get('/active-session-users', userController.getActiveSessionUsers);
   router.get('/getUserHistory', userController.getUserHistories );
   router.get('/userforAdmin',auth, userController.userforAdmin );
+  router.get("/user-states", userController.getStatesFromUsers);
+router.get("/user-cities/:stateId", userController.getCitiesFromUsers);
+
   
 router.get('/verify-token', (req, res) => {
   const authHeader = req.headers.authorization;
