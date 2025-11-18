@@ -580,88 +580,342 @@ exports.addQuestionsToExam = async (req, res) => {
 // Assumes mongoose is imported above this file
 // const mongoose = require('mongoose');
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
     const { category } = req.query;
 
+    // -----------------------------//
+    // Helper: Parse DD-MM-YYYY + time in IST
+    // -----------------------------//
+    function parseIST(dateStr, timeStr) {
+      const [day, month, year] = dateStr.split("-").map(Number);
+      const [hh, mm, ss] = timeStr.split(":").map(Number);
+
+      let date = new Date(Date.UTC(year, month - 1, day, hh, mm, ss));
+      return new Date(date.getTime() + 5.5 * 60 * 60 * 1000); // UTC → IST
+    }
+
+    const nowIST = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
+
+    // -----------------------------//
     const user = await User.findById(userId).select("className");
     if (!user || !user.className) {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // Fetch exams for the user's class
-    const exams = await Schoolerexam.find({ className: user.className })
-      .populate("category", "name")
+    const groupQuery = {
+      className: user.className,
+      members: userId,
+    };
+    if (category && mongoose.Types.ObjectId.isValid(category)) {
+      groupQuery.category = category;
+    }
+
+    const userExamGroup = await UserExamGroup.findOne(groupQuery).lean();
+    if (!userExamGroup) {
+      return res.status(200).json([]);
+    }
+
+    let exams = await Schoolerexam.find({
+      className: user.className,
+    })
+      .populate("category", "name finalist")
+      .populate("createdBy", "name email")
       .sort({ createdAt: 1 });
 
-    let visibleExams = [];
+    if (!exams || exams.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    const updatedExams = [];
 
     for (const exam of exams) {
-      const result = await ExamResult.findOne({ userId, examId: exam._id }).lean();
+      let classData =
+        (await School.findById(exam.className).select("_id name className")) ||
+        (await College.findById(exam.className).select("_id name className"));
 
-      const totalQuestions = exam.topicQuestions?.length || 0;
+      const examObj = exam.toObject();
+      examObj.className = classData
+        ? { _id: classData._id, name: classData.className || classData.name }
+        : null;
 
-      const examData = {
-        _id: exam._id,
-        examName: exam.examName,
-        category: exam.category?.name || "",
-        ScheduleDate: exam.ScheduleDate,
-        ScheduleTime: exam.ScheduleTime,
-        totalQuestions,
-        result: result ? result.result : null,
-        attend: result ? true : false,
-        isEligible: true,        // default true
-        statesType: result ? result.result : "Pending",
-      };
+      examObj.totalQuestions = exam.topicQuestions
+        ? exam.topicQuestions.length
+        : 0;
 
-      visibleExams.push(examData);
+      const userResult = await ExamResult.findOne({
+        userId,
+        examId: exam._id,
+      })
+        .select("correct finalScore percentage createdAt")
+        .lean();
+
+      examObj.correct = userResult ? userResult.correct : null;
+      examObj.finalScore = userResult ? userResult.finalScore : null;
+
+      if (userResult && examObj.totalQuestions > 0) {
+        examObj.percentage = parseFloat(
+          ((userResult.finalScore / examObj.totalQuestions) * 100).toFixed(2)
+        );
+      } else {
+        examObj.percentage = null;
+      }
+
+      const examCategoryId = exam.category?._id;
+      let userGroup = await UserExamGroup.findOne({
+        members: userId,
+        category: examCategoryId,
+      }).lean();
+
+      if (!userGroup) {
+        userGroup = await UserExamGroup.findOne({ members: userId })
+          .sort({ createdAt: -1 })
+          .lean();
+      }
+
+      let allResults = [];
+      if (userGroup) {
+        allResults = await ExamResult.find({
+          examId: exam._id,
+          userId: { $in: userGroup.members },
+        })
+          .select("userId percentage Completiontime")
+          .sort({ percentage: -1, Completiontime: 1 })
+          .lean();
+      }
+
+      if (userResult && allResults.length > 0) {
+        let rank = null;
+        for (let i = 0; i < allResults.length; i++) {
+          if (allResults[i].userId.toString() === userId.toString()) {
+            rank = i + 1;
+            break;
+          }
+        }
+
+        examObj.rank = rank;
+        examObj.totalParticipants = allResults.length;
+      } else {
+        examObj.rank = null;
+        examObj.totalParticipants = 0;
+      }
+
+      const passLimit = parseInt(exam.passout) || 1;
+      examObj.result =
+        examObj.rank !== null
+          ? examObj.rank <= passLimit
+            ? "passed"
+            : "failed"
+          : null;
+
+      examObj.status = examObj.percentage !== null;
+      examObj.publish = exam.publish;
+      examObj.attend = true;
+
+      updatedExams.push(examObj);
     }
 
-    // ************************************************************
-    // Convert DD-MM-YYYY + HH:MM:SS → Date (IST)
-    function parseIST(dateStr, timeStr) {
-      const [day, month, year] = dateStr.split("-").map(Number);
-      const [hh, mm, ss] = timeStr.split(":").map(Number);
-
-      // Convert to UTC → shift to IST (UTC+5:30)
-      return new Date(Date.UTC(year, month - 1, day, hh - 5, mm - 30, ss));
+    let filteredExams = updatedExams;
+    if (category) {
+      filteredExams = filteredExams.filter(
+        (e) => e.category && e.category._id?.toString() === category
+      );
     }
-    // ************************************************************
 
-    // ************************************************************
-    // NEW FINAL RULE:
-    // If FIRST exam time passed AND result null/failed → block all next exams
-    // ************************************************************
+    let stopNext = false;
+
+    // -----------------------------//
+    // Attendance logic
+    // -----------------------------//
+    for (let i = 0; i < filteredExams.length; i++) {
+      const exam = filteredExams[i];
+
+      const scheduledDateTimeIST = parseIST(
+        exam.ScheduleDate,
+        exam.ScheduleTime
+      );
+
+      if (scheduledDateTimeIST > nowIST) {
+        exam.attend = true;
+        continue;
+      }
+
+      if (stopNext) {
+        exam.attend = false;
+        exam.publish = false;
+        exam.rank = null;
+        exam.correct = null;
+        exam.finalScore = null;
+        exam.percentage = null;
+        exam.result = null;
+        exam.status = false;
+        continue;
+      }
+
+      if (scheduledDateTimeIST < nowIST && exam.result === null) {
+        exam.attend = true;
+        stopNext = true;
+        continue;
+      }
+
+      if (exam.result === "failed") {
+        exam.attend = true;
+        stopNext = true;
+      }
+    }
+
+    // -----------------------------//
+    // Visibility logic
+    // -----------------------------//
+    let visibleExams = [];
+    for (let i = 0; i < filteredExams.length; i++) {
+      const currentExam = filteredExams[i];
+
+      if (i === 0) {
+        currentExam.visible = true;
+        visibleExams.push(currentExam);
+        continue;
+      }
+
+      const previousExam = filteredExams[i - 1];
+      const passoutLimit = parseInt(previousExam.passout) || 1;
+
+      const userGroup = await ExamGroup.findOne({
+        examId: previousExam._id,
+        members: userId,
+      }).lean();
+
+      if (!userGroup) {
+        currentExam.visible = false;
+        visibleExams.push(currentExam);
+        continue;
+      }
+
+      const topResults = await ExamResult.find({
+        examId: previousExam._id,
+        userId: { $in: userGroup.members },
+      })
+        .sort({ percentage: -1, createdAt: 1 })
+        .limit(passoutLimit)
+        .select("userId")
+        .lean();
+
+      const topUserIds = topResults.map((r) => r.userId.toString());
+      currentExam.visible = topUserIds.includes(userId.toString());
+
+      visibleExams.push(currentExam);
+    }
+
+    // -----------------------------//
+    // Eligibility logic
+    // -----------------------------//
+    let failedFound = false;
+    for (let i = 0; i < visibleExams.length; i++) {
+      const exam = visibleExams[i];
+
+      if (failedFound) {
+        exam.isEligible = false;
+      } else {
+        exam.isEligible = true;
+      }
+
+      if (exam.result === "failed") {
+        failedFound = true;
+        exam.isEligible = false;
+      }
+    }
+
+    // ********************************************************************
+    // NEW RULE (IST Based)
+    // FIRST exam ka time निकल गया AND result null/failed →
+    // next exams: attend=false, isEligible=false
+    // ********************************************************************
     if (visibleExams.length > 0) {
       const first = visibleExams[0];
 
-      const firstSchedule = parseIST(first.ScheduleDate, first.ScheduleTime);
-      const now = new Date(); // IST automatically if server in India
+      const firstIST = parseIST(first.ScheduleDate, first.ScheduleTime);
 
-      const firstFailedOrNotAttempted =
+      const firstFailedOrNull =
         first.result === null || first.result === "failed";
 
-      const firstExamTimePassed = firstSchedule < now;
-
-      if (firstFailedOrNotAttempted && firstExamTimePassed) {
+      if (firstIST < nowIST && firstFailedOrNull) {
         for (let i = 1; i < visibleExams.length; i++) {
           visibleExams[i].attend = false;
           visibleExams[i].isEligible = false;
-          visibleExams[i].statesType = "Not Eligible";
         }
       }
     }
-    // ************************************************************
 
-    return res.status(200).json({
-      message: "User exams fetched successfully",
-      exams: visibleExams,
-    });
+    // -----------------------------//
+    // Save Logs
+    // -----------------------------//
+    if (category && mongoose.Types.ObjectId.isValid(category)) {
+      const oldStatuses = await ExamUserStatus.find({ userId }).select(
+        "category"
+      );
+
+      const oldCategoryIds = oldStatuses
+        .map((s) => s.category?._id?.toString())
+        .filter(Boolean);
+
+      const categoriesToDelete = oldCategoryIds.filter(
+        (cat) => cat !== category.toString()
+      );
+
+      if (categoriesToDelete.length > 0) {
+        await ExamUserStatus.deleteMany({
+          userId,
+          "category._id": { $in: categoriesToDelete },
+        });
+      }
+    }
+
+    for (const exam of visibleExams) {
+      const existing = await ExamUserStatus.findOne({
+        userId,
+        examId: exam._id,
+      });
+
+      const payload = {
+        category: exam.category,
+        className: exam.className,
+        totalQuestions: exam.totalQuestions,
+        correct: exam.correct,
+        finalScore: exam.finalScore,
+        percentage: exam.percentage,
+        rank: exam.rank,
+        totalParticipants: exam.totalParticipants,
+        result: exam.result,
+        status: exam.status,
+        publish: exam.publish,
+        attend: exam.attend,
+        visible: exam.visible,
+        isEligible: exam.isEligible,
+        ScheduleDate: exam.ScheduleDate,
+        ScheduleTime: exam.ScheduleTime,
+      };
+
+      if (existing) {
+        await ExamUserStatus.updateOne(
+          { userId, examId: exam._id },
+          { $set: payload }
+        );
+      } else {
+        await ExamUserStatus.create({
+          userId,
+          examId: exam._id,
+          ...payload,
+        });
+      }
+    }
+
+    return res.status(200).json(visibleExams);
 
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({
+    console.error("🔥 Error fetching exams:", error);
+    res.status(500).json({
       message: "Internal server error",
       error: error.message,
     });
