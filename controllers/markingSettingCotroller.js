@@ -140,7 +140,7 @@ exports.bufferTime = async (req, res) => {
       return res.status(400).json({ message: "examId is required." });
     }
 
-    // 🔹 Fetch Exam
+    // Fetch Exam
     const exam = await Schoolerexam.findById(examId)
       .select("ScheduleDate ScheduleTime ScheduleTitle ScheduleType createdAt updatedAt");
 
@@ -148,7 +148,7 @@ exports.bufferTime = async (req, res) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // 🔹 Fetch Buffer Setting
+    // Fetch Buffer Setting
     const setting = await MarkingSetting.findOne()
       .select("bufferTime createdBy");
 
@@ -156,43 +156,20 @@ exports.bufferTime = async (req, res) => {
       return res.status(404).json({ message: "Marking settings not found." });
     }
 
-    // 🔥 Convert bufferTime → ms
     const bufferDuration = setting.bufferTime * 60 * 1000;
 
-    // ------------------------------------------
-    // 🔥 FIX: Convert DD-MM-YYYY → YYYY-MM-DD
-    // ------------------------------------------
-    let dateStr = exam.ScheduleDate;
-
-    let day, month, year;
-
-    // Detect DD-MM-YYYY
-    if (/^\d{2}-\d{2}-\d{4}$/.test(dateStr)) {
-      [day, month, year] = dateStr.split("-").map(Number);
-    } else if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) {
-      [year, month, day] = dateStr.split("-").map(Number);
-    } else {
-      return res.status(400).json({ message: "Invalid date format" });
-    }
-
+    // 🔥 Remove UTC – Use Local Time (IST)
+    const [day, month, year] = exam.ScheduleDate.split("-").map(Number);
     const [hh, mm, ss] = exam.ScheduleTime.split(":").map(Number);
 
-    // 🔥 Accurate UTC timestamp
-    const givenTime = new Date(Date.UTC(year, month - 1, day, hh, mm, ss)).getTime();
+    // 🔥 Create Local IST Date
+    const givenTime = new Date(year, month - 1, day, hh, mm, ss).getTime();
 
-    // ------------------------------------------
-    // 🔥 Ensure No Negative Value
-    // ------------------------------------------
-    const safeGivenTime = givenTime < 0 ? 0 : givenTime;
-
-    // ------------------------------------------
-
-    // 🔥 Final Response
     res.status(200).json({
       bufferTime: setting.bufferTime,
       bufferDuration,
       serverNow: Date.now(),
-      givenTime: safeGivenTime, // never negative
+      givenTime,  // EXACT local time timestamp
 
       ScheduleDate: exam.ScheduleDate,
       ScheduleTime: exam.ScheduleTime,
