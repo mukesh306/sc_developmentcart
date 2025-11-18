@@ -140,7 +140,6 @@ exports.bufferTime = async (req, res) => {
       return res.status(400).json({ message: "examId is required." });
     }
 
-    // Fetch Exam
     const exam = await Schoolerexam.findById(examId)
       .select("ScheduleDate ScheduleTime ScheduleTitle ScheduleType createdAt updatedAt");
 
@@ -148,7 +147,6 @@ exports.bufferTime = async (req, res) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // Fetch Buffer Setting
     const setting = await MarkingSetting.findOne()
       .select("bufferTime createdBy");
 
@@ -158,18 +156,22 @@ exports.bufferTime = async (req, res) => {
 
     const bufferDuration = setting.bufferTime * 60 * 1000;
 
-    // 🔥 Remove UTC – Use Local Time (IST)
+    
     const [day, month, year] = exam.ScheduleDate.split("-").map(Number);
     const [hh, mm, ss] = exam.ScheduleTime.split(":").map(Number);
 
-    // 🔥 Create Local IST Date
-    const givenTime = new Date(year, month - 1, day, hh, mm, ss).getTime();
+    
+    const utcTime = Date.UTC(year, month - 1, day, hh, mm, ss);
+
+    
+    const IST_OFFSET = 5.5 * 60 * 60 * 1000;
+    const givenTime = utcTime + IST_OFFSET;
 
     res.status(200).json({
       bufferTime: setting.bufferTime,
       bufferDuration,
       serverNow: Date.now(),
-      givenTime,  // EXACT local time timestamp
+      givenTime,  
 
       ScheduleDate: exam.ScheduleDate,
       ScheduleTime: exam.ScheduleTime,
@@ -184,5 +186,6 @@ exports.bufferTime = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
