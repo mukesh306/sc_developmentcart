@@ -580,12 +580,27 @@ exports.addQuestionsToExam = async (req, res) => {
 // Assumes mongoose is imported above this file
 // const mongoose = require('mongoose');
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
     const { category } = req.query;
 
+    // -----------------------------//
+    // Helper: Parse DD-MM-YYYY + time in IST
+    // -----------------------------//
+    function parseIST(dateStr, timeStr) {
+      const [day, month, year] = dateStr.split("-").map(Number);
+      const [hh, mm, ss] = timeStr.split(":").map(Number);
+
+      let date = new Date(Date.UTC(year, month - 1, day, hh, mm, ss));
+
+      // Convert UTC → IST (+5:30)
+      return new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
+    }
+
+    const nowIST = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
+
+    // -----------------------------//
     const user = await User.findById(userId).select("className");
     if (!user || !user.className) {
       return res.status(400).json({ message: "User class not found." });
@@ -711,16 +726,19 @@ exports.UsersExams = async (req, res) => {
     }
 
     let stopNext = false;
-    const now = new Date();
 
+    // -----------------------------//
+    // Attendance logic
+    // -----------------------------//
     for (let i = 0; i < filteredExams.length; i++) {
       const exam = filteredExams[i];
 
-      const scheduledDateTime = new Date(
-        `${exam.ScheduleDate} ${exam.ScheduleTime}`
+      const scheduledDateTimeIST = parseIST(
+        exam.ScheduleDate,
+        exam.ScheduleTime
       );
 
-      if (scheduledDateTime > now) {
+      if (scheduledDateTimeIST > nowIST) {
         exam.attend = true;
         continue;
       }
@@ -737,7 +755,7 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      if (scheduledDateTime < now && exam.result === null) {
+      if (scheduledDateTimeIST < nowIST && exam.result === null) {
         exam.attend = true;
         stopNext = true;
         continue;
@@ -749,6 +767,9 @@ exports.UsersExams = async (req, res) => {
       }
     }
 
+    // -----------------------------//
+    // Visibility logic
+    // -----------------------------//
     let visibleExams = [];
     for (let i = 0; i < filteredExams.length; i++) {
       const currentExam = filteredExams[i];
@@ -788,6 +809,9 @@ exports.UsersExams = async (req, res) => {
       visibleExams.push(currentExam);
     }
 
+    // -----------------------------//
+    // Eligibility logic
+    // -----------------------------//
     let failedFound = false;
     for (let i = 0; i < visibleExams.length; i++) {
       const exam = visibleExams[i];
@@ -804,31 +828,32 @@ exports.UsersExams = async (req, res) => {
       }
     }
 
-    // ------------------------------------------------------------------
-    // NEW RULE:
-    // If first exam attend = true AND (result null OR failed)
-    // AND scheduled time passed → next all exams attend=false, isEligible=false
-    // ------------------------------------------------------------------
+    // ********************************************************************
+    // NEW RULE (IST Based)
+    // If FIRST exam:
+    // - ScheduleTime passed in IST
+    // - AND result null OR failed
+    // => next exams: attend=false, isEligible=false
+    // ********************************************************************
     if (visibleExams.length > 0) {
-      const firstExam = visibleExams[0];
+      const first = visibleExams[0];
 
-      const firstScheduled = new Date(
-        `${firstExam.ScheduleDate} ${firstExam.ScheduleTime}`
-      );
-      const nowTime = new Date();
+      const firstIST = parseIST(first.ScheduleDate, first.ScheduleTime);
 
       const firstFailedOrNull =
-        firstExam.result === null || firstExam.result === "failed";
+        first.result === null || first.result === "failed";
 
-      if (firstExam.attend === true && firstFailedOrNull && firstScheduled < nowTime) {
+      if (firstIST < nowIST && firstFailedOrNull) {
         for (let i = 1; i < visibleExams.length; i++) {
           visibleExams[i].attend = false;
           visibleExams[i].isEligible = false;
         }
       }
     }
-    // ------------------------------------------------------------------
 
+    // -----------------------------//
+    // Save Logs
+    // -----------------------------//
     if (category && mongoose.Types.ObjectId.isValid(category)) {
       const oldStatuses = await ExamUserStatus.find({ userId }).select(
         "category"
@@ -890,6 +915,7 @@ exports.UsersExams = async (req, res) => {
     }
 
     return res.status(200).json(visibleExams);
+
   } catch (error) {
     console.error("🔥 Error fetching exams:", error);
     res.status(500).json({
@@ -898,6 +924,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
