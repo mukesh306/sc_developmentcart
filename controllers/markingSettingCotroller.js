@@ -132,6 +132,7 @@ exports.getSettings = async (req, res) => {
 //   }
 // };
 
+
 exports.bufferTime = async (req, res) => {
   try {
     const { examId } = req.params;
@@ -163,9 +164,14 @@ exports.bufferTime = async (req, res) => {
     
     const utcTime = Date.UTC(year, month - 1, day, hh, mm, ss);
 
+    const dateString = `${ScheduleDate} ${ScheduleTime}`
+    const formatString = 'DD-MM-YYYY HH:mm:ss';
+    const timezone = 'Asia/Kolkata'; 
     
+    const timestampMilliseconds = moment.tz(dateString, formatString, timezone).valueOf(); 
+    console.log(timestampMilliseconds);
     const IST_OFFSET = 5.5 * 60 * 60 * 1000;
-    const givenTime = utcTime + IST_OFFSET;
+    const givenTime = timestampMilliseconds;
 
     res.status(200).json({
       bufferTime: setting.bufferTime,
