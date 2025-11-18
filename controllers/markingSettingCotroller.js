@@ -95,6 +95,43 @@ exports.getSettings = async (req, res) => {
 };
 
 
+// exports.bufferTime = async (req, res) => {
+//   try {
+//     const { examId } = req.params;
+
+//     if (!examId) {
+//       return res.status(400).json({ message: "examId is required." });
+//     }
+
+//     // ✅ 1. Find the exam by ID
+//     const exam = await Schoolerexam.findById(examId)
+//       .select("ScheduleDate ScheduleTime");
+
+//     if (!exam) {
+//       return res.status(404).json({ message: "Exam not found." });
+//     }
+
+//     // ✅ 2. Get bufferTime from MarkingSetting
+//     const setting = await MarkingSetting.findOne()
+//       .select("bufferTime")
+
+//     if (!setting) {
+//       return res.status(404).json({ message: "Marking settings not found." });
+//     }
+
+//     // ✅ 3. Combine both results
+//     res.status(200).json({
+//       bufferTime: setting.bufferTime,
+//       createdBy: setting.createdBy,
+//       ScheduleDate: exam.ScheduleDate,
+//       ScheduleTime: exam.ScheduleTime,
+//     });
+
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
 exports.bufferTime = async (req, res) => {
   try {
     const { examId } = req.params;
@@ -103,7 +140,7 @@ exports.bufferTime = async (req, res) => {
       return res.status(400).json({ message: "examId is required." });
     }
 
-    // ✅ 1. Find the exam by ID
+    // 1️⃣ Find exam
     const exam = await Schoolerexam.findById(examId)
       .select("ScheduleDate ScheduleTime");
 
@@ -111,20 +148,31 @@ exports.bufferTime = async (req, res) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // ✅ 2. Get bufferTime from MarkingSetting
+    // 2️⃣ Find marking setting
     const setting = await MarkingSetting.findOne()
-      .select("bufferTime")
+      .select("bufferTime createdBy");
 
     if (!setting) {
       return res.status(404).json({ message: "Marking settings not found." });
     }
 
-    // ✅ 3. Combine both results
+    // 🔥 Convert bufferTime → duration in ms
+    const bufferDuration = setting.bufferTime * 60 * 1000;
+
+    // 🔥 Convert ScheduleDate + ScheduleTime → timestamp (ms)
+    // ScheduleDate example: "2024-11-20"
+    // ScheduleTime example: "14:30:00"
+    const [year, month, day] = exam.ScheduleDate.split("-").map(Number);
+    const [hh, mm, ss] = exam.ScheduleTime.split(":").map(Number);
+
+    const givenTime = new Date(Date.UTC(year, month - 1, day, hh, mm, ss)).getTime();
+
+    // 3️⃣ Response
     res.status(200).json({
-      bufferTime: setting.bufferTime,
-      createdBy: setting.createdBy,
-      ScheduleDate: exam.ScheduleDate,
-      ScheduleTime: exam.ScheduleTime,
+      bufferDuration,       // buffer in ms
+      serverNow: Date.now(),// current server timestamp
+      givenTime,            // ScheduleTime converted to ms
+      createdBy: setting.createdBy
     });
 
   } catch (err) {

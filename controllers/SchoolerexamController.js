@@ -882,11 +882,6 @@ exports.UsersExams = async (req, res) => {
 
 
 
-
-
-
-
-
 exports.ExamQuestion = async (req, res) => {
   try {
     const exam = await Schoolerexam.findById(req.params.id)
