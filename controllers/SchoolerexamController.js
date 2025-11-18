@@ -1868,17 +1868,17 @@ exports.getAllExamGroups = async (req, res) => {
 //       return res.status(401).json({ message: "Unauthorized" });
 //     }
 
-//     // ✅ All Categories
+    
 //     const categories = await Schoolercategory.find();
 
 //     let result = [];
+//     let totalAmount = 0; 
 
 //     for (const category of categories) {
-//       // ✅ Last exam of category
+   
 //       const lastExam = await Schoolerexam.findOne({ category: category._id }).sort({ createdAt: -1 });
 
-
-//       let status = false; // ❗ default → user is not winner
+//       let status = false; 
 //       let percentage = null;
 //       let finalScore = null;
 //       let examId = null;
@@ -1906,25 +1906,27 @@ exports.getAllExamGroups = async (req, res) => {
 //           allTopUsers.push(...topUsers);
 //         }
 
-//         // ✅ unique list
+       
 //         const unique = [...new Map(allTopUsers.map(u => [u.userId.toString(), u])).values()];
 
-//         // ✅ Check if user is winner
+      
 //         const isWinner = unique.find(u => u.userId.toString() === userId.toString());
 
 //         if (isWinner) {
 //           status = true;
 //           percentage = isWinner.percentage;
 //           finalScore = isWinner.finalScore;
+//           totalAmount += Number(category.price) || 0; 
 //         }
 //       }
-//       // ✅ Push result for EVERY category
+
+    
 //       result.push({
 //         categoryId: category._id,
 //         categoryName: category.name,
 //         prize: category.price,
 //         examId,
-//         status,           // ⭐ true or false
+//         status,           
 //         percentage,
 //         finalScore
 //       });
@@ -1934,6 +1936,7 @@ exports.getAllExamGroups = async (req, res) => {
 //       message: "User category prize status fetched successfully.",
 //       userId,
 //       totalCategories: result.length,
+//       totalAmount, 
 //       categories: result,
 //     });
 
@@ -1943,74 +1946,48 @@ exports.getAllExamGroups = async (req, res) => {
 //   }
 // };
 
-
 exports.schoolerShipPrizes = async (req, res) => {
   try {
     const userId = req.user?._id;
+    const className = req.user?.className; 
 
     if (!userId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    
     const categories = await Schoolercategory.find();
 
     let result = [];
     let totalAmount = 0; 
 
     for (const category of categories) {
-   
-      const lastExam = await Schoolerexam.findOne({ category: category._id }).sort({ createdAt: -1 });
 
-      let status = false; 
+     
+      const topUserEntry = await CategoryTopUser.findOne({
+        categoryId: category._id,
+        userId: userId,
+        className: className
+      }).sort({ rank: 1 }); // optional: get the highest rank if multiple
+
+      let status = false;
       let percentage = null;
       let finalScore = null;
       let examId = null;
 
-      if (lastExam) {
-        examId = lastExam._id;
-
-        const passoutLimit = parseInt(lastExam.passout) || 1;
-
-        const groups = await ExamGroup.find({ examId: lastExam._id }).populate("members", "_id");
-
-        let allTopUsers = [];
-
-        for (const group of groups) {
-          const memberIds = group.members.map((m) => m._id);
-
-          const scores = await ExamResult.find({
-            examId: lastExam._id,
-            userId: { $in: memberIds }
-          })
-            .select("userId percentage finalScore")
-            .sort({ finalScore: -1 });
-
-          const topUsers = scores.slice(0, passoutLimit);
-          allTopUsers.push(...topUsers);
-        }
-
-       
-        const unique = [...new Map(allTopUsers.map(u => [u.userId.toString(), u])).values()];
-
-      
-        const isWinner = unique.find(u => u.userId.toString() === userId.toString());
-
-        if (isWinner) {
-          status = true;
-          percentage = isWinner.percentage;
-          finalScore = isWinner.finalScore;
-          totalAmount += Number(category.price) || 0; 
-        }
+      if (topUserEntry) {
+        status = true;
+        percentage = topUserEntry.percentage;
+        finalScore = topUserEntry.percentage; // if you have another field for score, use that
+        examId = topUserEntry.examId;
+        totalAmount += Number(category.price) || 0;
       }
 
-    
       result.push({
         categoryId: category._id,
         categoryName: category.name,
         prize: category.price,
         examId,
-        status,           
+        status,
         percentage,
         finalScore
       });
@@ -2020,7 +1997,7 @@ exports.schoolerShipPrizes = async (req, res) => {
       message: "User category prize status fetched successfully.",
       userId,
       totalCategories: result.length,
-      totalAmount, 
+      totalAmount,
       categories: result,
     });
 
@@ -2029,4 +2006,3 @@ exports.schoolerShipPrizes = async (req, res) => {
     res.status(500).json({ message: "Server Error", error: error.message });
   }
 };
-
