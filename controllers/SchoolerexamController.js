@@ -580,12 +580,12 @@ exports.addQuestionsToExam = async (req, res) => {
 // Assumes mongoose is imported above this file
 // const mongoose = require('mongoose');
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
     const { category } = req.query;
 
-    // Time Parser (Not used in logic now, as you asked)
     function parseIST(dateStr, timeStr) {
       const [day, month, year] = dateStr.split("-").map(Number);
       const [hh, mm, ss] = timeStr.split(":").map(Number);
@@ -719,9 +719,7 @@ exports.UsersExams = async (req, res) => {
 
     let stopNext = false;
 
-    // -----------------------------//
-    // ⚡ OLD ATTENDANCE LOGIC (Time removed)
-    // -----------------------------//
+    // OLD ATTENDANCE LOGIC
     for (let i = 0; i < filteredExams.length; i++) {
       const exam = filteredExams[i];
 
@@ -749,9 +747,7 @@ exports.UsersExams = async (req, res) => {
       }
     }
 
-    // -----------------------------//
-    // Visibility logic (Same)
-    // -----------------------------//
+    // VISIBILITY LOGIC
     let visibleExams = [];
     for (let i = 0; i < filteredExams.length; i++) {
       const currentExam = filteredExams[i];
@@ -791,18 +787,20 @@ exports.UsersExams = async (req, res) => {
       visibleExams.push(currentExam);
     }
 
-    // -----------------------------//
-    // Eligibility logic (Same)
-    // -----------------------------//
+    // --------------------------------------//
+    //  UPDATED ELIGIBILITY LOGIC (required) //
+    // --------------------------------------//
     let failedFound = false;
+
     for (let i = 0; i < visibleExams.length; i++) {
       const exam = visibleExams[i];
 
       if (failedFound) {
         exam.isEligible = false;
-      } else {
-        exam.isEligible = true;
+        continue;
       }
+
+      exam.isEligible = true;
 
       if (exam.result === "failed") {
         failedFound = true;
@@ -810,9 +808,7 @@ exports.UsersExams = async (req, res) => {
       }
     }
 
-    // -----------------------------//
-    // Save Logs (Same)
-    // -----------------------------//
+    // SAVE LOGS
     if (category && mongoose.Types.ObjectId.isValid(category)) {
       const oldStatuses = await ExamUserStatus.find({ userId }).select(
         "category"
@@ -883,6 +879,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
