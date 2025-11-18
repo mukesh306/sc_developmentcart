@@ -133,7 +133,6 @@ exports.getSettings = async (req, res) => {
 //   }
 // };
 
-
 exports.bufferTime = async (req, res) => {
   try {
     const { examId } = req.params;
@@ -158,27 +157,20 @@ exports.bufferTime = async (req, res) => {
 
     const bufferDuration = setting.bufferTime * 60 * 1000;
 
-    
-    const [day, month, year] = exam.ScheduleDate.split("-").map(Number);
-    const [hh, mm, ss] = exam.ScheduleTime.split(":").map(Number);
+    // ✅ FIXED – use exam.ScheduleDate & exam.ScheduleTime (NOT undefined variables)
+    const dateString = `${exam.ScheduleDate} ${exam.ScheduleTime}`;
+    const formatString = "DD-MM-YYYY HH:mm:ss";
 
-    
-    const utcTime = Date.UTC(year, month - 1, day, hh, mm, ss);
-
-    const dateString = `${ScheduleDate} ${ScheduleTime}`
-    const formatString = 'DD-MM-YYYY HH:mm:ss';
-    const timezone = 'Asia/Kolkata'; 
-    
-    const timestampMilliseconds = moment.tz(dateString, formatString, timezone).valueOf(); 
-    console.log(timestampMilliseconds);
-    const IST_OFFSET = 5.5 * 60 * 60 * 1000;
-    const givenTime = timestampMilliseconds;
+    // 🔥 Convert to IST timestamp using Moment
+    const givenTime = moment
+      .tz(dateString, formatString, "Asia/Kolkata")
+      .valueOf();
 
     res.status(200).json({
       bufferTime: setting.bufferTime,
       bufferDuration,
       serverNow: Date.now(),
-      givenTime,  
+      givenTime,               // ← FINAL IST TIMESTAMP
 
       ScheduleDate: exam.ScheduleDate,
       ScheduleTime: exam.ScheduleTime,
