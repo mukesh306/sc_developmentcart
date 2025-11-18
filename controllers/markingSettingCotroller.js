@@ -140,15 +140,15 @@ exports.bufferTime = async (req, res) => {
       return res.status(400).json({ message: "examId is required." });
     }
 
-    
+    // 🔹 Get Exam Data
     const exam = await Schoolerexam.findById(examId)
-      .select("ScheduleDate ScheduleTime");
+      .select("ScheduleDate ScheduleTime ScheduleTitle ScheduleType createdAt updatedAt");
 
     if (!exam) {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    
+    // 🔹 Get Buffer Time Setting
     const setting = await MarkingSetting.findOne()
       .select("bufferTime createdBy");
 
@@ -156,20 +156,30 @@ exports.bufferTime = async (req, res) => {
       return res.status(404).json({ message: "Marking settings not found." });
     }
 
-   
+    // 🔥 Convert bufferTime into ms
     const bufferDuration = setting.bufferTime * 60 * 1000;
 
-   
+    // 🔥 Convert ScheduleTime to timestamp (ms)
     const [year, month, day] = exam.ScheduleDate.split("-").map(Number);
     const [hh, mm, ss] = exam.ScheduleTime.split(":").map(Number);
 
     const givenTime = new Date(Date.UTC(year, month - 1, day, hh, mm, ss)).getTime();
 
-   
+    // 🔥 Final Response (Everything Included)
     res.status(200).json({
-      bufferDuration,       
-      serverNow: Date.now(),
-      givenTime,           
+      bufferTime: setting.bufferTime,  // ← minutes
+      bufferDuration,                  // ← ms
+      serverNow: Date.now(),           // ← current server timestamp
+      givenTime,                       // ← exam timestamp (ms)
+
+      // Old exam fields
+      ScheduleDate: exam.ScheduleDate,
+      ScheduleTime: exam.ScheduleTime,
+      ScheduleTitle: exam.ScheduleTitle,
+      ScheduleType: exam.ScheduleType,
+      createdAt: exam.createdAt,
+      updatedAt: exam.updatedAt,
+
       createdBy: setting.createdBy
     });
 
@@ -177,3 +187,4 @@ exports.bufferTime = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
