@@ -580,26 +580,19 @@ exports.addQuestionsToExam = async (req, res) => {
 // Assumes mongoose is imported above this file
 // const mongoose = require('mongoose');
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
     const { category } = req.query;
 
-    // -----------------------------//
-    // Helper: Parse DD-MM-YYYY + time in IST
-    // -----------------------------//
+    // Time Parser (Not used in logic now, as you asked)
     function parseIST(dateStr, timeStr) {
       const [day, month, year] = dateStr.split("-").map(Number);
       const [hh, mm, ss] = timeStr.split(":").map(Number);
-
       let date = new Date(Date.UTC(year, month - 1, day, hh, mm, ss));
-      return new Date(date.getTime() + 5.5 * 60 * 60 * 1000); // UTC → IST
+      return new Date(date.getTime() + 5.5 * 60 * 60 * 1000);
     }
 
-    const nowIST = new Date(new Date().getTime() + 5.5 * 60 * 60 * 1000);
-
-    // -----------------------------//
     const user = await User.findById(userId).select("className");
     if (!user || !user.className) {
       return res.status(400).json({ message: "User class not found." });
@@ -727,20 +720,10 @@ exports.UsersExams = async (req, res) => {
     let stopNext = false;
 
     // -----------------------------//
-    // Attendance logic
+    // ⚡ OLD ATTENDANCE LOGIC (Time removed)
     // -----------------------------//
     for (let i = 0; i < filteredExams.length; i++) {
       const exam = filteredExams[i];
-
-      const scheduledDateTimeIST = parseIST(
-        exam.ScheduleDate,
-        exam.ScheduleTime
-      );
-
-      if (scheduledDateTimeIST > nowIST) {
-        exam.attend = true;
-        continue;
-      }
 
       if (stopNext) {
         exam.attend = false;
@@ -754,7 +737,7 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      if (scheduledDateTimeIST < nowIST && exam.result === null) {
+      if (exam.result === null) {
         exam.attend = true;
         stopNext = true;
         continue;
@@ -767,7 +750,7 @@ exports.UsersExams = async (req, res) => {
     }
 
     // -----------------------------//
-    // Visibility logic
+    // Visibility logic (Same)
     // -----------------------------//
     let visibleExams = [];
     for (let i = 0; i < filteredExams.length; i++) {
@@ -809,7 +792,7 @@ exports.UsersExams = async (req, res) => {
     }
 
     // -----------------------------//
-    // Eligibility logic
+    // Eligibility logic (Same)
     // -----------------------------//
     let failedFound = false;
     for (let i = 0; i < visibleExams.length; i++) {
@@ -827,29 +810,8 @@ exports.UsersExams = async (req, res) => {
       }
     }
 
-    // ********************************************************************
-    // NEW RULE (IST Based)
-    // FIRST exam ka time निकल गया AND result null/failed →
-    // next exams: attend=false, isEligible=false
-    // ********************************************************************
-    if (visibleExams.length > 0) {
-      const first = visibleExams[0];
-
-      const firstIST = parseIST(first.ScheduleDate, first.ScheduleTime);
-
-      const firstFailedOrNull =
-        first.result === null || first.result === "failed";
-
-      if (firstIST < nowIST && firstFailedOrNull) {
-        for (let i = 1; i < visibleExams.length; i++) {
-          visibleExams[i].attend = false;
-          visibleExams[i].isEligible = false;
-        }
-      }
-    }
-
     // -----------------------------//
-    // Save Logs
+    // Save Logs (Same)
     // -----------------------------//
     if (category && mongoose.Types.ObjectId.isValid(category)) {
       const oldStatuses = await ExamUserStatus.find({ userId }).select(
@@ -921,7 +883,6 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
-
 
 
 
