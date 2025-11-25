@@ -7,6 +7,7 @@ const SchoolershipcategorySchema = new mongoose.Schema(
     price: { type: Number,required: true},
     groupSize: { type: Number,required: true},
     finalist: { type: Number,required: true},
+    examSize: { type: Number,required: true},
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Admin1",

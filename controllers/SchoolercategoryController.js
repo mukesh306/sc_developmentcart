@@ -6,12 +6,12 @@ const CategoryTopUser = require("../models/CategoryTopUser");
 
 exports.createSchoolercategory = async (req, res) => {
   try {
-    const { name, price,groupSize , finalist } = req.body;
+    const { name, price,groupSize , finalist,examSize } = req.body;
     const createdBy = req.user?._id;
 
-   if (!name || !price || !groupSize || !finalist) {
+   if (!name || !price || !groupSize || !finalist ||!examSize) {
       return res.status(400).json({ 
-        message: "All fields (name, price, groupSize, finalist) are required." 
+        message: "All fields (name, price, groupSize, finalist,ExamSize) are required." 
       });
     }
     // ✅ Create new category with price
@@ -20,6 +20,7 @@ exports.createSchoolercategory = async (req, res) => {
       price,
       groupSize , 
       finalist ,
+      examSize ,
       createdBy,
     });
 
@@ -65,10 +66,10 @@ exports.getSchoolercategoryById = async (req, res) => {
 
 exports.updateSchoolercategory = async (req, res) => {
   try {
-    const { name ,price,groupSize , finalist } = req.body;
+    const { name ,price,groupSize , finalist,examSize } = req.body;
     const category = await Schoolercategory.findByIdAndUpdate(
       req.params.id,
-      { name ,price,groupSize , finalist },
+      { name ,price,groupSize , finalist,examSize },
       { new: true }
     );
 
