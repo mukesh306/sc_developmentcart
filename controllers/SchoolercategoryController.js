@@ -190,45 +190,44 @@ exports.createSchoolergroup = async (req, res) => {
 
 exports.getAllSchoolergroups = async (req, res) => {
   try {
-    const userId = req.user._id; // ✅ Logged-in user
+    const userId = req.user._id; 
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
     const updatedCategories = [];
-    let allowNext = true; // ✅ First category open by default
-
+    let allowNext = true; 
     for (const category of categories) {
       if (category.price && category.groupSize) {
         const categoryObj = category.toObject();
 
-        // ✅ Get last Exam of this category
+       
         const latestExam = await Schoolerexam.findOne({ category: category._id })
           .sort({ createdAt: -1 })
           .lean();
 
-        // ✅ Set seat value
+        
         categoryObj.seat = latestExam?.passout ?? category.groupSize;
 
-        // ✅ Default locked
+        
         categoryObj.status = false;
 
-        // ✅ First category always open
+        
         if (updatedCategories.length === 0) {
           categoryObj.status = true;
         }
 
-        // ✅ Check if user already topped in this category
+       
         const userTop = await CategoryTopUser.findOne({
           userId,
           categoryId: category._id,
         });
 
-        // ✅ Only topper categories remain open
+        
         if (userTop) {
-          categoryObj.status = true; // user can always click this category
+          categoryObj.status = true; 
         } else {
-          // once a non-topper category reached, next ones stay locked
+          
           allowNext = false;
         }
 

@@ -12,6 +12,7 @@ const UserExamGroup  = require("../models/userExamGroup");
 const CategoryTopUser = require("../models/CategoryTopUser");
 const ExamUserStatus = require("../models/ExamUserStatus");
 
+
 exports.createExam = async (req, res) => {
   try {
     const {
@@ -24,10 +25,11 @@ exports.createExam = async (req, res) => {
       Negativemark,
       passout,
       seat,
-      topicQuestions
+      topicQuestions,
+      assignedGroup   
     } = req.body;
 
-    if (!examName || !category || !className || !ScheduleDate || !ScheduleTime || !ExamTime || !seat) {
+    if (!examName || !category || !className || !ScheduleDate || !ScheduleTime || !ExamTime || !seat || !assignedGroup ) {
       return res.status(400).json({ message: "Please fill all required fields." });
     }
 
@@ -42,6 +44,7 @@ exports.createExam = async (req, res) => {
       passout,
       seat,
       topicQuestions,
+      assignedGroup,
       createdBy: req.user?._id || req.body.createdBy 
     });
 
@@ -105,7 +108,7 @@ exports.getAllExams = async (req, res) => {
   try {
     const { category, className } = req.query;
 
-    // ✅ Step 1: Fetch all exams first
+   
     let exams = await Schoolerexam.find()
       .populate("category", "name")
       .populate("createdBy", "name email")
@@ -117,7 +120,7 @@ exports.getAllExams = async (req, res) => {
 
     const updatedExams = [];
 
-    // ✅ Step 2: Build data with class info and filtering logic
+    
     for (const exam of exams) {
       let classData =
         (await School.findById(exam.className).select("_id name className")) ||
@@ -141,7 +144,7 @@ exports.getAllExams = async (req, res) => {
       updatedExams.push(examObj);
     }
 
-    // ✅ Step 3: Apply filter on final objects
+  
     let filteredExams = updatedExams;
 
     if (category) {

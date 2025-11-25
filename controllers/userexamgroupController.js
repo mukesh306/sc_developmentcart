@@ -6,31 +6,26 @@ const UserExamGroup = require("../models/userExamGroup");
 const User = require('../models/User');
 const College = require('../models/college');
 const School = require('../models/school');
-// const Schoolercategory = require("../models/schoolershipcategory");
 const CategoryTopUser = require('../models/CategoryTopUser');
 
 exports.createGroup = async (req, res) => {
   try {
     const { memberIds, category, className } = req.body;
 
-    // ✅ Validate members
     if (!memberIds || !Array.isArray(memberIds) || memberIds.length === 0) {
       return res
         .status(400)
         .json({ message: "Members array is required and cannot be empty." });
     }
 
-    // ✅ Validate category
     if (!category || !mongoose.Types.ObjectId.isValid(category)) {
       return res.status(400).json({ message: "Valid category ID is required." });
     }
 
-    // ✅ Validate className
     if (!className || !mongoose.Types.ObjectId.isValid(className)) {
       return res.status(400).json({ message: "Valid className ID is required." });
     }
 
-    // ✅ Create the new group
     const newGroup = await UserExamGroup.create({
       members: memberIds,
       category,
@@ -47,56 +42,6 @@ exports.createGroup = async (req, res) => {
   }
 };
 
-// exports.AlluserExamGroups = async (req, res) => {
-//   try {
-//     const { className } = req.query;
-
-//     // ✅ Build query
-//     let query = {};
-//     if (className && mongoose.Types.ObjectId.isValid(className)) {
-//       query.className = className;
-//     }
-
-//     // ✅ Fetch groups based on className filter
-//     const groups = await UserExamGroup.find(query)
-//       .populate("category", "name")
-//       .sort({ createdAt: -1 });
-
-//     let finalGroups = [];
-
-//     for (let group of groups) {
-//       // ✅ Get className details like before
-//       let classId = group.className;
-//       let classDetails = null;
-
-//       if (mongoose.Types.ObjectId.isValid(classId)) {
-//         classDetails = (await School.findById(classId)) || (await College.findById(classId));
-//       }
-
-//       // ✅ Only return total member count
-//       const totalMembers = group.members ? group.members.length : 0;
-
-//       finalGroups.push({
-//         _id: group._id,
-//         category: group.category ? group.category.name : "N/A",
-//         className: classDetails ? classDetails.name : "N/A",
-//         totalMembers,
-//         createdAt: group.createdAt,
-//       });
-//     }
-
-//     return res.status(200).json({
-//       message: "Groups fetched successfully",
-//       totalGroups: finalGroups.length,
-//       groups: finalGroups,
-//     });
-//   } catch (error) {
-//     console.error("Error fetching groups:", error);
-//     res.status(500).json({ message: "Internal Server Error", error: error.message });
-//   }
-// };
-
-
 exports.AlluserExamGroups = async (req, res) => {
   try {
     const { className, category } = req.query; 
@@ -110,7 +55,7 @@ exports.AlluserExamGroups = async (req, res) => {
       query.category = category;
     }
 
-    // ✅ Fetch groups based on filters
+  
     const groups = await UserExamGroup.find(query)
       .populate("category", "name _id")
       .sort({ createdAt: -1 });
@@ -118,7 +63,6 @@ exports.AlluserExamGroups = async (req, res) => {
     let finalGroups = [];
 
     for (let group of groups) {
-      // ✅ Get className details from School or College
       let classId = group.className;
       let classDetails = null;
 
@@ -128,7 +72,7 @@ exports.AlluserExamGroups = async (req, res) => {
           (await College.findById(classId).select("name _id"));
       }
 
-      // ✅ Prepare clean response
+     
       finalGroups.push({
         _id: group._id,
         category: {
@@ -140,7 +84,7 @@ exports.AlluserExamGroups = async (req, res) => {
           name: classDetails ? classDetails.name : "N/A",
         },
         totalMembers: group.members ? group.members.length : 0,
-        members: group.members || [], // only user IDs
+        members: group.members || [], 
         createdAt: group.createdAt,
       });
     }
@@ -251,114 +195,6 @@ exports.deleteGroup = async (req, res) => {
   }
 };
 
-
-// exports.getAllActiveUsers = async (req, res) => {
-//   try {
-//     const { className, groupId, stateId, cityId, category } = req.query;
-
-//     const allowedCategoryId = "6909f6ea193d765a50c836f9";
-
-//     // ✅ Agar category di gayi hai aur wo allowed wali nahi hai
-//     if (category && category !== allowedCategoryId) {
-//       return res.status(200).json({
-//         message: "No users found for this category.",
-//         users: []
-//       });
-//     }
-
-//     // ✅ Normal logic (agar category nahi di gayi ho ya allowed wali di gayi ho)
-//     let query = { status: "yes" };
-
-//     // ✅ Filter by className
-//     if (className && mongoose.Types.ObjectId.isValid(className)) {
-//       query.className = className;
-//     }
-
-//     // ✅ Filter by state
-//     if (stateId && mongoose.Types.ObjectId.isValid(stateId)) {
-//       query.stateId = stateId;
-//     }
-
-//     // ✅ Filter by city
-//     if (cityId && mongoose.Types.ObjectId.isValid(cityId)) {
-//       query.cityId = cityId;
-//     }
-
-//     // ✅ Step 1: Collect all userIds that are members of any group
-//     const groupedUsers = await UserExamGroup.find({}, "members");
-//     const allGroupedUserIds = groupedUsers.flatMap(g => g.members.map(id => id.toString()));
-
-//     // ✅ Step 2: Get members of the current group (if editing)
-//     let currentGroupMemberIds = [];
-//     if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
-//       const currentGroup = await UserExamGroup.findById(groupId).select("members");
-//       if (currentGroup) {
-//         currentGroupMemberIds = currentGroup.members.map(id => id.toString());
-//       }
-//     }
-
-//     // ✅ Step 3: Exclude all grouped users except the ones in current group
-//     const excludeIds = allGroupedUserIds.filter(id => !currentGroupMemberIds.includes(id));
-
-//     if (excludeIds.length > 0) {
-//       query._id = { $nin: excludeIds };
-//     }
-
-//     // ✅ Step 4: Fetch users
-//     let users = await User.find(query)
-//       .populate("countryId", "name")
-//       .populate("stateId", "name")
-//       .populate("cityId", "name")
-//       .populate({
-//         path: "updatedBy",
-//         select: "email session startDate endDate endTime name role"
-//       });
-
-//     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
-//     let finalList = [];
-
-//     for (let user of users) {
-//       let classId = user.className;
-//       let classDetails = null;
-
-//       if (mongoose.Types.ObjectId.isValid(classId)) {
-//         classDetails = (await School.findById(classId)) || (await College.findById(classId));
-//       }
-
-//       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//         user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-//       }
-//       if (user.marksheet && fs.existsSync(user.marksheet)) {
-//         user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-//       }
-
-//       const formattedUser = {
-//         ...user._doc,
-//         country: user.countryId?.name || "",
-//         state: user.stateId?.name || "",
-//         city: user.cityId?.name || "",
-//         institutionName: user.schoolName || user.collegeName || user.instituteName || "",
-//         institutionType: user.studentType || "",
-//         updatedBy: user.updatedBy || null
-//       };
-
-//       if (classDetails && classDetails.price != null) {
-//         formattedUser.classOrYear = classDetails.name;
-//       }
-
-//       finalList.push(formattedUser);
-//     }
-
-//     return res.status(200).json({
-//       message: "Active users fetched successfully (filtered by state, city, and excluding other groups).",
-//       users: finalList
-//     });
-
-//   } catch (error) {
-//     console.error("Get Users Error:", error);
-//     return res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 exports.getAllActiveUsers = async (req, res) => {
