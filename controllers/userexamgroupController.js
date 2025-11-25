@@ -42,6 +42,7 @@ exports.createGroup = async (req, res) => {
   }
 };
 
+
 exports.AlluserExamGroups = async (req, res) => {
   try {
     const { className, category } = req.query; 
@@ -101,7 +102,6 @@ exports.AlluserExamGroups = async (req, res) => {
       .json({ message: "Internal Server Error", error: error.message });
   }
 };
-
 
 
 exports.updateGroup = async (req, res) => {
@@ -195,6 +195,41 @@ exports.deleteGroup = async (req, res) => {
   }
 };
 
+exports.getGroupMembers = async (req, res) => {
+  try {
+    const { groupId } = req.params;
+
+    if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
+      return res.status(400).json({ message: "Valid groupId is required." });
+    }
+
+    
+    const group = await UserExamGroup.findById(groupId)
+      .populate("members", "firstName email _id") 
+      .populate("category", "name _id")
+      .populate("className", "name _id");
+
+    if (!group) {
+      return res.status(404).json({ message: "Group not found." });
+    }
+
+    return res.status(200).json({
+      message: "Group members fetched successfully.",
+      groupId: group._id,
+      category: group.category,
+      className: group.className,
+      totalMembers: group.members.length,
+      members: group.members, // includes name + email
+    });
+
+  } catch (error) {
+    console.error("Error fetching group members:", error);
+    res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
 
 
 exports.getAllActiveUsers = async (req, res) => {
