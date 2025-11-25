@@ -202,13 +202,10 @@ exports.getGroupMembers = async (req, res) => {
     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
       return res.status(400).json({ message: "Valid groupId is required." });
     }
-
-    
+ 
     const group = await UserExamGroup.findById(groupId)
       .populate("members", "firstName email _id") 
-      .populate("category", "name _id")
-      .populate("className", "name _id");
-
+    
     if (!group) {
       return res.status(404).json({ message: "Group not found." });
     }
@@ -216,10 +213,7 @@ exports.getGroupMembers = async (req, res) => {
     return res.status(200).json({
       message: "Group members fetched successfully.",
       groupId: group._id,
-      category: group.category,
-      className: group.className,
-      totalMembers: group.members.length,
-      members: group.members, // includes name + email
+      members: group.members, 
     });
 
   } catch (error) {
