@@ -1,3 +1,4 @@
+const mongoose = require('mongoose');
 const Schoolercategory = require("../models/schoolershipcategory");
 const Schoolergroup = require("../models/Schoolergroup");
 const Schoolerexam = require("../models/Schoolerexam");
@@ -35,6 +36,7 @@ const CategoryTopUser = require("../models/CategoryTopUser");
 //     res.status(500).json({ message: "Error creating category.", error: error.message });
 //   }
 // };
+
 
 exports.createSchoolercategory = async (req, res) => {
   try {
