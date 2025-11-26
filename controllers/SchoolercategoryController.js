@@ -208,6 +208,28 @@ exports.deleteSchoolercategory = async (req, res) => {
 };
 
 
+exports.getExamTypeByCategoryId = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const category = await Schoolercategory.findById(id).select("examType");
+
+    if (!category) {
+      return res.status(404).json({ message: "Category not found." });
+    }
+
+    return res.status(200).json({
+      message: "ExamType fetched successfully.",
+      examType: category.examType
+    });
+
+  } catch (error) {
+    res.status(500).json({
+      message: "Error fetching examType.",
+      error: error.message
+    });
+  }
+};
 
 
 exports.createSchoolergroup = async (req, res) => {
