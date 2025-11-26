@@ -4,23 +4,72 @@ const Schoolerexam = require("../models/Schoolerexam");
 const ExamResult = require("../models/examResult");
 const CategoryTopUser = require("../models/CategoryTopUser");
 
+
+// exports.createSchoolercategory = async (req, res) => {
+//   try {
+//     const { name, price,groupSize , finalist,examSize } = req.body;
+//     const createdBy = req.user?._id;
+
+//    if (!name || !price || !groupSize || !finalist ||!examSize) {
+//       return res.status(400).json({ 
+//         message: "All fields (name, price, groupSize, finalist,ExamSize) are required." 
+//       });
+//     }
+//     // ✅ Create new category with price
+//     const newCategory = new Schoolercategory({
+//       name,
+//       price,
+//       groupSize , 
+//       finalist ,
+//       examSize ,
+//       createdBy,
+//     });
+
+//     await newCategory.save();
+
+//     res.status(201).json({
+//       message: "Category created successfully.",
+//       category: newCategory,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: "Error creating category.", error: error.message });
+//   }
+// };
+
 exports.createSchoolercategory = async (req, res) => {
   try {
-    const { name, price,groupSize , finalist,examSize } = req.body;
+    const { name, price, groupSize, finalist, examSize } = req.body;
     const createdBy = req.user?._id;
 
-   if (!name || !price || !groupSize || !finalist ||!examSize) {
-      return res.status(400).json({ 
-        message: "All fields (name, price, groupSize, finalist,ExamSize) are required." 
+    if (!name || !price || !groupSize || !finalist || !examSize) {
+      return res.status(400).json({
+        message: "All fields (name, price, groupSize, finalist, examSize) are required."
       });
     }
-    // ✅ Create new category with price
+
+    if (isNaN(examSize) || examSize <= 0) {
+      return res.status(400).json({
+        message: "examSize must be a valid number."
+      });
+    }
+
+    // Create examType array
+    let examType = [];
+    for (let i = 1; i <= examSize; i++) {
+      examType.push({
+        name: `Exam ${i}`,
+        id: new mongoose.Types.ObjectId().toString(),
+        count: i
+      });
+    }
+
     const newCategory = new Schoolercategory({
       name,
       price,
-      groupSize , 
-      finalist ,
-      examSize ,
+      groupSize,
+      finalist,
+      examSize,
+      examType,
       createdBy,
     });
 
@@ -30,8 +79,12 @@ exports.createSchoolercategory = async (req, res) => {
       message: "Category created successfully.",
       category: newCategory,
     });
+
   } catch (error) {
-    res.status(500).json({ message: "Error creating category.", error: error.message });
+    res.status(500).json({
+      message: "Error creating category.",
+      error: error.message
+    });
   }
 };
 
@@ -64,27 +117,78 @@ exports.getSchoolercategoryById = async (req, res) => {
   }
 };
 
+// exports.updateSchoolercategory = async (req, res) => {
+//   try {
+//     const { name ,price,groupSize , finalist,examSize } = req.body;
+//     const category = await Schoolercategory.findByIdAndUpdate(
+//       req.params.id,
+//       { name ,price,groupSize , finalist,examSize },
+//       { new: true }
+//     );
+
+//     if (!category) {
+//       return res.status(404).json({ message: "Category not found." });
+//     }
+
+//     res.status(200).json({
+//       message: "Category updated successfully.",
+//       category,
+//     });
+//   } catch (error) {
+//     res.status(500).json({ message: "Error updating category.", error });
+//   }
+// };
+
 exports.updateSchoolercategory = async (req, res) => {
   try {
-    const { name ,price,groupSize , finalist,examSize } = req.body;
-    const category = await Schoolercategory.findByIdAndUpdate(
-      req.params.id,
-      { name ,price,groupSize , finalist,examSize },
-      { new: true }
-    );
+    const { name, price, groupSize, finalist, examSize } = req.body;
 
+    // category exists?
+    let category = await Schoolercategory.findById(req.params.id);
     if (!category) {
       return res.status(404).json({ message: "Category not found." });
     }
 
+    // Update simple fields
+    if (name) category.name = name;
+    if (price) category.price = price;
+    if (groupSize) category.groupSize = groupSize;
+    if (finalist) category.finalist = finalist;
+
+    // Check examSize changed
+    if (examSize && examSize !== category.examSize) {
+
+      // Update examSize
+      category.examSize = examSize;
+
+      // Regenerate examType
+      let examType = [];
+      for (let i = 1; i <= examSize; i++) {
+        examType.push({
+          name: `Exam ${i}`,
+          id: new mongoose.Types.ObjectId().toString(),
+          count: i
+        });
+      }
+
+      category.examType = examType;
+    }
+
+    await category.save();
+
     res.status(200).json({
       message: "Category updated successfully.",
-      category,
+      category
     });
+
   } catch (error) {
-    res.status(500).json({ message: "Error updating category.", error });
+    res.status(500).json({ 
+      message: "Error updating category.", 
+      error: error.message 
+    });
   }
 };
+
 
 
 exports.deleteSchoolercategory = async (req, res) => {
