@@ -47,7 +47,6 @@ exports.AlluserExamGroups = async (req, res) => {
   try {
     const { className, category } = req.query; 
 
-   
     let query = {};
     if (className && mongoose.Types.ObjectId.isValid(className)) {
       query.className = className;

@@ -266,6 +266,44 @@ exports.publishExam = async (req, res) => {
   }
 };
 
+exports.assignGroupToExam = async (req, res) => {
+  try {
+    const { examId, examType, groupId } = req.body;
+
+    if (!examId || !examType || !groupId) {
+      return res.status(400).json({
+        message: "examId, examType and groupId are required.",
+      });
+    }
+    const exam = await Schoolerexam.findOne({
+      _id: examId,
+      examType: examType
+    });
+
+    if (!exam) {
+      return res.status(404).json({
+        message: "Exam not found or examType mismatch.",
+      });
+    }
+
+    if (exam.assignedGroup.includes(groupId)) {
+      return res.status(400).json({
+        message: "This group is already assigned to this exam.",
+      });
+    }
+
+    exam.assignedGroup.push(groupId);
+    await exam.save();
+
+    res.status(200).json({
+      message: "Group assigned successfully.",
+      exam,
+    });
+  } catch (error) {
+    console.error("Error assigning group:", error);
+    res.status(500).json({ message: "Internal server error", error });
+  }
+};
 
 
 // ✅ Delete exam
