@@ -25,12 +25,11 @@ const SchoolerExamSchema = new mongoose.Schema(
       required: true,
     },
     
-      assignedGroup: [
+      examType:
       {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "userexamGroup",
-      }
-    ],
+        ref: "Schoolercategory",
+      },
     ScheduleDate: { type: String, required: true },
     ScheduleTime: { type: String, required: true },
     ExamTime: { type: String, required: true },

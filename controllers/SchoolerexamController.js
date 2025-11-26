@@ -26,10 +26,10 @@ exports.createExam = async (req, res) => {
       passout,
       seat,
       topicQuestions,
-      assignedGroup   
+         examType,
     } = req.body;
 
-    if (!examName || !category || !className || !ScheduleDate || !ScheduleTime || !ExamTime || !seat || !assignedGroup ) {
+    if (!examName || !category || !className || !ScheduleDate || !ScheduleTime || !ExamTime || !seat ||!examType ) {
       return res.status(400).json({ message: "Please fill all required fields." });
     }
 
@@ -44,7 +44,7 @@ exports.createExam = async (req, res) => {
       passout,
       seat,
       topicQuestions,
-      assignedGroup,
+      examType,
       createdBy: req.user?._id || req.body.createdBy 
     });
 
