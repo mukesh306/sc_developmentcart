@@ -57,13 +57,76 @@ exports.createExam = async (req, res) => {
 };
 
 
-exports.getAllExams = async (req, res) => {
-  try {
-    const { category, className } = req.query;
+// exports.getAllExams = async (req, res) => {
+//   try {
+//     const { category, className } = req.query;
 
    
+//     let exams = await Schoolerexam.find()
+//       .populate("category", "name")
+//       .populate("createdBy", "name email")
+//       .sort({ createdAt: 1 });
+
+//     if (!exams || exams.length === 0) {
+//       return res.status(200).json([]);
+//     }
+
+//     const updatedExams = [];
+
+    
+//     for (const exam of exams) {
+//       let classData =
+//         (await School.findById(exam.className).select("_id name className")) ||
+//         (await College.findById(exam.className).select("_id name className"));
+
+//       const examObj = exam.toObject();
+      
+//       if (classData) {
+//         examObj.className = {
+//           _id: classData._id,
+//           name: classData.className || classData.name,
+//         };
+//       } else {
+//         examObj.className = null;
+//       }
+
+//       examObj.totalQuestions = exam.topicQuestions
+//         ? exam.topicQuestions.length
+//         : 0;
+
+//       updatedExams.push(examObj);
+//     }
+
+  
+//     let filteredExams = updatedExams;
+
+//     if (category) {
+//       filteredExams = filteredExams.filter(
+//         (e) => e.category && e.category._id?.toString() === category
+//       );
+//     }
+
+//     if (className) {
+//       filteredExams = filteredExams.filter(
+//         (e) => e.className && e.className._id?.toString() === className
+//       );
+//     }
+
+//     res.status(200).json(filteredExams);
+//   } catch (error) {
+//     console.error("🔥 Error fetching exams:", error);
+//     res.status(500).json({ message: "Internal server error", error: error.message });
+//   }
+// };
+
+
+exports.getAllExams = async (req, res) => {
+  try {
+    const { category, className, examType } = req.query;
+
     let exams = await Schoolerexam.find()
       .populate("category", "name")
+      .populate("examType", "name") // <-- populate examType also
       .populate("createdBy", "name email")
       .sort({ createdAt: 1 });
 
@@ -73,14 +136,13 @@ exports.getAllExams = async (req, res) => {
 
     const updatedExams = [];
 
-    
     for (const exam of exams) {
       let classData =
         (await School.findById(exam.className).select("_id name className")) ||
         (await College.findById(exam.className).select("_id name className"));
 
       const examObj = exam.toObject();
-      
+
       if (classData) {
         examObj.className = {
           _id: classData._id,
@@ -97,18 +159,29 @@ exports.getAllExams = async (req, res) => {
       updatedExams.push(examObj);
     }
 
-  
+    // ------------------------
+    // APPLY FILTERS (ID BASED)
+    // ------------------------
     let filteredExams = updatedExams;
 
+    // category filter by ID
     if (category) {
       filteredExams = filteredExams.filter(
         (e) => e.category && e.category._id?.toString() === category
       );
     }
 
+    // className filter by ID
     if (className) {
       filteredExams = filteredExams.filter(
         (e) => e.className && e.className._id?.toString() === className
+      );
+    }
+
+    // ⭐ NEW: examType filter by ID
+    if (examType) {
+      filteredExams = filteredExams.filter(
+        (e) => e.examType && e.examType._id?.toString() === examType
       );
     }
 
