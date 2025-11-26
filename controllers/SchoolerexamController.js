@@ -119,14 +119,13 @@ exports.createExam = async (req, res) => {
 //   }
 // };
 
-
 exports.getAllExams = async (req, res) => {
   try {
     const { category, className, examType } = req.query;
 
+    // Removed examType populate 👇
     let exams = await Schoolerexam.find()
       .populate("category", "name")
-      .populate("examType", "name") // <-- populate examType also
       .populate("createdBy", "name email")
       .sort({ createdAt: 1 });
 
@@ -164,24 +163,24 @@ exports.getAllExams = async (req, res) => {
     // ------------------------
     let filteredExams = updatedExams;
 
-    // category filter by ID
+    // category filter
     if (category) {
       filteredExams = filteredExams.filter(
         (e) => e.category && e.category._id?.toString() === category
       );
     }
 
-    // className filter by ID
+    // class filter
     if (className) {
       filteredExams = filteredExams.filter(
         (e) => e.className && e.className._id?.toString() === className
       );
     }
 
-    // ⭐ NEW: examType filter by ID
+    // ⭐ examType filter (ID match, NO POPULATE)
     if (examType) {
       filteredExams = filteredExams.filter(
-        (e) => e.examType && e.examType._id?.toString() === examType
+        (e) => e.examType && e.examType.toString() === examType
       );
     }
 
@@ -191,6 +190,7 @@ exports.getAllExams = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
+
 
 
 exports.getExamById = async (req, res) => {
