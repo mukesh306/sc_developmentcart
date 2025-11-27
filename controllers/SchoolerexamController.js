@@ -317,14 +317,12 @@ exports.getExamByGroupAndExamType = async (req, res) => {
       });
     }
 
-    // Find exam where examType matches and assignedGroup contains groupId
     const exam = await Schoolerexam.findOne({
       examType: examType,
       assignedGroup: groupId
     })
-    .populate("category")
-    .populate("className")
-    .populate("createdBy");
+      .populate("category", "name")
+      .populate("createdBy", "name email");
 
     if (!exam) {
       return res.status(404).json({
@@ -332,9 +330,30 @@ exports.getExamByGroupAndExamType = async (req, res) => {
       });
     }
 
+    // ⭐ className fetch same as getAllExams
+    let classData =
+      (await School.findById(exam.className).select("_id name className")) ||
+      (await College.findById(exam.className).select("_id name className"));
+
+    const examObj = exam.toObject();
+
+    if (classData) {
+      examObj.className = {
+        _id: classData._id,
+        name: classData.className || classData.name,
+      };
+    } else {
+      examObj.className = null;
+    }
+
+    // ⭐ totalQuestions
+    examObj.totalQuestions = exam.topicQuestions
+      ? exam.topicQuestions.length
+      : 0;
+
     res.status(200).json({
       message: "Exam found.",
-      exam,
+      exam: examObj,
     });
 
   } catch (error) {
@@ -342,6 +361,7 @@ exports.getExamByGroupAndExamType = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error });
   }
 };
+
 
 
 
