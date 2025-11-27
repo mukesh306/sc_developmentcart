@@ -307,30 +307,28 @@ exports.assignGroupToExam = async (req, res) => {
   }
 };
 
-
-exports.getExamByGroup = async (req, res) => {
+exports.getExamByGroupAndExamType = async (req, res) => {
   try {
-    const { examId, groupId } = req.query;
+    const { examType, groupId } = req.query;
 
-    if (!examId || !groupId) {
+    if (!examType || !groupId) {
       return res.status(400).json({
-        message: "examId and groupId are required.",
+        message: "examType and groupId are required.",
       });
     }
 
-    const exam = await Schoolerexam.findById(examId)
-      .populate("assignedGroup");
+    // Find exam where examType matches and assignedGroup contains groupId
+    const exam = await Schoolerexam.findOne({
+      examType: examType,
+      assignedGroup: groupId
+    })
+    .populate("category")
+    .populate("className")
+    .populate("createdBy");
 
     if (!exam) {
-      return res.status(404).json({ message: "Exam not found." });
-    }
-
-    // Check if group is assigned
-    const isAssigned = exam.assignedGroup.includes(groupId);
-
-    if (!isAssigned) {
-      return res.status(400).json({
-        message: "This group is not assigned to this exam.",
+      return res.status(404).json({
+        message: "No exam found for given examType and groupId.",
       });
     }
 
@@ -344,6 +342,7 @@ exports.getExamByGroup = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error });
   }
 };
+
 
 
 
