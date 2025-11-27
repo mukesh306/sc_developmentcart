@@ -403,6 +403,49 @@ exports.deleteGroupFromExam = async (req, res) => {
 };
 
 
+// exports.updateGroupInExam = async (req, res) => {
+//   try {
+//     const { examId, examType, groupId } = req.body;
+
+//     if (!examId || !examType || !groupId) {
+//       return res.status(400).json({
+//         message: "examId, examType and groupId are required.",
+//       });
+//     }
+
+//     const exam = await Schoolerexam.findOne({
+//       _id: examId,
+//       examType: examType
+//     });
+
+//     if (!exam) {
+//       return res.status(404).json({
+//         message: "Exam not found or examType mismatch.",
+//       });
+//     }
+
+//     // assignedGroup must have at least one item
+//     if (exam.assignedGroup.length === 0) {
+//       return res.status(400).json({
+//         message: "This exam has no assigned group to update.",
+//       });
+//     }
+
+//     // Replace the first assigned group
+//     exam.assignedGroup[0] = groupId;
+//     await exam.save();
+
+//     res.status(200).json({
+//       message: "Group updated successfully.",
+//       exam
+//     });
+
+//   } catch (error) {
+//     console.error("Error updating group:", error);
+//     res.status(500).json({ message: "Internal server error", error });
+//   }
+// };
+
 exports.updateGroupInExam = async (req, res) => {
   try {
     const { examId, examType, groupId } = req.body;
@@ -413,39 +456,33 @@ exports.updateGroupInExam = async (req, res) => {
       });
     }
 
+    // Find exam by groupId + examType
     const exam = await Schoolerexam.findOne({
-      _id: examId,
-      examType: examType
+      examType: examType,
+      assignedGroup: groupId
     });
 
     if (!exam) {
       return res.status(404).json({
-        message: "Exam not found or examType mismatch.",
+        message: "Exam not found with given groupId & examType.",
       });
     }
 
-    // assignedGroup must have at least one item
-    if (exam.assignedGroup.length === 0) {
-      return res.status(400).json({
-        message: "This exam has no assigned group to update.",
-      });
-    }
+    // Update the examId FIELD (not Mongo _id)
+    exam.examId = examId;
 
-    // Replace the first assigned group
-    exam.assignedGroup[0] = groupId;
     await exam.save();
 
     res.status(200).json({
-      message: "Group updated successfully.",
+      message: "examId updated successfully.",
       exam
     });
 
   } catch (error) {
-    console.error("Error updating group:", error);
+    console.error("Error updating examId:", error);
     res.status(500).json({ message: "Internal server error", error });
   }
 };
-
 
 
 // ✅ Delete exam
