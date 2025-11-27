@@ -310,7 +310,6 @@ exports.createSchoolergroup = async (req, res) => {
 // };
 
 
-
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -327,30 +326,30 @@ exports.getAllSchoolergroups = async (req, res) => {
 
       const categoryObj = category.toObject();
 
-      // 1️⃣ IF NO examType → initial seats
+      // CASE 1: examType NOT provided → initial seats
       if (!examType) {
         categoryObj.seat = category.groupSize;
-      } else {
-        // 2️⃣ Get ALL exams of this category sorted by createdAt
+      } 
+      else {
+        // Get all exams of this category sorted by createdAt
         const allExams = await Schoolerexam.find({ category: category._id })
           .sort({ createdAt: 1 }) // oldest → latest
           .lean();
 
+        // If no exams → initial seat
         if (allExams.length === 0) {
           categoryObj.seat = category.groupSize;
-        } else {
-          // Extract examTypes in order
+        } 
+        else {
           const examTypeList = allExams.map(ex => ex.examType);
 
-          // Find index of user-given examType
-          let index = examTypeList.indexOf(examType);
-
-          // If not found OR it's the last one → pick the latest exam
-          if (index === -1 || index === allExams.length - 1) {
+          // CASE 2: examType exists in saved exams → show initial
+          if (examTypeList.includes(examType)) {
+            categoryObj.seat = category.groupSize;
+          } 
+          // CASE 3: examType not exists → show next/latest exam's passout
+          else {
             categoryObj.seat = allExams[allExams.length - 1].passout;
-          } else {
-            // Otherwise pick the next examType exam
-            categoryObj.seat = allExams[index + 1].passout;
           }
         }
       }
@@ -368,6 +367,7 @@ exports.getAllSchoolergroups = async (req, res) => {
     });
   }
 };
+
 
 
 
