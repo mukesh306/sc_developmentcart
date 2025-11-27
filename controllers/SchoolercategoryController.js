@@ -336,18 +336,16 @@ exports.getAllSchoolergroups = async (req, res) => {
           .sort({ createdAt: 1 }) // oldest → latest
           .lean();
 
-        // If no exams → initial seat
         if (allExams.length === 0) {
           categoryObj.seat = category.groupSize;
-        } 
-        else {
+        } else {
           const examTypeList = allExams.map(ex => ex.examType);
 
-          // CASE 2: examType exists in saved exams → show initial
+          // CASE 2: examType exists in saved exams → initial seat
           if (examTypeList.includes(examType)) {
             categoryObj.seat = category.groupSize;
           } 
-          // CASE 3: examType not exists → show next/latest exam's passout
+          // CASE 3: examType not exists → next/latest exam passout
           else {
             categoryObj.seat = allExams[allExams.length - 1].passout;
           }
@@ -367,6 +365,8 @@ exports.getAllSchoolergroups = async (req, res) => {
     });
   }
 };
+
+
 
 
 
