@@ -1,5 +1,6 @@
 
 const mongoose = require('mongoose');
+const mongoose = require('mongoose');
 const Schoolerexam = require("../models/Schoolerexam");
 const School = require("../models/school");      
 const College = require("../models/college");
@@ -267,6 +268,7 @@ exports.publishExam = async (req, res) => {
   }
 };
 
+
 exports.assignGroupToExam = async (req, res) => {
   try {
     const { examId, examType, groupId } = req.body;
@@ -305,6 +307,45 @@ exports.assignGroupToExam = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error });
   }
 };
+
+
+exports.getExamByGroup = async (req, res) => {
+  try {
+    const { examId, groupId } = req.query;
+
+    if (!examId || !groupId) {
+      return res.status(400).json({
+        message: "examId and groupId are required.",
+      });
+    }
+
+    const exam = await Schoolerexam.findById(examId)
+      .populate("assignedGroup");
+
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found." });
+    }
+
+    // Check if group is assigned
+    const isAssigned = exam.assignedGroup.includes(groupId);
+
+    if (!isAssigned) {
+      return res.status(400).json({
+        message: "This group is not assigned to this exam.",
+      });
+    }
+
+    res.status(200).json({
+      message: "Exam found.",
+      exam,
+    });
+
+  } catch (error) {
+    console.error("Error fetching exam:", error);
+    res.status(500).json({ message: "Internal server error", error });
+  }
+};
+
 
 
 // ✅ Delete exam
