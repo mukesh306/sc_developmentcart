@@ -312,7 +312,12 @@ exports.createSchoolergroup = async (req, res) => {
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { examType } = req.query;
+    let { examType } = req.query;
+
+    // 🟢 Convert examType string → ObjectId
+    if (examType && mongoose.Types.ObjectId.isValid(examType)) {
+      examType = new mongoose.Types.ObjectId(examType);
+    }
 
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
@@ -322,10 +327,9 @@ exports.getAllSchoolergroups = async (req, res) => {
 
     for (const category of categories) {
       if (!category.price || !category.groupSize) continue;
-
       const categoryObj = category.toObject();
 
-      // 1️⃣ IF NO examType → return initial groupSize
+      // Agar examType nahi diya
       if (!examType) {
         categoryObj.seat = category.groupSize;
       } else {
@@ -336,15 +340,16 @@ exports.getAllSchoolergroups = async (req, res) => {
         if (allExams.length === 0) {
           categoryObj.seat = category.groupSize;
         } else {
-          const examTypeList = allExams.map(ex => ex.examType);
+          const examTypeList = allExams.map(ex => ex.examType.toString());
 
-          const index = examTypeList.indexOf(examType);
+          // Compare using string (safe)
+          const index = examTypeList.indexOf(examType.toString());
 
           if (index !== -1) {
-            // ⭐ User gave SAME examType which is saved → ALWAYS groupSize
+            // SAME examType found → INITIAL seat
             categoryObj.seat = category.groupSize;
           } else {
-            // ⭐ Not found → return latest passout
+            // Not found → last passout
             categoryObj.seat = allExams[allExams.length - 1].passout;
           }
         }
@@ -356,11 +361,7 @@ exports.getAllSchoolergroups = async (req, res) => {
     res.status(200).json(updatedCategories);
 
   } catch (error) {
-    console.error("❌ Error fetching categories:", error);
-    res.status(500).json({
-      message: "Error fetching categories.",
-      error: error.message,
-    });
+    res.status(500).json({ message: "Error fetching categories", error: error.message });
   }
 };
 
