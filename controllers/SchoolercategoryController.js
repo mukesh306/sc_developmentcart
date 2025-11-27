@@ -314,59 +314,60 @@ exports.getAllSchoolergroups = async (req, res) => {
     const userId = req.user._id;
     const { examType } = req.query;
 
+    // 1) Get All Categories
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
     const updatedCategories = [];
 
-    // ------------------------------------------
-    // 1) Find previous examType (if examType given)
-    // ------------------------------------------
+    // -------------------------------------
+    // Find Previous ExamType (if examType given)
+    // -------------------------------------
     let previousExamType = null;
 
     if (examType) {
-      const current = await ExamType.findById(examType);
+      const currentExamType = await ExamType.findById(examType);
 
-      if (current && current.order > 1) {
+      if (currentExamType && currentExamType.order > 1) {
         previousExamType = await ExamType.findOne({
-          order: current.order - 1,
+          order: currentExamType.order - 1,
         }).lean();
       }
     }
 
-    // ------------------------------------------
-    // 2) Build response for each category
-    // ------------------------------------------
+    // -------------------------------------
+    // Build Each Category Response
+    // -------------------------------------
     for (const category of categories) {
       const categoryObj = category.toObject();
-      let seatValue = category.groupSize; // default seat
+      let seatValue = category.groupSize; // default
 
-      // ------------------------------------------------
-      // CASE 1: NO examType → always return initial groupSize
-      // ------------------------------------------------
+      // -------------------------------------------
+      // CASE 1: No examType → initial groupSize only
+      // -------------------------------------------
       if (!examType) {
         seatValue = category.groupSize;
       }
 
-      // ------------------------------------------------
-      // CASE 2: examType given → get previous examType’s passout
-      // ------------------------------------------------
+      // -----------------------------------------------------------
+      // CASE 2: examType given → use previous examType's passout
+      // -----------------------------------------------------------
       if (examType && previousExamType) {
         const previousExam = await Schoolerexam.findOne({
           category: category._id,
-          examType: previousExamType._id,
+          examType: previousExamType._id,   // previous examType ka exam
         })
-          .sort({ createdAt: -1 })
+          .sort({ createdAt: -1 })          // latest exam
           .lean();
 
-        // Passout milega → warna default groupSize
         seatValue = previousExam?.passout ?? category.groupSize;
       }
 
+      // set seat
       categoryObj.seat = seatValue;
 
-      // default status
+      // By default first category active
       categoryObj.status = updatedCategories.length === 0;
 
       // If user is top user in this category
@@ -383,6 +384,7 @@ exports.getAllSchoolergroups = async (req, res) => {
     }
 
     return res.status(200).json(updatedCategories);
+
   } catch (error) {
     console.error("❌ Error fetching categories:", error);
     return res.status(500).json({
