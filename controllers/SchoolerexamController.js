@@ -119,6 +119,7 @@ exports.createExam = async (req, res) => {
 //   }
 // };
 
+
 exports.getAllExams = async (req, res) => {
   try {
     const { category, className, examType } = req.query;
