@@ -325,12 +325,12 @@ exports.getExamByGroupAndExamType = async (req, res) => {
       .populate("createdBy", "name email");
 
     if (!exam) {
-      return res.status(404).json({
+      return res.status(200).json({
         message: "No exam found for given examType and groupId.",
       });
     }
 
-    // ⭐ className fetch same as getAllExams
+   
     let classData =
       (await School.findById(exam.className).select("_id name className")) ||
       (await College.findById(exam.className).select("_id name className"));
@@ -362,7 +362,92 @@ exports.getExamByGroupAndExamType = async (req, res) => {
   }
 };
 
+exports.deleteGroupFromExam = async (req, res) => {
+  try {
+    const { examId, examType, groupId } = req.body;
 
+    if (!examId || !examType || !groupId) {
+      return res.status(400).json({
+        message: "examId, examType and groupId are required.",
+      });
+    }
+
+    const exam = await Schoolerexam.findOne({
+      _id: examId,
+      examType: examType
+    });
+
+    if (!exam) {
+      return res.status(404).json({
+        message: "Exam not found or examType mismatch.",
+      });
+    }
+
+    const index = exam.assignedGroup.indexOf(groupId);
+
+    if (index === -1) {
+      return res.status(400).json({
+        message: "This group is not assigned to this exam.",
+      });
+    }
+
+    // Remove group
+    exam.assignedGroup.splice(index, 1);
+    await exam.save();
+
+    res.status(200).json({
+      message: "Group deleted successfully.",
+      exam
+    });
+
+  } catch (error) {
+    console.error("Error deleting group:", error);
+    res.status(500).json({ message: "Internal server error", error });
+  }
+};
+
+exports.updateGroupInExam = async (req, res) => {
+  try {
+    const { examId, examType, newGroupId } = req.body;
+
+    if (!examId || !examType || !newGroupId) {
+      return res.status(400).json({
+        message: "examId, examType and newGroupId are required.",
+      });
+    }
+
+    const exam = await Schoolerexam.findOne({
+      _id: examId,
+      examType: examType
+    });
+
+    if (!exam) {
+      return res.status(404).json({
+        message: "Exam not found or examType mismatch.",
+      });
+    }
+
+    // assignedGroup must have at least one item
+    if (exam.assignedGroup.length === 0) {
+      return res.status(400).json({
+        message: "This exam has no assigned group to update.",
+      });
+    }
+
+    // Replace the first assigned group
+    exam.assignedGroup[0] = newGroupId;
+    await exam.save();
+
+    res.status(200).json({
+      message: "Group updated successfully.",
+      exam
+    });
+
+  } catch (error) {
+    console.error("Error updating group:", error);
+    res.status(500).json({ message: "Internal server error", error });
+  }
+};
 
 
 
