@@ -253,141 +253,121 @@ exports.createSchoolergroup = async (req, res) => {
 
 
 
-exports.getAllSchoolergroups = async (req, res) => {
-  try {
-    const userId = req.user._id; 
-    const categories = await Schoolercategory.find()
-      .populate("createdBy", "firstName lastName email")
-      .sort({ createdAt: 1 });
-
-    const updatedCategories = [];
-    let allowNext = true; 
-    for (const category of categories) {
-      if (category.price && category.groupSize) {
-        const categoryObj = category.toObject();
-
-       
-        const latestExam = await Schoolerexam.findOne({ category: category._id })
-          .sort({ createdAt: -1 })
-          .lean();
-
-        
-        categoryObj.seat = latestExam?.passout ?? category.groupSize;
-
-        
-        categoryObj.status = false;
-
-        
-        if (updatedCategories.length === 0) {
-          categoryObj.status = true;
-        }
-
-       
-        const userTop = await CategoryTopUser.findOne({
-          userId,
-          categoryId: category._id,
-        });
-
-        
-        if (userTop) {
-          categoryObj.status = true; 
-        } else {
-          
-          allowNext = false;
-        }
-
-        updatedCategories.push(categoryObj);
-      }
-    }
-
-    res.status(200).json(updatedCategories);
-  } catch (error) {
-    console.error("❌ Error fetching categories:", error);
-    res
-      .status(500)
-      .json({ message: "Error fetching categories.", error: error.message });
-  }
-};
-
-
 // exports.getAllSchoolergroups = async (req, res) => {
 //   try {
-//     const userId = req.user._id;
-//     const { examType } = req.query;
-
-//     // get all categories
+//     const userId = req.user._id; 
 //     const categories = await Schoolercategory.find()
 //       .populate("createdBy", "firstName lastName email")
 //       .sort({ createdAt: 1 });
 
 //     const updatedCategories = [];
-
-//     // -----------------------------------
-//     // Get previous examType (NO MODEL)
-//     // -----------------------------------
-//     let previousExamType = null;
-
-//     if (examType) {
-//       // examType from query is number/string
-//       const current = Number(examType);
-
-//       if (current > 1) {
-//         previousExamType = current - 1;
-//       }
-//     }
-
-//     // -----------------------------------
-//     // Process each category
-//     // -----------------------------------
+//     let allowNext = true; 
 //     for (const category of categories) {
-//       let categoryObj = category.toObject();
-//       let seatValue = category.groupSize;
+//       if (category.price && category.groupSize) {
+//         const categoryObj = category.toObject();
 
-//       // CASE 1: examType NOT given → initial groupSize
-//       if (!examType) {
-//         seatValue = category.groupSize;
-//       }
-
-//       // CASE 2: examType given → pickup previous examType passout
-//       if (examType && previousExamType !== null) {
-//         const previousExam = await Schoolerexam.findOne({
-//           category: category._id,
-//           examType: previousExamType, // NO MODEL
-//         })
+       
+//         const latestExam = await Schoolerexam.findOne({ category: category._id })
 //           .sort({ createdAt: -1 })
 //           .lean();
 
-//         seatValue = previousExam?.passout ?? category.groupSize;
+        
+//         categoryObj.seat = latestExam?.passout ?? category.groupSize;
+
+        
+//         categoryObj.status = false;
+
+        
+//         if (updatedCategories.length === 0) {
+//           categoryObj.status = true;
+//         }
+
+       
+//         const userTop = await CategoryTopUser.findOne({
+//           userId,
+//           categoryId: category._id,
+//         });
+
+        
+//         if (userTop) {
+//           categoryObj.status = true; 
+//         } else {
+          
+//           allowNext = false;
+//         }
+
+//         updatedCategories.push(categoryObj);
 //       }
-
-//       // add seat
-//       categoryObj.seat = seatValue;
-
-//       // default first status true
-//       categoryObj.status = updatedCategories.length === 0;
-
-//       // check top user
-//       const userTop = await CategoryTopUser.findOne({
-//         userId,
-//         categoryId: category._id,
-//       });
-
-//       if (userTop) categoryObj.status = true;
-
-//       updatedCategories.push(categoryObj);
 //     }
 
-//     return res.status(200).json(updatedCategories);
-
+//     res.status(200).json(updatedCategories);
 //   } catch (error) {
-//     return res.status(500).json({
-//       message: "Error fetching categories.",
-//       error: error.message,
-//     });
+//     console.error("❌ Error fetching categories:", error);
+//     res
+//       .status(500)
+//       .json({ message: "Error fetching categories.", error: error.message });
 //   }
 // };
 
 
+
+exports.getAllSchoolergroups = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { examType } = req.query;
+
+    const categories = await Schoolercategory.find()
+      .populate("createdBy", "firstName lastName email")
+      .sort({ createdAt: 1 });
+
+    const updatedCategories = [];
+
+    for (const category of categories) {
+      if (!category.price || !category.groupSize) continue;
+
+      const categoryObj = category.toObject();
+
+      // 1️⃣ IF NO examType → initial seats
+      if (!examType) {
+        categoryObj.seat = category.groupSize;
+      } else {
+        // 2️⃣ Get ALL exams of this category sorted by createdAt
+        const allExams = await Schoolerexam.find({ category: category._id })
+          .sort({ createdAt: 1 }) // oldest → latest
+          .lean();
+
+        if (allExams.length === 0) {
+          categoryObj.seat = category.groupSize;
+        } else {
+          // Extract examTypes in order
+          const examTypeList = allExams.map(ex => ex.examType);
+
+          // Find index of user-given examType
+          let index = examTypeList.indexOf(examType);
+
+          // If not found OR it's the last one → pick the latest exam
+          if (index === -1 || index === allExams.length - 1) {
+            categoryObj.seat = allExams[allExams.length - 1].passout;
+          } else {
+            // Otherwise pick the next examType exam
+            categoryObj.seat = allExams[index + 1].passout;
+          }
+        }
+      }
+
+      updatedCategories.push(categoryObj);
+    }
+
+    res.status(200).json(updatedCategories);
+
+  } catch (error) {
+    console.error("❌ Error fetching categories:", error);
+    res.status(500).json({
+      message: "Error fetching categories.",
+      error: error.message,
+    });
+  }
+};
 
 
 
