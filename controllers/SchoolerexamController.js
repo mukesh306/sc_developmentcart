@@ -362,10 +362,9 @@ exports.getExamByGroupAndExamType = async (req, res) => {
   }
 };
 
-
 exports.deleteGroupFromExam = async (req, res) => {
   try {
-    const { examId, examType, groupId } = req.body;
+    const { examId, examType, groupId } = req.query;
 
     if (!examId || !examType || !groupId) {
       return res.status(400).json({
@@ -373,10 +372,7 @@ exports.deleteGroupFromExam = async (req, res) => {
       });
     }
 
-    const exam = await Schoolerexam.findOne({
-      _id: examId,
-      examType: examType
-    });
+    const exam = await Schoolerexam.findOne({ _id: examId, examType });
 
     if (!exam) {
       return res.status(404).json({
@@ -392,13 +388,12 @@ exports.deleteGroupFromExam = async (req, res) => {
       });
     }
 
-    // Remove group
     exam.assignedGroup.splice(index, 1);
     await exam.save();
 
     res.status(200).json({
       message: "Group deleted successfully.",
-      exam
+      exam,
     });
 
   } catch (error) {
@@ -410,11 +405,11 @@ exports.deleteGroupFromExam = async (req, res) => {
 
 exports.updateGroupInExam = async (req, res) => {
   try {
-    const { examId, examType, newGroupId } = req.body;
+    const { examId, examType, groupId } = req.body;
 
-    if (!examId || !examType || !newGroupId) {
+    if (!examId || !examType || !groupId) {
       return res.status(400).json({
-        message: "examId, examType and newGroupId are required.",
+        message: "examId, examType and groupId are required.",
       });
     }
 
@@ -437,7 +432,7 @@ exports.updateGroupInExam = async (req, res) => {
     }
 
     // Replace the first assigned group
-    exam.assignedGroup[0] = newGroupId;
+    exam.assignedGroup[0] = groupId;
     await exam.save();
 
     res.status(200).json({
