@@ -325,36 +325,27 @@ exports.getAllSchoolergroups = async (req, res) => {
 
       const categoryObj = category.toObject();
 
-      // 1️⃣ IF NO examType → initial seats
+      // 1️⃣ IF NO examType → return initial groupSize
       if (!examType) {
         categoryObj.seat = category.groupSize;
       } else {
-        // 2️⃣ Get ALL exams of this category sorted by createdAt
         const allExams = await Schoolerexam.find({ category: category._id })
-          .sort({ createdAt: 1 }) // oldest → latest
+          .sort({ createdAt: 1 })
           .lean();
 
         if (allExams.length === 0) {
           categoryObj.seat = category.groupSize;
         } else {
-          // Extract examTypes in order
           const examTypeList = allExams.map(ex => ex.examType);
 
-          // Find index of user-given examType
-          let index = examTypeList.indexOf(examType);
+          const index = examTypeList.indexOf(examType);
 
-          if (index === -1) {
-            // ExamType not found → latest exam's passout
-            categoryObj.seat = allExams[allExams.length - 1].passout;
+          if (index !== -1) {
+            // ⭐ User gave SAME examType which is saved → ALWAYS groupSize
+            categoryObj.seat = category.groupSize;
           } else {
-            // ✅ NEW CONDITION:
-            // Agar user last examType bhej raha hai → initial groupSize
-            if (index === allExams.length - 1) {
-              categoryObj.seat = category.groupSize;
-            } else {
-              // Otherwise pick the next examType exam's passout
-              categoryObj.seat = allExams[index + 1].passout;
-            }
+            // ⭐ Not found → return latest passout
+            categoryObj.seat = allExams[allExams.length - 1].passout;
           }
         }
       }
