@@ -309,7 +309,6 @@ exports.createSchoolergroup = async (req, res) => {
 //   }
 // };
 
-
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -344,12 +343,18 @@ exports.getAllSchoolergroups = async (req, res) => {
           // Find index of user-given examType
           let index = examTypeList.indexOf(examType);
 
-          // If not found OR it's the last one → pick the latest exam
-          if (index === -1 || index === allExams.length - 1) {
+          if (index === -1) {
+            // ExamType not found → latest exam's passout
             categoryObj.seat = allExams[allExams.length - 1].passout;
           } else {
-            // Otherwise pick the next examType exam
-            categoryObj.seat = allExams[index + 1].passout;
+            // ✅ NEW CONDITION:
+            // Agar user last examType bhej raha hai → initial groupSize
+            if (index === allExams.length - 1) {
+              categoryObj.seat = category.groupSize;
+            } else {
+              // Otherwise pick the next examType exam's passout
+              categoryObj.seat = allExams[index + 1].passout;
+            }
           }
         }
       }
