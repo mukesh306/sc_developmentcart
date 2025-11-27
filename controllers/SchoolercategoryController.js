@@ -309,7 +309,6 @@ exports.createSchoolergroup = async (req, res) => {
 //   }
 // };
 
-
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -329,8 +328,7 @@ exports.getAllSchoolergroups = async (req, res) => {
       // CASE 1: examType NOT provided → initial seats
       if (!examType) {
         categoryObj.seat = category.groupSize;
-      } 
-      else {
+      } else {
         // Get all exams of this category sorted by createdAt
         const allExams = await Schoolerexam.find({ category: category._id })
           .sort({ createdAt: 1 }) // oldest → latest
@@ -341,11 +339,11 @@ exports.getAllSchoolergroups = async (req, res) => {
         } else {
           const examTypeList = allExams.map(ex => ex.examType);
 
-          // CASE 2: examType exists in saved exams → initial seat
+          // CASE 2: examType exists in saved exams → show initial seat
           if (examTypeList.includes(examType)) {
             categoryObj.seat = category.groupSize;
           } 
-          // CASE 3: examType not exists → next/latest exam passout
+          // CASE 3: examType does not exist → show latest exam's passout
           else {
             categoryObj.seat = allExams[allExams.length - 1].passout;
           }
@@ -365,6 +363,7 @@ exports.getAllSchoolergroups = async (req, res) => {
     });
   }
 };
+
 
 
 
