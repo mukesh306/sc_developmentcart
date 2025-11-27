@@ -253,146 +253,146 @@ exports.createSchoolergroup = async (req, res) => {
 
 
 
-// exports.getAllSchoolergroups = async (req, res) => {
-//   try {
-//     const userId = req.user._id; 
-//     const categories = await Schoolercategory.find()
-//       .populate("createdBy", "firstName lastName email")
-//       .sort({ createdAt: 1 });
-
-//     const updatedCategories = [];
-//     let allowNext = true; 
-//     for (const category of categories) {
-//       if (category.price && category.groupSize) {
-//         const categoryObj = category.toObject();
-
-       
-//         const latestExam = await Schoolerexam.findOne({ category: category._id })
-//           .sort({ createdAt: -1 })
-//           .lean();
-
-        
-//         categoryObj.seat = latestExam?.passout ?? category.groupSize;
-
-        
-//         categoryObj.status = false;
-
-        
-//         if (updatedCategories.length === 0) {
-//           categoryObj.status = true;
-//         }
-
-       
-//         const userTop = await CategoryTopUser.findOne({
-//           userId,
-//           categoryId: category._id,
-//         });
-
-        
-//         if (userTop) {
-//           categoryObj.status = true; 
-//         } else {
-          
-//           allowNext = false;
-//         }
-
-//         updatedCategories.push(categoryObj);
-//       }
-//     }
-
-//     res.status(200).json(updatedCategories);
-//   } catch (error) {
-//     console.error("❌ Error fetching categories:", error);
-//     res
-//       .status(500)
-//       .json({ message: "Error fetching categories.", error: error.message });
-//   }
-// };
-
 exports.getAllSchoolergroups = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const { examType } = req.query;
-
-    // 1) Get All Categories
+    const userId = req.user._id; 
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
     const updatedCategories = [];
-
-    // -------------------------------------
-    // Find Previous ExamType (if examType given)
-    // -------------------------------------
-    let previousExamType = null;
-
-    if (examType) {
-      const currentExamType = await ExamType.findById(examType);
-
-      if (currentExamType && currentExamType.order > 1) {
-        previousExamType = await ExamType.findOne({
-          order: currentExamType.order - 1,
-        }).lean();
-      }
-    }
-
-    // -------------------------------------
-    // Build Each Category Response
-    // -------------------------------------
+    let allowNext = true; 
     for (const category of categories) {
-      const categoryObj = category.toObject();
-      let seatValue = category.groupSize; // default
+      if (category.price && category.groupSize) {
+        const categoryObj = category.toObject();
 
-      // -------------------------------------------
-      // CASE 1: No examType → initial groupSize only
-      // -------------------------------------------
-      if (!examType) {
-        seatValue = category.groupSize;
-      }
-
-      // -----------------------------------------------------------
-      // CASE 2: examType given → use previous examType's passout
-      // -----------------------------------------------------------
-      if (examType && previousExamType) {
-        const previousExam = await Schoolerexam.findOne({
-          category: category._id,
-          examType: previousExamType._id,   // previous examType ka exam
-        })
-          .sort({ createdAt: -1 })          // latest exam
+       
+        const latestExam = await Schoolerexam.findOne({ category: category._id })
+          .sort({ createdAt: -1 })
           .lean();
 
-        seatValue = previousExam?.passout ?? category.groupSize;
+        
+        categoryObj.seat = latestExam?.passout ?? category.groupSize;
+
+        
+        categoryObj.status = false;
+
+        
+        if (updatedCategories.length === 0) {
+          categoryObj.status = true;
+        }
+
+       
+        const userTop = await CategoryTopUser.findOne({
+          userId,
+          categoryId: category._id,
+        });
+
+        
+        if (userTop) {
+          categoryObj.status = true; 
+        } else {
+          
+          allowNext = false;
+        }
+
+        updatedCategories.push(categoryObj);
       }
-
-      // set seat
-      categoryObj.seat = seatValue;
-
-      // By default first category active
-      categoryObj.status = updatedCategories.length === 0;
-
-      // If user is top user in this category
-      const userTop = await CategoryTopUser.findOne({
-        userId,
-        categoryId: category._id,
-      });
-
-      if (userTop) {
-        categoryObj.status = true;
-      }
-
-      updatedCategories.push(categoryObj);
     }
 
-    return res.status(200).json(updatedCategories);
-
+    res.status(200).json(updatedCategories);
   } catch (error) {
     console.error("❌ Error fetching categories:", error);
-    return res.status(500).json({
-      message: "Error fetching categories.",
-      error: error.message,
-    });
+    res
+      .status(500)
+      .json({ message: "Error fetching categories.", error: error.message });
   }
 };
+
+// exports.getAllSchoolergroups = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { examType } = req.query;
+
+//     // 1) Get All Categories
+//     const categories = await Schoolercategory.find()
+//       .populate("createdBy", "firstName lastName email")
+//       .sort({ createdAt: 1 });
+
+//     const updatedCategories = [];
+
+//     // -------------------------------------
+//     // Find Previous ExamType (if examType given)
+//     // -------------------------------------
+//     let previousExamType = null;
+
+//     if (examType) {
+//       const currentExamType = await ExamType.findById(examType);
+
+//       if (currentExamType && currentExamType.order > 1) {
+//         previousExamType = await ExamType.findOne({
+//           order: currentExamType.order - 1,
+//         }).lean();
+//       }
+//     }
+
+//     // -------------------------------------
+//     // Build Each Category Response
+//     // -------------------------------------
+//     for (const category of categories) {
+//       const categoryObj = category.toObject();
+//       let seatValue = category.groupSize; // default
+
+//       // -------------------------------------------
+//       // CASE 1: No examType → initial groupSize only
+//       // -------------------------------------------
+//       if (!examType) {
+//         seatValue = category.groupSize;
+//       }
+
+//       // -----------------------------------------------------------
+//       // CASE 2: examType given → use previous examType's passout
+//       // -----------------------------------------------------------
+//       if (examType && previousExamType) {
+//         const previousExam = await Schoolerexam.findOne({
+//           category: category._id,
+//           examType: previousExamType._id,   // previous examType ka exam
+//         })
+//           .sort({ createdAt: -1 })          // latest exam
+//           .lean();
+
+//         seatValue = previousExam?.passout ?? category.groupSize;
+//       }
+
+//       // set seat
+//       categoryObj.seat = seatValue;
+
+//       // By default first category active
+//       categoryObj.status = updatedCategories.length === 0;
+
+//       // If user is top user in this category
+//       const userTop = await CategoryTopUser.findOne({
+//         userId,
+//         categoryId: category._id,
+//       });
+
+//       if (userTop) {
+//         categoryObj.status = true;
+//       }
+
+//       updatedCategories.push(categoryObj);
+//     }
+
+//     return res.status(200).json(updatedCategories);
+
+//   } catch (error) {
+//     console.error("❌ Error fetching categories:", error);
+//     return res.status(500).json({
+//       message: "Error fetching categories.",
+//       error: error.message,
+//     });
+//   }
+// };
 
 
 
