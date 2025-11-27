@@ -362,6 +362,7 @@ exports.getExamByGroupAndExamType = async (req, res) => {
   }
 };
 
+
 exports.deleteGroupFromExam = async (req, res) => {
   try {
     const { examId, examType, groupId } = req.body;
@@ -405,6 +406,7 @@ exports.deleteGroupFromExam = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error });
   }
 };
+
 
 exports.updateGroupInExam = async (req, res) => {
   try {
