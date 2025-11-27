@@ -314,71 +314,64 @@ exports.getAllSchoolergroups = async (req, res) => {
     const userId = req.user._id;
     const { examType } = req.query;
 
-    // 1) Get All Categories
+    // get all categories
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
     const updatedCategories = [];
 
-    // -------------------------------------
-    // Find Previous ExamType (if examType given)
-    // -------------------------------------
+    // -----------------------------------
+    // Get previous examType (NO MODEL)
+    // -----------------------------------
     let previousExamType = null;
 
     if (examType) {
-      const currentExamType = await ExamType.findById(examType);
+      // examType from query is number/string
+      const current = Number(examType);
 
-      if (currentExamType && currentExamType.order > 1) {
-        previousExamType = await ExamType.findOne({
-          order: currentExamType.order - 1,
-        }).lean();
+      if (current > 1) {
+        previousExamType = current - 1;
       }
     }
 
-    // -------------------------------------
-    // Build Each Category Response
-    // -------------------------------------
+    // -----------------------------------
+    // Process each category
+    // -----------------------------------
     for (const category of categories) {
-      const categoryObj = category.toObject();
-      let seatValue = category.groupSize; // default
+      let categoryObj = category.toObject();
+      let seatValue = category.groupSize;
 
-      // -------------------------------------------
-      // CASE 1: No examType → initial groupSize only
-      // -------------------------------------------
+      // CASE 1: examType NOT given → initial groupSize
       if (!examType) {
         seatValue = category.groupSize;
       }
 
-      // -----------------------------------------------------------
-      // CASE 2: examType given → use previous examType's passout
-      // -----------------------------------------------------------
-      if (examType && previousExamType) {
+      // CASE 2: examType given → pickup previous examType passout
+      if (examType && previousExamType !== null) {
         const previousExam = await Schoolerexam.findOne({
           category: category._id,
-          examType: previousExamType._id,   // previous examType ka exam
+          examType: previousExamType, // NO MODEL
         })
-          .sort({ createdAt: -1 })          // latest exam
+          .sort({ createdAt: -1 })
           .lean();
 
         seatValue = previousExam?.passout ?? category.groupSize;
       }
 
-      // set seat
+      // add seat
       categoryObj.seat = seatValue;
 
-      // By default first category active
+      // default first status true
       categoryObj.status = updatedCategories.length === 0;
 
-      // If user is top user in this category
+      // check top user
       const userTop = await CategoryTopUser.findOne({
         userId,
         categoryId: category._id,
       });
 
-      if (userTop) {
-        categoryObj.status = true;
-      }
+      if (userTop) categoryObj.status = true;
 
       updatedCategories.push(categoryObj);
     }
@@ -386,13 +379,13 @@ exports.getAllSchoolergroups = async (req, res) => {
     return res.status(200).json(updatedCategories);
 
   } catch (error) {
-    console.error("❌ Error fetching categories:", error);
     return res.status(500).json({
       message: "Error fetching categories.",
       error: error.message,
     });
   }
 };
+
 
 
 
