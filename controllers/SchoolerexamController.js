@@ -446,7 +446,6 @@ exports.deleteGroupFromExam = async (req, res) => {
 //   }
 // };
 
-
 exports.updateGroupInExam = async (req, res) => {
   try {
     const { examId, examType, groupId } = req.body;
@@ -457,10 +456,10 @@ exports.updateGroupInExam = async (req, res) => {
       });
     }
 
-    // 1️⃣ Find the exam where group is currently assigned
+    // 1️⃣ Find the exam where this group is currently assigned
     const oldExam = await Schoolerexam.findOne({
       examType: examType,
-      assignedGroup: groupId
+      assignedGroup: { $in: [groupId] }   // FIXED
     });
 
     if (!oldExam) {
@@ -469,7 +468,7 @@ exports.updateGroupInExam = async (req, res) => {
       });
     }
 
-    // 2️⃣ Find the new exam where you want to move this group
+    // 2️⃣ Find the new exam to move this group
     const newExam = await Schoolerexam.findOne({
       _id: examId,
       examType: examType
@@ -481,13 +480,13 @@ exports.updateGroupInExam = async (req, res) => {
       });
     }
 
-    // 3️⃣ Remove groupId from old exam
+    // 3️⃣ Remove group from OLD exam
     oldExam.assignedGroup = oldExam.assignedGroup.filter(
-      (id) => id.toString() !== groupId
+      (id) => id.toString() !== groupId.toString()
     );
     await oldExam.save();
 
-    // 4️⃣ Add groupId to new exam (avoid duplicates)
+    // 4️⃣ Add group to NEW exam
     if (!newExam.assignedGroup.includes(groupId)) {
       newExam.assignedGroup.push(groupId);
       await newExam.save();
@@ -504,6 +503,7 @@ exports.updateGroupInExam = async (req, res) => {
     res.status(500).json({ message: "Internal server error", error });
   }
 };
+
 
 
 // ✅ Delete exam
