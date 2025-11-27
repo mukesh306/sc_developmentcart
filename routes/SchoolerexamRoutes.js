@@ -17,7 +17,6 @@ router.delete("/schooler/deleteExam/:id", auth, SchoolerexamController.deleteExa
 router.post("/schooler/assignGroup", SchoolerexamController.assignGroupToExam);
 router.get("/schooler/assignGroup", SchoolerexamController.getExamByGroup);
 
-
 router.get("/schooler/UsersExams",auth, SchoolerexamController.UsersExams);
 router.get("/schooler/ExamQuestion/:id", SchoolerexamController.ExamQuestion);
 router.post("/schooler/submitExamAnswer", auth, SchoolerexamController.submitExamAnswer);
