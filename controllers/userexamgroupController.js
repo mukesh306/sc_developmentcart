@@ -7,6 +7,7 @@ const User = require('../models/User');
 const College = require('../models/college');
 const School = require('../models/school');
 const CategoryTopUser = require('../models/CategoryTopUser');
+const Schoolerexam = require('../models/Schoolerexam');
 
 
 // exports.createGroup = async (req, res) => {
@@ -88,9 +89,70 @@ exports.createGroup = async (req, res) => {
 };
 
 
+// exports.AlluserExamGroups = async (req, res) => {
+//   try {
+//     const { className, category } = req.query; 
+
+//     let query = {};
+//     if (className && mongoose.Types.ObjectId.isValid(className)) {
+//       query.className = className;
+//     }
+//     if (category && mongoose.Types.ObjectId.isValid(category)) {
+//       query.category = category;
+//     }
+
+  
+//     const groups = await UserExamGroup.find(query)
+//       .populate("category", "name _id")
+//       .sort({ createdAt: 1 });
+
+//     let finalGroups = [];
+
+//     for (let group of groups) {
+//       let classId = group.className;
+//       let classDetails = null;
+
+//       if (mongoose.Types.ObjectId.isValid(classId)) {
+//         classDetails =
+//           (await School.findById(classId).select("name _id")) ||
+//           (await College.findById(classId).select("name _id"));
+//       }
+
+     
+//       finalGroups.push({
+//         _id: group._id,
+//         name: group.name,
+//         category: {
+//           _id: group.category ? group.category._id : null,
+//           name: group.category ? group.category.name : "N/A",
+//         },
+//         className: {
+//           _id: classDetails ? classDetails._id : null,
+//           name: classDetails ? classDetails.name : "N/A",
+//         },
+//         totalMembers: group.members ? group.members.length : 0,
+//         members: group.members || [], 
+//         createdAt: group.createdAt,
+//       });
+//     }
+
+//     return res.status(200).json({
+//       message: "Groups fetched successfully",
+//       totalGroups: finalGroups.length,
+//       groups: finalGroups,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching groups:", error);
+//     res
+//       .status(500)
+//       .json({ message: "Internal Server Error", error: error.message });
+//   }
+// };
+
+
 exports.AlluserExamGroups = async (req, res) => {
   try {
-    const { className, category } = req.query; 
+    const { className, category } = req.query;
 
     let query = {};
     if (className && mongoose.Types.ObjectId.isValid(className)) {
@@ -100,9 +162,8 @@ exports.AlluserExamGroups = async (req, res) => {
       query.category = category;
     }
 
-  
     const groups = await UserExamGroup.find(query)
-      .populate("category", "name _id")
+      .populate("category", "name _id examType")
       .sort({ createdAt: 1 });
 
     let finalGroups = [];
@@ -117,20 +178,42 @@ exports.AlluserExamGroups = async (req, res) => {
           (await College.findById(classId).select("name _id"));
       }
 
-     
+      // ⭐ Only examType length added
+      const examCount = group.category?.examType?.length || 0;
+
+      // ⭐ Count: this group is assigned in how many exams
+      const examsWithThisGroup = await Schoolerexam.find({
+        assignedGroup: group._id
+      }).select("assignedGroup");
+
+      const ExamAssignedCount = examsWithThisGroup.length;
+
+      // ⭐ Count: total assigned groups in all those exams
+      let AssignedGroupCount = 0;
+      for (let ex of examsWithThisGroup) {
+        AssignedGroupCount += (ex.assignedGroup?.length || 0);
+      }
+
       finalGroups.push({
         _id: group._id,
         name: group.name,
+
         category: {
           _id: group.category ? group.category._id : null,
           name: group.category ? group.category.name : "N/A",
         },
+
+        ExamCount: examCount,               // examType length
+        ExamAssignedCount,                  // कितने exams में यह group assigned है
+        AssignedGroupCount,                 // exams में कितने groups assigned हैं (sum)
+
         className: {
           _id: classDetails ? classDetails._id : null,
           name: classDetails ? classDetails.name : "N/A",
         },
+
         totalMembers: group.members ? group.members.length : 0,
-        members: group.members || [], 
+        members: group.members || [],
         createdAt: group.createdAt,
       });
     }
@@ -142,9 +225,10 @@ exports.AlluserExamGroups = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching groups:", error);
-    res
-      .status(500)
-      .json({ message: "Internal Server Error", error: error.message });
+    res.status(500).json({
+      message: "Internal Server Error",
+      error: error.message,
+    });
   }
 };
 
