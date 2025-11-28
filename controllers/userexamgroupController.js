@@ -120,6 +120,7 @@ exports.AlluserExamGroups = async (req, res) => {
      
       finalGroups.push({
         _id: group._id,
+        name: group.name,
         category: {
           _id: group.category ? group.category._id : null,
           name: group.category ? group.category.name : "N/A",
