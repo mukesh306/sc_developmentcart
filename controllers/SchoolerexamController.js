@@ -12,7 +12,7 @@ const UserExamGroup  = require("../models/userExamGroup");
 const CategoryTopUser = require("../models/CategoryTopUser");
 const ExamUserStatus = require("../models/ExamUserStatus");
 const MarkingSetting = require("../models/markingSetting");
-
+const moment = require("moment-timezone");
 
 exports.createExam = async (req, res) => {
   try {
@@ -839,14 +839,16 @@ exports.UsersExams = async (req, res) => {
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
 
-      // ⭐⭐⭐ NEW STATUSMANAGE LOGIC (Schedule/Ongoing/Completed) ⭐⭐⭐
+      // -----------------------------------------------------
+      // ⭐⭐⭐ STATUSMANAGE USING REAL IST MOMENT-TIMEZONE ⭐⭐⭐
+      // -----------------------------------------------------
 
       let statusManage = "To Be Schedule";
 
       if (exam.publish === true) {
         if (examObj.finalScore === null) {
 
-          // GET BUFFER TIME FROM MARKING SETTING
+          // BUFFER TIME FROM MARKING SETTING
           const markingSetting = await MarkingSetting.findOne({
             className: user.className,
           }).lean();
@@ -855,20 +857,29 @@ exports.UsersExams = async (req, res) => {
             ? parseInt(markingSetting.bufferTime)
             : 0;
 
-          // EXAM DATE
-          const examDate = exam.slotDate || exam.createdAt;
-          const baseDate = new Date(examDate);
+          // EXAM DATE (YYYY-MM-DD)
+          const examDate = moment(exam.slotDate || exam.createdAt)
+            .tz("Asia/Kolkata")
+            .format("YYYY-MM-DD");
 
-          // TIME MERGE
-          let [h, m, s] = exam.ScheduleTime.split(":").map(Number);
-          baseDate.setHours(h, m, s, 0);
+          // MERGE DATE + TIME IN IST
+          const scheduleDateTime = moment.tz(
+            `${examDate} ${exam.ScheduleTime}`,
+            "YYYY-MM-DD HH:mm:ss",
+            "Asia/Kolkata"
+          );
 
-          const scheduleTime = baseDate.getTime();          // Real start time
-          const startTime = scheduleTime + bufferTime * 60000;   // After buffer
-          const endTime = startTime + exam.ExamTime * 60000;     // Ongoing window
+          // START TIME (schedule + buffer)
+          const scheduleTime = scheduleDateTime.valueOf();
+          const startTime = scheduleTime + bufferTime * 60000;
 
-          const now = Date.now();
+          // END TIME (start + exam duration)
+          const endTime = startTime + exam.ExamTime * 60000;
 
+          // CURRENT IST TIME
+          const now = moment().tz("Asia/Kolkata").valueOf();
+
+          // APPLY STATUS LOGIC
           if (now < startTime) {
             statusManage = "Schedule";
           } else if (now >= startTime && now <= endTime) {
@@ -887,7 +898,7 @@ exports.UsersExams = async (req, res) => {
       updatedExams.push(examObj);
     }
 
-    // SAVE USER STATUS
+    // SAVE USER STATUS IN DATABASE
     for (const exam of updatedExams) {
       const existing = await ExamUserStatus.findOne({
         userId,
