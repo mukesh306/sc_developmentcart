@@ -712,18 +712,19 @@ exports.addQuestionsToExam = async (req, res) => {
 // };
 
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
     const { category } = req.query;
 
-    // Get User Class
+   
     const user = await User.findById(userId).select("className");
     if (!user || !user.className) {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // FIND ASSIGNED GROUP OF USER  
+    
     const assignedGroup = await UserExamGroup.findOne({
       members: userId,
       ...(category && mongoose.Types.ObjectId.isValid(category)
@@ -735,11 +736,11 @@ exports.UsersExams = async (req, res) => {
       return res.status(200).json([]); 
     }
 
-    // GET ONLY EXAMS ASSIGNED TO THIS GROUP
+    
     let exams = await Schoolerexam.find({
       className: user.className,
       category: assignedGroup.category,
-      assignedGroup: { $in: [assignedGroup._id] }   // 👈 ONLY GROUP ASSIGNED EXAMS
+      assignedGroup: { $in: [assignedGroup._id] }  
     })
       .populate("category", "name finalist")
       .populate("createdBy", "name email")
@@ -753,7 +754,7 @@ exports.UsersExams = async (req, res) => {
 
     for (const exam of exams) {
       
-      // CLASS NAME POPULATE (school OR college)
+     
       let classData =
         (await School.findById(exam.className).select("_id name className")) ||
         (await College.findById(exam.className).select("_id name className"));
@@ -763,12 +764,12 @@ exports.UsersExams = async (req, res) => {
         ? { _id: classData._id, name: classData.className || classData.name }
         : null;
 
-      // TOTAL QUESTIONS
+     
       examObj.totalQuestions = exam.topicQuestions
         ? exam.topicQuestions.length
         : 0;
 
-      // GET USER RESULT
+     
       const userResult = await ExamResult.findOne({
         userId,
         examId: exam._id,
@@ -787,7 +788,7 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // RANK CALCULATION ONLY AMONG GROUP MEMBERS
+      
       let allResults = await ExamResult.find({
         examId: exam._id,
         userId: { $in: assignedGroup.members },
@@ -812,7 +813,7 @@ exports.UsersExams = async (req, res) => {
         examObj.totalParticipants = 0;
       }
 
-      // PASS / FAIL
+    
       const passLimit = parseInt(exam.passout) || 1;
       examObj.result =
         examObj.rank !== null
@@ -824,10 +825,23 @@ exports.UsersExams = async (req, res) => {
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
 
+     
+      let statusManage = "To Be Schedule";
+
+      if (exam.publish === true) {
+        if (examObj.finalScore === null) {
+          statusManage = "Schedule";
+        } else {
+          statusManage = "Completed";
+        }
+      }
+
+      examObj.statusManage = statusManage;
+
       updatedExams.push(examObj);
     }
 
-    // SAVE OR UPDATE USER EXAM STATUS
+   
     for (const exam of updatedExams) {
       const existing = await ExamUserStatus.findOne({
         userId,
@@ -846,6 +860,7 @@ exports.UsersExams = async (req, res) => {
         result: exam.result,
         status: exam.status,
         publish: exam.publish,
+        statusManage: exam.statusManage, 
       };
 
       if (existing) {
