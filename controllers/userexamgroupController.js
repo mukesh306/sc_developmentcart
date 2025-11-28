@@ -188,11 +188,11 @@ exports.AlluserExamGroups = async (req, res) => {
 
       const ExamAssignedCount = examsWithThisGroup.length;
 
-      // ⭐ Count: total assigned groups in all those exams
-      let AssignedGroupCount = 0;
-      for (let ex of examsWithThisGroup) {
-        AssignedGroupCount += (ex.assignedGroup?.length || 0);
-      }
+    
+      // let AssignedGroupCount = 0;
+      // for (let ex of examsWithThisGroup) {
+      //   AssignedGroupCount += (ex.assignedGroup?.length || 0);
+      // }
 
       finalGroups.push({
         _id: group._id,
@@ -203,9 +203,9 @@ exports.AlluserExamGroups = async (req, res) => {
           name: group.category ? group.category.name : "N/A",
         },
 
-        ExamCount: examCount,               // examType length
-        ExamAssignedCount,                  // कितने exams में यह group assigned है
-        AssignedGroupCount,                 // exams में कितने groups assigned हैं (sum)
+        ExamCount: examCount,               
+        ExamAssignedCount,                  
+        // AssignedGroupCount,                 
 
         className: {
           _id: classDetails ? classDetails._id : null,
