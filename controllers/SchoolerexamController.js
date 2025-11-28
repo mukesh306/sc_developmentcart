@@ -839,10 +839,9 @@ exports.UsersExams = async (req, res) => {
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
 
-      // -----------------------------------------------------
-      // ⭐⭐⭐ STATUSMANAGE USING REAL IST MOMENT-TIMEZONE ⭐⭐⭐
-      // -----------------------------------------------------
-
+      // --------------------------------------------------------------------
+      // ⭐⭐⭐ STATUSMANAGE — FINAL FIX WITH IST + MOMENT-TIMEZONE ⭐⭐⭐
+      // --------------------------------------------------------------------
       let statusManage = "To Be Schedule";
 
       if (exam.publish === true) {
@@ -898,7 +897,7 @@ exports.UsersExams = async (req, res) => {
       updatedExams.push(examObj);
     }
 
-    // SAVE USER STATUS IN DATABASE
+    // SAVE USER STATUS
     for (const exam of updatedExams) {
       const existing = await ExamUserStatus.findOne({
         userId,
@@ -943,6 +942,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 exports.ExamQuestion = async (req, res) => {
