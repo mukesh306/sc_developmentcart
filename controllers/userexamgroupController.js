@@ -8,6 +8,41 @@ const College = require('../models/college');
 const School = require('../models/school');
 const CategoryTopUser = require('../models/CategoryTopUser');
 
+
+// exports.createGroup = async (req, res) => {
+//   try {
+//     const { memberIds, category, className } = req.body;
+
+//     if (!memberIds || !Array.isArray(memberIds) || memberIds.length === 0) {
+//       return res
+//         .status(400)
+//         .json({ message: "Members array is required and cannot be empty." });
+//     }
+
+//     if (!category || !mongoose.Types.ObjectId.isValid(category)) {
+//       return res.status(400).json({ message: "Valid category ID is required." });
+//     }
+
+//     if (!className || !mongoose.Types.ObjectId.isValid(className)) {
+//       return res.status(400).json({ message: "Valid className ID is required." });
+//     }
+
+//     const newGroup = await UserExamGroup.create({
+//       members: memberIds,
+//       category,
+//       className,
+//     });
+
+//     res.status(201).json({
+//       message: "Group created successfully",
+//       group: newGroup,
+//     });
+//   } catch (error) {
+//     console.error("Error creating group:", error);
+//     res.status(500).json({ message: "Internal Server Error", error });
+//   }
+// };
+
 exports.createGroup = async (req, res) => {
   try {
     const { memberIds, category, className } = req.body;
@@ -26,7 +61,16 @@ exports.createGroup = async (req, res) => {
       return res.status(400).json({ message: "Valid className ID is required." });
     }
 
+    // 1️⃣ Count existing groups only for this category
+    const groupCount = await UserExamGroup.countDocuments({ category });
+
+    // 2️⃣ Generate new group name: Group_001, Group_002...
+    const nextNumber = (groupCount + 1).toString().padStart(3, "0");
+    const groupName = `Group_${nextNumber}`;
+
+    // 3️⃣ Create new group
     const newGroup = await UserExamGroup.create({
+      name: groupName,
       members: memberIds,
       category,
       className,
@@ -36,6 +80,7 @@ exports.createGroup = async (req, res) => {
       message: "Group created successfully",
       group: newGroup,
     });
+
   } catch (error) {
     console.error("Error creating group:", error);
     res.status(500).json({ message: "Internal Server Error", error });
