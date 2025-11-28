@@ -11,6 +11,7 @@ const Schoolercategory = require("../models/schoolershipcategory");
 const UserExamGroup  = require("../models/userExamGroup");
 const CategoryTopUser = require("../models/CategoryTopUser");
 const ExamUserStatus = require("../models/ExamUserStatus");
+const MarkingSetting = require("../models/markingSetting");
 
 
 exports.createExam = async (req, res) => {
