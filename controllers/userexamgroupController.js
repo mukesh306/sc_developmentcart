@@ -103,7 +103,7 @@ exports.AlluserExamGroups = async (req, res) => {
   
     const groups = await UserExamGroup.find(query)
       .populate("category", "name _id")
-      .sort({ createdAt: -1 });
+      .sort({ createdAt: 1 });
 
     let finalGroups = [];
 
