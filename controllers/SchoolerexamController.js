@@ -692,7 +692,7 @@ exports.UsersExams = async (req, res) => {
     let exams = await Schoolerexam.find({
       className: user.className,
       category: assignedGroup.category,
-      assignedGroup: { $in: [assignedGroup._id] }
+      assignedGroup: { $in: [assignedGroup._id] },
     })
       .populate("category", "name finalist")
       .populate("createdBy", "name email")
@@ -703,9 +703,9 @@ exports.UsersExams = async (req, res) => {
     }
 
     const updatedExams = [];
+    const socketExamArray = []; // ← ARRAY TO EMIT
 
     for (const exam of exams) {
-
       let classData =
         (await School.findById(exam.className).select("_id name className")) ||
         (await College.findById(exam.className).select("_id name className"));
@@ -715,7 +715,9 @@ exports.UsersExams = async (req, res) => {
         ? { _id: classData._id, name: classData.className || classData.name }
         : null;
 
-      examObj.totalQuestions = exam.topicQuestions ? exam.topicQuestions.length : 0;
+      examObj.totalQuestions = exam.topicQuestions
+        ? exam.topicQuestions.length
+        : 0;
 
       const userResult = await ExamResult.findOne({
         userId,
@@ -761,18 +763,19 @@ exports.UsersExams = async (req, res) => {
       const passLimit = parseInt(exam.passout) || 1;
       examObj.result =
         examObj.rank !== null
-          ? examObj.rank <= passLimit ? "passed" : "failed"
+          ? examObj.rank <= passLimit
+            ? "passed"
+            : "failed"
           : null;
 
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
 
-   
+      // ============= STATUS MANAGEMENT =============
       let statusManage = "To Be Schedule";
 
       if (exam.publish === true) {
         if (examObj.finalScore === null) {
-
           const markingSetting = await MarkingSetting.findOne({
             className: user.className,
           }).lean();
@@ -803,7 +806,6 @@ exports.UsersExams = async (req, res) => {
           } else if (now > endTime) {
             statusManage = "Completed";
           }
-
         } else {
           statusManage = "Completed";
         }
@@ -811,27 +813,24 @@ exports.UsersExams = async (req, res) => {
 
       examObj.statusManage = statusManage;
 
-      //  SOCKET.IO REAL-TIME EMIT
-   
-     //  SOCKET.IO REAL-TIME EMIT + CONSOLE LOG CHECK
-if (global.io) {
-  global.io.emit("examStatusUpdate", {
-    examId: exam._id,
-    statusManage,
-  });
-
-  console.log(
-    `📡 Socket Emit → examStatusUpdate | ExamID: ${exam._id} | Status: ${statusManage}`
-  );
-} else {
-  console.log("❌ global.io NOT FOUND (Socket NOT Running)");
-}
-
+      // PUSH DATA FOR SOCKET ARRAY
+      socketExamArray.push({
+        examId: exam._id,
+        statusManage: statusManage,
+      });
 
       updatedExams.push(examObj);
     }
 
-    // SAVE STATUS IN DATABASE
+    // ==================== SINGLE SOCKET EMIT (ARRAY) ====================
+    if (global.io) {
+      global.io.emit("examStatusUpdate", socketExamArray); // 🔥 KEY SAME
+      console.log("📡 Full Status Array Sent →", socketExamArray);
+    } else {
+      console.log("❌ global.io NOT FOUND (Socket NOT Running)");
+    }
+
+    // ================== SAVE STATUS IN DB ==================
     for (const exam of updatedExams) {
       const existing = await ExamUserStatus.findOne({
         userId,
