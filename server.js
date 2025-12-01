@@ -76,7 +76,8 @@ setInterval(async () => {
         ? parseInt(markingSetting.bufferTime)
         : 0;
 
-      const examDate = moment(exam.slotDate || exam.createdAt)
+      // ⭐ Correct exam date
+      const examDate = moment(exam.examDate)
         .tz("Asia/Kolkata")
         .format("YYYY-MM-DD");
 
@@ -86,23 +87,24 @@ setInterval(async () => {
         "Asia/Kolkata"
       );
 
-      // ⭐ ADD BUFFER TIME ⭐
-      const startTime = scheduleDateTime.add(bufferTime, "minutes").valueOf();
+      // ⭐ ONGOING STARTS after bufferTime
+      const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
 
-      const endTime = startTime + exam.ExamTime * 60000;
-      const now = moment().tz("Asia/Kolkata").valueOf();
+      // ⭐ END AFTER exam duration
+      const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
 
-      let statusManage = "To Be Schedule";
+      const now = moment().tz("Asia/Kolkata");
 
-      if (now < startTime) {
+      let statusManage = "Schedule";
+
+      if (now.isBefore(ongoingStart)) {
         statusManage = "Schedule";
-      } else if (now >= startTime && now <= endTime) {
+      } else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) {
         statusManage = "Ongoing";
-      } else if (now > endTime) {
+      } else if (now.isSameOrAfter(ongoingEnd)) {
         statusManage = "Completed";
       }
 
-      // UPDATE STATUS IN DB FOR ALL USERS
       await ExamUserStatus.updateMany(
         { examId: exam._id },
         { $set: { statusManage } }
@@ -111,8 +113,8 @@ setInterval(async () => {
       socketArray.push({
         examId: exam._id,
         statusManage,
-        ScheduleDate: exam.ScheduleDate || "",
-        ScheduleTime: exam.ScheduleTime || ""
+        ScheduleTime: exam.ScheduleTime,
+        bufferTime,
       });
     }
 
@@ -124,7 +126,6 @@ setInterval(async () => {
     console.error("CRON ERROR:", err);
   }
 }, 30000);
-
 
 // ------------------------------------------------------------------
 // 🚀 START SERVER
