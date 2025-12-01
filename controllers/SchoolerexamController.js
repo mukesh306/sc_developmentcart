@@ -667,16 +667,19 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
     const { category } = req.query;
 
+    // Get user class
     const user = await User.findById(userId).select("className");
     if (!user || !user.className) {
       return res.status(400).json({ message: "User class not found." });
     }
 
+    // Find assigned group
     const assignedGroup = await UserExamGroup.findOne({
       members: userId,
       ...(category && mongoose.Types.ObjectId.isValid(category)
@@ -688,6 +691,7 @@ exports.UsersExams = async (req, res) => {
       return res.status(200).json([]);
     }
 
+    // Get exams
     let exams = await Schoolerexam.find({
       className: user.className,
       category: assignedGroup.category,
@@ -707,7 +711,7 @@ exports.UsersExams = async (req, res) => {
     for (const exam of exams) {
       const examObj = exam.toObject();
 
-      let classData =
+      const classData =
         (await School.findById(exam.className).select("_id name className")) ||
         (await College.findById(exam.className).select("_id name className"));
 
@@ -722,9 +726,7 @@ exports.UsersExams = async (req, res) => {
       const userResult = await ExamResult.findOne({
         userId,
         examId: exam._id,
-      })
-        .select("correct finalScore percentage createdAt")
-        .lean();
+      }).select("correct finalScore percentage createdAt").lean();
 
       examObj.correct = userResult ? userResult.correct : null;
       examObj.finalScore = userResult ? userResult.finalScore : null;
@@ -737,7 +739,7 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      let allResults = await ExamResult.find({
+      const allResults = await ExamResult.find({
         examId: exam._id,
         userId: { $in: assignedGroup.members },
       })
@@ -746,7 +748,7 @@ exports.UsersExams = async (req, res) => {
         .lean();
 
       if (userResult && allResults.length > 0) {
-        let rank = allResults.findIndex(
+        const rank = allResults.findIndex(
           (r) => r.userId.toString() === userId.toString()
         );
         examObj.rank = rank >= 0 ? rank + 1 : null;
@@ -767,7 +769,7 @@ exports.UsersExams = async (req, res) => {
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
 
-      // ⭐⭐ FINAL UPDATED STATUS MANAGE ⭐⭐
+      // ⭐ FINAL STATUS LOGIC WITH BUFFER TIME ⭐
       let statusManage = "Schedule";
 
       if (exam.publish === true) {
@@ -790,6 +792,7 @@ exports.UsersExams = async (req, res) => {
             "Asia/Kolkata"
           );
 
+          // ⭐ Add bufferTime here
           const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
 
           const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
@@ -804,6 +807,8 @@ exports.UsersExams = async (req, res) => {
             statusManage = "Completed";
           }
 
+          // Save updatedScheduleTime for frontend if needed
+          examObj.updatedScheduleTime = ongoingStart.format("HH:mm:ss");
         } else {
           statusManage = "Completed";
         }
@@ -818,6 +823,7 @@ exports.UsersExams = async (req, res) => {
         statusManage,
         ScheduleTime: exam.ScheduleTime,
         ScheduleDate: exam.ScheduleDate,
+        updatedScheduleTime: examObj.updatedScheduleTime || exam.ScheduleTime,
       });
 
       await ExamUserStatus.findOneAndUpdate(
@@ -856,7 +862,6 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
-
 
 
 

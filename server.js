@@ -8,7 +8,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const moment = require("moment-timezone");
 
-// MODELS REQUIRED FOR CRON
+// MODELS
 const Schoolerexam = require("./models/Schoolerexam");
 const MarkingSetting = require("./models/markingSetting");
 const ExamUserStatus = require("./models/ExamUserStatus");
@@ -16,13 +16,12 @@ const ExamUserStatus = require("./models/ExamUserStatus");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// DB CONNECT
 connectDB();
 
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
-
-// STATIC UPLOADS
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ROUTES
@@ -45,14 +44,12 @@ app.use('/api/v1', require('./routes/classSeatRoutes'));
 
 // SOCKET.IO SETUP
 const server = http.createServer(app);
-
 global.io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
 global.io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
-
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
   });
@@ -65,7 +62,7 @@ setInterval(async () => {
   try {
     const exams = await Schoolerexam.find({ publish: true });
 
-    let socketArray = [];
+    const socketArray = [];
 
     for (const exam of exams) {
       const markingSetting = await MarkingSetting.findOne({
@@ -76,7 +73,7 @@ setInterval(async () => {
         ? parseInt(markingSetting.bufferTime)
         : 0;
 
-      // ⭐ Correct exam date
+      // Correct exam date
       const examDate = moment(exam.examDate)
         .tz("Asia/Kolkata")
         .format("YYYY-MM-DD");
@@ -87,10 +84,10 @@ setInterval(async () => {
         "Asia/Kolkata"
       );
 
-      // ⭐ ONGOING STARTS after bufferTime
+      // Add bufferTime for Ongoing start
       const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
 
-      // ⭐ END AFTER exam duration
+      // End after exam duration
       const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
 
       const now = moment().tz("Asia/Kolkata");
@@ -105,6 +102,7 @@ setInterval(async () => {
         statusManage = "Completed";
       }
 
+      // UPDATE STATUS IN DB
       await ExamUserStatus.updateMany(
         { examId: exam._id },
         { $set: { statusManage } }
@@ -116,6 +114,7 @@ setInterval(async () => {
         ScheduleTime: exam.ScheduleTime,
         ScheduleDate: exam.ScheduleDate,
         bufferTime,
+        updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
       });
     }
 
