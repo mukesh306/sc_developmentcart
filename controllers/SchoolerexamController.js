@@ -667,6 +667,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -816,14 +817,13 @@ exports.UsersExams = async (req, res) => {
 
       updatedExams.push(examObj);
 
-      // Prepare socket data with result
+      // Prepare socket data
       socketEmitArray.push({
         examId: exam._id,
         statusManage,
         ScheduleTime: exam.ScheduleTime,
         ScheduleDate: exam.ScheduleDate,
         updatedScheduleTime: examObj.updatedScheduleTime || exam.ScheduleTime,
-        result: examObj.result, // ✅ Include result for socket
       });
 
       // Update ExamUserStatus
