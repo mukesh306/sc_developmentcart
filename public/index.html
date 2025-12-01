@@ -4,14 +4,43 @@
   <meta charset="UTF-8">
   <title>Exam Status Dashboard</title>
   <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+
   <style>
-    body { font-family: Arial, sans-serif; margin: 20px; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
-    th { background-color: #f4f4f4; }
-    .status { font-weight: bold; }
+    body { 
+      font-family: Arial, sans-serif; 
+      margin: 20px; 
+      background: #f8f9fa;
+    }
+
+    h1 {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+
+    table { 
+      width: 100%; 
+      border-collapse: collapse; 
+      margin-top: 20px; 
+      background: #fff;
+      border-radius: 8px;
+      overflow: hidden;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+
+    th, td { 
+      padding: 12px; 
+      text-align: left; 
+      font-size: 15px;
+      border-bottom: 1px solid #ddd;
+    }
+
+    th { 
+      background-color: #343a40; 
+      color: #fff; 
+    }
 
     /* STATUS COLORS */
+    .status { font-weight: bold; font-size: 14px; }
     .schedule { color: orange; }
     .ongoing { color: green; }
     .completed { color: blue; }
@@ -34,16 +63,36 @@
 </table>
 
 <script>
+  // ----------------------------
+  // CONFIG
+  // ----------------------------
   const baseURL = "https://dev.backend.shikshacart.com/api/v1/schooler/UsersExams";
+
   const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5MWRkOThjNTQ3ZDg1MWU2MTc3MGRhMSIsImlhdCI6MTc2NDU3NDYxNSwiZXhwIjoxNzY0NjYxMDE1fQ.OAbZOPe7nq-9rhMmnH3z3QbTO8_2vuV4sBksDwkYmE4";
 
-  const examTableBody = document.querySelector("#examTable tbody");
 
+  // ----------------------------
+  // SOCKET.IO CONNECTION
+  // ----------------------------
   const socket = io("https://dev.backend.shikshacart.com", {
-    transports: ["websocket"]
+    transports: ["websocket"],
+    reconnection: true,
+    reconnectionAttempts: Infinity,
+    reconnectionDelay: 2000
   });
 
-  // Fetch Exam Data Initially
+  socket.on("connect", () => {
+    console.log("🔥 Socket Connected:", socket.id);
+  });
+
+  socket.on("disconnect", () => {
+    console.log("⚠️ Socket Disconnected");
+  });
+
+
+  // ----------------------------
+  // INITIAL FETCH: GET USER EXAMS
+  // ----------------------------
   async function fetchExams() {
     try {
       const res = await fetch(baseURL, {
@@ -60,54 +109,61 @@
     }
   }
 
-  // Render full table
+
+  // ----------------------------
+  // TABLE RENDER FUNCTION
+  // ----------------------------
   function renderTable(exams) {
+    const examTableBody = document.querySelector("#examTable tbody");
     examTableBody.innerHTML = "";
 
     exams.forEach(exam => {
       const tr = document.createElement("tr");
       tr.id = "exam-" + exam._id;
 
-      const tdId = document.createElement("td");
-      tdId.textContent = exam._id;
+      tr.innerHTML = `
+        <td>${exam._id}</td>
+        <td>${exam.examName ?? "-"}</td>
+        <td class="status ${cleanStatus(exam.statusManage)}">
+          ${exam.statusManage ?? "To Be Schedule"}
+        </td>
+      `;
 
-      const tdName = document.createElement("td");
-      tdName.textContent = exam.examName || "-";
-
-      const tdStatus = document.createElement("td");
-      const statusClass = exam.statusManage
-        ? exam.statusManage.toLowerCase().replace(/\s/g, '')
-        : "tobeschedule";
-
-      tdStatus.textContent = exam.statusManage || "To Be Schedule";
-      tdStatus.classList.add("status", statusClass);
-
-      tr.append(tdId, tdName, tdStatus);
       examTableBody.appendChild(tr);
     });
   }
 
-  // Listen for real-time socket updates
+
+  // ----------------------------
+  // CLEAN STATUS NAME → CLASSNAME SAFE
+  // ----------------------------
+  function cleanStatus(status) {
+    return status ? status.toLowerCase().replace(/\s/g, "") : "tobeschedule";
+  }
+
+
+  // ----------------------------
+  // SOCKET LISTENER (REAL-TIME UPDATE)
+  // ----------------------------
   socket.on("examStatusUpdate", (data) => {
-    console.log("Socket Update Received:", data);
+    console.log("📡 Real-Time Update:", data);
 
     data.forEach(item => {
       const tr = document.querySelector("#exam-" + item.examId);
+      if (!tr) return;
 
-      if (tr) {
-        const statusTd = tr.querySelector(".status");
+      const statusTd = tr.querySelector(".status");
+      if (!statusTd) return;
 
-        const statusClass = item.statusManage
-          .toLowerCase()
-          .replace(/\s/g, '');
-
-        statusTd.textContent = item.statusManage;
-        statusTd.className = "status " + statusClass;
-      }
+      statusTd.textContent = item.statusManage;
+      statusTd.className = "status " + cleanStatus(item.statusManage);
     });
   });
 
-  // Load data on page load
+
+  // ----------------------------
+  // LOAD INITIAL DATA
+  // ----------------------------
   fetchExams();
 </script>
 
