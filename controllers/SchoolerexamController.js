@@ -813,12 +813,20 @@ exports.UsersExams = async (req, res) => {
 
       //  SOCKET.IO REAL-TIME EMIT
    
-      if (global.io) {
-        global.io.emit("examStatusUpdate", {
-          examId: exam._id,
-          statusManage: statusManage,
-        });
-      }
+     //  SOCKET.IO REAL-TIME EMIT + CONSOLE LOG CHECK
+if (global.io) {
+  global.io.emit("examStatusUpdate", {
+    examId: exam._id,
+    statusManage,
+  });
+
+  console.log(
+    `📡 Socket Emit → examStatusUpdate | ExamID: ${exam._id} | Status: ${statusManage}`
+  );
+} else {
+  console.log("❌ global.io NOT FOUND (Socket NOT Running)");
+}
+
 
       updatedExams.push(examObj);
     }
