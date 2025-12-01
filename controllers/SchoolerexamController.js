@@ -667,6 +667,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -710,7 +711,6 @@ exports.UsersExams = async (req, res) => {
     for (const exam of exams) {
       const examObj = exam.toObject();
 
-      // Get class or college data
       const classData =
         (await School.findById(exam.className).select("_id name className")) ||
         (await College.findById(exam.className).select("_id name className"));
@@ -771,7 +771,6 @@ exports.UsersExams = async (req, res) => {
 
       // ⭐ FINAL STATUS LOGIC WITH BUFFER TIME ⭐
       let statusManage = "Schedule";
-      let updatedScheduleTime = exam.ScheduleTime; // default
 
       if (exam.publish === true) {
         if (examObj.finalScore === null) {
@@ -793,8 +792,9 @@ exports.UsersExams = async (req, res) => {
             "Asia/Kolkata"
           );
 
-          // Add bufferTime here
+          // ⭐ Add bufferTime here
           const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
+
           const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
 
           const now = moment().tz("Asia/Kolkata");
@@ -803,18 +803,18 @@ exports.UsersExams = async (req, res) => {
             statusManage = "Schedule";
           } else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) {
             statusManage = "Ongoing";
-            updatedScheduleTime = ongoingStart.format("HH:mm:ss"); // ✅ update ScheduleTime
           } else if (now.isSameOrAfter(ongoingEnd)) {
             statusManage = "Completed";
-            updatedScheduleTime = ongoingStart.format("HH:mm:ss");
           }
+
+          // Save updatedScheduleTime for frontend if needed
+          examObj.updatedScheduleTime = ongoingStart.format("HH:mm:ss");
         } else {
           statusManage = "Completed";
         }
       }
 
       examObj.statusManage = statusManage;
-      examObj.updatedScheduleTime = updatedScheduleTime;
 
       updatedExams.push(examObj);
 
@@ -823,7 +823,7 @@ exports.UsersExams = async (req, res) => {
         statusManage,
         ScheduleTime: exam.ScheduleTime,
         ScheduleDate: exam.ScheduleDate,
-        updatedScheduleTime,
+        updatedScheduleTime: examObj.updatedScheduleTime || exam.ScheduleTime,
       });
 
       await ExamUserStatus.findOneAndUpdate(
@@ -833,15 +833,15 @@ exports.UsersExams = async (req, res) => {
           examId: exam._id,
           category: exam.category,
           className: exam.className,
-          totalQuestions: examObj.totalQuestions,
-          correct: examObj.correct,
-          finalScore: examObj.finalScore,
-          percentage: examObj.percentage,
-          rank: examObj.rank,
-          totalParticipants: examObj.totalParticipants,
-          result: examObj.result,
-          status: examObj.status,
-          publish: examObj.publish,
+          totalQuestions: exam.totalQuestions,
+          correct: exam.correct,
+          finalScore: exam.finalScore,
+          percentage: exam.percentage,
+          rank: exam.rank,
+          totalParticipants: exam.totalParticipants,
+          result: exam.result,
+          status: exam.status,
+          publish: exam.publish,
           statusManage,
         },
         { upsert: true }
