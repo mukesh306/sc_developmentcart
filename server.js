@@ -59,6 +59,7 @@ app.use('/api/v1', UserExamGroup);
 
 app.use('/api/v1', Organization);
 app.use('/api/v1', ClassSeat);
+app.use(express.static('public'));
 
 // ------------------------------------------------------------------
 // 🔥 Socket.io Setup (Added)
