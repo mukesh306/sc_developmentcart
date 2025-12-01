@@ -818,7 +818,7 @@ exports.UsersExams = async (req, res) => {
      socketEmitArray.push({
   examId: exam._id,
   statusManage: statusManage,
-  ScheduleDate: exam.slotDate || "",
+  ScheduleDate: exam.ScheduleDate || "",
   ScheduleTime: exam.ScheduleTime || ""
 });
 
