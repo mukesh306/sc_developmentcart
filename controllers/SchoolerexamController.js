@@ -815,10 +815,13 @@ exports.UsersExams = async (req, res) => {
       updatedExams.push(examObj);
 
       // ====== SOCKET QUEUE ITEM ADD ======
-      socketEmitArray.push({
-        examId: exam._id,
-        statusManage: statusManage,
-      });
+     socketEmitArray.push({
+  examId: exam._id,
+  statusManage: statusManage,
+  ScheduleDate: exam.slotDate || "",
+  ScheduleTime: exam.ScheduleTime || ""
+});
+
 
       // SAVE TO DB
       await ExamUserStatus.findOneAndUpdate(

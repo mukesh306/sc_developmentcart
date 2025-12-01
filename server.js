@@ -112,6 +112,8 @@ setInterval(async () => {
       socketArray.push({
         examId: exam._id,
         statusManage,
+        ScheduleDate: exam.slotDate || "",      
+        ScheduleTime: exam.ScheduleTime || "" 
       });
     }
 
@@ -122,7 +124,7 @@ setInterval(async () => {
   } catch (err) {
     console.error("CRON ERROR:", err);
   }
-}, 30000); // 30 SECONDS INTERVAL
+}, 30000); 
 
 
 // ------------------------------------------------------------------
