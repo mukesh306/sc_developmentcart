@@ -7,30 +7,11 @@ const connectDB = require('./config/db');
 const http = require("http");
 const { Server } = require("socket.io");
 const moment = require("moment-timezone");
-const mongoose = require('mongoose');
 
 // MODELS
 const Schoolerexam = require("./models/Schoolerexam");
 const MarkingSetting = require("./models/markingSetting");
 const ExamUserStatus = require("./models/ExamUserStatus");
-
-// ROUTES
-const authRoutes = require('./routes/authRoutes');
-const locationRoutes = require('./routes/locationRoutes');
-const learningRoutes = require('./routes/learningRoutes');
-const assignRoutes = require('./routes/assignRoutes');
-const topicRoutes = require('./routes/topicRoutes');
-const experiencePointRoutes = require('./routes/experiencePointRoutes');
-const markingSettingRoutes = require('./routes/markingSettingRoutes');
-const practicesRoutes = require('./routes/practicesRoutes');
-const schoolRoutes = require('./routes/schoolRoutes');
-const quoteRoutes = require('./routes/quoteRoutes');
-const userRoutes = require('./routes/userRoutes');
-const SchoolercategoryRoutes = require('./routes/SchoolercategoryRoutes');
-const SchoolerexamRoutes = require('./routes/SchoolerexamRoutes');
-const userexamGroupRoutes = require('./routes/userexamGroupRoutes');
-const organizationSignRoutes = require('./routes/organizationSignRoutes');
-const classSeatRoutes = require('./routes/classSeatRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -44,22 +25,22 @@ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ROUTES
-app.use('/api/auth', authRoutes);
-app.use('/api/v1', locationRoutes);
-app.use('/api/v1', learningRoutes);
-app.use('/api/v1', assignRoutes);
-app.use('/api/v1', topicRoutes);
-app.use('/api/v1', experiencePointRoutes);
-app.use('/api/v1', markingSettingRoutes);
-app.use('/api/v1', practicesRoutes);
-app.use('/api/v1', schoolRoutes);
-app.use('/api/v1', quoteRoutes);
-app.use('/api/v1', userRoutes);
-app.use('/api/v1', SchoolercategoryRoutes);
-app.use('/api/v1', SchoolerexamRoutes);
-app.use('/api/v1', userexamGroupRoutes);
-app.use('/api/v1', organizationSignRoutes);
-app.use('/api/v1', classSeatRoutes);
+app.use('/api/auth', require('./routes/authRoutes'));
+app.use('/api/v1', require('./routes/locationRoutes'));
+app.use('/api/v1', require('./routes/learningRoutes'));
+app.use('/api/v1', require('./routes/assignRoutes'));
+app.use('/api/v1', require('./routes/topicRoutes'));
+app.use('/api/v1', require('./routes/experiencePointRoutes'));
+app.use('/api/v1', require('./routes/markingSettingRoutes'));
+app.use('/api/v1', require('./routes/practicesRoutes'));
+app.use('/api/v1', require('./routes/schoolRoutes'));
+app.use('/api/v1', require('./routes/quoteRoutes'));
+app.use('/api/v1', require('./routes/userRoutes'));
+app.use('/api/v1', require('./routes/SchoolercategoryRoutes'));
+app.use('/api/v1', require('./routes/SchoolerexamRoutes'));
+app.use('/api/v1', require('./routes/userexamGroupRoutes'));
+app.use('/api/v1', require('./routes/organizationSignRoutes'));
+app.use('/api/v1', require('./routes/classSeatRoutes'));
 
 // SOCKET.IO SETUP
 const server = http.createServer(app);
@@ -84,12 +65,18 @@ setInterval(async () => {
     const socketArray = [];
 
     for (const exam of exams) {
-      // Fetch marking setting by className
-      const classId = typeof exam.className === 'object' ? exam.className._id : exam.className;
-      const markingSetting = await MarkingSetting.findOne({ className: classId }).lean();
-      const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
+      const markingSetting = await MarkingSetting.findOne({
+        className: exam.className,
+      }).lean();
 
-      const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
+      const bufferTime = markingSetting?.bufferTime
+        ? parseInt(markingSetting.bufferTime)
+        : 0;
+
+      // Correct exam date
+      const examDate = moment(exam.examDate)
+        .tz("Asia/Kolkata")
+        .format("YYYY-MM-DD");
 
       const scheduleDateTime = moment.tz(
         `${examDate} ${exam.ScheduleTime}`,
@@ -97,17 +84,25 @@ setInterval(async () => {
         "Asia/Kolkata"
       );
 
+      // Add bufferTime for Ongoing start
       const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
+
+      // End after exam duration
       const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
 
       const now = moment().tz("Asia/Kolkata");
 
       let statusManage = "Schedule";
-      if (now.isBefore(ongoingStart)) statusManage = "Schedule";
-      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
-      else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-      // Update ExamUserStatus
+      if (now.isBefore(ongoingStart)) {
+        statusManage = "Schedule";
+      } else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) {
+        statusManage = "Ongoing";
+      } else if (now.isSameOrAfter(ongoingEnd)) {
+        statusManage = "Completed";
+      }
+
+      // UPDATE STATUS IN DB
       await ExamUserStatus.updateMany(
         { examId: exam._id },
         { $set: { statusManage } }
@@ -131,6 +126,7 @@ setInterval(async () => {
     console.error("CRON ERROR:", err);
   }
 }, 30000);
+
 // ------------------------------------------------------------------
 // 🚀 START SERVER
 // ------------------------------------------------------------------
