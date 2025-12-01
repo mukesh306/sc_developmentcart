@@ -10,15 +10,18 @@
     th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
     th { background-color: #f4f4f4; }
     .status { font-weight: bold; }
-    .Schedule { color: orange; }
-    .Ongoing { color: green; }
-    .Completed { color: blue; }
-    .ToBeSchedule { color: gray; }
+
+    /* STATUS COLORS */
+    .schedule { color: orange; }
+    .ongoing { color: green; }
+    .completed { color: blue; }
+    .tobeschedule { color: gray; }
   </style>
 </head>
 <body>
 
 <h1>Exam Status Dashboard</h1>
+
 <table id="examTable">
   <thead>
     <tr>
@@ -31,60 +34,80 @@
 </table>
 
 <script>
-  const baseURL = "https://dev.backend.shikshacart.com/api/v1/schooler/UsersExams"; // API endpoint
-  const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5MWRkOThjNTQ3ZDg1MWU2MTc3MGRhMSIsImlhdCI6MTc2NDU3NDYxNSwiZXhwIjoxNzY0NjYxMDE1fQ.OAbZOPe7nq-9rhMmnH3z3QbTO8_2vuV4sBksDwkYmE4"; // Agar authentication token chahiye toh yahan add kare
+  const baseURL = "https://dev.backend.shikshacart.com/api/v1/schooler/UsersExams";
+  const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5MWRkOThjNTQ3ZDg1MWU2MTc3MGRhMSIsImlhdCI6MTc2NDU3NDYxNSwiZXhwIjoxNzY0NjYxMDE1fQ.OAbZOPe7nq-9rhMmnH3z3QbTO8_2vuV4sBksDwkYmE4";
 
   const examTableBody = document.querySelector("#examTable tbody");
-  const socket = io("https://dev.backend.shikshacart.com"); // Socket server URL
 
-  // Initial API Fetch
+  const socket = io("https://dev.backend.shikshacart.com", {
+    transports: ["websocket"]
+  });
+
+  // Fetch Exam Data Initially
   async function fetchExams() {
     try {
       const res = await fetch(baseURL, {
-        headers: { "Authorization": "Bearer " + token }
+        headers: {
+          "Authorization": "Bearer " + token
+        }
       });
+
       const exams = await res.json();
       renderTable(exams);
+
     } catch (err) {
       console.error("API Fetch Error:", err);
     }
   }
 
-  // Render Table
+  // Render full table
   function renderTable(exams) {
     examTableBody.innerHTML = "";
+
     exams.forEach(exam => {
       const tr = document.createElement("tr");
       tr.id = "exam-" + exam._id;
 
       const tdId = document.createElement("td");
       tdId.textContent = exam._id;
+
       const tdName = document.createElement("td");
       tdName.textContent = exam.examName || "-";
+
       const tdStatus = document.createElement("td");
+      const statusClass = exam.statusManage
+        ? exam.statusManage.toLowerCase().replace(/\s/g, '')
+        : "tobeschedule";
+
       tdStatus.textContent = exam.statusManage || "To Be Schedule";
-      tdStatus.classList.add("status", exam.statusManage.replace(/\s/g,''));
+      tdStatus.classList.add("status", statusClass);
 
       tr.append(tdId, tdName, tdStatus);
       examTableBody.appendChild(tr);
     });
   }
 
-  // Socket.io listen
+  // Listen for real-time socket updates
   socket.on("examStatusUpdate", (data) => {
     console.log("Socket Update Received:", data);
-    // data = [{examId, statusManage}, ...]
+
     data.forEach(item => {
       const tr = document.querySelector("#exam-" + item.examId);
+
       if (tr) {
         const statusTd = tr.querySelector(".status");
+
+        const statusClass = item.statusManage
+          .toLowerCase()
+          .replace(/\s/g, '');
+
         statusTd.textContent = item.statusManage;
-        statusTd.className = "status " + item.statusManage.replace(/\s/g,'');
+        statusTd.className = "status " + statusClass;
       }
     });
   });
 
-  // Initial load
+  // Load data on page load
   fetchExams();
 </script>
 
