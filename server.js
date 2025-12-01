@@ -112,7 +112,7 @@ setInterval(async () => {
       socketArray.push({
         examId: exam._id,
         statusManage,
-        ScheduleDate: exam.slotDate || "",      
+        ScheduleDate: exam.ScheduleDate || "",      
         ScheduleTime: exam.ScheduleTime || "" 
       });
     }
