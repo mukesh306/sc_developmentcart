@@ -1,0 +1,92 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Exam Status Dashboard</title>
+  <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #ccc; padding: 10px; text-align: left; }
+    th { background-color: #f4f4f4; }
+    .status { font-weight: bold; }
+    .Schedule { color: orange; }
+    .Ongoing { color: green; }
+    .Completed { color: blue; }
+    .ToBeSchedule { color: gray; }
+  </style>
+</head>
+<body>
+
+<h1>Exam Status Dashboard</h1>
+<table id="examTable">
+  <thead>
+    <tr>
+      <th>Exam ID</th>
+      <th>Exam Name</th>
+      <th>Status</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<script>
+  const baseURL = "https://dev.backend.shikshacart.com/api/v1/schooler/UsersExams"; // API endpoint
+  const token = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5MWRkOThjNTQ3ZDg1MWU2MTc3MGRhMSIsImlhdCI6MTc2NDU3NDYxNSwiZXhwIjoxNzY0NjYxMDE1fQ.OAbZOPe7nq-9rhMmnH3z3QbTO8_2vuV4sBksDwkYmE4"; // Agar authentication token chahiye toh yahan add kare
+
+  const examTableBody = document.querySelector("#examTable tbody");
+  const socket = io("https://dev.backend.shikshacart.com"); // Socket server URL
+
+  // Initial API Fetch
+  async function fetchExams() {
+    try {
+      const res = await fetch(baseURL, {
+        headers: { "Authorization": "Bearer " + token }
+      });
+      const exams = await res.json();
+      renderTable(exams);
+    } catch (err) {
+      console.error("API Fetch Error:", err);
+    }
+  }
+
+  // Render Table
+  function renderTable(exams) {
+    examTableBody.innerHTML = "";
+    exams.forEach(exam => {
+      const tr = document.createElement("tr");
+      tr.id = "exam-" + exam._id;
+
+      const tdId = document.createElement("td");
+      tdId.textContent = exam._id;
+      const tdName = document.createElement("td");
+      tdName.textContent = exam.examName || "-";
+      const tdStatus = document.createElement("td");
+      tdStatus.textContent = exam.statusManage || "To Be Schedule";
+      tdStatus.classList.add("status", exam.statusManage.replace(/\s/g,''));
+
+      tr.append(tdId, tdName, tdStatus);
+      examTableBody.appendChild(tr);
+    });
+  }
+
+  // Socket.io listen
+  socket.on("examStatusUpdate", (data) => {
+    console.log("Socket Update Received:", data);
+    // data = [{examId, statusManage}, ...]
+    data.forEach(item => {
+      const tr = document.querySelector("#exam-" + item.examId);
+      if (tr) {
+        const statusTd = tr.querySelector(".status");
+        statusTd.textContent = item.statusManage;
+        statusTd.className = "status " + item.statusManage.replace(/\s/g,'');
+      }
+    });
+  });
+
+  // Initial load
+  fetchExams();
+</script>
+
+</body>
+</html>
