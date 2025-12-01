@@ -666,7 +666,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //     });
 //   }
 // };
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -705,6 +704,7 @@ exports.UsersExams = async (req, res) => {
     }
 
     const updatedExams = [];
+    const socketEmitArray = []; // ⬅️ Socket data queue
 
     for (const exam of exams) {
       let classData =
@@ -721,7 +721,7 @@ exports.UsersExams = async (req, res) => {
         ? exam.topicQuestions.length
         : 0;
 
-      // USER RESULT FIND
+      // USER RESULT
       const userResult = await ExamResult.findOne({
         userId,
         examId: exam._id,
@@ -741,7 +741,7 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // RANKING SYSTEM
+      // RANKING
       let allResults = await ExamResult.find({
         examId: exam._id,
         userId: { $in: assignedGroup.members },
@@ -773,7 +773,7 @@ exports.UsersExams = async (req, res) => {
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
 
-      // ************* STATUS MANAGE LOGIC (NO SOCKET) *************
+      // ************* STATUS MANAGE LOGIC *************
       let statusManage = "To Be Schedule";
 
       if (exam.publish === true) {
@@ -812,39 +812,39 @@ exports.UsersExams = async (req, res) => {
       examObj.statusManage = statusManage;
       updatedExams.push(examObj);
 
-      // ************* SAVE STATUS IN DB *************
-      const existing = await ExamUserStatus.findOne({
-        userId,
+      // ====== SOCKET QUEUE ITEM ADD ======
+      socketEmitArray.push({
         examId: exam._id,
+        statusManage: statusManage,
       });
 
-      const payload = {
-        category: exam.category,
-        className: exam.className,
-        totalQuestions: exam.totalQuestions,
-        correct: exam.correct,
-        finalScore: exam.finalScore,
-        percentage: exam.percentage,
-        rank: exam.rank,
-        totalParticipants: exam.totalParticipants,
-        result: exam.result,
-        status: exam.status,
-        publish: exam.publish,
-        statusManage: exam.statusManage,
-      };
-
-      if (existing) {
-        await ExamUserStatus.updateOne(
-          { userId, examId: exam._id },
-          { $set: payload }
-        );
-      } else {
-        await ExamUserStatus.create({
+      // SAVE TO DB
+      await ExamUserStatus.findOneAndUpdate(
+        { userId, examId: exam._id },
+        {
           userId,
           examId: exam._id,
-          ...payload,
-        });
-      }
+          category: exam.category,
+          className: exam.className,
+          totalQuestions: exam.totalQuestions,
+          correct: exam.correct,
+          finalScore: exam.finalScore,
+          percentage: exam.percentage,
+          rank: exam.rank,
+          totalParticipants: exam.totalParticipants,
+          result: exam.result,
+          status: exam.status,
+          publish: exam.publish,
+          statusManage: statusManage,
+        },
+        { upsert: true }
+      );
+    }
+
+    // ====== REAL-TIME SOCKET EMIT (🔥 MAIN FIX) ======
+    if (global.io) {
+      global.io.emit("examStatusUpdate", socketEmitArray);
+      console.log("📡 Sent to Socket:", socketEmitArray);
     }
 
     return res.status(200).json(updatedExams);
@@ -856,6 +856,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 exports.ExamQuestion = async (req, res) => {
