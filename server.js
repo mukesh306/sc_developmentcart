@@ -10,6 +10,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 
 const app = express();
+
 const PORT = process.env.PORT || 5000;
 
 const schoolRoutes = require('./routes/schoolRoutes');
@@ -32,6 +33,9 @@ connectDB();
 
 app.use(cors());
 app.use(express.json());
+
+
+app.use('/chat', express.static(path.join(__dirname, 'public')));
 
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
@@ -59,7 +63,6 @@ app.use('/api/v1', UserExamGroup);
 
 app.use('/api/v1', Organization);
 app.use('/api/v1', ClassSeat);
-app.use(express.static('public'));
 
 // ------------------------------------------------------------------
 // 🔥 Socket.io Setup (Added)
