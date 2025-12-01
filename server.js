@@ -115,6 +115,7 @@ setInterval(async () => {
         ScheduleDate: exam.ScheduleDate,
         bufferTime,
         updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
+         result: examObj.result,
       });
     }
 

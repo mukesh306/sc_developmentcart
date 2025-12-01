@@ -816,13 +816,14 @@ exports.UsersExams = async (req, res) => {
 
       updatedExams.push(examObj);
 
-      // Prepare socket data
+      // Prepare socket data with result
       socketEmitArray.push({
         examId: exam._id,
         statusManage,
         ScheduleTime: exam.ScheduleTime,
         ScheduleDate: exam.ScheduleDate,
         updatedScheduleTime: examObj.updatedScheduleTime || exam.ScheduleTime,
+        result: examObj.result, // ✅ Include result for socket
       });
 
       // Update ExamUserStatus
