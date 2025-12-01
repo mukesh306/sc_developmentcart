@@ -672,13 +672,11 @@ exports.UsersExams = async (req, res) => {
     const userId = req.user._id;
     const { category } = req.query;
 
-    // USER CHECK
     const user = await User.findById(userId).select("className");
     if (!user || !user.className) {
       return res.status(400).json({ message: "User class not found." });
     }
 
-    // FIND USER GROUP
     const assignedGroup = await UserExamGroup.findOne({
       members: userId,
       ...(category && mongoose.Types.ObjectId.isValid(category)
@@ -690,7 +688,6 @@ exports.UsersExams = async (req, res) => {
       return res.status(200).json([]);
     }
 
-    // GET ALL ASSIGNED EXAMS
     let exams = await Schoolerexam.find({
       className: user.className,
       category: assignedGroup.category,
@@ -708,21 +705,20 @@ exports.UsersExams = async (req, res) => {
     const socketEmitArray = [];
 
     for (const exam of exams) {
+      const examObj = exam.toObject();
+
       let classData =
         (await School.findById(exam.className).select("_id name className")) ||
         (await College.findById(exam.className).select("_id name className"));
 
-      const examObj = exam.toObject();
       examObj.className = classData
         ? { _id: classData._id, name: classData.className || classData.name }
         : null;
 
-      // TOTAL QUESTIONS
       examObj.totalQuestions = exam.topicQuestions
         ? exam.topicQuestions.length
         : 0;
 
-      // USER RESULT
       const userResult = await ExamResult.findOne({
         userId,
         examId: exam._id,
@@ -733,7 +729,6 @@ exports.UsersExams = async (req, res) => {
       examObj.correct = userResult ? userResult.correct : null;
       examObj.finalScore = userResult ? userResult.finalScore : null;
 
-      // PERCENTAGE
       if (userResult && examObj.totalQuestions > 0) {
         examObj.percentage = parseFloat(
           ((userResult.finalScore / examObj.totalQuestions) * 100).toFixed(2)
@@ -742,7 +737,6 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // RANKING
       let allResults = await ExamResult.find({
         examId: exam._id,
         userId: { $in: assignedGroup.members },
@@ -762,7 +756,6 @@ exports.UsersExams = async (req, res) => {
 
       examObj.totalParticipants = allResults.length;
 
-      // PASS OR FAIL
       const passLimit = parseInt(exam.passout) || 1;
       examObj.result =
         examObj.rank !== null
@@ -774,8 +767,8 @@ exports.UsersExams = async (req, res) => {
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
 
-      // ⭐⭐ FINAL UPDATED STATUS MANAGE LOGIC ⭐⭐
-      let statusManage = "To Be Schedule";
+      // ⭐⭐ FINAL UPDATED STATUS MANAGE ⭐⭐
+      let statusManage = "Schedule";
 
       if (exam.publish === true) {
         if (examObj.finalScore === null) {
@@ -787,7 +780,7 @@ exports.UsersExams = async (req, res) => {
             ? parseInt(markingSetting.bufferTime)
             : 0;
 
-          const examDate = moment(exam.slotDate || exam.createdAt)
+          const examDate = moment(exam.examDate)
             .tz("Asia/Kolkata")
             .format("YYYY-MM-DD");
 
@@ -797,28 +790,33 @@ exports.UsersExams = async (req, res) => {
             "Asia/Kolkata"
           );
 
-          // ⭐ ADD BUFFER TIME ⭐
-          const startTime = scheduleDateTime.add(bufferTime, "minutes").valueOf();
-          const endTime = startTime + exam.ExamTime * 60000;
+          const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
 
-          const now = moment().tz("Asia/Kolkata").valueOf();
+          const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
 
-          if (now < startTime) statusManage = "Schedule";
-          else if (now >= startTime && now <= endTime) statusManage = "Ongoing";
-          else if (now > endTime) statusManage = "Completed";
+          const now = moment().tz("Asia/Kolkata");
+
+          if (now.isBefore(ongoingStart)) {
+            statusManage = "Schedule";
+          } else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) {
+            statusManage = "Ongoing";
+          } else if (now.isSameOrAfter(ongoingEnd)) {
+            statusManage = "Completed";
+          }
+
         } else {
           statusManage = "Completed";
         }
       }
 
       examObj.statusManage = statusManage;
+
       updatedExams.push(examObj);
 
       socketEmitArray.push({
         examId: exam._id,
-        statusManage: statusManage,
-        ScheduleDate: exam.ScheduleDate || "",
-        ScheduleTime: exam.ScheduleTime || ""
+        statusManage,
+        ScheduleTime: exam.ScheduleTime,
       });
 
       await ExamUserStatus.findOneAndUpdate(
@@ -837,13 +835,12 @@ exports.UsersExams = async (req, res) => {
           result: exam.result,
           status: exam.status,
           publish: exam.publish,
-          statusManage: statusManage,
+          statusManage,
         },
         { upsert: true }
       );
     }
 
-    // SOCKET EMIT
     if (global.io) {
       global.io.emit("examStatusUpdate", socketEmitArray);
       console.log("📡 Sent to Socket:", socketEmitArray);
