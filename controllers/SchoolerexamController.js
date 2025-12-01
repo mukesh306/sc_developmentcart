@@ -817,6 +817,7 @@ exports.UsersExams = async (req, res) => {
         examId: exam._id,
         statusManage,
         ScheduleTime: exam.ScheduleTime,
+        ScheduleDate: exam.ScheduleDate,
       });
 
       await ExamUserStatus.findOneAndUpdate(

@@ -114,6 +114,7 @@ setInterval(async () => {
         examId: exam._id,
         statusManage,
         ScheduleTime: exam.ScheduleTime,
+        ScheduleDate: exam.ScheduleDate,
         bufferTime,
       });
     }
