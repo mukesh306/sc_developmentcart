@@ -667,7 +667,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -706,7 +705,7 @@ exports.UsersExams = async (req, res) => {
     }
 
     const updatedExams = [];
-    const socketEmitArray = []; // ⬅️ Socket data queue
+    const socketEmitArray = [];
 
     for (const exam of exams) {
       let classData =
@@ -775,7 +774,7 @@ exports.UsersExams = async (req, res) => {
       examObj.status = examObj.percentage !== null;
       examObj.publish = exam.publish;
 
-      // ************* STATUS MANAGE LOGIC *************
+      // ⭐⭐ FINAL UPDATED STATUS MANAGE LOGIC ⭐⭐
       let statusManage = "To Be Schedule";
 
       if (exam.publish === true) {
@@ -798,9 +797,10 @@ exports.UsersExams = async (req, res) => {
             "Asia/Kolkata"
           );
 
-          const scheduleTime = scheduleDateTime.valueOf();
-          const startTime = scheduleTime + bufferTime * 60000;
+          // ⭐ ADD BUFFER TIME ⭐
+          const startTime = scheduleDateTime.add(bufferTime, "minutes").valueOf();
           const endTime = startTime + exam.ExamTime * 60000;
+
           const now = moment().tz("Asia/Kolkata").valueOf();
 
           if (now < startTime) statusManage = "Schedule";
@@ -814,16 +814,13 @@ exports.UsersExams = async (req, res) => {
       examObj.statusManage = statusManage;
       updatedExams.push(examObj);
 
-      // ====== SOCKET QUEUE ITEM ADD ======
-     socketEmitArray.push({
-  examId: exam._id,
-  statusManage: statusManage,
-  ScheduleDate: exam.ScheduleDate || "",
-  ScheduleTime: exam.ScheduleTime || ""
-});
+      socketEmitArray.push({
+        examId: exam._id,
+        statusManage: statusManage,
+        ScheduleDate: exam.ScheduleDate || "",
+        ScheduleTime: exam.ScheduleTime || ""
+      });
 
-
-      // SAVE TO DB
       await ExamUserStatus.findOneAndUpdate(
         { userId, examId: exam._id },
         {
@@ -846,7 +843,7 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // ====== REAL-TIME SOCKET EMIT (🔥 MAIN FIX) ======
+    // SOCKET EMIT
     if (global.io) {
       global.io.emit("examStatusUpdate", socketEmitArray);
       console.log("📡 Sent to Socket:", socketEmitArray);
@@ -861,6 +858,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 

@@ -13,7 +13,6 @@ const Schoolerexam = require("./models/Schoolerexam");
 const MarkingSetting = require("./models/markingSetting");
 const ExamUserStatus = require("./models/ExamUserStatus");
 
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -59,7 +58,6 @@ global.io.on("connection", (socket) => {
   });
 });
 
-
 // ------------------------------------------------------------------
 // 🔥 CRON JOB – AUTO STATUS UPDATE (EVERY 30 SECONDS)
 // ------------------------------------------------------------------
@@ -88,8 +86,9 @@ setInterval(async () => {
         "Asia/Kolkata"
       );
 
-      const scheduleTime = scheduleDateTime.valueOf();
-      const startTime = scheduleTime + bufferTime * 60000;
+      // ⭐ ADD BUFFER TIME ⭐
+      const startTime = scheduleDateTime.add(bufferTime, "minutes").valueOf();
+
       const endTime = startTime + exam.ExamTime * 60000;
       const now = moment().tz("Asia/Kolkata").valueOf();
 
@@ -112,8 +111,8 @@ setInterval(async () => {
       socketArray.push({
         examId: exam._id,
         statusManage,
-        ScheduleDate: exam.ScheduleDate || "",      
-        ScheduleTime: exam.ScheduleTime || "" 
+        ScheduleDate: exam.ScheduleDate || "",
+        ScheduleTime: exam.ScheduleTime || ""
       });
     }
 
@@ -124,7 +123,7 @@ setInterval(async () => {
   } catch (err) {
     console.error("CRON ERROR:", err);
   }
-}, 30000); 
+}, 30000);
 
 
 // ------------------------------------------------------------------
