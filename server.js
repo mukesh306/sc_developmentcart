@@ -138,7 +138,7 @@ setInterval(async () => {
         bufferTime,
         updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
         users: updatedUsers,   
-        result: examObj.result || null
+         result: null
       });
     }
 
