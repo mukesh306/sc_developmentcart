@@ -92,10 +92,9 @@ global.io.on("connection", (socket) => {
       return socket.emit("examTimeResponse", { error: "Exam not found" });
     }
 
-    const examDuration = exam.ExamTime || 0; // minutes
+    const examDuration = exam.ExamTime || 0; // in minutes
 
-    // Calculate real remaining seconds based on schedule
-    const bufferTime = 0; // You can fetch this from MarkingSetting if needed
+    // Calculate remaining seconds based on exam schedule
     const examDateStr = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
     const scheduleDateTime = moment.tz(
       `${examDateStr} ${exam.ScheduleTime}`,
@@ -103,26 +102,29 @@ global.io.on("connection", (socket) => {
       "Asia/Kolkata"
     );
 
-    const examStart = scheduleDateTime.clone().add(bufferTime, "minutes");
-    const examEnd = examStart.clone().add(examDuration, "minutes");
     const now = moment().tz("Asia/Kolkata");
 
-    let remainingSeconds = 0;
+    let remainingSeconds;
 
-    if (now.isBefore(examStart)) {
+    if (now.isBefore(scheduleDateTime)) {
       // Exam hasn't started yet
       remainingSeconds = examDuration * 60;
-    } else if (now.isBetween(examStart, examEnd)) {
+    } else if (now.isBetween(scheduleDateTime, scheduleDateTime.clone().add(examDuration, "minutes"))) {
       // Exam ongoing
-      remainingSeconds = examEnd.diff(now, "seconds");
+      remainingSeconds = scheduleDateTime.clone().add(examDuration, "minutes").diff(now, "seconds");
     } else {
       // Exam completed
       remainingSeconds = 0;
     }
 
-    socket.emit("examTimeResponse", { examId, remainingSeconds });
+    // Emit initial ExamTime and remainingSeconds
+    socket.emit("examTimeResponse", {
+      examId,
+      ExamTime: examDuration,
+      remainingSeconds
+    });
 
-    // Start countdown for this socket (optional)
+    // Countdown for this socket
     const interval = setInterval(() => {
       if (remainingSeconds <= 0) {
         socket.emit("examCountdown", { examId, remainingSeconds: 0 });
