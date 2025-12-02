@@ -149,6 +149,31 @@ setInterval(async () => {
     const socketArray = [];
 
     for (const exam of exams) {
+
+      // 🔥 Check if exam already completed & result generated
+      const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
+      const alreadyCompleted = userStatuses.some(
+        u => u.statusManage === "Completed" && u.result !== null
+      );
+
+      // ⭐ If exam completed once → Never change again
+      if (alreadyCompleted) {
+        socketArray.push({
+          examId: exam._id,
+          statusManage: "Completed",
+          ScheduleTime: exam.ScheduleTime,
+          ScheduleDate: exam.ScheduleDate,
+          bufferTime,
+          updatedScheduleTime: exam.ScheduleTime,
+          result: userStatuses[0]?.result || "Completed"
+        });
+
+        continue; //  Skip next logic for this exam
+      }
+
+      // ------------------------------
+      // OLD LOGIC (Works as backup)
+      // ------------------------------
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
 
       const scheduleDateTime = moment.tz(
@@ -165,7 +190,8 @@ setInterval(async () => {
       let statusManage = "Schedule";
 
       if (now.isBefore(ongoingStart)) statusManage = "Schedule";
-      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
+      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
+        statusManage = "Ongoing";
       else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
       // Update user statuses
@@ -181,8 +207,7 @@ setInterval(async () => {
       let examResult = null;
 
       if (statusManage === "Completed") {
-        if (!anyAttempt) examResult = "Not Attempt";
-        else examResult = "Completed";
+        examResult = anyAttempt ? "Completed" : "Not Attempt";
       }
 
       socketArray.push({
