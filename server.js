@@ -75,62 +75,79 @@ global.io = new Server(server, {
 global.io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  socket.on("getExamTime", async (examId) => {
-    try {
-      if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
-        return socket.emit("examTimeResponse", { error: "Invalid examId" });
-      }
+ 
+ socket.on("getExamTime", async (examId) => {
+  try {
+    if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
+      return socket.emit("examTimeResponse", { error: "Invalid examId" });
+    }
 
-      const exam = await Schoolerexam.findById(examId)
-        .select("ExamTime ScheduleTime examDate")
-        .lean();
+    const exam = await Schoolerexam.findById(examId)
+      .select("ExamTime ScheduleTime examDate")
+      .lean();
 
-      if (!exam) {
-        return socket.emit("examTimeResponse", { error: "Exam not found" });
-      }
+    if (!exam) {
+      return socket.emit("examTimeResponse", { error: "Exam not found" });
+    }
 
-      const examDuration = exam.ExamTime || 0;
-      const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
+    const examDuration = exam.ExamTime || 0; 
 
-      // Normalize ScheduleTime
-      let examTime = exam.ScheduleTime;
-      if (/^\d{2}:\d{2}$/.test(examTime)) examTime = `${examTime}:00`;
-      const [hh, mm, ss] = examTime.split(":");
-      examTime = `${hh.padStart(2, "0")}:${mm.padStart(2, "0")}:${(ss || "00").padStart(2, "0")}`;
+    // Format exam date
+    const examDate = moment(exam.examDate)
+      .tz("Asia/Kolkata")
+      .format("YYYY-MM-DD");
 
-      const startTime = moment.tz(`${examDate} ${examTime}`, "YYYY-MM-DD HH:mm:ss", "Asia/Kolkata");
-      const endTime = startTime.clone().add(examDuration, "minutes");
+    // FIX: Add seconds if missing
+    const examTime = exam.ScheduleTime.length === 5 
+      ? `${exam.ScheduleTime}:00`
+      : exam.ScheduleTime;
 
+    // Start time
+    const startTime = moment.tz(
+      `${examDate} ${examTime}`,
+      "YYYY-MM-DD HH:mm:ss",
+      "Asia/Kolkata"
+    );
+
+    // End time
+    const endTime = startTime.clone().add(examDuration, "minutes");
+
+    // Current time
+    const now = moment().tz("Asia/Kolkata");
+
+    // PERFECT remaining seconds
+    let remainingSeconds = Math.max(0, endTime.diff(now, "seconds"));
+
+    // send immediate response
+    socket.emit("examTimeResponse", {
+      examId,
+      ExamTime: examDuration,
+      remainingSeconds
+    });
+
+    // send countdown every second
+    const interval = setInterval(() => {
       const now = moment().tz("Asia/Kolkata");
-      let remainingSeconds = Math.max(0, Math.floor(endTime.diff(now) / 1000));
+      remainingSeconds = Math.max(0, endTime.diff(now, "seconds"));
 
-      // Send immediate response
-      socket.emit("examTimeResponse", {
+      socket.emit("examCountdown", {
         examId,
-        ExamTime: examDuration,
         remainingSeconds
       });
 
-      // Countdown every second
-      const interval = setInterval(() => {
-        const now = moment().tz("Asia/Kolkata");
-        remainingSeconds = Math.max(0, Math.floor(endTime.diff(now) / 1000));
+      if (remainingSeconds <= 0) {
+        clearInterval(interval);
+      }
 
-        socket.emit("examCountdown", {
-          examId,
-          remainingSeconds
-        });
+    }, 1000);
 
-        if (remainingSeconds <= 0) clearInterval(interval);
-      }, 1000);
+    socket.on("disconnect", () => clearInterval(interval));
 
-      socket.on("disconnect", () => clearInterval(interval));
-
-    } catch (err) {
-      console.error("Error in getExamTime:", err);
-      socket.emit("examTimeResponse", { error: "Internal server error" });
-    }
-  });
+  } catch (err) {
+    console.error("Error in getExamTime:", err);
+    socket.emit("examTimeResponse", { error: "Internal server error" });
+  }
+});
 
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
@@ -138,20 +155,26 @@ global.io.on("connection", (socket) => {
 });
 
 // ------------------------------------------------------------------
-// CRON JOB
+//  CRON JOB – AUTO STATUS UPDATE (EVERY 30 SECONDS)
 // ------------------------------------------------------------------
 setInterval(async () => {
   try {
     const exams = await Schoolerexam.find({ publish: true });
+
     const markingSetting = await MarkingSetting.findOne().lean();
     const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
     const socketArray = [];
 
     for (const exam of exams) {
-      const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
-      const alreadyCompleted = userStatuses.some(u => u.statusManage === "Completed" && u.result !== null);
 
+      // 🔥 Check if exam already completed & result generated
+      const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
+      const alreadyCompleted = userStatuses.some(
+        u => u.statusManage === "Completed" && u.result !== null
+      );
+
+      // ⭐ If exam completed once → Never change again
       if (alreadyCompleted) {
         socketArray.push({
           examId: exam._id,
@@ -162,32 +185,48 @@ setInterval(async () => {
           updatedScheduleTime: exam.ScheduleTime,
           result: userStatuses[0]?.result || "Completed"
         });
-        continue;
+
+        continue; //  Skip next logic for this exam
       }
 
+      // ------------------------------
+      // OLD LOGIC (Works as backup)
+      // ------------------------------
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
-      let scheduleTime = exam.ScheduleTime;
-      if (/^\d{2}:\d{2}$/.test(scheduleTime)) scheduleTime = `${scheduleTime}:00`;
-      const [hh, mm, ss] = scheduleTime.split(":");
-      scheduleTime = `${hh.padStart(2, "0")}:${mm.padStart(2, "0")}:${(ss || "00").padStart(2, "0")}`;
 
-      const scheduleDateTime = moment.tz(`${examDate} ${scheduleTime}`, "YYYY-MM-DD HH:mm:ss", "Asia/Kolkata");
+      const scheduleDateTime = moment.tz(
+        `${examDate} ${exam.ScheduleTime}`,
+        "YYYY-MM-DD HH:mm:ss",
+        "Asia/Kolkata"
+      );
+
       const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
       const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
+
       const now = moment().tz("Asia/Kolkata");
 
       let statusManage = "Schedule";
+
       if (now.isBefore(ongoingStart)) statusManage = "Schedule";
-      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
+      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
+        statusManage = "Ongoing";
       else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-      await ExamUserStatus.updateMany({ examId: exam._id }, { $set: { statusManage } });
+      // Update user statuses
+      await ExamUserStatus.updateMany(
+        { examId: exam._id },
+        { $set: { statusManage } }
+      );
 
+      // Check attempts
       const allUsers = await ExamUserStatus.find({ examId: exam._id }).lean();
       const anyAttempt = allUsers.some(u => u.finalScore !== null);
 
       let examResult = null;
-      if (statusManage === "Completed") examResult = anyAttempt ? "Completed" : "Not Attempt";
+
+      if (statusManage === "Completed") {
+        examResult = anyAttempt ? "Completed" : "Not Attempt";
+      }
 
       socketArray.push({
         examId: exam._id,
@@ -210,7 +249,7 @@ setInterval(async () => {
 }, 10000);
 
 // ------------------------------------------------------------------
-// START SERVER
+//  START SERVER
 // ------------------------------------------------------------------
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
