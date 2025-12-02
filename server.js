@@ -69,6 +69,9 @@ global.io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
+// In-memory store for exam start timestamps
+const examStartTimes = {}; // key: examId, value: timestamp in ms
+
 // ------------------------------
 // SOCKET EVENTS
 // ------------------------------
@@ -76,72 +79,61 @@ global.io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
   // =======================================================
-  // NEW getExamTime EVENT WITH PURE COUNTDOWN LOGIC
+  // getExamTime EVENT WITH PURE COUNTDOWN LOGIC
   // =======================================================
- socket.on("getExamTime", async (examId) => {
-  try {
-    if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
-      return socket.emit("examTimeResponse", { error: "Invalid examId" });
-    }
-
-    const exam = await Schoolerexam.findById(examId)
-      .select("ExamTime ScheduleTime examDate")
-      .lean();
-
-    if (!exam) {
-      return socket.emit("examTimeResponse", { error: "Exam not found" });
-    }
-
-    const examDuration = exam.ExamTime || 0; // in minutes
-
-    // exam start time
-    const examDateStr = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
-    const examStart = moment.tz(`${examDateStr} ${exam.ScheduleTime}`, "YYYY-MM-DD HH:mm:ss", "Asia/Kolkata");
-    const examEnd = examStart.clone().add(examDuration, "minutes");
-
-    const now = moment().tz("Asia/Kolkata");
-
-    let remainingSeconds;
-
-    if (now.isBefore(examStart)) {
-      // Exam hasn't started
-      remainingSeconds = examDuration * 60;
-    } else if (now.isBetween(examStart, examEnd)) {
-      // Exam ongoing
-      remainingSeconds = examEnd.diff(now, "seconds"); // correct remaining seconds
-    } else {
-      // Exam completed
-      remainingSeconds = 0;
-    }
-
-    // Emit initial ExamTime and remainingSeconds
-    socket.emit("examTimeResponse", {
-      examId,
-      ExamTime: examDuration,
-      remainingSeconds
-    });
-
-    // Start countdown for this socket
-    const interval = setInterval(() => {
-      if (remainingSeconds <= 0) {
-        socket.emit("examCountdown", { examId, remainingSeconds: 0 });
-        clearInterval(interval);
-        return;
+  socket.on("getExamTime", async (examId) => {
+    try {
+      if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
+        return socket.emit("examTimeResponse", { error: "Invalid examId" });
       }
 
-      remainingSeconds--;
-      socket.emit("examCountdown", { examId, remainingSeconds });
-    }, 1000);
+      const exam = await Schoolerexam.findById(examId)
+        .select("ExamTime")
+        .lean();
 
-    socket.on("disconnect", () => clearInterval(interval));
+      if (!exam) {
+        return socket.emit("examTimeResponse", { error: "Exam not found" });
+      }
 
-  } catch (err) {
-    console.error("Error fetching ExamTime:", err);
-    socket.emit("examTimeResponse", { error: "Internal server error" });
-  }
-});
+      const examDuration = exam.ExamTime || 0; // in minutes
 
+      // Set exam start time if not already set
+      if (!examStartTimes[examId]) {
+        examStartTimes[examId] = Date.now();
+      }
 
+      // Calculate remaining seconds
+      let elapsedSeconds = Math.floor((Date.now() - examStartTimes[examId]) / 1000);
+      let remainingSeconds = examDuration * 60 - elapsedSeconds;
+
+      if (remainingSeconds < 0) remainingSeconds = 0;
+
+      // Emit initial response
+      socket.emit("examTimeResponse", {
+        examId,
+        ExamTime: examDuration,
+        remainingSeconds
+      });
+
+      // Start countdown for this socket
+      const interval = setInterval(() => {
+        if (remainingSeconds <= 0) {
+          socket.emit("examCountdown", { examId, remainingSeconds: 0 });
+          clearInterval(interval);
+          return;
+        }
+
+        remainingSeconds--;
+        socket.emit("examCountdown", { examId, remainingSeconds });
+      }, 1000);
+
+      socket.on("disconnect", () => clearInterval(interval));
+
+    } catch (err) {
+      console.error("Error fetching ExamTime:", err);
+      socket.emit("examTimeResponse", { error: "Internal server error" });
+    }
+  });
 
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
@@ -149,7 +141,7 @@ global.io.on("connection", (socket) => {
 });
 
 // ------------------------------------------------------------------
-//  CRON JOB – AUTO STATUS UPDATE (EVERY 30 SECONDS)
+//  CRON JOB – AUTO STATUS UPDATE (EVERY 10 SECONDS)
 // ------------------------------------------------------------------
 setInterval(async () => {
   try {
@@ -161,14 +153,11 @@ setInterval(async () => {
     const socketArray = [];
 
     for (const exam of exams) {
-
-      // 🔥 Check if exam already completed & result generated
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
       const alreadyCompleted = userStatuses.some(
         u => u.statusManage === "Completed" && u.result !== null
       );
 
-      // ⭐ If exam completed once → Never change again
       if (alreadyCompleted) {
         socketArray.push({
           examId: exam._id,
@@ -179,15 +168,11 @@ setInterval(async () => {
           updatedScheduleTime: exam.ScheduleTime,
           result: userStatuses[0]?.result || "Completed"
         });
-
-        continue; //  Skip next logic for this exam
+        continue;
       }
 
-      // ------------------------------
-      // OLD LOGIC (Works as backup)
-      // ------------------------------
+      // Backup schedule logic
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
-
       const scheduleDateTime = moment.tz(
         `${examDate} ${exam.ScheduleTime}`,
         "YYYY-MM-DD HH:mm:ss",
@@ -200,24 +185,20 @@ setInterval(async () => {
       const now = moment().tz("Asia/Kolkata");
 
       let statusManage = "Schedule";
-
       if (now.isBefore(ongoingStart)) statusManage = "Schedule";
       else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
         statusManage = "Ongoing";
       else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-      // Update user statuses
       await ExamUserStatus.updateMany(
         { examId: exam._id },
         { $set: { statusManage } }
       );
 
-      // Check attempts
       const allUsers = await ExamUserStatus.find({ examId: exam._id }).lean();
       const anyAttempt = allUsers.some(u => u.finalScore !== null);
 
       let examResult = null;
-
       if (statusManage === "Completed") {
         examResult = anyAttempt ? "Completed" : "Not Attempt";
       }
