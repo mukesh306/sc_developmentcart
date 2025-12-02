@@ -81,14 +81,13 @@ setInterval(async () => {
   try {
     const exams = await Schoolerexam.find({ publish: true });
 
+    // 🔥 Direct MarkingSetting se global bufferTime lo
+    const markingSetting = await MarkingSetting.findOne().lean();
+    const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
+
     const socketArray = [];
 
     for (const exam of exams) {
-      // Fetch marking setting by className
-      const classId = typeof exam.className === 'object' ? exam.className._id : exam.className;
-      const markingSetting = await MarkingSetting.findOne({ className: classId }).lean();
-      const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
-
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
 
       const scheduleDateTime = moment.tz(
@@ -107,7 +106,6 @@ setInterval(async () => {
       else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
       else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-      // Update ExamUserStatus
       await ExamUserStatus.updateMany(
         { examId: exam._id },
         { $set: { statusManage } }
@@ -131,6 +129,7 @@ setInterval(async () => {
     console.error("CRON ERROR:", err);
   }
 }, 30000);
+
 // ------------------------------------------------------------------
 // 🚀 START SERVER
 // ------------------------------------------------------------------
