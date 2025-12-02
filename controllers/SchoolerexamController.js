@@ -819,7 +819,7 @@ exports.UsersExams = async (req, res) => {
         ScheduleTime: exam.ScheduleTime,
         ScheduleDate: exam.ScheduleDate,
         updatedScheduleTime: examObj.updatedScheduleTime || exam.ScheduleTime,
-        //  result: examObj.result || null
+         result: examObj.result || null
       });
 
       // Save ExamUserStatus
