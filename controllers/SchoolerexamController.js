@@ -667,7 +667,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -691,7 +690,7 @@ exports.UsersExams = async (req, res) => {
       return res.status(200).json([]);
     }
 
-    // Get exams
+    // Fetch exams
     let exams = await Schoolerexam.find({
       className: user.className,
       category: assignedGroup.category,
@@ -705,7 +704,7 @@ exports.UsersExams = async (req, res) => {
       return res.status(200).json([]);
     }
 
-    // 🔥 Global bufferTime from MarkingSetting
+    // Global buffer time
     const markingSetting = await MarkingSetting.findOne().lean();
     const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
@@ -715,7 +714,7 @@ exports.UsersExams = async (req, res) => {
     for (const exam of exams) {
       const examObj = exam.toObject();
 
-      // Get class/college info
+      // Class / College Info
       const classData =
         (await School.findById(exam.className).select("_id name className")) ||
         (await College.findById(exam.className).select("_id name className"));
@@ -724,11 +723,9 @@ exports.UsersExams = async (req, res) => {
         ? { _id: classData._id, name: classData.className || classData.name }
         : null;
 
-      examObj.totalQuestions = exam.topicQuestions
-        ? exam.topicQuestions.length
-        : 0;
+      examObj.totalQuestions = exam.topicQuestions?.length || 0;
 
-      // Get user result
+      // Get user exam result
       const userResult = await ExamResult.findOne({
         userId,
         examId: exam._id,
@@ -736,8 +733,8 @@ exports.UsersExams = async (req, res) => {
         .select("correct finalScore percentage createdAt")
         .lean();
 
-      examObj.correct = userResult ? userResult.correct : null;
-      examObj.finalScore = userResult ? userResult.finalScore : null;
+      examObj.correct = userResult?.correct ?? null;
+      examObj.finalScore = userResult?.finalScore ?? null;
 
       if (userResult && examObj.totalQuestions > 0) {
         examObj.percentage = parseFloat(
@@ -747,7 +744,7 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // Ranking logic
+      // Ranking
       const allResults = await ExamResult.find({
         examId: exam._id,
         userId: { $in: assignedGroup.members },
@@ -767,12 +764,11 @@ exports.UsersExams = async (req, res) => {
 
       examObj.totalParticipants = allResults.length;
 
-      // ⭐ FINAL STATUS LOGIC WITH GLOBAL BUFFER TIME ⭐
+      // ⭐ STATUS LOGIC
       let statusManage = "Schedule";
 
       if (exam.publish === true) {
         if (examObj.finalScore === null) {
-
           const examDate = moment(exam.examDate)
             .tz("Asia/Kolkata")
             .format("YYYY-MM-DD");
@@ -788,13 +784,10 @@ exports.UsersExams = async (req, res) => {
 
           const now = moment().tz("Asia/Kolkata");
 
-          if (now.isBefore(ongoingStart)) {
-            statusManage = "Schedule";
-          } else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) {
+          if (now.isBefore(ongoingStart)) statusManage = "Schedule";
+          else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
             statusManage = "Ongoing";
-          } else if (now.isSameOrAfter(ongoingEnd)) {
-            statusManage = "Completed";
-          }
+          else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
           examObj.updatedScheduleTime = ongoingStart.format("HH:mm:ss");
         } else {
@@ -804,20 +797,22 @@ exports.UsersExams = async (req, res) => {
 
       examObj.statusManage = statusManage;
 
-      // ⭐ RESULT LOGIC INCLUDING "Not Attempt"
+      // ⭐⭐⭐ FINAL RESULT LOGIC ⭐⭐⭐
       const passLimit = parseInt(exam.passout) || 1;
 
+      // 🔥🔥 YOU WANTED THIS — “Not Attempt” 🔥🔥
       if (statusManage === "Completed" && examObj.finalScore === null) {
         examObj.result = "Not Attempt";
       } else if (examObj.rank !== null) {
-        examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
+        examObj.result =
+          examObj.rank <= passLimit ? "passed" : "failed";
       } else {
         examObj.result = null;
       }
 
       updatedExams.push(examObj);
 
-      // Prepare socket data
+      // Socket data
       socketEmitArray.push({
         examId: exam._id,
         statusManage,
@@ -826,7 +821,7 @@ exports.UsersExams = async (req, res) => {
         updatedScheduleTime: examObj.updatedScheduleTime || exam.ScheduleTime,
       });
 
-      // Update ExamUserStatus
+      // Save ExamUserStatus
       await ExamUserStatus.findOneAndUpdate(
         { userId, examId: exam._id },
         {
@@ -848,10 +843,8 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // Emit to socket
     if (global.io) {
       global.io.emit("examStatusUpdate", socketEmitArray);
-      console.log("📡 Sent to Socket:", socketEmitArray);
     }
 
     return res.status(200).json(updatedExams);
@@ -863,6 +856,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
