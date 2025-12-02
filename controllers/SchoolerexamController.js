@@ -667,7 +667,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -793,12 +792,14 @@ exports.UsersExams = async (req, res) => {
 
       examObj.statusManage = statusManage;
 
-      // 9️⃣ FINAL RESULT LOGIC
+      // 9️⃣ FINAL RESULT LOGIC (✅ FIXED)
       const passLimit = parseInt(exam.passout) || 1;
 
-      if (statusManage === "Completed" && examObj.finalScore === null) {
+      if (examObj.finalScore === null) {
+        // User did not attempt
         examObj.result = "Not Attempt";
       } else if (examObj.rank !== null) {
+        // User attempted, determine pass/fail by rank
         examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
       } else {
         examObj.result = null;
@@ -813,7 +814,7 @@ exports.UsersExams = async (req, res) => {
         ScheduleTime: exam.ScheduleTime,
         ScheduleDate: exam.ScheduleDate,
         updatedScheduleTime: examObj.updatedScheduleTime || exam.ScheduleTime,
-        result: examObj.result || null
+        result: examObj.result
       });
 
       // 11️⃣ Save ExamUserStatus
@@ -852,6 +853,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
