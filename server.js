@@ -94,24 +94,21 @@ global.io.on("connection", (socket) => {
 
     const examDuration = exam.ExamTime || 0; // in minutes
 
-    // Calculate remaining seconds based on exam schedule
+    // exam start time
     const examDateStr = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
-    const scheduleDateTime = moment.tz(
-      `${examDateStr} ${exam.ScheduleTime}`,
-      "YYYY-MM-DD HH:mm:ss",
-      "Asia/Kolkata"
-    );
+    const examStart = moment.tz(`${examDateStr} ${exam.ScheduleTime}`, "YYYY-MM-DD HH:mm:ss", "Asia/Kolkata");
+    const examEnd = examStart.clone().add(examDuration, "minutes");
 
     const now = moment().tz("Asia/Kolkata");
 
     let remainingSeconds;
 
-    if (now.isBefore(scheduleDateTime)) {
-      // Exam hasn't started yet
+    if (now.isBefore(examStart)) {
+      // Exam hasn't started
       remainingSeconds = examDuration * 60;
-    } else if (now.isBetween(scheduleDateTime, scheduleDateTime.clone().add(examDuration, "minutes"))) {
+    } else if (now.isBetween(examStart, examEnd)) {
       // Exam ongoing
-      remainingSeconds = scheduleDateTime.clone().add(examDuration, "minutes").diff(now, "seconds");
+      remainingSeconds = examEnd.diff(now, "seconds"); // correct remaining seconds
     } else {
       // Exam completed
       remainingSeconds = 0;
@@ -124,7 +121,7 @@ global.io.on("connection", (socket) => {
       remainingSeconds
     });
 
-    // Countdown for this socket
+    // Start countdown for this socket
     const interval = setInterval(() => {
       if (remainingSeconds <= 0) {
         socket.emit("examCountdown", { examId, remainingSeconds: 0 });
@@ -143,6 +140,7 @@ global.io.on("connection", (socket) => {
     socket.emit("examTimeResponse", { error: "Internal server error" });
   }
 });
+
 
 
   socket.on("disconnect", () => {
