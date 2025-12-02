@@ -705,6 +705,10 @@ exports.UsersExams = async (req, res) => {
       return res.status(200).json([]);
     }
 
+    // 🔥 Global bufferTime from MarkingSetting
+    const markingSetting = await MarkingSetting.findOne().lean();
+    const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
+
     const updatedExams = [];
     const socketEmitArray = [];
 
@@ -728,7 +732,9 @@ exports.UsersExams = async (req, res) => {
       const userResult = await ExamResult.findOne({
         userId,
         examId: exam._id,
-      }).select("correct finalScore percentage createdAt").lean();
+      })
+        .select("correct finalScore percentage createdAt")
+        .lean();
 
       examObj.correct = userResult ? userResult.correct : null;
       examObj.finalScore = userResult ? userResult.finalScore : null;
@@ -741,7 +747,7 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
-      // Get all participants results for ranking
+      // Ranking logic
       const allResults = await ExamResult.find({
         examId: exam._id,
         userId: { $in: assignedGroup.members },
@@ -761,18 +767,11 @@ exports.UsersExams = async (req, res) => {
 
       examObj.totalParticipants = allResults.length;
 
-      // ⭐ FINAL STATUS LOGIC WITH BUFFER TIME ⭐
+      // ⭐ FINAL STATUS LOGIC WITH GLOBAL BUFFER TIME ⭐
       let statusManage = "Schedule";
 
       if (exam.publish === true) {
         if (examObj.finalScore === null) {
-          const markingSetting = await MarkingSetting.findOne({
-            className: user.className,
-          }).lean();
-
-          const bufferTime = markingSetting?.bufferTime
-            ? parseInt(markingSetting.bufferTime)
-            : 0;
 
           const examDate = moment(exam.examDate)
             .tz("Asia/Kolkata")
@@ -805,8 +804,9 @@ exports.UsersExams = async (req, res) => {
 
       examObj.statusManage = statusManage;
 
-      // ✅ RESULT LOGIC INCLUDING "Not Attempt"
+      // ⭐ RESULT LOGIC INCLUDING "Not Attempt"
       const passLimit = parseInt(exam.passout) || 1;
+
       if (statusManage === "Completed" && examObj.finalScore === null) {
         examObj.result = "Not Attempt";
       } else if (examObj.rank !== null) {
@@ -834,14 +834,13 @@ exports.UsersExams = async (req, res) => {
           examId: exam._id,
           category: exam.category,
           className: exam.className,
-          totalQuestions: exam.totalQuestions,
-          correct: exam.correct,
-          finalScore: exam.finalScore,
-          percentage: exam.percentage,
-          rank: exam.rank,
-          totalParticipants: exam.totalParticipants,
+          totalQuestions: examObj.totalQuestions,
+          correct: examObj.correct,
+          finalScore: examObj.finalScore,
+          percentage: examObj.percentage,
+          rank: examObj.rank,
+          totalParticipants: examObj.totalParticipants,
           result: examObj.result,
-          status: examObj.status,
           publish: exam.publish,
           statusManage,
         },
@@ -864,6 +863,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
