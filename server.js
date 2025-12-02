@@ -61,26 +61,19 @@ app.use('/api/v1', userexamGroupRoutes);
 app.use('/api/v1', organizationSignRoutes);
 app.use('/api/v1', classSeatRoutes);
 
-// ------------------------------------------------------------------
-// SOCKET.IO SETUP
-// ------------------------------------------------------------------
+
 const server = http.createServer(app);
 global.io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-// In-memory store for exam start timestamps
-const examStartTimes = {}; // key: examId, value: timestamp in ms
 
-// ------------------------------
-// SOCKET EVENTS
-// ------------------------------
+const examStartTimes = {}; 
+
+
 global.io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  // =======================================================
-  // getExamTime EVENT WITH PURE COUNTDOWN LOGIC
-  // =======================================================
   socket.on("getExamTime", async (examId) => {
     try {
       if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
@@ -95,27 +88,27 @@ global.io.on("connection", (socket) => {
         return socket.emit("examTimeResponse", { error: "Exam not found" });
       }
 
-      const examDuration = exam.ExamTime || 0; // in minutes
+      const examDuration = exam.ExamTime || 0; 
 
-      // Set exam start time if not already set
+      
       if (!examStartTimes[examId]) {
         examStartTimes[examId] = Date.now();
       }
 
-      // Calculate remaining seconds
+     
       let elapsedSeconds = Math.floor((Date.now() - examStartTimes[examId]) / 1000);
       let remainingSeconds = examDuration * 60 - elapsedSeconds;
 
       if (remainingSeconds < 0) remainingSeconds = 0;
 
-      // Emit initial response
+      
       socket.emit("examTimeResponse", {
         examId,
         ExamTime: examDuration,
         remainingSeconds
       });
 
-      // Start countdown for this socket
+     
       const interval = setInterval(() => {
         if (remainingSeconds <= 0) {
           socket.emit("examCountdown", { examId, remainingSeconds: 0 });
@@ -140,20 +133,69 @@ global.io.on("connection", (socket) => {
   });
 });
 
-// ------------------------------------------------------------------
-//  CRON JOB – AUTO STATUS UPDATE (EVERY 10 SECONDS)
-// ------------------------------------------------------------------
 setInterval(async () => {
   try {
-    const exams = await Schoolerexam.find({ publish: true });
+    const exams = await Schoolerexam.find({ publish: true }).sort({ createdAt: 1 });
 
     const markingSetting = await MarkingSetting.findOne().lean();
     const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
     const socketArray = [];
 
-    for (const exam of exams) {
+    // STEP 1: Get all exams in order (first → last)
+    for (let i = 0; i < exams.length; i++) {
+      const exam = exams[i];
+
+      // STEP 2: Fetch all users' exam statuses for this exam
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
+
+      // -------------------------------
+      // 🔥 NEW RULE: CHECK PREVIOUS EXAM FAILED OR NOT
+      // -------------------------------
+      let forcedNotEligible = false;
+
+      if (i > 0) { // previous exam exists
+        const previousExam = exams[i - 1];
+
+        const prevExamUsers = await ExamUserStatus.find({ examId: previousExam._id }).lean();
+
+        // If any user failed in previous exam
+        const anyFailed = prevExamUsers.some(u => u.result === "Failed");
+
+        if (anyFailed) {
+          forcedNotEligible = true;
+        }
+      }
+
+      // --------------------------------
+      // IF USER IS NOT ELIGIBLE → PERMANENT LOCK
+      // --------------------------------
+      if (forcedNotEligible) {
+        // Update user status permanently
+        await ExamUserStatus.updateMany(
+          { examId: exam._id },
+          { $set: { statusManage: "Not Eligible", result: "Not Attempt" } }
+        );
+
+        // Send to socket
+        socketArray.push({
+          examId: exam._id,
+          statusManage: "Not Eligible",
+          ScheduleTime: exam.ScheduleTime,
+          ScheduleDate: exam.ScheduleDate,
+          bufferTime,
+          updatedScheduleTime: exam.ScheduleTime,
+          result: "Not Attempt"
+        });
+
+        // Skip all remaining logic for this exam
+        continue;
+      }
+
+      // --------------------------------
+      // IF NOT FAILED CASE → NORMAL OLD LOGIC WORKS
+      // --------------------------------
+
       const alreadyCompleted = userStatuses.some(
         u => u.statusManage === "Completed" && u.result !== null
       );
