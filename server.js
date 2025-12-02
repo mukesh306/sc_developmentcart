@@ -77,11 +77,14 @@ global.io.on("connection", (socket) => {
 // ------------------------------------------------------------------
 // 🔥 CRON JOB – AUTO STATUS UPDATE (EVERY 30 SECONDS)
 // ------------------------------------------------------------------
+// ------------------------------------------------------------------
+// 🔥 CRON JOB – AUTO STATUS UPDATE (EVERY 30 SECONDS)
+// ------------------------------------------------------------------
 setInterval(async () => {
   try {
     const exams = await Schoolerexam.find({ publish: true });
 
-    // 🔥 Direct MarkingSetting se global bufferTime lo
+    // ⭐ Global Buffer Time
     const markingSetting = await MarkingSetting.findOne().lean();
     const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
@@ -102,34 +105,35 @@ setInterval(async () => {
       const now = moment().tz("Asia/Kolkata");
 
       let statusManage = "Schedule";
+
       if (now.isBefore(ongoingStart)) statusManage = "Schedule";
       else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
       else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-      // 🔥 Update ExamUserStatus Status
+      // Update all users status
       await ExamUserStatus.updateMany(
         { examId: exam._id },
         { $set: { statusManage } }
       );
 
-      // 🔥 Fetch all user statuses for this exam (to add final result)
-      const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
+      // Get all users of this exam
+      const allUsers = await ExamUserStatus.find({ examId: exam._id }).lean();
 
-      const updatedUsers = userStatuses.map((u) => {
-        let result = u.result || null;
+      // Check if any user attempted
+      const anyAttempt = allUsers.some(u => u.finalScore !== null);
 
-        // ⭐ NEW LOGIC ⭐
-        if (statusManage === "Completed" && (u.finalScore === null || u.finalScore === undefined)) {
-          result = "Not Attempt";
+      // ⭐⭐ RESULT LOGIC ⭐⭐
+      let examResult = null;
+
+      if (statusManage === "Completed") {
+        if (!anyAttempt) {
+          examResult = "Not Attempt";
+        } else {
+          examResult = "Completed";
         }
+      }
 
-        return {
-          userId: u.userId,
-          finalScore: u.finalScore,
-          result,
-        };
-      });
-
+      // ⭐⭐ FINAL SOCKET PAYLOAD ⭐⭐
       socketArray.push({
         examId: exam._id,
         statusManage,
@@ -137,8 +141,7 @@ setInterval(async () => {
         ScheduleDate: exam.ScheduleDate,
         bufferTime,
         updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
-        users: updatedUsers,   
-         result: null
+        result: examResult,  // ⭐ ONLY THIS NEW FIELD
       });
     }
 
