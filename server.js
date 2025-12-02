@@ -106,10 +106,29 @@ setInterval(async () => {
       else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
       else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
+      // 🔥 Update ExamUserStatus Status
       await ExamUserStatus.updateMany(
         { examId: exam._id },
         { $set: { statusManage } }
       );
+
+      // 🔥 Fetch all user statuses for this exam (to add final result)
+      const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
+
+      const updatedUsers = userStatuses.map((u) => {
+        let result = u.result || null;
+
+        // ⭐ NEW LOGIC ⭐
+        if (statusManage === "Completed" && (u.finalScore === null || u.finalScore === undefined)) {
+          result = "Not Attempt";
+        }
+
+        return {
+          userId: u.userId,
+          finalScore: u.finalScore,
+          result,
+        };
+      });
 
       socketArray.push({
         examId: exam._id,
@@ -118,6 +137,7 @@ setInterval(async () => {
         ScheduleDate: exam.ScheduleDate,
         bufferTime,
         updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
+        users: updatedUsers,   
       });
     }
 
