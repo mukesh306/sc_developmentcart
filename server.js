@@ -78,58 +78,78 @@ global.io.on("connection", (socket) => {
   // =======================================================
   // NEW getExamTime EVENT WITH PURE COUNTDOWN LOGIC
   // =======================================================
-  socket.on("getExamTime", async (examId) => {
-    try {
-      if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
-        return socket.emit("examTimeResponse", { error: "Invalid examId" });
-      }
-
-      const exam = await Schoolerexam.findById(examId)
-        .select("ExamTime ScheduleTime examDate")
-        .lean();
-
-      if (!exam) {
-        return socket.emit("examTimeResponse", { error: "Exam not found" });
-      }
-
-      const examDuration = exam.ExamTime || 0; // minutes
-
-      // Send ExamTime first
-      socket.emit("examTimeResponse", {
-        examId,
-        ExamTime: examDuration
-      });
-
-      // Convert minutes → seconds
-      let remainingSeconds = examDuration * 60;
-
-      // PURE COUNTDOWN
-      const interval = setInterval(() => {
-        if (remainingSeconds <= 0) {
-          socket.emit("examCountdown", { examId, remainingSeconds: 0 });
-          clearInterval(interval);
-          return;
-        }
-
-        remainingSeconds--;
-
-        socket.emit("examCountdown", {
-          examId,
-          remainingSeconds
-        });
-
-      }, 1000);
-
-      socket.on("disconnect", () => {
-        clearInterval(interval);
-        console.log("Client disconnected:", socket.id);
-      });
-
-    } catch (err) {
-      console.error("Error fetching ExamTime:", err);
-      socket.emit("examTimeResponse", { error: "Internal server error" });
+ socket.on("getExamTime", async (examId) => {
+  try {
+    if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
+      return socket.emit("examTimeResponse", { error: "Invalid examId" });
     }
-  });
+
+    const exam = await Schoolerexam.findById(examId)
+      .select("ExamTime ScheduleTime examDate")
+      .lean();
+
+    if (!exam) {
+      return socket.emit("examTimeResponse", { error: "Exam not found" });
+    }
+
+    const examDuration = exam.ExamTime || 0; // minutes
+
+    // Format exam date
+    const examDate = moment(exam.examDate)
+      .tz("Asia/Kolkata")
+      .format("YYYY-MM-DD");
+
+    // FIX: Add seconds if missing
+    const examTime = exam.ScheduleTime.length === 5 
+      ? `${exam.ScheduleTime}:00`
+      : exam.ScheduleTime;
+
+    // Start time
+    const startTime = moment.tz(
+      `${examDate} ${examTime}`,
+      "YYYY-MM-DD HH:mm:ss",
+      "Asia/Kolkata"
+    );
+
+    // End time
+    const endTime = startTime.clone().add(examDuration, "minutes");
+
+    // Current time
+    const now = moment().tz("Asia/Kolkata");
+
+    // PERFECT remaining seconds
+    let remainingSeconds = Math.max(0, endTime.diff(now, "seconds"));
+
+    // send immediate response
+    socket.emit("examTimeResponse", {
+      examId,
+      ExamTime: examDuration,
+      remainingSeconds
+    });
+
+    // send countdown every second
+    const interval = setInterval(() => {
+      const now = moment().tz("Asia/Kolkata");
+      remainingSeconds = Math.max(0, endTime.diff(now, "seconds"));
+
+      socket.emit("examCountdown", {
+        examId,
+        remainingSeconds
+      });
+
+      if (remainingSeconds <= 0) {
+        clearInterval(interval);
+      }
+
+    }, 1000);
+
+    socket.on("disconnect", () => clearInterval(interval));
+
+  } catch (err) {
+    console.error("Error in getExamTime:", err);
+    socket.emit("examTimeResponse", { error: "Internal server error" });
+  }
+});
 
   socket.on("disconnect", () => {
     console.log("Client disconnected:", socket.id);
