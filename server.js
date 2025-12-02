@@ -78,6 +78,9 @@ const examStartTimes = {}; // key: examId, value: timestamp in ms
 global.io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
+  // =======================================================
+  // getExamTime EVENT WITH PURE COUNTDOWN LOGIC
+  // =======================================================
   socket.on("getExamTime", async (examId) => {
     try {
       if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
@@ -92,23 +95,27 @@ global.io.on("connection", (socket) => {
         return socket.emit("examTimeResponse", { error: "Exam not found" });
       }
 
-      const examDuration = exam.ExamTime || 0;
+      const examDuration = exam.ExamTime || 0; // in minutes
 
+      // Set exam start time if not already set
       if (!examStartTimes[examId]) {
         examStartTimes[examId] = Date.now();
       }
 
+      // Calculate remaining seconds
       let elapsedSeconds = Math.floor((Date.now() - examStartTimes[examId]) / 1000);
       let remainingSeconds = examDuration * 60 - elapsedSeconds;
 
       if (remainingSeconds < 0) remainingSeconds = 0;
 
+      // Emit initial response
       socket.emit("examTimeResponse", {
         examId,
         ExamTime: examDuration,
         remainingSeconds
       });
 
+      // Start countdown for this socket
       const interval = setInterval(() => {
         if (remainingSeconds <= 0) {
           socket.emit("examCountdown", { examId, remainingSeconds: 0 });
@@ -147,17 +154,11 @@ setInterval(async () => {
 
     for (const exam of exams) {
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
-
-      // ----------------------------------------------
-      // FIX: IF RESULT = PASSED / FAILED → NEVER UPDATE
-      // ----------------------------------------------
-      const permanentlyCompleted = userStatuses.some(
-        u => u.result === "Passed" || u.result === "Failed"
+      const alreadyCompleted = userStatuses.some(
+        u => u.statusManage === "Completed" && u.result !== null
       );
 
-      if (permanentlyCompleted) {
-        const savedResult = userStatuses.find(u => u.result)?.result;
-
+      if (alreadyCompleted) {
         socketArray.push({
           examId: exam._id,
           statusManage: "Completed",
@@ -165,17 +166,12 @@ setInterval(async () => {
           ScheduleDate: exam.ScheduleDate,
           bufferTime,
           updatedScheduleTime: exam.ScheduleTime,
-          result: savedResult
+          result: userStatuses[0]?.result || "Completed"
         });
-
-        // Skip further processing — DO NOT overwrite result
         continue;
       }
 
-      // ----------------------------------------------
-      // NORMAL LOGIC (runs only if no result stored yet)
-      // ----------------------------------------------
-
+      // Backup schedule logic
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
       const scheduleDateTime = moment.tz(
         `${examDate} ${exam.ScheduleTime}`,
