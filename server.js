@@ -69,10 +69,15 @@ global.io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
+// ------------------------------
+// SOCKET EVENTS
+// ------------------------------
 global.io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  //  NEW: getExamTime event + countdown
+  // =======================================================
+  // NEW getExamTime EVENT WITH PURE COUNTDOWN LOGIC
+  // =======================================================
   socket.on("getExamTime", async (examId) => {
     try {
       if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
@@ -87,44 +92,34 @@ global.io.on("connection", (socket) => {
         return socket.emit("examTimeResponse", { error: "Exam not found" });
       }
 
-      const bufferTime = 0; // optional
-      const examDate = moment(exam.examDate)
-        .tz("Asia/Kolkata")
-        .format("YYYY-MM-DD");
-
-      const startTime = moment.tz(
-        `${examDate} ${exam.ScheduleTime}`,
-        "YYYY-MM-DD HH:mm:ss",
-        "Asia/Kolkata"
-      ).add(bufferTime, "minutes");
-
       const examDuration = exam.ExamTime || 0; // minutes
-      const endTime = startTime.clone().add(examDuration, "minutes");
 
-      //  Emit only ExamTime initially
+      // Send ExamTime first
       socket.emit("examTimeResponse", {
         examId,
         ExamTime: examDuration
       });
 
-      //  Start realtime countdown
-      const interval = setInterval(() => {
-        const now = moment().tz("Asia/Kolkata");
-        let remainingSec = endTime.diff(now, "seconds");
+      // Convert minutes → seconds
+      let remainingSeconds = examDuration * 60;
 
-        //  Stop at 0
-        if (remainingSec <= 0) {
-          remainingSec = 0;
+      // PURE COUNTDOWN
+      const interval = setInterval(() => {
+        if (remainingSeconds <= 0) {
+          socket.emit("examCountdown", { examId, remainingSeconds: 0 });
           clearInterval(interval);
+          return;
         }
+
+        remainingSeconds--;
 
         socket.emit("examCountdown", {
           examId,
-          remainingSeconds: remainingSec
+          remainingSeconds
         });
+
       }, 1000);
 
-      // Clear interval on disconnect
       socket.on("disconnect", () => {
         clearInterval(interval);
         console.log("Client disconnected:", socket.id);
@@ -148,7 +143,6 @@ setInterval(async () => {
   try {
     const exams = await Schoolerexam.find({ publish: true });
 
-    //  Global Buffer Time
     const markingSetting = await MarkingSetting.findOne().lean();
     const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
@@ -174,30 +168,23 @@ setInterval(async () => {
       else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
       else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-      // Update all users status
+      // Update user statuses
       await ExamUserStatus.updateMany(
         { examId: exam._id },
         { $set: { statusManage } }
       );
 
-      // Get all users of this exam
+      // Check attempts
       const allUsers = await ExamUserStatus.find({ examId: exam._id }).lean();
-
-      // Check if any user attempted
       const anyAttempt = allUsers.some(u => u.finalScore !== null);
 
-      // RESULT LOGIC 
       let examResult = null;
 
       if (statusManage === "Completed") {
-        if (!anyAttempt) {
-          examResult = "Not Attempt";
-        } else {
-          examResult = "Completed";
-        }
+        if (!anyAttempt) examResult = "Not Attempt";
+        else examResult = "Completed";
       }
 
-      //  FINAL SOCKET PAYLOAD 
       socketArray.push({
         examId: exam._id,
         statusManage,
@@ -205,7 +192,7 @@ setInterval(async () => {
         ScheduleDate: exam.ScheduleDate,
         bufferTime,
         updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
-        result: examResult,  //  ONLY THIS NEW FIELD
+        result: examResult,
       });
     }
 
@@ -216,7 +203,7 @@ setInterval(async () => {
   } catch (err) {
     console.error("CRON ERROR:", err);
   }
-}, 30000);
+}, 10000);
 
 // ------------------------------------------------------------------
 //  START SERVER
