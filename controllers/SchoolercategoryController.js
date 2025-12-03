@@ -310,7 +310,6 @@ exports.createSchoolergroup = async (req, res) => {
 //   }
 // };
 
-
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -322,13 +321,19 @@ exports.getAllSchoolergroups = async (req, res) => {
 
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
-      .sort({ createdAt: 1 }); // ensure serial order
+      .sort({ createdAt: 1 });
 
     // Get user's saved categories
     const userTopCategories = await CategoryTopUser.find({ userId }).lean();
     const savedCategoryIds = userTopCategories.map(entry => entry.categoryId.toString());
 
-    let lastSavedIndex = -1; // track the latest saved category index
+    // Find the **highest saved category in serial order**
+    let lastSavedIndex = -1;
+    for (let i = 0; i < categories.length; i++) {
+      if (savedCategoryIds.includes(categories[i]._id.toString())) {
+        lastSavedIndex = i; // record the index of the saved category
+      }
+    }
 
     const updatedCategories = categories.map((category, i) => {
       if (!category.price || !category.groupSize) return null;
@@ -340,16 +345,11 @@ exports.getAllSchoolergroups = async (req, res) => {
 
       // Status logic
       if (i === 0) {
-        categoryObj.status = true; // first always true
-      } else if (lastSavedIndex >= 0 && i <= lastSavedIndex + 1) {
-        // current index is next to last saved → true
-        categoryObj.status = true;
-      } else if (savedCategoryIds.includes(category._id.toString())) {
-        // current category is saved
-        categoryObj.status = true;
-        lastSavedIndex = i; // mark this index as last saved
+        categoryObj.status = true; // first category always true
+      } else if (i <= lastSavedIndex) {
+        categoryObj.status = true; // all categories up to saved one
       } else {
-        categoryObj.status = false;
+        categoryObj.status = false; // below saved category
       }
 
       return categoryObj;
@@ -361,7 +361,6 @@ exports.getAllSchoolergroups = async (req, res) => {
     res.status(500).json({ message: "Error fetching categories", error: error.message });
   }
 };
-
 
 
 
