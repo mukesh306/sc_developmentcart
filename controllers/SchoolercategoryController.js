@@ -315,45 +315,75 @@ exports.getAllSchoolergroups = async (req, res) => {
     const userId = req.user._id;
     let { examType } = req.query;
 
+    // Convert examType to ObjectId
     if (examType && mongoose.Types.ObjectId.isValid(examType)) {
       examType = new mongoose.Types.ObjectId(examType);
     }
 
+    // Get all categories
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
-    // Get user's saved categories
+    // Get all saved categories of this user
     const userTopCategories = await CategoryTopUser.find({ userId }).lean();
     const savedCategoryIds = userTopCategories.map(entry => entry.categoryId.toString());
 
-    // Find the **highest saved category in serial order**
+    // Find last saved category index
     let lastSavedIndex = -1;
     for (let i = 0; i < categories.length; i++) {
       if (savedCategoryIds.includes(categories[i]._id.toString())) {
-        lastSavedIndex = i; // record the index of the saved category
+        lastSavedIndex = i;
       }
     }
 
-    const updatedCategories = categories.map((category, i) => {
-      if (!category.price || !category.groupSize) return null;
+    const updatedCategories = [];
+
+    for (let i = 0; i < categories.length; i++) {
+      const category = categories[i];
+      if (!category.price || !category.groupSize) continue;
 
       const categoryObj = category.toObject();
 
-      // Seat logic (simplified)
-      categoryObj.seat = category.groupSize;
-
-      // Status logic
-      if (i === 0) {
-        categoryObj.status = true; // first category always true
-      } else if (i <= lastSavedIndex) {
-        categoryObj.status = true; // all categories up to saved one
+      // --------------------------------------
+      // ⭐ SEAT LOGIC (Original full logic)
+      // --------------------------------------
+      if (!examType) {
+        categoryObj.seat = category.groupSize;
       } else {
-        categoryObj.status = false; // below saved category
+        const allExams = await Schoolerexam.find({ category: category._id })
+          .sort({ createdAt: 1 })
+          .lean();
+
+        if (allExams.length === 0) {
+          categoryObj.seat = category.groupSize;
+        } else {
+          const examTypeList = allExams.map(ex => ex.examType.toString());
+          const index = examTypeList.indexOf(examType.toString());
+
+          if (index !== -1) {
+            // Same examType exists → give default seats
+            categoryObj.seat = category.groupSize;
+          } else {
+            // Different examType → give last passout seat
+            categoryObj.seat = allExams[allExams.length - 1].passout;
+          }
+        }
       }
 
-      return categoryObj;
-    }).filter(Boolean);
+      // --------------------------------------
+      // ⭐ STATUS LOGIC (Your new logic)
+      // --------------------------------------
+      if (i === 0) {
+        categoryObj.status = true;   // 1st category true
+      } else if (i <= lastSavedIndex) {
+        categoryObj.status = true;   // Till saved category true
+      } else {
+        categoryObj.status = false;  // Others false
+      }
+
+      updatedCategories.push(categoryObj);
+    }
 
     res.status(200).json(updatedCategories);
 
@@ -361,6 +391,7 @@ exports.getAllSchoolergroups = async (req, res) => {
     res.status(500).json({ message: "Error fetching categories", error: error.message });
   }
 };
+
 
 
 
