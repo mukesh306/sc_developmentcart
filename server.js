@@ -78,9 +78,6 @@ const examStartTimes = {}; // key: examId, value: timestamp in ms
 global.io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  // =======================================================
-  // getExamTime EVENT WITH PURE COUNTDOWN LOGIC
-  // =======================================================
   socket.on("getExamTime", async (examId) => {
     try {
       if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
@@ -97,25 +94,21 @@ global.io.on("connection", (socket) => {
 
       const examDuration = exam.ExamTime || 0; // in minutes
 
-      // Set exam start time if not already set
       if (!examStartTimes[examId]) {
         examStartTimes[examId] = Date.now();
       }
 
-      // Calculate remaining seconds
       let elapsedSeconds = Math.floor((Date.now() - examStartTimes[examId]) / 1000);
       let remainingSeconds = examDuration * 60 - elapsedSeconds;
 
       if (remainingSeconds < 0) remainingSeconds = 0;
 
-      // Emit initial response
       socket.emit("examTimeResponse", {
         examId,
         ExamTime: examDuration,
         remainingSeconds
       });
 
-      // Start countdown for this socket
       const interval = setInterval(() => {
         if (remainingSeconds <= 0) {
           socket.emit("examCountdown", { examId, remainingSeconds: 0 });
@@ -141,7 +134,7 @@ global.io.on("connection", (socket) => {
 });
 
 // ------------------------------------------------------------------
-//  CRON JOB – AUTO STATUS UPDATE (EVERY 10 SECONDS)
+// CRON JOB – AUTO STATUS UPDATE (EVERY 10 SECONDS)
 // ------------------------------------------------------------------
 setInterval(async () => {
   try {
@@ -154,6 +147,7 @@ setInterval(async () => {
 
     for (const exam of exams) {
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
+
       const alreadyCompleted = userStatuses.some(
         u => u.statusManage === "Completed" && u.result !== null
       );
@@ -171,7 +165,6 @@ setInterval(async () => {
         continue;
       }
 
-      // Backup schedule logic
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
       const scheduleDateTime = moment.tz(
         `${examDate} ${exam.ScheduleTime}`,
@@ -196,11 +189,23 @@ setInterval(async () => {
       );
 
       const allUsers = await ExamUserStatus.find({ examId: exam._id }).lean();
-      const anyAttempt = allUsers.some(u => u.finalScore !== null);
-
       let examResult = null;
+
       if (statusManage === "Completed") {
-        examResult = anyAttempt ? "Completed" : "Not Attempt";
+        const existingResult = allUsers.find(u => u.result !== null);
+
+        if (existingResult) {
+          examResult = existingResult.result; // पहले से saved result
+        } else {
+          const anyAttempt = allUsers.some(u => u.finalScore !== null);
+          examResult = anyAttempt ? "Completed" : "Not Attempt";
+
+          // पहली बार result DB में set करें
+          await ExamUserStatus.updateMany(
+            { examId: exam._id, result: null },
+            { $set: { result: examResult } }
+          );
+        }
       }
 
       socketArray.push({
@@ -224,7 +229,7 @@ setInterval(async () => {
 }, 10000);
 
 // ------------------------------------------------------------------
-//  START SERVER
+// START SERVER
 // ------------------------------------------------------------------
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
