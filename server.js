@@ -160,7 +160,7 @@ setInterval(async () => {
         const prevFailed = await ExamUserStatus.findOne({
           userId: u.userId,
           examId: { $ne: exam._id },
-          result: "Failed"
+          result: "failed"
         }).lean();
 
         if (prevFailed) {
@@ -173,16 +173,21 @@ setInterval(async () => {
         }
       }
 
+      // ⭐⭐⭐ NEW BLOCK ⭐⭐⭐  
+      // Send EXACT DB data to socket  
       if (shouldBlockExam) {
+        const dbStatus = await ExamUserStatus.findOne({ examId: exam._id }).lean();
+
         socketArray.push({
           examId: exam._id,
-          statusManage: "Not Eligible",
+          statusManage: dbStatus?.statusManage || "Not Eligible",
           ScheduleTime: exam.ScheduleTime,
           ScheduleDate: exam.ScheduleDate,
           bufferTime,
           updatedScheduleTime: exam.ScheduleTime,
-          result: "Not Eligible"
+          result: dbStatus?.result ?? null
         });
+
         continue;
       }
       // ============================================================
