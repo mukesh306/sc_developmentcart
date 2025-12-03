@@ -148,51 +148,76 @@ setInterval(async () => {
     const exams = await Schoolerexam.find({ publish: true });
 
     const markingSetting = await MarkingSetting.findOne().lean();
-    const bufferTime = markingSetting?.bufferTime
-      ? parseInt(markingSetting.bufferTime)
-      : 0;
+    const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
     const socketArray = [];
 
     for (const exam of exams) {
-      // All user status for exam
-      const users = await ExamUserStatus.find({ examId: exam._id }).lean();
+      const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
+      const alreadyCompleted = userStatuses.some(
+        u => u.statusManage === "Completed" && u.result !== null
+      );
 
-      if (!users.length) {
+      if (alreadyCompleted) {
         socketArray.push({
           examId: exam._id,
+          statusManage: "Completed",
           ScheduleTime: exam.ScheduleTime,
           ScheduleDate: exam.ScheduleDate,
           bufferTime,
           updatedScheduleTime: exam.ScheduleTime,
-          statusManage: "Schedule",
-          result: null
+          result: userStatuses[0]?.result || "Completed"
         });
         continue;
       }
 
-      // Use DB values exactly
-      const usr = users[0];
+      // Backup schedule logic
+      const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
+      const scheduleDateTime = moment.tz(
+        `${examDate} ${exam.ScheduleTime}`,
+        "YYYY-MM-DD HH:mm:ss",
+        "Asia/Kolkata"
+      );
+
+      const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
+      const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
+
+      const now = moment().tz("Asia/Kolkata");
+
+      let statusManage = "Schedule";
+      if (now.isBefore(ongoingStart)) statusManage = "Schedule";
+      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
+        statusManage = "Ongoing";
+      else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
+
+      await ExamUserStatus.updateMany(
+        { examId: exam._id },
+        { $set: { statusManage } }
+      );
+
+      const allUsers = await ExamUserStatus.find({ examId: exam._id }).lean();
+      const anyAttempt = allUsers.some(u => u.finalScore !== null);
+
+      let examResult = null;
+      if (statusManage === "Completed") {
+        examResult = anyAttempt ? "Completed" : "Not Attempt";
+      }
 
       socketArray.push({
         examId: exam._id,
+        statusManage,
         ScheduleTime: exam.ScheduleTime,
         ScheduleDate: exam.ScheduleDate,
         bufferTime,
-        updatedScheduleTime: usr.updatedScheduleTime || exam.ScheduleTime,
-
-        // ⭐⭐⭐ ONLY DB VALUES ⭐⭐⭐
-        statusManage: usr.statusManage,
-        result: usr.result
+        updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
+        result: examResult,
       });
     }
 
-    // Emit only
     if (socketArray.length && global.io) {
       global.io.emit("examStatusUpdate", socketArray);
-      console.log("📡 LIVE EMIT FROM DB:", socketArray);
+      console.log("📡 CRON EMIT:", socketArray);
     }
-
   } catch (err) {
     console.error("CRON ERROR:", err);
   }
