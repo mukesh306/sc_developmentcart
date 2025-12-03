@@ -667,7 +667,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -708,6 +707,12 @@ exports.UsersExams = async (req, res) => {
 
     const updatedExams = [];
     const socketEmitArray = [];
+
+    // 🌟 MAIN CHECK: Any previous failed exam?
+    const anyPreviousFailed = await ExamUserStatus.findOne({
+      userId,
+      result: "failed"
+    }).lean();
 
     for (const exam of exams) {
       const examObj = { ...exam };
@@ -762,21 +767,15 @@ exports.UsersExams = async (req, res) => {
 
       examObj.totalParticipants = allResults.length;
 
-      // -------------------------------------------------------------------
-      // 8️⃣ BEFORE STATUS LOGIC → CHECK PREVIOUS FAILED EXAMS
-      // -------------------------------------------------------------------
-      const previousFailed = await ExamUserStatus.findOne({
-        userId,
-        examId: { $ne: exam._id },   // any previous exam
-        result: "failed"             // previous exam result failed
-      }).lean();
+      // ******************************************************************
+      // 🔥 MAIN REQUIRED LOGIC: IF ANY PREVIOUS EXAM FAILED → NOT ELIGIBLE
+      // ******************************************************************
+      if (anyPreviousFailed) {
 
-      if (previousFailed) {
-        // Only change statusManage, RESULT MUST STAY NULL
         examObj.statusManage = "Not Eligible";
-        examObj.result = null;
+        examObj.result = null; // MUST stay null
 
-        // Save permanent Not Eligible for this exam
+        // Save in DB forever
         await ExamUserStatus.findOneAndUpdate(
           { userId, examId: exam._id },
           {
@@ -784,7 +783,7 @@ exports.UsersExams = async (req, res) => {
             examId: exam._id,
             category: exam.category,
             statusManage: "Not Eligible",
-            result: null,   // MUST remain null
+            result: null,
             publish: exam.publish,
           },
           { upsert: true }
@@ -792,10 +791,11 @@ exports.UsersExams = async (req, res) => {
 
         updatedExams.push(examObj);
 
-        // continue → skip all other logic (LOCK status)
+        // Skip timing logic
         continue;
       }
-      // -------------------------------------------------------------------
+      // ******************************************************************
+
 
       // 9️⃣ STATUS LOGIC
       let statusManage = "Schedule";
@@ -830,6 +830,7 @@ exports.UsersExams = async (req, res) => {
 
       examObj.statusManage = statusManage;
 
+
       // 🔟 FINAL RESULT LOGIC
       const passLimit = parseInt(exam.passout) || 1;
 
@@ -843,17 +844,7 @@ exports.UsersExams = async (req, res) => {
 
       updatedExams.push(examObj);
 
-      // 1️⃣1️⃣ Socket emit array
-      socketEmitArray.push({
-        examId: exam._id,
-        statusManage,
-        ScheduleTime: exam.ScheduleTime,
-        ScheduleDate: exam.ScheduleDate,
-        updatedScheduleTime: examObj.updatedScheduleTime || exam.ScheduleTime,
-        result: examObj.result || null,
-      });
-
-      // 1️⃣2️⃣ Save ExamUserStatus
+      // 1️⃣1️⃣ Save ExamUserStatus
       await ExamUserStatus.findOneAndUpdate(
         { userId, examId: exam._id },
         {
@@ -875,7 +866,7 @@ exports.UsersExams = async (req, res) => {
       );
     }
 
-    // 1️⃣3️⃣ Emit socket
+    // Socket Emit
     if (global.io) {
       global.io.emit("examStatusUpdate", socketEmitArray);
     }
