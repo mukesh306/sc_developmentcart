@@ -134,21 +134,28 @@ global.io.on("connection", (socket) => {
 // ------------------------------------------------------------------
 //  CRON JOB (EVERY 10 SEC)
 // ------------------------------------------------------------------
-
 setInterval(async () => {
   try {
     const exams = await Schoolerexam.find({ publish: true });
+
     const markingSetting = await MarkingSetting.findOne().lean();
     const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
     const socketArray = [];
 
     for (const exam of exams) {
+
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
 
+      const alreadyCompleted = userStatuses.some(
+        u => u.statusManage === "Completed" && u.result !== null
+      );
+
       // ============================================================
-      //   ✔ BLOCK USERS WHO FAILED ANY PREVIOUS EXAM
+      //   ✔ NEW LOGIC – IF ANY PREVIOUS EXAM FAILED → NOT ELIGIBLE
       // ============================================================
+      let shouldBlockExam = false;
+
       for (const u of userStatuses) {
         const prevFailed = await ExamUserStatus.findOne({
           userId: u.userId,
@@ -157,31 +164,28 @@ setInterval(async () => {
         }).lean();
 
         if (prevFailed) {
-          // Update statusManage and result for this exam
+          shouldBlockExam = true;
+
           await ExamUserStatus.updateMany(
             { examId: exam._id, userId: u.userId },
             { $set: { statusManage: "Not Eligible", result: null } }
           );
-
-          socketArray.push({
-            examId: exam._id,
-            statusManage: "Not Eligible",
-            ScheduleTime: exam.ScheduleTime,
-            ScheduleDate: exam.ScheduleDate,
-            bufferTime,
-            updatedScheduleTime: exam.ScheduleTime,
-            result: null
-          });
-
-          // Skip further processing for this user for this exam
-          continue;
         }
       }
 
-      // Check if exam already completed
-      const alreadyCompleted = userStatuses.some(
-        u => u.statusManage === "Completed" && u.result !== null
-      );
+      if (shouldBlockExam) {
+        socketArray.push({
+          examId: exam._id,
+          statusManage: "Not Eligible",
+          ScheduleTime: exam.ScheduleTime,
+          ScheduleDate: exam.ScheduleDate,
+          bufferTime,
+          updatedScheduleTime: exam.ScheduleTime,
+          result: "Not Eligible"
+        });
+        continue;
+      }
+      // ============================================================
 
       if (alreadyCompleted) {
         socketArray.push({
@@ -196,7 +200,6 @@ setInterval(async () => {
         continue;
       }
 
-      // Compute exam schedule
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
       const scheduleDateTime = moment.tz(
         `${examDate} ${exam.ScheduleTime}`,
