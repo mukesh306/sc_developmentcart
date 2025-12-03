@@ -62,7 +62,7 @@ app.use('/api/v1', organizationSignRoutes);
 app.use('/api/v1', classSeatRoutes);
 
 // ------------------------------------------------------------------
-// SOCKET.IO SETUP
+// SOCKET.IO
 // ------------------------------------------------------------------
 const server = http.createServer(app);
 global.io = new Server(server, {
@@ -70,17 +70,12 @@ global.io = new Server(server, {
 });
 
 // In-memory store for exam start timestamps
-const examStartTimes = {}; // key: examId, value: timestamp in ms
+const examStartTimes = {};
 
-// ------------------------------
 // SOCKET EVENTS
-// ------------------------------
 global.io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
-  // =======================================================
-  // getExamTime EVENT WITH PURE COUNTDOWN LOGIC
-  // =======================================================
   socket.on("getExamTime", async (examId) => {
     try {
       if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
@@ -95,27 +90,23 @@ global.io.on("connection", (socket) => {
         return socket.emit("examTimeResponse", { error: "Exam not found" });
       }
 
-      const examDuration = exam.ExamTime || 0; // in minutes
+      const examDuration = exam.ExamTime || 0;
 
-      // Set exam start time if not already set
       if (!examStartTimes[examId]) {
         examStartTimes[examId] = Date.now();
       }
 
-      // Calculate remaining seconds
       let elapsedSeconds = Math.floor((Date.now() - examStartTimes[examId]) / 1000);
       let remainingSeconds = examDuration * 60 - elapsedSeconds;
 
       if (remainingSeconds < 0) remainingSeconds = 0;
 
-      // Emit initial response
       socket.emit("examTimeResponse", {
         examId,
         ExamTime: examDuration,
         remainingSeconds
       });
 
-      // Start countdown for this socket
       const interval = setInterval(() => {
         if (remainingSeconds <= 0) {
           socket.emit("examCountdown", { examId, remainingSeconds: 0 });
@@ -141,7 +132,7 @@ global.io.on("connection", (socket) => {
 });
 
 // ------------------------------------------------------------------
-//  CRON JOB – AUTO STATUS UPDATE (EVERY 10 SECONDS)
+//  CRON JOB (EVERY 10 SEC)
 // ------------------------------------------------------------------
 setInterval(async () => {
   try {
@@ -153,10 +144,48 @@ setInterval(async () => {
     const socketArray = [];
 
     for (const exam of exams) {
+
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
+
       const alreadyCompleted = userStatuses.some(
         u => u.statusManage === "Completed" && u.result !== null
       );
+
+      // ============================================================
+      //   ✔ NEW LOGIC – IF ANY PREVIOUS EXAM FAILED → NOT ELIGIBLE
+      // ============================================================
+      let shouldBlockExam = false;
+
+      for (const u of userStatuses) {
+        const prevFailed = await ExamUserStatus.findOne({
+          userId: u.userId,
+          examId: { $ne: exam._id },
+          result: "Failed"
+        }).lean();
+
+        if (prevFailed) {
+          shouldBlockExam = true;
+
+          await ExamUserStatus.updateMany(
+            { examId: exam._id, userId: u.userId },
+            { $set: { statusManage: "Not Eligible", result: null } }
+          );
+        }
+      }
+
+      if (shouldBlockExam) {
+        socketArray.push({
+          examId: exam._id,
+          statusManage: "Not Eligible",
+          ScheduleTime: exam.ScheduleTime,
+          ScheduleDate: exam.ScheduleDate,
+          bufferTime,
+          updatedScheduleTime: exam.ScheduleTime,
+          result: "Not Eligible"
+        });
+        continue;
+      }
+      // ============================================================
 
       if (alreadyCompleted) {
         socketArray.push({
@@ -171,7 +200,6 @@ setInterval(async () => {
         continue;
       }
 
-      // Backup schedule logic
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
       const scheduleDateTime = moment.tz(
         `${examDate} ${exam.ScheduleTime}`,
