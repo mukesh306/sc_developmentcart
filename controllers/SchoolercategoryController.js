@@ -253,110 +253,107 @@ exports.createSchoolergroup = async (req, res) => {
 
 
 
+
 // exports.getAllSchoolergroups = async (req, res) => {
 //   try {
-//     const userId = req.user._id; 
+//     const userId = req.user._id;
+//     let { examType } = req.query;
+
+//     // 🟢 Convert examType string → ObjectId
+//     if (examType && mongoose.Types.ObjectId.isValid(examType)) {
+//       examType = new mongoose.Types.ObjectId(examType);
+//     }
+
 //     const categories = await Schoolercategory.find()
 //       .populate("createdBy", "firstName lastName email")
 //       .sort({ createdAt: 1 });
 
 //     const updatedCategories = [];
-//     let allowNext = true; 
-//     for (const category of categories) {
-//       if (category.price && category.groupSize) {
-//         const categoryObj = category.toObject();
 
-       
-//         const latestExam = await Schoolerexam.findOne({ category: category._id })
-//           .sort({ createdAt: -1 })
+//     for (const category of categories) {
+//       if (!category.price || !category.groupSize) continue;
+//       const categoryObj = category.toObject();
+
+//       // Agar examType nahi diya
+//       if (!examType) {
+//         categoryObj.seat = category.groupSize;
+//       } else {
+//         const allExams = await Schoolerexam.find({ category: category._id })
+//           .sort({ createdAt: 1 })
 //           .lean();
 
-        
-//         categoryObj.seat = latestExam?.passout ?? category.groupSize;
-
-        
-//         categoryObj.status = false;
-
-        
-//         if (updatedCategories.length === 0) {
-//           categoryObj.status = true;
-//         }
-
-       
-//         const userTop = await CategoryTopUser.findOne({
-//           userId,
-//           categoryId: category._id,
-//         });
-
-        
-//         if (userTop) {
-//           categoryObj.status = true; 
+//         if (allExams.length === 0) {
+//           categoryObj.seat = category.groupSize;
 //         } else {
-          
-//           allowNext = false;
-//         }
+//           const examTypeList = allExams.map(ex => ex.examType.toString());
 
-//         updatedCategories.push(categoryObj);
+//           // Compare using string (safe)
+//           const index = examTypeList.indexOf(examType.toString());
+
+//           if (index !== -1) {
+//             // SAME examType found → INITIAL seat
+//             categoryObj.seat = category.groupSize;
+//           } else {
+//             // Not found → last passout
+//             categoryObj.seat = allExams[allExams.length - 1].passout;
+//           }
+//         }
 //       }
+
+//       updatedCategories.push(categoryObj);
 //     }
 
 //     res.status(200).json(updatedCategories);
+
 //   } catch (error) {
-//     console.error("❌ Error fetching categories:", error);
-//     res
-//       .status(500)
-//       .json({ message: "Error fetching categories.", error: error.message });
+//     res.status(500).json({ message: "Error fetching categories", error: error.message });
 //   }
 // };
+
 
 exports.getAllSchoolergroups = async (req, res) => {
   try {
     const userId = req.user._id;
     let { examType } = req.query;
 
-    // 🟢 Convert examType string → ObjectId
     if (examType && mongoose.Types.ObjectId.isValid(examType)) {
       examType = new mongoose.Types.ObjectId(examType);
     }
 
     const categories = await Schoolercategory.find()
       .populate("createdBy", "firstName lastName email")
-      .sort({ createdAt: 1 });
+      .sort({ createdAt: 1 }); // ensure serial order
 
-    const updatedCategories = [];
+    // Get user's saved categories
+    const userTopCategories = await CategoryTopUser.find({ userId }).lean();
+    const savedCategoryIds = userTopCategories.map(entry => entry.categoryId.toString());
 
-    for (const category of categories) {
-      if (!category.price || !category.groupSize) continue;
+    let lastSavedIndex = -1; // track the latest saved category index
+
+    const updatedCategories = categories.map((category, i) => {
+      if (!category.price || !category.groupSize) return null;
+
       const categoryObj = category.toObject();
 
-      // Agar examType nahi diya
-      if (!examType) {
-        categoryObj.seat = category.groupSize;
+      // Seat logic (simplified)
+      categoryObj.seat = category.groupSize;
+
+      // Status logic
+      if (i === 0) {
+        categoryObj.status = true; // first always true
+      } else if (lastSavedIndex >= 0 && i <= lastSavedIndex + 1) {
+        // current index is next to last saved → true
+        categoryObj.status = true;
+      } else if (savedCategoryIds.includes(category._id.toString())) {
+        // current category is saved
+        categoryObj.status = true;
+        lastSavedIndex = i; // mark this index as last saved
       } else {
-        const allExams = await Schoolerexam.find({ category: category._id })
-          .sort({ createdAt: 1 })
-          .lean();
-
-        if (allExams.length === 0) {
-          categoryObj.seat = category.groupSize;
-        } else {
-          const examTypeList = allExams.map(ex => ex.examType.toString());
-
-          // Compare using string (safe)
-          const index = examTypeList.indexOf(examType.toString());
-
-          if (index !== -1) {
-            // SAME examType found → INITIAL seat
-            categoryObj.seat = category.groupSize;
-          } else {
-            // Not found → last passout
-            categoryObj.seat = allExams[allExams.length - 1].passout;
-          }
-        }
+        categoryObj.status = false;
       }
 
-      updatedCategories.push(categoryObj);
-    }
+      return categoryObj;
+    }).filter(Boolean);
 
     res.status(200).json(updatedCategories);
 
@@ -364,9 +361,6 @@ exports.getAllSchoolergroups = async (req, res) => {
     res.status(500).json({ message: "Error fetching categories", error: error.message });
   }
 };
-
-
-
 
 
 
