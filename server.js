@@ -1,4 +1,3 @@
-// server.js (complete, fixed)
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -63,20 +62,25 @@ app.use('/api/v1', organizationSignRoutes);
 app.use('/api/v1', classSeatRoutes);
 
 // ------------------------------------------------------------------
-// SOCKET.IO
+// SOCKET.IO SETUP
 // ------------------------------------------------------------------
 const server = http.createServer(app);
 global.io = new Server(server, {
   cors: { origin: "*", methods: ["GET", "POST"] },
 });
 
-// In-memory store for exam start timestamps (used by socket "getExamTime")
-const examStartTimes = {};
+// In-memory store for exam start timestamps
+const examStartTimes = {}; // key: examId, value: timestamp in ms
 
+// ------------------------------
 // SOCKET EVENTS
+// ------------------------------
 global.io.on("connection", (socket) => {
   console.log("Client connected:", socket.id);
 
+  // =======================================================
+  // getExamTime EVENT WITH PURE COUNTDOWN LOGIC
+  // =======================================================
   socket.on("getExamTime", async (examId) => {
     try {
       if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
@@ -91,22 +95,27 @@ global.io.on("connection", (socket) => {
         return socket.emit("examTimeResponse", { error: "Exam not found" });
       }
 
-      const examDuration = parseInt(exam.ExamTime || 0, 10);
+      const examDuration = exam.ExamTime || 0; // in minutes
 
+      // Set exam start time if not already set
       if (!examStartTimes[examId]) {
         examStartTimes[examId] = Date.now();
       }
 
+      // Calculate remaining seconds
       let elapsedSeconds = Math.floor((Date.now() - examStartTimes[examId]) / 1000);
       let remainingSeconds = examDuration * 60 - elapsedSeconds;
+
       if (remainingSeconds < 0) remainingSeconds = 0;
 
+      // Emit initial response
       socket.emit("examTimeResponse", {
         examId,
         ExamTime: examDuration,
         remainingSeconds
       });
 
+      // Start countdown for this socket
       const interval = setInterval(() => {
         if (remainingSeconds <= 0) {
           socket.emit("examCountdown", { examId, remainingSeconds: 0 });
@@ -119,6 +128,7 @@ global.io.on("connection", (socket) => {
       }, 1000);
 
       socket.on("disconnect", () => clearInterval(interval));
+
     } catch (err) {
       console.error("Error fetching ExamTime:", err);
       socket.emit("examTimeResponse", { error: "Internal server error" });
@@ -131,89 +141,24 @@ global.io.on("connection", (socket) => {
 });
 
 // ------------------------------------------------------------------
-//  CRON JOB (EVERY 10 SEC)
-//  - Emits status for ALL published exams (Option A)
-//  - Ensures results are not overwritten by CRON
+//  CRON JOB – AUTO STATUS UPDATE (EVERY 10 SECONDS)
 // ------------------------------------------------------------------
-
-/**
- * Helper: parse exam.ScheduleTime which is assumed HH:mm:ss (24h).
- * Returns a moment in Asia/Kolkata timezone for that exam's date+time.
- */
-function getScheduleDateTime(exam) {
-  // Normalize exam date: if exam.examDate stored as Date or as string use moment directly
-  const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
-  // Ensure ScheduleTime exists and fallback to 00:00:00
-  const scheduleTime = exam.ScheduleTime || "00:00:00";
-  return moment.tz(`${examDate} ${scheduleTime}`, "YYYY-MM-DD HH:mm:ss", "Asia/Kolkata");
-}
-
 setInterval(async () => {
   try {
-    // fetch published exams
-    const exams = await Schoolerexam.find({ publish: true }).lean();
-    if (!exams || exams.length === 0) return;
+    const exams = await Schoolerexam.find({ publish: true });
 
     const markingSetting = await MarkingSetting.findOne().lean();
-    const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime, 10) : 0;
+    const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
     const socketArray = [];
 
-    // For each exam compute status and push a single object per exam
     for (const exam of exams) {
-      // fetch all user statuses for this exam once
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
-
-      // ---------------------------------------------------------
-      // 1) If ANY previous exam (different examId) for this user is Failed
-      //    -> set this exam statuses for that user to Not Eligible (result null)
-      //    NOTE: We avoid overwriting real results that are already set in other exams.
-      // ---------------------------------------------------------
-      let shouldBlockExamForAtLeastOneUser = false;
-
-      // We'll collect userIds that must be set Not Eligible (then update once)
-      const usersToBlock = new Set();
-
-      for (const u of userStatuses) {
-        // If a previous exam for this user elsewhere has result: "Failed"
-        const prevFailed = await ExamUserStatus.findOne({
-          userId: u.userId,
-          examId: { $ne: exam._id },
-          result: "Failed"
-        }).lean();
-
-        if (prevFailed) {
-          shouldBlockExamForAtLeastOneUser = true;
-          usersToBlock.add(String(u.userId));
-        }
-      }
-
-      // Apply Not Eligible for usersToBlock (updateMany)
-      if (usersToBlock.size > 0) {
-        await ExamUserStatus.updateMany(
-          { examId: exam._id, userId: { $in: Array.from(usersToBlock) } },
-          { $set: { statusManage: "Not Eligible", result: null } }
-        );
-      }
-
-      // Re-fetch user statuses if we made changes to ensure consistency
-      const updatedUserStatuses = usersToBlock.size > 0
-        ? await ExamUserStatus.find({ examId: exam._id }).lean()
-        : userStatuses;
-
-      // ---------------------------------------------------------
-      // 2) If any user has statusManage === "Completed" AND result !== null,
-      //    treat exam as already completed (do not change results).
-      // ---------------------------------------------------------
-      const alreadyCompleted = updatedUserStatuses.some(
+      const alreadyCompleted = userStatuses.some(
         u => u.statusManage === "Completed" && u.result !== null
       );
 
       if (alreadyCompleted) {
-        // Preserve actual stored result(s). If multiple users, pick the first explicit non-null result
-        const preservedResult = updatedUserStatuses.find(u => u.result !== null)?.result || null;
-
-        // Push single object for this exam with preserved result
         socketArray.push({
           examId: exam._id,
           statusManage: "Completed",
@@ -221,40 +166,37 @@ setInterval(async () => {
           ScheduleDate: exam.ScheduleDate,
           bufferTime,
           updatedScheduleTime: exam.ScheduleTime,
-          result: preservedResult
+          result: userStatuses[0]?.result || "Completed"
         });
-
-        // Move to next exam (do not recalc schedule/ongoing/completed)
         continue;
       }
 
-      // ---------------------------------------------------------
-      // 3) Otherwise compute schedule / ongoing / completed based on time + buffer + exam duration
-      // ---------------------------------------------------------
-      const scheduleDateTime = getScheduleDateTime(exam);
+      // Backup schedule logic
+      const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
+      const scheduleDateTime = moment.tz(
+        `${examDate} ${exam.ScheduleTime}`,
+        "YYYY-MM-DD HH:mm:ss",
+        "Asia/Kolkata"
+      );
 
       const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
-      const ongoingEnd = ongoingStart.clone().add(parseInt(exam.ExamTime || 0, 10), "minutes");
+      const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
 
       const now = moment().tz("Asia/Kolkata");
 
       let statusManage = "Schedule";
       if (now.isBefore(ongoingStart)) statusManage = "Schedule";
-      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
+      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
+        statusManage = "Ongoing";
       else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-      // Update all ExamUserStatus documents for this exam with computed statusManage
-      // NOTE: This does NOT touch their result fields (we avoid touching 'result' unless explicitly needed)
       await ExamUserStatus.updateMany(
         { examId: exam._id },
         { $set: { statusManage } }
       );
 
-      // After updating statusManage, determine exam-level result:
-      // If Completed -> determine if any attempt (finalScore or result) exists
       const allUsers = await ExamUserStatus.find({ examId: exam._id }).lean();
-      const anyAttempt = allUsers.some(u => u.finalScore !== null && u.finalScore !== undefined) ||
-                         allUsers.some(u => u.result !== null && u.result !== undefined);
+      const anyAttempt = allUsers.some(u => u.finalScore !== null);
 
       let examResult = null;
       if (statusManage === "Completed") {
@@ -268,21 +210,13 @@ setInterval(async () => {
         ScheduleDate: exam.ScheduleDate,
         bufferTime,
         updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
-        result: examResult
+        result: examResult,
       });
-    } // end for exams
+    }
 
-    // Remove duplicates just in case (keeping last entry) and emit
-    if (socketArray.length > 0 && global.io) {
-      // Ensure uniqueness by examId (keep the last occurrence)
-      const uniqueMap = new Map();
-      for (const obj of socketArray) {
-        uniqueMap.set(String(obj.examId), obj);
-      }
-      const uniqueArray = Array.from(uniqueMap.values());
-
-      global.io.emit("examStatusUpdate", uniqueArray);
-      console.log("📡 CRON EMIT:", uniqueArray);
+    if (socketArray.length && global.io) {
+      global.io.emit("examStatusUpdate", socketArray);
+      console.log("📡 CRON EMIT:", socketArray);
     }
   } catch (err) {
     console.error("CRON ERROR:", err);
