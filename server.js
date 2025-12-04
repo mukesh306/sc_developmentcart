@@ -155,10 +155,6 @@ setInterval(async () => {
     const socketArray = [];
 
     for (const exam of exams) {
-      // Fetch all ExamUserStatus docs for this exam
-      const userStatuses = await ExamUserStatus.find({ examId: exam._id });
-
-      // Exam Date + schedule
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
       const scheduleDateTime = moment.tz(
         `${examDate} ${exam.ScheduleTime}`,
@@ -170,29 +166,29 @@ setInterval(async () => {
       const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, "minutes");
       const now = moment().tz("Asia/Kolkata");
 
-      // STATUS MANAGE
       let statusManage = "Schedule";
       if (now.isBefore(ongoingStart)) statusManage = "Schedule";
       else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
       else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
       // -----------------------------
-      // UPDATE STATUS ONLY (Do not touch result)
+      // 1️⃣ Update statusManage ONLY
       // -----------------------------
       await ExamUserStatus.updateMany(
-        { examId: exam._id, statusManage: { $ne: "Not Eligible" } },
-        { $set: { statusManage } }
+        { examId: exam._id },
+        { $set: { statusManage } } // result untouched
       );
 
       // -----------------------------
-      // FIX RESULT LOGIC
+      // 2️⃣ Fetch fresh docs from DB before result check
       // -----------------------------
+      const freshUsers = await ExamUserStatus.find({ examId: exam._id });
+
       if (statusManage === "Completed") {
-        for (const user of userStatuses) {
-          // If already failed or passed → never overwrite
+        for (const user of freshUsers) {
+          // ✅ Check DB field, never overwrite failed or passed
           if (user.result === "failed" || user.result === "passed") continue;
 
-          // If null or undefined → set Not Attempt
           if (user.result === null || user.result === undefined) {
             await ExamUserStatus.updateOne(
               { _id: user._id },
@@ -203,7 +199,7 @@ setInterval(async () => {
       }
 
       // -----------------------------
-      // SOCKET EMIT LOGIC (For frontend)
+      // 3️⃣ Prepare socket emit
       // -----------------------------
       const refreshedStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
       const nonNullResults = refreshedStatuses
@@ -212,7 +208,6 @@ setInterval(async () => {
 
       let examResultForEmit = null;
       const uniqueResults = [...new Set(nonNullResults)];
-
       if (uniqueResults.length === 1 && uniqueResults[0] != null) {
         examResultForEmit = uniqueResults[0];
       }
@@ -228,7 +223,9 @@ setInterval(async () => {
       });
     }
 
-    // SOCKET EMIT
+    // -----------------------------
+    // 4️⃣ Socket emit
+    // -----------------------------
     if (socketArray.length && global.io) {
       global.io.emit("examStatusUpdate", socketArray);
     }
@@ -237,6 +234,7 @@ setInterval(async () => {
     console.error("CRON ERROR:", err);
   }
 }, 10000);
+
 
 
 // ------------------------------------------------------------------
