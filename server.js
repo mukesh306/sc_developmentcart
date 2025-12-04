@@ -139,7 +139,6 @@ global.io.on("connection", (socket) => {
 setInterval(async () => {
   try {
     const exams = await Schoolerexam.find({ publish: true });
-
     const markingSetting = await MarkingSetting.findOne().lean();
     const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
@@ -148,24 +147,27 @@ setInterval(async () => {
     for (const exam of exams) {
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
 
-      const alreadyCompleted = userStatuses.some(
-        u => u.statusManage === "Completed" && u.result !== null
+      // 🛑 RESULT FIX : अगर DB में failed/passed है → CRON कभी update नहीं करेगा
+      const existingFinalResult = userStatuses.find(u =>
+        u.result === "failed" || u.result === "passed"
       );
 
-      if (alreadyCompleted) {
+      if (existingFinalResult) {
         socketArray.push({
           examId: exam._id,
-          statusManage: "Completed",
+          statusManage: existingFinalResult.statusManage,
           ScheduleTime: exam.ScheduleTime,
           ScheduleDate: exam.ScheduleDate,
           bufferTime,
           updatedScheduleTime: exam.ScheduleTime,
-          result: userStatuses[0]?.result || "Completed"
+          result: existingFinalResult.result // हमेशा वही भेजेगा जो DB में है
         });
-        continue;
+        continue; // आगे की processing skip
       }
 
+      // Normal Status Handling
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
+
       const scheduleDateTime = moment.tz(
         `${examDate} ${exam.ScheduleTime}`,
         "YYYY-MM-DD HH:mm:ss",
@@ -174,7 +176,6 @@ setInterval(async () => {
 
       const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
       const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
-
       const now = moment().tz("Asia/Kolkata");
 
       let statusManage = "Schedule";
@@ -188,19 +189,17 @@ setInterval(async () => {
         { $set: { statusManage } }
       );
 
-      const allUsers = await ExamUserStatus.find({ examId: exam._id }).lean();
       let examResult = null;
 
       if (statusManage === "Completed") {
-        const existingResult = allUsers.find(u => u.result !== null);
+        const existing = userStatuses.find(u => u.result !== null);
 
-        if (existingResult) {
-          examResult = existingResult.result; // पहले से saved result
+        if (existing) {
+          examResult = existing.result; // DB में जो भी है → वही ले लो
         } else {
-          const anyAttempt = allUsers.some(u => u.finalScore !== null);
+          const anyAttempt = userStatuses.some(u => u.finalScore !== null);
           examResult = anyAttempt ? "Completed" : "Not Attempt";
 
-          // पहली बार result DB में set करें
           await ExamUserStatus.updateMany(
             { examId: exam._id, result: null },
             { $set: { result: examResult } }
@@ -215,13 +214,12 @@ setInterval(async () => {
         ScheduleDate: exam.ScheduleDate,
         bufferTime,
         updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
-        result: examResult,
+        result: examResult
       });
     }
 
     if (socketArray.length && global.io) {
       global.io.emit("examStatusUpdate", socketArray);
-      console.log("📡 CRON EMIT:", socketArray);
     }
   } catch (err) {
     console.error("CRON ERROR:", err);
