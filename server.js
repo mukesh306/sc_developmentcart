@@ -17,9 +17,23 @@ const Schoolerexam = require("./models/Schoolerexam");
 const MarkingSetting = require("./models/markingSetting");
 const ExamUserStatus = require("./models/ExamUserStatus");
 
-// ROUTES (your existing routes)
+// ROUTES
 const authRoutes = require('./routes/authRoutes');
-// ... include other routes as needed
+const locationRoutes = require('./routes/locationRoutes');
+const learningRoutes = require('./routes/learningRoutes');
+const assignRoutes = require('./routes/assignRoutes');
+const topicRoutes = require('./routes/topicRoutes');
+const experiencePointRoutes = require('./routes/experiencePointRoutes');
+const markingSettingRoutes = require('./routes/markingSettingRoutes');
+const practicesRoutes = require('./routes/practicesRoutes');
+const schoolRoutes = require('./routes/schoolRoutes');
+const quoteRoutes = require('./routes/quoteRoutes');
+const userRoutes = require('./routes/userRoutes');
+const SchoolercategoryRoutes = require('./routes/SchoolercategoryRoutes');
+const SchoolerexamRoutes = require('./routes/SchoolerexamRoutes');
+const userexamGroupRoutes = require('./routes/userexamGroupRoutes');
+const organizationSignRoutes = require('./routes/organizationSignRoutes');
+const classSeatRoutes = require('./routes/classSeatRoutes');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -27,6 +41,7 @@ const PORT = process.env.PORT || 5000;
 // DB CONNECT
 connectDB();
 
+// MIDDLEWARE
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
@@ -34,7 +49,21 @@ app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 // ROUTES
 app.use('/api/auth', authRoutes);
-// ... your other routes here
+app.use('/api/v1', locationRoutes);
+app.use('/api/v1', learningRoutes);
+app.use('/api/v1', assignRoutes);
+app.use('/api/v1', topicRoutes);
+app.use('/api/v1', experiencePointRoutes);
+app.use('/api/v1', markingSettingRoutes);
+app.use('/api/v1', practicesRoutes);
+app.use('/api/v1', schoolRoutes);
+app.use('/api/v1', quoteRoutes);
+app.use('/api/v1', userRoutes);
+app.use('/api/v1', SchoolercategoryRoutes);
+app.use('/api/v1', SchoolerexamRoutes);
+app.use('/api/v1', userexamGroupRoutes);
+app.use('/api/v1', organizationSignRoutes);
+app.use('/api/v1', classSeatRoutes);
 
 // ------------------------------------------------------------------
 // SOCKET.IO SETUP
@@ -48,7 +77,7 @@ global.io = new Server(server, {
 const examStartTimes = {}; // key: examId, value: timestamp in ms
 
 // ------------------------------
-// AUTH MIDDLEWARE
+// AUTH MIDDLEWARE FOR SOCKET
 // ------------------------------
 io.use(async (socket, next) => {
   const token = socket.handshake.auth.token;
@@ -174,7 +203,7 @@ setInterval(async () => {
         bufferTime,
         updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
         result: examResultForEmit,
-        userIds 
+        userIds
       });
     }
 
@@ -183,9 +212,7 @@ setInterval(async () => {
       global.io.sockets.sockets.forEach((socket) => {
         if (!socket.user) return;
 
-        // Filter exams for this user
         const userExams = socketArray.filter(exam => exam.userIds.includes(socket.user._id.toString()));
-
         if (userExams.length) {
           socket.emit("examStatusUpdate", userExams);
         }
