@@ -1,3 +1,4 @@
+// server.js
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -136,6 +137,11 @@ global.io.on("connection", (socket) => {
 // ------------------------------------------------------------------
 // CRON JOB – AUTO STATUS UPDATE (EVERY 10 SECONDS)
 // ------------------------------------------------------------------
+// IMPORTANT FIXES:
+// - CRON only updates statusManage (not result).
+// - CRON will not overwrite records that are "Not Eligible".
+// - For socket emit, CRON aggregates existing per-user results but DOES NOT mutate them.
+// This prevents accidentally overwriting a correct per-user result.
 
 setInterval(async () => {
   try {
@@ -146,19 +152,11 @@ setInterval(async () => {
     const socketArray = [];
 
     for (const exam of exams) {
-
+      // Fetch all ExamUserStatus docs for this exam (we need them to decide if any results exist)
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
-      
-      // पहले से saved result (अगर कोई है)
-      const savedResultData = userStatuses.find(u => u.result !== null);
 
-      // अगर पहले से result है → lock कर देंगे (overwrite नहीं करेंगे)
-      let lockedResult = savedResultData?.result ?? null;
-      let lockedStatus = savedResultData?.statusManage ?? null;
-
-      // Exam Date
+      // Exam Date + schedule
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
-
       const scheduleDateTime = moment.tz(
         `${examDate} ${exam.ScheduleTime}`,
         "YYYY-MM-DD HH:mm:ss",
@@ -166,40 +164,35 @@ setInterval(async () => {
       );
 
       const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
-      const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
+      const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, "minutes");
       const now = moment().tz("Asia/Kolkata");
 
-      let statusManage = lockedStatus || "Schedule";
+      // Decide statusManage (do not overwrite if any user has Not Eligible locked)
+      let statusManage = "Schedule";
+      if (now.isBefore(ongoingStart)) statusManage = "Schedule";
+      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
+      else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-      // अगर पहले result नहीं था, तभी status update होगा
-      if (!lockedStatus) {
-        if (now.isBefore(ongoingStart)) statusManage = "Schedule";
-        else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
-          statusManage = "Ongoing";
-        else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
+      // Update statusManage for all ExamUserStatus docs for this exam **only if**
+      // they are not permanently locked as "Not Eligible"
+      await ExamUserStatus.updateMany(
+        { examId: exam._id, statusManage: { $ne: "Not Eligible" } },
+        { $set: { statusManage } }
+      );
 
-        await ExamUserStatus.updateMany(
-          { examId: exam._id },
-          { $set: { statusManage } }
-        );
+      // RESULT AGGREGATION FOR SOCKET EMIT (don't mutate DB)
+      // If all non-null results are same and at least one non-null exists -> emit that value
+      const nonNullResults = userStatuses.map(u => u.result).filter(r => r !== null && r !== undefined);
+      let examResultForEmit = null;
+      const uniqueResults = [...new Set(nonNullResults)];
+      if (uniqueResults.length === 1 && uniqueResults[0] != null) {
+        // All available results are identical -> safe to emit that
+        examResultForEmit = uniqueResults[0];
+      } else {
+        // Mixed or no results -> emit null (meaning per-user results vary / unavailable)
+        examResultForEmit = null;
       }
 
-      // RESULT LOGIC
-      let examResult = lockedResult;
-
-      // अगर पहले result नहीं था → पहली बार result decide करो
-      if (!lockedResult && statusManage === "Completed") {
-        const anyAttempt = userStatuses.some(u => u.finalScore !== null);
-        examResult = anyAttempt ? "Completed" : "Not Attempt";
-
-        // पहली बार ही result save करना है
-        await ExamUserStatus.updateMany(
-          { examId: exam._id, result: null },
-          { $set: { result: examResult } }
-        );
-      }
-
-      // अब हर exam का data हमेशा push होगा (length हमेशा सही आएगी)
       socketArray.push({
         examId: exam._id,
         statusManage,
@@ -207,7 +200,7 @@ setInterval(async () => {
         ScheduleDate: exam.ScheduleDate,
         bufferTime,
         updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
-        result: examResult
+        result: examResultForEmit
       });
     }
 
