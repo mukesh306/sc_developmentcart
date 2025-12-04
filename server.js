@@ -144,6 +144,7 @@ global.io.on("connection", (socket) => {
 // ------------------------------
 // CRON: Update exam status every 10s per user
 // ------------------------------
+
 setInterval(async () => {
   try {
     const markingSetting = await MarkingSetting.findOne().lean();
@@ -157,38 +158,50 @@ setInterval(async () => {
       // Fetch exams for this user
       const userExamStatuses = await ExamUserStatus.find({ userId: socket.user._id })
         .populate('examId', 'ScheduleTime ScheduleDate ExamTime publish examDate')
+        .sort({ 'examId.examDate': 1, 'examId.ScheduleTime': 1 }) // sort by date & time
         .lean();
 
       const userExams = [];
+      let hasFailed = false; // track if user has failed any previous exam
 
       for (const status of userExamStatuses) {
         const exam = status.examId;
         if (!exam || !exam.publish) continue;
 
-        const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
-        const scheduleDateTime = moment.tz(
-          `${examDate} ${exam.ScheduleTime}`,
+        let statusManage = "Schedule";
+        let result = status.result;
+
+        const examDateTime = moment.tz(
+          `${moment(exam.examDate).format("YYYY-MM-DD")} ${exam.ScheduleTime}`,
           "YYYY-MM-DD HH:mm:ss",
           "Asia/Kolkata"
         );
 
-        const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
+        const ongoingStart = examDateTime.clone().add(bufferTime, "minutes");
         const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, "minutes");
         const now = moment().tz("Asia/Kolkata");
 
-        let statusManage = "Schedule";
-        if (now.isBefore(ongoingStart)) statusManage = "Schedule";
-        else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
-        else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
+        // If user already failed a previous exam, this exam becomes Not Eligible
+        if (hasFailed) {
+          statusManage = "Not Eligible";
+          result = null;
+          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage, result } });
+        } else {
+          // Determine status based on time
+          if (now.isBefore(ongoingStart)) statusManage = "Schedule";
+          else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
+          else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-        // Update user's status
-        await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
+          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
 
-        // Determine result
-        let result = status.result;
-        if (statusManage === "Completed" && (!result || result === null)) {
-          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result: "Not Attempt" } });
-          result = "Not Attempt";
+          // If completed and result null, set Not Attempt
+          if (statusManage === "Completed" && (!result || result === null)) {
+            result = "Not Attempt";
+            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
+          }
+
+          // Track if user failed this exam
+          if (status.result === "failed") hasFailed = true;
         }
 
         userExams.push({
@@ -210,6 +223,7 @@ setInterval(async () => {
     console.error("CRON ERROR:", err);
   }
 }, 10000);
+
 
 // ------------------------------------------------------------------
 // START SERVER
