@@ -148,33 +148,27 @@ setInterval(async () => {
     for (const exam of exams) {
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
 
-      // ---------------------------------------------
-      // 🛑 1) RESULT कभी भी update मत करो
-      // सिर्फ null पर ही set होने देना है
-      // ---------------------------------------------
-      const allResultsLocked = userStatuses.every(u => u.result !== null);
+      // 🛑 RESULT FIX: अगर result null नहीं है → कभी भी update मत करो
+      const savedResult = userStatuses.find(u => u.result !== null);
 
-      if (allResultsLocked) {
-        // सभी users socket में भेजो (EK NAHI — SAB)
-        userStatuses.forEach(u => {
-          socketArray.push({
-            examId: exam._id,
-            userId: u.userId,
-            statusManage: u.statusManage,
-            ScheduleTime: exam.ScheduleTime,
-            ScheduleDate: exam.ScheduleDate,
-            bufferTime,
-            updatedScheduleTime: exam.ScheduleTime,
-            result: u.result,  // हमेशा DB वाला
-          });
+      if (savedResult) {
+        socketArray.push({
+          examId: exam._id,
+          statusManage: savedResult.statusManage,
+          ScheduleTime: exam.ScheduleTime,
+          ScheduleDate: exam.ScheduleDate,
+          bufferTime,
+          updatedScheduleTime: exam.ScheduleTime,
+          result: savedResult.result  // हमेशा DB वाला दे रहे हैं
         });
         continue; // आगे की processing skip
       }
 
-      // ---------------------------------------------------------
-      // 🛑 2) यहां सिर्फ statusManage update होगा, result नहीं
-      // ---------------------------------------------------------
+      // -------------------------------------------
+      // RESULT अभी भी null है → पहली बार calculation
+      // -------------------------------------------
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
+
       const scheduleDateTime = moment.tz(
         `${examDate} ${exam.ScheduleTime}`,
         "YYYY-MM-DD HH:mm:ss",
@@ -187,57 +181,46 @@ setInterval(async () => {
 
       let statusManage = "Schedule";
       if (now.isBefore(ongoingStart)) statusManage = "Schedule";
-      else if (now.isBetween(ongoingStart, ongoingEnd)) statusManage = "Ongoing";
-      else statusManage = "Completed";
+      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
+        statusManage = "Ongoing";
+      else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-      // Status update (only status)
       await ExamUserStatus.updateMany(
         { examId: exam._id },
         { $set: { statusManage } }
       );
 
-      // -----------------------------------------------------------
-      // 🛑 3) Result सिर्फ पहली बार null से generate होगा
-      // -----------------------------------------------------------
       let examResult = null;
+
       if (statusManage === "Completed") {
-        userStatuses.forEach(async (u) => {
-          if (u.result === null) {
-            const r = u.finalScore !== null ? "Completed" : "Not Attempt";
-            await ExamUserStatus.updateOne(
-              { _id: u._id },
-              { $set: { result: r } }
-            );
-            u.result = r; // Local update
-          }
-        });
+        const anyAttempt = userStatuses.some(u => u.finalScore !== null);
+        examResult = anyAttempt ? "Completed" : "Not Attempt";
+
+        // पहली बार ही result save करना है
+        await ExamUserStatus.updateMany(
+          { examId: exam._id, result: null },
+          { $set: { result: examResult } }
+        );
       }
 
-      // अब socket में सभी users भेजो
-      const updatedUsers = await ExamUserStatus.find({ examId: exam._id }).lean();
-      updatedUsers.forEach(u => {
-        socketArray.push({
-          examId: exam._id,
-          userId: u.userId,
-          statusManage: u.statusManage,
-          ScheduleTime: exam.ScheduleTime,
-          ScheduleDate: exam.ScheduleDate,
-          bufferTime,
-          updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
-          result: u.result
-        });
+      socketArray.push({
+        examId: exam._id,
+        statusManage,
+        ScheduleTime: exam.ScheduleTime,
+        ScheduleDate: exam.ScheduleDate,
+        bufferTime,
+        updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
+        result: examResult
       });
     }
 
     if (socketArray.length && global.io) {
       global.io.emit("examStatusUpdate", socketArray);
     }
-
   } catch (err) {
     console.error("CRON ERROR:", err);
   }
 }, 10000);
-
 
 // ------------------------------------------------------------------
 // START SERVER
