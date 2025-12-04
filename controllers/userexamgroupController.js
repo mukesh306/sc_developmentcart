@@ -8,6 +8,7 @@ const College = require('../models/college');
 const School = require('../models/school');
 const CategoryTopUser = require('../models/CategoryTopUser');
 const Schoolerexam = require('../models/Schoolerexam');
+const ExamResult = require("../models/examResult");
 
 
 // exports.createGroup = async (req, res) => {
@@ -324,6 +325,39 @@ exports.deleteGroup = async (req, res) => {
   }
 };
 
+
+// exports.getGroupMembers = async (req, res) => {
+//   try {
+//     const { groupId } = req.params;
+
+//     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
+//       return res.status(400).json({ message: "Valid groupId is required." });
+//     }
+ 
+//     const group = await UserExamGroup.findById(groupId)
+//       .populate("members", "firstName email _id") 
+    
+//     if (!group) {
+//       return res.status(404).json({ message: "Group not found." });
+//     }
+
+//     return res.status(200).json({
+//       message: "Group members fetched successfully.",
+//       groupId: group._id,
+//       members: group.members, 
+//     });
+
+//   } catch (error) {
+//     console.error("Error fetching group members:", error);
+//     res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
+
 exports.getGroupMembers = async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -331,18 +365,42 @@ exports.getGroupMembers = async (req, res) => {
     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
       return res.status(400).json({ message: "Valid groupId is required." });
     }
- 
-    const group = await UserExamGroup.findById(groupId)
-      .populate("members", "firstName email _id") 
+
     
+    const group = await UserExamGroup.findById(groupId)
+      .populate("members", "firstName email _id");
+
     if (!group) {
       return res.status(404).json({ message: "Group not found." });
+    }
+
+    const membersWithExamData = [];
+
+    for (const member of group.members) {
+      
+      const results = await ExamResult.find({ userId: member._id })
+        .select("examId percentage result createdAt");
+
+     
+      const examPercentage = results.map(r => ({
+        examId: r.examId,
+        percentage: r.percentage,
+        result: r.result,
+        createdAt: r.createdAt
+      }));
+
+      membersWithExamData.push({
+        _id: member._id,
+        firstName: member.firstName,
+        email: member.email,
+        examPercentage 
+      });
     }
 
     return res.status(200).json({
       message: "Group members fetched successfully.",
       groupId: group._id,
-      members: group.members, 
+      members: membersWithExamData,
     });
 
   } catch (error) {
