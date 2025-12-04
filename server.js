@@ -146,27 +146,17 @@ setInterval(async () => {
     const socketArray = [];
 
     for (const exam of exams) {
+
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
+      
+      // पहले से saved result (अगर कोई है)
+      const savedResultData = userStatuses.find(u => u.result !== null);
 
-      // 🛑 RESULT FIX: अगर result null नहीं है → कभी भी update मत करो
-      const savedResult = userStatuses.find(u => u.result !== null);
+      // अगर पहले से result है → lock कर देंगे (overwrite नहीं करेंगे)
+      let lockedResult = savedResultData?.result ?? null;
+      let lockedStatus = savedResultData?.statusManage ?? null;
 
-      if (savedResult) {
-        socketArray.push({
-          examId: exam._id,
-          statusManage: savedResult.statusManage,
-          ScheduleTime: exam.ScheduleTime,
-          ScheduleDate: exam.ScheduleDate,
-          bufferTime,
-          updatedScheduleTime: exam.ScheduleTime,
-          result: savedResult.result  // हमेशा DB वाला दे रहे हैं
-        });
-        continue; // आगे की processing skip
-      }
-
-      // -------------------------------------------
-      // RESULT अभी भी null है → पहली बार calculation
-      // -------------------------------------------
+      // Exam Date
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
 
       const scheduleDateTime = moment.tz(
@@ -179,20 +169,26 @@ setInterval(async () => {
       const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
       const now = moment().tz("Asia/Kolkata");
 
-      let statusManage = "Schedule";
-      if (now.isBefore(ongoingStart)) statusManage = "Schedule";
-      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
-        statusManage = "Ongoing";
-      else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
+      let statusManage = lockedStatus || "Schedule";
 
-      await ExamUserStatus.updateMany(
-        { examId: exam._id },
-        { $set: { statusManage } }
-      );
+      // अगर पहले result नहीं था, तभी status update होगा
+      if (!lockedStatus) {
+        if (now.isBefore(ongoingStart)) statusManage = "Schedule";
+        else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
+          statusManage = "Ongoing";
+        else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-      let examResult = null;
+        await ExamUserStatus.updateMany(
+          { examId: exam._id },
+          { $set: { statusManage } }
+        );
+      }
 
-      if (statusManage === "Completed") {
+      // RESULT LOGIC
+      let examResult = lockedResult;
+
+      // अगर पहले result नहीं था → पहली बार result decide करो
+      if (!lockedResult && statusManage === "Completed") {
         const anyAttempt = userStatuses.some(u => u.finalScore !== null);
         examResult = anyAttempt ? "Completed" : "Not Attempt";
 
@@ -203,6 +199,7 @@ setInterval(async () => {
         );
       }
 
+      // अब हर exam का data हमेशा push होगा (length हमेशा सही आएगी)
       socketArray.push({
         examId: exam._id,
         statusManage,
@@ -214,9 +211,11 @@ setInterval(async () => {
       });
     }
 
+    // SOCKET EMIT
     if (socketArray.length && global.io) {
       global.io.emit("examStatusUpdate", socketArray);
     }
+
   } catch (err) {
     console.error("CRON ERROR:", err);
   }
