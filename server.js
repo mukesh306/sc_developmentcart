@@ -176,37 +176,35 @@ setInterval(async () => {
       else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
       else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-      // UPDATE statusManage BUT never overwrite Not Eligible
+      // -----------------------------
+      // UPDATE STATUS ONLY (Do not touch result)
+      // -----------------------------
       await ExamUserStatus.updateMany(
         { examId: exam._id, statusManage: { $ne: "Not Eligible" } },
         { $set: { statusManage } }
       );
 
-      // ------------------------------------------------------------------
+      // -----------------------------
       // FIX RESULT LOGIC
-      // ------------------------------------------------------------------
-      for (const user of userStatuses) {
+      // -----------------------------
+      if (statusManage === "Completed") {
+        for (const user of userStatuses) {
+          // If already failed or passed → never overwrite
+          if (user.result === "failed" || user.result === "passed") continue;
 
-        // 1️⃣ If result is already failed or passed → NEVER change it
-        if (user.result === "failed" || user.result === "passed") {
-          continue;
-        }
-
-        // 2️⃣ If exam completed and user still has null result → set Not Attempt
-        if (
-          statusManage === "Completed" &&
-          (user.result === null || user.result === undefined)
-        ) {
-          await ExamUserStatus.updateOne(
-            { _id: user._id },
-            { $set: { result: "Not Attempt" } }
-          );
+          // If null or undefined → set Not Attempt
+          if (user.result === null || user.result === undefined) {
+            await ExamUserStatus.updateOne(
+              { _id: user._id },
+              { $set: { result: "Not Attempt" } }
+            );
+          }
         }
       }
 
-      // ------------------------------------------------------------------
-      // SOCKET RESULT (Only for frontend display — no DB change)
-      // ------------------------------------------------------------------
+      // -----------------------------
+      // SOCKET EMIT LOGIC (For frontend)
+      // -----------------------------
       const refreshedStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
       const nonNullResults = refreshedStatuses
         .map(u => u.result)
@@ -216,10 +214,9 @@ setInterval(async () => {
       const uniqueResults = [...new Set(nonNullResults)];
 
       if (uniqueResults.length === 1 && uniqueResults[0] != null) {
-        examResultForEmit = uniqueResults[0]; // Only when ALL results same
+        examResultForEmit = uniqueResults[0];
       }
 
-      // PUSH SOCKET DATA
       socketArray.push({
         examId: exam._id,
         statusManage,
