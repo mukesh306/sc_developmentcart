@@ -142,29 +142,28 @@ global.io.on("connection", (socket) => {
 });
 
 // ------------------------------
-// CRON: Update exam status every 10s
+// CRON: Update exam status every 10s per user
 // ------------------------------
 setInterval(async () => {
   try {
+    const markingSetting = await MarkingSetting.findOne().lean();
+    const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
+
     if (!global.io) return;
 
-    // Loop through connected sockets
-    global.io.sockets.sockets.forEach(async (socket) => {
-      if (!socket.user) return; // skip if no user attached
+    for (const [socketId, socket] of global.io.sockets.sockets) {
+      if (!socket.user) continue;
 
-      // Get all ExamUserStatus for this user
+      // Fetch exams for this user
       const userExamStatuses = await ExamUserStatus.find({ userId: socket.user._id })
-        .populate('examId', 'ScheduleTime ScheduleDate ExamTime publish') // get exam info
+        .populate('examId', 'ScheduleTime ScheduleDate ExamTime publish examDate')
         .lean();
 
-      const markingSetting = await MarkingSetting.findOne().lean();
-      const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
-
-      const socketArray = [];
+      const userExams = [];
 
       for (const status of userExamStatuses) {
         const exam = status.examId;
-        if (!exam || !exam.publish) continue; // skip unpublished exams
+        if (!exam || !exam.publish) continue;
 
         const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
         const scheduleDateTime = moment.tz(
@@ -182,23 +181,17 @@ setInterval(async () => {
         else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
         else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-        // Update ExamUserStatus for this user
-        await ExamUserStatus.updateOne(
-          { _id: status._id },
-          { $set: { statusManage } }
-        );
+        // Update user's status
+        await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
 
-        // If completed and result null, set Not Attempt
+        // Determine result
         let result = status.result;
         if (statusManage === "Completed" && (!result || result === null)) {
-          await ExamUserStatus.updateOne(
-            { _id: status._id },
-            { $set: { result: "Not Attempt" } }
-          );
+          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result: "Not Attempt" } });
           result = "Not Attempt";
         }
 
-        socketArray.push({
+        userExams.push({
           examId: exam._id,
           statusManage,
           ScheduleTime: exam.ScheduleTime,
@@ -209,10 +202,10 @@ setInterval(async () => {
         });
       }
 
-      if (socketArray.length) {
-        socket.emit("examStatusUpdate", socketArray); // send only this user's exams
+      if (userExams.length) {
+        socket.emit("examStatusUpdate", userExams);
       }
-    });
+    }
   } catch (err) {
     console.error("CRON ERROR:", err);
   }
