@@ -147,25 +147,25 @@ setInterval(async () => {
     for (const exam of exams) {
       const userStatuses = await ExamUserStatus.find({ examId: exam._id }).lean();
 
-      // 🛑 RESULT FIX : अगर DB में failed/passed है → CRON कभी update नहीं करेगा
-      const existingFinalResult = userStatuses.find(u =>
-        u.result === "failed" || u.result === "passed"
-      );
+      // 🛑 RESULT FIX: अगर result null नहीं है → कभी भी update मत करो
+      const savedResult = userStatuses.find(u => u.result !== null);
 
-      if (existingFinalResult) {
+      if (savedResult) {
         socketArray.push({
           examId: exam._id,
-          statusManage: existingFinalResult.statusManage,
+          statusManage: savedResult.statusManage,
           ScheduleTime: exam.ScheduleTime,
           ScheduleDate: exam.ScheduleDate,
           bufferTime,
           updatedScheduleTime: exam.ScheduleTime,
-          result: existingFinalResult.result // हमेशा वही भेजेगा जो DB में है
+          result: savedResult.result  // हमेशा DB वाला दे रहे हैं
         });
         continue; // आगे की processing skip
       }
 
-      // Normal Status Handling
+      // -------------------------------------------
+      // RESULT अभी भी null है → पहली बार calculation
+      // -------------------------------------------
       const examDate = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
 
       const scheduleDateTime = moment.tz(
@@ -192,19 +192,14 @@ setInterval(async () => {
       let examResult = null;
 
       if (statusManage === "Completed") {
-        const existing = userStatuses.find(u => u.result !== null);
+        const anyAttempt = userStatuses.some(u => u.finalScore !== null);
+        examResult = anyAttempt ? "Completed" : "Not Attempt";
 
-        if (existing) {
-          examResult = existing.result; // DB में जो भी है → वही ले लो
-        } else {
-          const anyAttempt = userStatuses.some(u => u.finalScore !== null);
-          examResult = anyAttempt ? "Completed" : "Not Attempt";
-
-          await ExamUserStatus.updateMany(
-            { examId: exam._id, result: null },
-            { $set: { result: examResult } }
-          );
-        }
+        // पहली बार ही result save करना है
+        await ExamUserStatus.updateMany(
+          { examId: exam._id, result: null },
+          { $set: { result: examResult } }
+        );
       }
 
       socketArray.push({
