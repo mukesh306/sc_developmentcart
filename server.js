@@ -74,7 +74,7 @@ global.io = new Server(server, {
 });
 
 // In-memory store for exam start timestamps
-const examStartTimes = {}; // key: examId, value: timestamp in ms
+const examStartTimes = {}; 
 
 // ------------------------------
 // AUTH MIDDLEWARE FOR SOCKET
@@ -93,6 +93,35 @@ io.use(async (socket, next) => {
     next(new Error("Authentication error: Invalid token"));
   }
 });
+
+// -------------------------------------------
+// HELPER: CHECK IF EXAM FULLY COMPLETED
+// -------------------------------------------
+async function isExamFullyCompleted(examId) {
+  const statuses = await ExamUserStatus.find({ examId }).lean();
+  return statuses.every(s =>
+    s.statusManage === "Completed" ||
+    s.statusManage === "Not Eligible"
+  );
+}
+
+// -------------------------------------------
+// HELPER: FINAL RANK CALCULATION
+// -------------------------------------------
+async function calculateFinalRank(examId) {
+  const users = await ExamUserStatus.find({ examId })
+    .sort({ totalMarks: -1 })
+    .lean();
+
+  let rank = 1;
+  for (const u of users) {
+    await ExamUserStatus.updateOne(
+      { _id: u._id },
+      { $set: { rank } }
+    );
+    rank++;
+  }
+}
 
 // ------------------------------
 // SOCKET EVENTS
@@ -117,7 +146,11 @@ global.io.on("connection", (socket) => {
       let remainingSeconds = examDuration * 60 - elapsedSeconds;
       if (remainingSeconds < 0) remainingSeconds = 0;
 
-      socket.emit("examTimeResponse", { examId, ExamTime: examDuration, remainingSeconds });
+      socket.emit("examTimeResponse", {
+        examId,
+        ExamTime: examDuration,
+        remainingSeconds
+      });
 
       const interval = setInterval(() => {
         if (remainingSeconds <= 0) {
@@ -141,10 +174,9 @@ global.io.on("connection", (socket) => {
   });
 });
 
-// ------------------------------
-// CRON: Update exam status every 10s per user
-// ------------------------------
-
+// --------------------------------------------------------------------
+// MAIN CRON — RANK/RESULT SHOW ONLY AFTER FULL EXAM COMPLETED
+// --------------------------------------------------------------------
 setInterval(async () => {
   try {
     const markingSetting = await MarkingSetting.findOne().lean();
@@ -155,14 +187,13 @@ setInterval(async () => {
     for (const [socketId, socket] of global.io.sockets.sockets) {
       if (!socket.user) continue;
 
-      // Fetch exams for this user
       const userExamStatuses = await ExamUserStatus.find({ userId: socket.user._id })
         .populate('examId', 'ScheduleTime ScheduleDate ExamTime publish examDate')
-        .sort({ 'examId.examDate': 1, 'examId.ScheduleTime': 1 }) // sort by date & time
+        .sort({ 'examId.examDate': 1, 'examId.ScheduleTime': 1 })
         .lean();
 
       const userExams = [];
-      let hasFailed = false; // track if user has failed any previous exam
+      let hasFailed = false;
 
       for (const status of userExamStatuses) {
         const exam = status.examId;
@@ -181,38 +212,49 @@ setInterval(async () => {
         const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, "minutes");
         const now = moment().tz("Asia/Kolkata");
 
-        // If user already failed a previous exam, this exam becomes Not Eligible
         if (hasFailed) {
           statusManage = "Not Eligible";
           result = null;
           await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage, result } });
         } else {
-          // Determine status based on time
           if (now.isBefore(ongoingStart)) statusManage = "Schedule";
           else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
           else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
           await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
 
-          // If completed and result null, set Not Attempt
           if (statusManage === "Completed" && (!result || result === null)) {
             result = "Not Attempt";
             await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
           }
 
-          // Track if user failed this exam
           if (status.result === "failed") hasFailed = true;
         }
 
-        userExams.push({
+        // -----------------------------
+        // NEW LOGIC: SHOW RESULT/RANK ONLY AFTER FULL EXAM COMPLETED
+        // -----------------------------
+        const examCompleted = await isExamFullyCompleted(exam._id);
+
+        let examObj = {
           examId: exam._id,
           statusManage,
           ScheduleTime: exam.ScheduleTime,
           ScheduleDate: exam.ScheduleDate,
           bufferTime,
           updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
-          result
-        });
+        };
+
+        if (examCompleted) {
+          examObj.result = result || null;
+          examObj.rank = status.rank || null;
+
+          if (!status.rank) {
+            await calculateFinalRank(exam._id);
+          }
+        }
+
+        userExams.push(examObj);
       }
 
       if (userExams.length) {
@@ -224,10 +266,6 @@ setInterval(async () => {
   }
 }, 1000);
 
-
-// ------------------------------------------------------------------
-// START SERVER
-// ------------------------------------------------------------------
 server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
