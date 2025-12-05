@@ -208,9 +208,7 @@ setInterval(async () => {
     for (const [socketId, socket] of global.io.sockets.sockets) {
       if (!socket.user) continue;
 
-      // -----------------------------------
-      // Build query — include category filter if set on socket
-      // -----------------------------------
+      
       const filterQuery = { userId: socket.user._id };
 
       if (socket.selectedCategory) {
