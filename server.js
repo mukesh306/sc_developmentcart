@@ -175,7 +175,7 @@ global.io.on("connection", (socket) => {
 });
 
 // --------------------------------------------------------------------
-// MAIN CRON — RANK/RESULT SHOW ONLY AFTER FULL EXAM COMPLETED
+// MAIN CRON — RANK/RESULT ONLY AFTER FULL EXAM COMPLETED
 // --------------------------------------------------------------------
 setInterval(async () => {
   try {
@@ -215,24 +215,35 @@ setInterval(async () => {
         if (hasFailed) {
           statusManage = "Not Eligible";
           result = null;
-          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage, result } });
+          await ExamUserStatus.updateOne(
+            { _id: status._id },
+            { $set: { statusManage, result } }
+          );
         } else {
           if (now.isBefore(ongoingStart)) statusManage = "Schedule";
           else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
           else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
-          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
+          await ExamUserStatus.updateOne(
+            { _id: status._id },
+            { $set: { statusManage } }
+          );
 
           if (statusManage === "Completed" && (!result || result === null)) {
             result = "Not Attempt";
-            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
+            await ExamUserStatus.updateOne(
+              { _id: status._id },
+              { $set: { result } }
+            );
           }
 
           if (status.result === "failed") hasFailed = true;
         }
 
         // -----------------------------
-        // NEW LOGIC: SHOW RESULT/RANK ONLY AFTER FULL EXAM COMPLETED
+        // SHOW RESULT & RANK ONLY WHEN:
+        // 1) FULL EXAM COMPLETED
+        // 2) THIS USER'S STATUS === COMPLETED
         // -----------------------------
         const examCompleted = await isExamFullyCompleted(exam._id);
 
@@ -245,7 +256,7 @@ setInterval(async () => {
           updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
         };
 
-        if (examCompleted) {
+        if (examCompleted && statusManage === "Completed") {
           examObj.result = result || null;
           examObj.rank = status.rank || null;
 
