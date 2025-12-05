@@ -208,14 +208,11 @@ setInterval(async () => {
     for (const [socketId, socket] of global.io.sockets.sockets) {
       if (!socket.user) continue;
 
-      // -----------------------------------
-      // Build query — include category filter if set on socket
-      // -----------------------------------
+      
       const filterQuery = { userId: socket.user._id };
 
       if (socket.selectedCategory) {
-        // ExamUserStatus saves category as an embedded object { _id, name, finalist }
-        // so we must filter by category._id
+       
         try {
           filterQuery["category._id"] = new mongoose.Types.ObjectId(socket.selectedCategory);
         } catch (e) {
