@@ -74,13 +74,13 @@ global.io = new Server(server, {
 });
 
 // In-memory store for exam start timestamps
-const examStartTimes = {}; 
+const examStartTimes = {};
 
 // ------------------------------
 // AUTH MIDDLEWARE FOR SOCKET
 // ------------------------------
 io.use(async (socket, next) => {
-  const token = socket.handshake.auth.token;
+  const token = socket.handshake.auth?.token;
   if (!token) return next(new Error("Authentication error: Token required"));
 
   try {
@@ -109,6 +109,7 @@ async function isExamFullyCompleted(examId) {
 // HELPER: FINAL RANK CALCULATION
 // -------------------------------------------
 async function calculateFinalRank(examId) {
+  // Note: adjust 'totalMarks' field name if different in your schema
   const users = await ExamUserStatus.find({ examId })
     .sort({ totalMarks: -1 })
     .lean();
@@ -127,7 +128,27 @@ async function calculateFinalRank(examId) {
 // SOCKET EVENTS
 // ------------------------------
 global.io.on("connection", (socket) => {
-  console.log(`✅ User connected: ${socket.user.firstName} (${socket.id})`);
+  console.log(`✅ User connected: ${socket.user?.firstName || 'Unknown'} (${socket.id})`);
+
+  // --- NEW: store selected category for this socket (optional)
+  // frontend should emit: socket.emit('joinExamCategory', { categoryId: "<objectId>" })
+  socket.selectedCategory = null;
+
+  socket.on("joinExamCategory", (data) => {
+    try {
+      const catId = data?.categoryId;
+      if (catId && mongoose.Types.ObjectId.isValid(catId)) {
+        socket.selectedCategory = catId.toString();
+        console.log(`Socket ${socket.id} set selectedCategory = ${socket.selectedCategory}`);
+      } else {
+        socket.selectedCategory = null;
+        console.log(`Socket ${socket.id} cleared selectedCategory (invalid or empty)`);
+      }
+    } catch (err) {
+      console.error("joinExamCategory error:", err);
+      socket.selectedCategory = null;
+    }
+  });
 
   socket.on("getExamTime", async (examId) => {
     try {
@@ -170,7 +191,7 @@ global.io.on("connection", (socket) => {
   });
 
   socket.on("disconnect", () => {
-    console.log(`❌ User disconnected: ${socket.user.firstName} (${socket.id})`);
+    console.log(`❌ User disconnected: ${socket.user?.firstName || 'Unknown'} (${socket.id})`);
   });
 });
 
@@ -187,7 +208,23 @@ setInterval(async () => {
     for (const [socketId, socket] of global.io.sockets.sockets) {
       if (!socket.user) continue;
 
-      const userExamStatuses = await ExamUserStatus.find({ userId: socket.user._id })
+      // -----------------------------------
+      // Build query — include category filter if set on socket
+      // -----------------------------------
+      const filterQuery = { userId: socket.user._id };
+
+      if (socket.selectedCategory) {
+        // ExamUserStatus saves category as an embedded object { _id, name, finalist }
+        // so we must filter by category._id
+        try {
+          filterQuery["category._id"] = new mongoose.Types.ObjectId(socket.selectedCategory);
+        } catch (e) {
+          // if invalid, ignore category filter
+          console.warn("Invalid socket.selectedCategory, ignoring category filter", socket.selectedCategory);
+        }
+      }
+
+      const userExamStatuses = await ExamUserStatus.find(filterQuery)
         .populate('examId', 'ScheduleTime ScheduleDate ExamTime publish examDate')
         .sort({ 'examId.examDate': 1, 'examId.ScheduleTime': 1 })
         .lean();
@@ -232,7 +269,7 @@ setInterval(async () => {
         }
 
         // -----------------------------
-        // NEW FIX ↓↓↓ rank only when Completed
+        // NEW FIX ↓↓↓ rank only when Completed AND full exam completed by everyone
         // -----------------------------
         const examCompleted = await isExamFullyCompleted(exam._id);
 
@@ -245,14 +282,21 @@ setInterval(async () => {
           updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
         };
 
-        // ⭐ FIX: Rank only when this user is also completed
+        // Rank only when this user status is Completed and exam is fully completed
         if (examCompleted && statusManage === "Completed") {
           examObj.result = result || null;
           examObj.rank = status.rank || null;
 
           if (!status.rank) {
             await calculateFinalRank(exam._id);
+            // reload status to get new rank
+            const updatedStatus = await ExamUserStatus.findById(status._id).lean();
+            examObj.rank = updatedStatus?.rank || examObj.rank;
           }
+        } else {
+          // send result if exists but don't calculate rank yet
+          examObj.result = result || null;
+          examObj.rank = status.rank || null;
         }
 
         userExams.push(examObj);
