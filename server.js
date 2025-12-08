@@ -278,25 +278,57 @@ setInterval(async () => {
           examObj.rank = null;
         }
 
- 
-
-
-
-        else if (statusManage === "Completed") {
+        // else if (statusManage === "Completed") {
          
-          examObj.result = result || status.result || null;
+        //   examObj.result = result || status.result || null;
 
-          if (examFullyCompleted) {
-            examObj.rank = status.rank || null;
-            if (!status.rank) {
-              await calculateFinalRank(exam._id);
-              let updatedStatus = await ExamUserStatus.findById(status._id).lean();
-              examObj.rank = updatedStatus?.rank || null;
-            }
-          } else {
-            examObj.rank = null;
-          }
-        }
+        //   if (examFullyCompleted) {
+        //     examObj.rank = status.rank || null;
+        //     if (!status.rank) {
+        //       await calculateFinalRank(exam._id);
+        //       let updatedStatus = await ExamUserStatus.findById(status._id).lean();
+        //       examObj.rank = updatedStatus?.rank || null;
+        //     }
+        //   } else {
+        //     examObj.rank = null;
+        //   }
+        // }
+
+else if (statusManage === "Completed") {
+
+ 
+  examObj.result = result || status.result || null;
+
+  if (examFullyCompleted) {
+
+   
+    setTimeout(async () => {
+      let finalRank = status.rank;
+
+     
+      if (!status.rank) {
+        await calculateFinalRank(exam._id);
+        let updatedStatus = await ExamUserStatus.findById(status._id).lean();
+        finalRank = updatedStatus?.rank || null;
+      }
+
+     
+      examObj.rank = finalRank;
+      examObj.result = result || status.result || null;
+
+      
+      socket.emit("examStatusUpdate", [examObj]);
+
+    }, 5000); 
+
+    
+    continue;
+  }
+
+  
+  examObj.rank = null;
+}
+
 
         userExams.push(examObj);
       }
