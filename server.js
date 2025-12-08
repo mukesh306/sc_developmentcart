@@ -10,6 +10,7 @@ const { Server } = require("socket.io");
 const moment = require("moment-timezone");
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
+const cron = require("node-cron");
 
 // MODELS
 const User = require("./models/User");
@@ -191,7 +192,7 @@ global.io.on("connection", (socket) => {
 // --------------------------------------------------------------------
 // MAIN CRON — RANK/RESULT SHOW ONLY AFTER FULL EXAM COMPLETED
 // --------------------------------------------------------------------
-setInterval(async () => {
+cron.schedule("*/1 * * * * *", async () => {
   try {
     const markingSetting = await MarkingSetting.findOne().lean();
     const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
@@ -253,9 +254,6 @@ setInterval(async () => {
           if (status.result === "failed") hasFailed = true;
         }
 
-        // -----------------------------
-        // FINAL FIX: rank + result logic (only for current exam, do not touch old completed exams)
-        // -----------------------------
         const examFullyCompleted = await isExamFullyCompleted(exam._id);
 
         let examObj = {
@@ -267,8 +265,6 @@ setInterval(async () => {
           updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
         };
 
-        // STATUS-WISE RESULT + RANK LOGIC
-
         if (statusManage === "Schedule") {
           examObj.result = null;
           examObj.rank = null;
@@ -277,13 +273,12 @@ setInterval(async () => {
           examObj.result = null;
           examObj.rank = null;
         }
-
         else if (statusManage === "Completed") {
-         
           examObj.result = result || status.result || null;
 
           if (examFullyCompleted) {
             examObj.rank = status.rank || null;
+
             if (!status.rank) {
               await calculateFinalRank(exam._id);
               let updatedStatus = await ExamUserStatus.findById(status._id).lean();
@@ -293,9 +288,6 @@ setInterval(async () => {
             examObj.rank = null;
           }
         }
-
-
-        
 
         userExams.push(examObj);
       }
@@ -307,8 +299,9 @@ setInterval(async () => {
   } catch (err) {
     console.error("CRON ERROR:", err);
   }
-}, 1000);
-
-server.listen(PORT, () => {
-  console.log(`Server running on port ${PORT}`);
 });
+
+// --------------------------------------------------------------------
+// START SERVER
+// --------------------------------------------------------------------
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
