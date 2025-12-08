@@ -109,7 +109,6 @@ async function isExamFullyCompleted(examId) {
 // HELPER: FINAL RANK CALCULATION
 // -------------------------------------------
 async function calculateFinalRank(examId) {
-  // Note: adjust 'totalMarks' field name if different in your schema
   const users = await ExamUserStatus.find({ examId })
     .sort({ totalMarks: -1 })
     .lean();
@@ -130,8 +129,6 @@ async function calculateFinalRank(examId) {
 global.io.on("connection", (socket) => {
   console.log(`✅ User connected: ${socket.user?.firstName || 'Unknown'} (${socket.id})`);
 
-  // --- NEW: store selected category for this socket (optional)
-  // frontend should emit: socket.emit('joinExamCategory', { categoryId: "<objectId>" })
   socket.selectedCategory = null;
 
   socket.on("joinExamCategory", (data) => {
@@ -139,13 +136,10 @@ global.io.on("connection", (socket) => {
       const catId = data?.categoryId;
       if (catId && mongoose.Types.ObjectId.isValid(catId)) {
         socket.selectedCategory = catId.toString();
-        console.log(`Socket ${socket.id} set selectedCategory = ${socket.selectedCategory}`);
       } else {
         socket.selectedCategory = null;
-        console.log(`Socket ${socket.id} cleared selectedCategory (invalid or empty)`);
       }
     } catch (err) {
-      console.error("joinExamCategory error:", err);
       socket.selectedCategory = null;
     }
   });
@@ -185,13 +179,12 @@ global.io.on("connection", (socket) => {
 
       socket.on("disconnect", () => clearInterval(interval));
     } catch (err) {
-      console.error("❌ Error fetching ExamTime:", err);
       socket.emit("examTimeResponse", { error: "Internal server error" });
     }
   });
 
   socket.on("disconnect", () => {
-    console.log(`❌ User disconnected: ${socket.user?.firstName || 'Unknown'} (${socket.id})`);
+    console.log(`❌ User disconnected: (${socket.id})`);
   });
 });
 
@@ -208,17 +201,12 @@ setInterval(async () => {
     for (const [socketId, socket] of global.io.sockets.sockets) {
       if (!socket.user) continue;
 
-      
       const filterQuery = { userId: socket.user._id };
 
       if (socket.selectedCategory) {
-       
         try {
           filterQuery["category._id"] = new mongoose.Types.ObjectId(socket.selectedCategory);
-        } catch (e) {
-          // if invalid, ignore category filter
-          console.warn("Invalid socket.selectedCategory, ignoring category filter", socket.selectedCategory);
-        }
+        } catch (e) {}
       }
 
       const userExamStatuses = await ExamUserStatus.find(filterQuery)
@@ -266,9 +254,9 @@ setInterval(async () => {
         }
 
         // -----------------------------
-        // NEW FIX ↓↓↓ rank only when Completed AND full exam completed by everyone
+        // FINAL FIX: rank + result logic
         // -----------------------------
-        const examCompleted = await isExamFullyCompleted(exam._id);
+        const examFullyCompleted = await isExamFullyCompleted(exam._id);
 
         let examObj = {
           examId: exam._id,
@@ -279,21 +267,32 @@ setInterval(async () => {
           updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
         };
 
-        // Rank only when this user status is Completed and exam is fully completed
-        if (examCompleted && statusManage === "Completed") {
-          examObj.result = result || null;
-          examObj.rank = status.rank || null;
+        // STATUS-WISE RESULT + RANK LOGIC
 
-          if (!status.rank) {
-            await calculateFinalRank(exam._id);
-            // reload status to get new rank
-            const updatedStatus = await ExamUserStatus.findById(status._id).lean();
-            examObj.rank = updatedStatus?.rank || examObj.rank;
-          }
-        } else {
-          // send result if exists but don't calculate rank yet
+        if (statusManage === "Schedule") {
+          examObj.result = null;
+          examObj.rank = null;
+        }
+
+        else if (statusManage === "Ongoing") {
+          examObj.result = null;
+          examObj.rank = null;
+        }
+
+        else if (statusManage === "Completed") {
           examObj.result = result || null;
-          examObj.rank = status.rank || null;
+
+          if (examFullyCompleted) {
+            examObj.rank = status.rank || null;
+
+            if (!status.rank) {
+              await calculateFinalRank(exam._id);
+              let updatedStatus = await ExamUserStatus.findById(status._id).lean();
+              examObj.rank = updatedStatus?.rank || null;
+            }
+          } else {
+            examObj.rank = null;
+          }
         }
 
         userExams.push(examObj);
