@@ -109,6 +109,7 @@ async function isExamFullyCompleted(examId) {
 // -------------------------------------------
 // HELPER: FINAL RANK CALCULATION
 // -------------------------------------------
+
 async function calculateFinalRank(examId) {
   const users = await ExamUserStatus.find({ examId })
     .sort({ totalMarks: -1 })
@@ -192,6 +193,10 @@ global.io.on("connection", (socket) => {
 // --------------------------------------------------------------------
 // MAIN CRON — RANK/RESULT SHOW ONLY AFTER FULL EXAM COMPLETED
 // --------------------------------------------------------------------
+
+// --------------------------------------------------------------------
+// MAIN CRON — RANK/RESULT SHOW ONLY AFTER FULL EXAM COMPLETED
+// --------------------------------------------------------------------
 cron.schedule("*/1 * * * * *", async () => {
   try {
     const markingSetting = await MarkingSetting.findOne().lean();
@@ -216,13 +221,13 @@ cron.schedule("*/1 * * * * *", async () => {
         .lean();
 
       const userExams = [];
-      let hasFailed = false;
+      let hasFailed = false; // reset per user
 
       for (const status of userExamStatuses) {
         const exam = status.examId;
         if (!exam || !exam.publish) continue;
 
-        let statusManage = "Schedule";
+        let statusManage = status.statusManage || "Schedule";
         let result = status.result;
 
         const examDateTime = moment.tz(
@@ -235,22 +240,26 @@ cron.schedule("*/1 * * * * *", async () => {
         const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, "minutes");
         const now = moment().tz("Asia/Kolkata");
 
-        if (hasFailed) {
+        // Only future exams affected if previous exam failed
+        if (hasFailed && (statusManage === "Schedule" || statusManage === "Ongoing")) {
           statusManage = "Not Eligible";
           result = null;
           await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage, result } });
         } else {
+          // normal status update
           if (now.isBefore(ongoingStart)) statusManage = "Schedule";
           else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
           else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
 
           await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
 
-          if (statusManage === "Completed" && (!result || result === null)) {
+          // Set "Not Attempt" ONLY if exam completed but result is null
+          if (statusManage === "Completed" && (result === null || result === undefined)) {
             result = "Not Attempt";
             await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
           }
 
+          // Mark failure AFTER processing current exam
           if (status.result === "failed") hasFailed = true;
         }
 
@@ -265,15 +274,10 @@ cron.schedule("*/1 * * * * *", async () => {
           updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
         };
 
-        if (statusManage === "Schedule") {
+        if (statusManage === "Schedule" || statusManage === "Ongoing") {
           examObj.result = null;
           examObj.rank = null;
-        }
-        else if (statusManage === "Ongoing") {
-          examObj.result = null;
-          examObj.rank = null;
-        }
-        else if (statusManage === "Completed") {
+        } else if (statusManage === "Completed") {
           examObj.result = result || status.result || null;
 
           if (examFullyCompleted) {
@@ -281,12 +285,15 @@ cron.schedule("*/1 * * * * *", async () => {
 
             if (!status.rank) {
               await calculateFinalRank(exam._id);
-              let updatedStatus = await ExamUserStatus.findById(status._id).lean();
+              const updatedStatus = await ExamUserStatus.findById(status._id).lean();
               examObj.rank = updatedStatus?.rank || null;
             }
           } else {
             examObj.rank = null;
           }
+        } else if (statusManage === "Not Eligible") {
+          examObj.result = null;
+          examObj.rank = null;
         }
 
         userExams.push(examObj);
@@ -300,6 +307,9 @@ cron.schedule("*/1 * * * * *", async () => {
     console.error("CRON ERROR:", err);
   }
 });
+
+
+
 
 // --------------------------------------------------------------------
 // START SERVER
