@@ -5,18 +5,18 @@ const path = require('path');
 require('dotenv').config();
 const connectDB = require('./config/db');
 
-const http = require("http");
-const { Server } = require("socket.io");
-const moment = require("moment-timezone");
+const http = require('http');
+const { Server } = require('socket.io');
+const moment = require('moment-timezone');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
-const cron = require("node-cron");
+const cron = require('node-cron');
 
 // MODELS
-const User = require("./models/User");
-const Schoolerexam = require("./models/Schoolerexam");
-const MarkingSetting = require("./models/markingSetting");
-const ExamUserStatus = require("./models/ExamUserStatus");
+const User = require('./models/User');
+const Schoolerexam = require('./models/Schoolerexam');
+const MarkingSetting = require('./models/markingSetting');
+const ExamUserStatus = require('./models/ExamUserStatus');
 
 // ROUTES
 const authRoutes = require('./routes/authRoutes');
@@ -70,9 +70,11 @@ app.use('/api/v1', classSeatRoutes);
 // SOCKET.IO SETUP
 // ------------------------------------------------------------------
 const server = http.createServer(app);
-global.io = new Server(server, {
-  cors: { origin: "*", methods: ["GET", "POST"] },
+const io = new Server(server, {
+  cors: { origin: '*', methods: ['GET', 'POST'] },
 });
+// expose globally for other parts if needed
+global.io = io;
 
 // In-memory store for exam start timestamps
 const examStartTimes = {};
@@ -82,16 +84,16 @@ const examStartTimes = {};
 // ------------------------------
 io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
-  if (!token) return next(new Error("Authentication error: Token required"));
+  if (!token) return next(new Error('Authentication error: Token required'));
 
   try {
-    const decoded = jwt.verify(token, process.env.JWT_SECRET || "testsecret");
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'testsecret');
     const user = await User.findById(decoded.id);
-    if (!user) return next(new Error("Authentication error: User not found"));
+    if (!user) return next(new Error('Authentication error: User not found'));
     socket.user = user;
     next();
   } catch (err) {
-    next(new Error("Authentication error: Invalid token"));
+    next(new Error('Authentication error: Invalid token'));
   }
 });
 
@@ -100,27 +102,19 @@ io.use(async (socket, next) => {
 // -------------------------------------------
 async function isExamFullyCompleted(examId) {
   const statuses = await ExamUserStatus.find({ examId }).lean();
-  return statuses.every(s =>
-    s.statusManage === "Completed" ||
-    s.statusManage === "Not Eligible"
+  return statuses.every(
+    (s) => s.statusManage === 'Completed' || s.statusManage === 'Not Eligible'
   );
 }
 
 // -------------------------------------------
 // HELPER: FINAL RANK CALCULATION
 // -------------------------------------------
-
 async function calculateFinalRank(examId) {
-  const users = await ExamUserStatus.find({ examId })
-    .sort({ totalMarks: -1 })
-    .lean();
-
+  const users = await ExamUserStatus.find({ examId }).sort({ totalMarks: -1 }).lean();
   let rank = 1;
   for (const u of users) {
-    await ExamUserStatus.updateOne(
-      { _id: u._id },
-      { $set: { rank } }
-    );
+    await ExamUserStatus.updateOne({ _id: u._id }, { $set: { rank } });
     rank++;
   }
 }
@@ -128,12 +122,12 @@ async function calculateFinalRank(examId) {
 // ------------------------------
 // SOCKET EVENTS
 // ------------------------------
-global.io.on("connection", (socket) => {
+io.on('connection', (socket) => {
   console.log(`✅ User connected: ${socket.user?.firstName || 'Unknown'} (${socket.id})`);
 
   socket.selectedCategory = null;
 
-  socket.on("joinExamCategory", (data) => {
+  socket.on('joinExamCategory', (data) => {
     try {
       const catId = data?.categoryId;
       if (catId && mongoose.Types.ObjectId.isValid(catId)) {
@@ -146,14 +140,14 @@ global.io.on("connection", (socket) => {
     }
   });
 
-  socket.on("getExamTime", async (examId) => {
+  socket.on('getExamTime', async (examId) => {
     try {
       if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
-        return socket.emit("examTimeResponse", { error: "Invalid examId" });
+        return socket.emit('examTimeResponse', { error: 'Invalid examId' });
       }
 
-      const exam = await Schoolerexam.findById(examId).select("ExamTime").lean();
-      if (!exam) return socket.emit("examTimeResponse", { error: "Exam not found" });
+      const exam = await Schoolerexam.findById(examId).select('ExamTime').lean();
+      if (!exam) return socket.emit('examTimeResponse', { error: 'Exam not found' });
 
       const examDuration = exam.ExamTime || 0;
 
@@ -163,29 +157,29 @@ global.io.on("connection", (socket) => {
       let remainingSeconds = examDuration * 60 - elapsedSeconds;
       if (remainingSeconds < 0) remainingSeconds = 0;
 
-      socket.emit("examTimeResponse", {
+      socket.emit('examTimeResponse', {
         examId,
         ExamTime: examDuration,
-        remainingSeconds
+        remainingSeconds,
       });
 
       const interval = setInterval(() => {
         if (remainingSeconds <= 0) {
-          socket.emit("examCountdown", { examId, remainingSeconds: 0 });
+          socket.emit('examCountdown', { examId, remainingSeconds: 0 });
           clearInterval(interval);
           return;
         }
         remainingSeconds--;
-        socket.emit("examCountdown", { examId, remainingSeconds });
+        socket.emit('examCountdown', { examId, remainingSeconds });
       }, 1000);
 
-      socket.on("disconnect", () => clearInterval(interval));
+      socket.on('disconnect', () => clearInterval(interval));
     } catch (err) {
-      socket.emit("examTimeResponse", { error: "Internal server error" });
+      socket.emit('examTimeResponse', { error: 'Internal server error' });
     }
   });
 
-  socket.on("disconnect", () => {
+  socket.on('disconnect', () => {
     console.log(`❌ User disconnected: (${socket.id})`);
   });
 });
@@ -193,25 +187,22 @@ global.io.on("connection", (socket) => {
 // --------------------------------------------------------------------
 // MAIN CRON — RANK/RESULT SHOW ONLY AFTER FULL EXAM COMPLETED
 // --------------------------------------------------------------------
-
-// --------------------------------------------------------------------
-// MAIN CRON — RANK/RESULT SHOW ONLY AFTER FULL EXAM COMPLETED
-// --------------------------------------------------------------------
-cron.schedule("*/1 * * * * *", async () => {
+cron.schedule('*/1 * * * * *', async () => {
   try {
     const markingSetting = await MarkingSetting.findOne().lean();
     const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
     if (!global.io) return;
 
-    for (const [socketId, socket] of global.io.sockets.sockets) {
+    // iterate active sockets
+    for (const [socketId, socket] of io.sockets.sockets) {
       if (!socket.user) continue;
 
       const filterQuery = { userId: socket.user._id };
 
       if (socket.selectedCategory) {
         try {
-          filterQuery["category._id"] = new mongoose.Types.ObjectId(socket.selectedCategory);
+          filterQuery['category._id'] = new mongoose.Types.ObjectId(socket.selectedCategory);
         } catch (e) {}
       }
 
@@ -227,40 +218,41 @@ cron.schedule("*/1 * * * * *", async () => {
         const exam = status.examId;
         if (!exam || !exam.publish) continue;
 
-        let statusManage = status.statusManage || "Schedule";
+        let statusManage = status.statusManage || 'Schedule';
         let result = status.result;
 
         const examDateTime = moment.tz(
-          `${moment(exam.examDate).format("YYYY-MM-DD")} ${exam.ScheduleTime}`,
-          "YYYY-MM-DD HH:mm:ss",
-          "Asia/Kolkata"
+          `${moment(exam.examDate).format('YYYY-MM-DD')} ${exam.ScheduleTime}`,
+          'YYYY-MM-DD HH:mm:ss',
+          'Asia/Kolkata'
         );
 
-        const ongoingStart = examDateTime.clone().add(bufferTime, "minutes");
-        const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, "minutes");
-        const now = moment().tz("Asia/Kolkata");
+        const ongoingStart = examDateTime.clone().add(bufferTime, 'minutes');
+        const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, 'minutes');
+        const now = moment().tz('Asia/Kolkata');
 
         // Only future exams affected if previous exam failed
-        if (hasFailed && (statusManage === "Schedule" || statusManage === "Ongoing")) {
-          statusManage = "Not Eligible";
+        if (hasFailed && (statusManage === 'Schedule' || statusManage === 'Ongoing')) {
+          statusManage = 'Not Eligible';
           result = null;
           await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage, result } });
         } else {
           // normal status update
-          if (now.isBefore(ongoingStart)) statusManage = "Schedule";
-          else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = "Ongoing";
-          else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
+          if (now.isBefore(ongoingStart)) statusManage = 'Schedule';
+          else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = 'Ongoing';
+          else if (now.isSameOrAfter(ongoingEnd)) statusManage = 'Completed';
 
           await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
 
-          // Set "Not Attempt" ONLY if exam completed but result is null
-          if (statusManage === "Completed" && (result === null || result === undefined)) {
-            result = "Not Attempt";
+          // PER USER CHOICE (A): Set "Not Attempt" when result is null for a completed exam
+          // Note: This will not change exams that already have a saved result (passed/failed)
+          if (statusManage === 'Completed' && (result === null || result === undefined)) {
+            result = 'Not Attempt';
             await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
           }
 
-          // Mark failure AFTER processing current exam
-          if (status.result === "failed") hasFailed = true;
+          // Mark failure AFTER processing current exam so future exams become Not Eligible
+          if (status.result === 'failed') hasFailed = true;
         }
 
         const examFullyCompleted = await isExamFullyCompleted(exam._id);
@@ -271,13 +263,13 @@ cron.schedule("*/1 * * * * *", async () => {
           ScheduleTime: exam.ScheduleTime,
           ScheduleDate: exam.ScheduleDate,
           bufferTime,
-          updatedScheduleTime: ongoingStart.format("HH:mm:ss"),
+          updatedScheduleTime: ongoingStart.format('HH:mm:ss'),
         };
 
-        if (statusManage === "Schedule" || statusManage === "Ongoing") {
+        if (statusManage === 'Schedule' || statusManage === 'Ongoing') {
           examObj.result = null;
           examObj.rank = null;
-        } else if (statusManage === "Completed") {
+        } else if (statusManage === 'Completed') {
           examObj.result = result || status.result || null;
 
           if (examFullyCompleted) {
@@ -291,7 +283,7 @@ cron.schedule("*/1 * * * * *", async () => {
           } else {
             examObj.rank = null;
           }
-        } else if (statusManage === "Not Eligible") {
+        } else if (statusManage === 'Not Eligible') {
           examObj.result = null;
           examObj.rank = null;
         }
@@ -300,15 +292,13 @@ cron.schedule("*/1 * * * * *", async () => {
       }
 
       if (userExams.length) {
-        socket.emit("examStatusUpdate", userExams);
+        socket.emit('examStatusUpdate', userExams);
       }
     }
   } catch (err) {
-    console.error("CRON ERROR:", err);
+    console.error('CRON ERROR:', err);
   }
 });
-
-
 
 
 // --------------------------------------------------------------------
