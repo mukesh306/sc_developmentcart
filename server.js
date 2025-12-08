@@ -73,7 +73,6 @@ const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
-// expose globally for other parts if needed
 global.io = io;
 
 // In-memory store for exam start timestamps
@@ -195,6 +194,7 @@ cron.schedule('*/1 * * * * *', async () => {
     if (!global.io) return;
 
     // iterate active sockets
+    // io.sockets.sockets is a Map in modern socket.io; iterate entries
     for (const [socketId, socket] of io.sockets.sockets) {
       if (!socket.user) continue;
 
@@ -218,6 +218,7 @@ cron.schedule('*/1 * * * * *', async () => {
         const exam = status.examId;
         if (!exam || !exam.publish) continue;
 
+        // Use the stored statusManage/result but compute current time windows
         let statusManage = status.statusManage || 'Schedule';
         let result = status.result;
 
@@ -231,28 +232,49 @@ cron.schedule('*/1 * * * * *', async () => {
         const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, 'minutes');
         const now = moment().tz('Asia/Kolkata');
 
-        // Only future exams affected if previous exam failed
-        if (hasFailed && (statusManage === 'Schedule' || statusManage === 'Ongoing')) {
+        // compute what the status should be based on time (but don't overwrite Completed results blindly)
+        let computedStatus = statusManage;
+        if (now.isBefore(ongoingStart)) computedStatus = 'Schedule';
+        else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) computedStatus = 'Ongoing';
+        else if (now.isSameOrAfter(ongoingEnd)) computedStatus = 'Completed';
+
+        // If previous exam failed, apply Not Eligible only to future (Schedule/Ongoing) exams
+        if (hasFailed && (computedStatus === 'Schedule' || computedStatus === 'Ongoing')) {
+          // mark as Not Eligible (future exams only)
           statusManage = 'Not Eligible';
           result = null;
           await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage, result } });
         } else {
-          // normal status update
-          if (now.isBefore(ongoingStart)) statusManage = 'Schedule';
-          else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) statusManage = 'Ongoing';
-          else if (now.isSameOrAfter(ongoingEnd)) statusManage = 'Completed';
+          // Update statusManage in DB if changed (but be safe)
+          if (statusManage !== computedStatus) {
+            statusManage = computedStatus;
+            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
+          }
 
-          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
+          // SET "Not Attempt" only when:
+          // - exam is Completed (time passed)
+          // - there is NO existing result in DB (null/undefined)
+          // - AND we have evidence user never attempted the exam (no marks, no attempts, haveStarted false)
+          // This prevents overwriting a legit passed/failed value that is temporarily null due to timing.
+          const userNeverAttempted =
+            (status.totalMarks === null || status.totalMarks === undefined || status.totalMarks === 0) &&
+            (!status.attemptedQuestions || status.attemptedQuestions === 0) &&
+            (status.haveStarted === false || status.haveStarted === undefined);
 
-          // PER USER CHOICE (A): Set "Not Attempt" when result is null for a completed exam
-          // Note: This will not change exams that already have a saved result (passed/failed)
-          if (statusManage === 'Completed' && (result === null || result === undefined)) {
+          if (
+            statusManage === 'Completed' &&
+            (result === null || result === undefined) &&
+            userNeverAttempted
+          ) {
             result = 'Not Attempt';
             await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
           }
 
-          // Mark failure AFTER processing current exam so future exams become Not Eligible
-          if (status.result === 'failed') hasFailed = true;
+          // IMPORTANT: mark failure AFTER processing current exam
+          // Only set hasFailed true if DB has result 'failed' (we don't infer failure from missing values)
+          if (status.result === 'failed') {
+            hasFailed = true;
+          }
         }
 
         const examFullyCompleted = await isExamFullyCompleted(exam._id);
@@ -270,7 +292,8 @@ cron.schedule('*/1 * * * * *', async () => {
           examObj.result = null;
           examObj.rank = null;
         } else if (statusManage === 'Completed') {
-          examObj.result = result || status.result || null;
+          // prefer DB result; fallback to computed result variable
+          examObj.result = status.result != null ? status.result : result || null;
 
           if (examFullyCompleted) {
             examObj.rank = status.rank || null;
@@ -289,17 +312,16 @@ cron.schedule('*/1 * * * * *', async () => {
         }
 
         userExams.push(examObj);
-      }
+      } // end for statuses
 
       if (userExams.length) {
         socket.emit('examStatusUpdate', userExams);
       }
-    }
+    } // end for sockets
   } catch (err) {
     console.error('CRON ERROR:', err);
   }
 });
-
 
 // --------------------------------------------------------------------
 // START SERVER
