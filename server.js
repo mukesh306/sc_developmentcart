@@ -254,7 +254,7 @@ setInterval(async () => {
         }
 
         // -----------------------------
-        // FINAL FIX: rank + result logic
+        // FINAL FIX: rank + result logic (only for current exam, do not touch old completed exams)
         // -----------------------------
         const examFullyCompleted = await isExamFullyCompleted(exam._id);
 
@@ -273,18 +273,16 @@ setInterval(async () => {
           examObj.result = null;
           examObj.rank = null;
         }
-
         else if (statusManage === "Ongoing") {
           examObj.result = null;
           examObj.rank = null;
         }
-
         else if (statusManage === "Completed") {
-          examObj.result = result || null;
+          // previously saved result ko change nahi karna
+          examObj.result = result || status.result || null;
 
           if (examFullyCompleted) {
             examObj.rank = status.rank || null;
-
             if (!status.rank) {
               await calculateFinalRank(exam._id);
               let updatedStatus = await ExamUserStatus.findById(status._id).lean();
