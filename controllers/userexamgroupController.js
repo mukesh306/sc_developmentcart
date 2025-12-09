@@ -400,17 +400,33 @@ exports.getGroupMembers = async (req, res) => {
     const membersWithExamData = [];
 
     for (const member of group.members) {
-      
-      // Fetch exam results for this member
-      const results = await ExamResult.find({ userId: member._id })
-        .select("examId percentage completionTime createdAt"); 
 
-      const examPercentage = results.map(r => ({
-        examId: r.examId,
-        percentage: r.percentage,
-        completionTime: r.Completiontime  ?? null, 
-        createdAt: r.createdAt
-      }));
+      // Fetch exam results
+      const results = await ExamResult.find({ userId: member._id })
+        .select("examId percentage Completiontime createdAt")
+        .lean();
+
+      const examPercentage = [];
+
+      for (const r of results) {
+        
+        // 👇 Fetch rank from ExamUserStatus
+        const status = await ExamUserStatus.findOne({
+          userId: member._id,
+          examId: r.examId
+        })
+        .select("rank totalParticipants")
+        .lean();
+
+        examPercentage.push({
+          examId: r.examId,
+          percentage: r.percentage,
+          completionTime: r.Completiontime ?? null,
+          createdAt: r.createdAt,
+          rank: status?.rank ?? null,
+          totalParticipants: status?.totalParticipants ?? null,
+        });
+      }
 
       membersWithExamData.push({
         _id: member._id,
