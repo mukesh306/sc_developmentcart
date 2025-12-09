@@ -172,7 +172,7 @@ io.on('connection', (socket) => {
 });
 
 // --------------------------------------------------------------------
-// OPTIMIZED CRON — ONLY RUNS ON REAL CHANGES
+// OPTIMIZED CRON — STATUS STABLE (NO MID-ONGOING COMPLETED)
 // --------------------------------------------------------------------
 cron.schedule('*/15 * * * * *', async () => {
   try {
@@ -187,9 +187,7 @@ cron.schedule('*/15 * * * * *', async () => {
       if (!socket.user) continue;
 
       const query = { userId: socket.user._id };
-      if (socket.selectedCategory) {
-        query['category._id'] = socket.selectedCategory;
-      }
+      if (socket.selectedCategory) query['category._id'] = socket.selectedCategory;
 
       const statuses = await ExamUserStatus.find(query)
         .populate('examId', 'examDate ScheduleTime ExamTime publish')
@@ -212,44 +210,46 @@ cron.schedule('*/15 * * * * *', async () => {
           'YYYY-MM-DD HH:mm:ss',
           'Asia/Kolkata'
         );
-
         const ongoingStart = examStart.clone().add(bufferTime, 'minutes');
         const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, 'minutes');
 
         const now = moment().tz('Asia/Kolkata');
 
         let computedStatus = dbStatus;
-        if (now.isBefore(ongoingStart)) computedStatus = 'Schedule';
-        else if (now.isBefore(ongoingEnd)) computedStatus = 'Ongoing';
-        else computedStatus = 'Completed';
 
-        // Not Eligible for future exams if failed
-        if (hasFailed && (computedStatus === 'Schedule' || computedStatus === 'Ongoing')) {
-          if (dbStatus !== 'Not Eligible') {
-            await ExamUserStatus.updateOne(
-              { _id: status._id },
-              { $set: { statusManage: 'Not Eligible', result: null } }
-            );
-            dbStatus = 'Not Eligible';
-          }
-        } else {
-          if (dbStatus !== computedStatus) {
-            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage: computedStatus } });
-            dbStatus = computedStatus;
-          }
-
-          const neverAttempted =
-            (!status.totalMarks || status.totalMarks === 0) &&
-            (!status.attemptedQuestions || status.attemptedQuestions === 0) &&
-            !status.haveStarted;
-
-          if (computedStatus === 'Completed' && !dbResult && neverAttempted) {
-            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result: 'Not Attempt' } });
-            dbResult = 'Not Attempt';
-          }
-
-          if (status.result === 'failed') hasFailed = true;
+        // ⚡ STABLE STATUS LOGIC
+        if (dbStatus === 'Completed' || dbStatus === 'Not Eligible') {
+          // once completed/not eligible, never revert
+          computedStatus = dbStatus;
+        } else if (hasFailed && (now.isBefore(ongoingEnd))) {
+          // future exams after failure
+          computedStatus = 'Not Eligible';
+        } else if (now.isBefore(ongoingStart)) {
+          computedStatus = 'Schedule';
+        } else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) {
+          computedStatus = 'Ongoing';
+        } else if (now.isSameOrAfter(ongoingEnd)) {
+          computedStatus = 'Completed';
         }
+
+        // update DB if changed
+        if (dbStatus !== computedStatus) {
+          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage: computedStatus } });
+          dbStatus = computedStatus;
+        }
+
+        // handle Not Attempt
+        const neverAttempted =
+          (!status.totalMarks || status.totalMarks === 0) &&
+          (!status.attemptedQuestions || status.attemptedQuestions === 0) &&
+          !status.haveStarted;
+
+        if (dbStatus === 'Completed' && !dbResult && neverAttempted) {
+          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result: 'Not Attempt' } });
+          dbResult = 'Not Attempt';
+        }
+
+        if (status.result === 'failed') hasFailed = true;
 
         const examCompleted = await isExamFullyCompleted(exam._id);
 
@@ -271,9 +271,7 @@ cron.schedule('*/15 * * * * *', async () => {
               const newS = await ExamUserStatus.findById(status._id).lean();
               obj.rank = newS?.rank || null;
             }
-          } else {
-            obj.rank = null;
-          }
+          } else obj.rank = null;
         }
 
         sendData.push(obj);
