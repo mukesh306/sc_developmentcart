@@ -1609,7 +1609,6 @@ exports.getCategoriesFromUsers = async (req, res) => {
 // };
 
 
-
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -1631,10 +1630,7 @@ exports.userforAdmin = async (req, res) => {
     if (cityId) filter.cityId = cityId;
     if (categoryId) filter.categoryId = categoryId;
 
-    filter.createdAt = {
-      $gte: new Date(admin.startDate),
-      $lte: new Date(admin.endDate)
-    };
+    // ⭐ DATE FILTER REMOVED HERE (as you asked)
 
     const totalUsers = await User.find(filter).countDocuments();
 
@@ -1645,9 +1641,7 @@ exports.userforAdmin = async (req, res) => {
       .select("-password")
       .lean();
 
-    // -----------------------------
-    // ⭐ FIELDS FILTER LOGIC ADDED ⭐
-    // -----------------------------
+    // ⭐ FIELD FILTER (same as before)
     let requestedFields = [];
     if (fields) {
       requestedFields = fields.split(",").map(f => f.trim());
@@ -1658,16 +1652,12 @@ exports.userforAdmin = async (req, res) => {
     if (requestedFields.length > 0) {
       responseUsers = paginatedUsers.map(user => {
         const filtered = {};
-
         requestedFields.forEach(f => {
           if (user.hasOwnProperty(f)) {
             filtered[f] = user[f];
           }
         });
-
-        // _id always include
         filtered._id = user._id;
-
         return filtered;
       });
     }
@@ -1685,6 +1675,7 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: "Internal server error", error: error.message });
   }
 };
+
 
 
 // exports.userforAdmin = async (req, res) => {
