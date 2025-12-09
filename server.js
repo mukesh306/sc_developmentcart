@@ -161,6 +161,18 @@ io.on('connection', (socket) => {
         ExamTime: examDuration,
         remainingSeconds,
       });
+
+      const interval = setInterval(() => {
+        if (remainingSeconds <= 0) {
+          socket.emit('examCountdown', { examId, remainingSeconds: 0 });
+          clearInterval(interval);
+          return;
+        }
+        remainingSeconds--;
+        socket.emit('examCountdown', { examId, remainingSeconds });
+      }, 1000);
+
+      socket.on('disconnect', () => clearInterval(interval));
     } catch (err) {
       socket.emit('examTimeResponse', { error: 'Internal server error' });
     }
@@ -172,117 +184,142 @@ io.on('connection', (socket) => {
 });
 
 // --------------------------------------------------------------------
-// OPTIMIZED CRON — STATUS STABLE (NO MID-ONGOING COMPLETED)
+// MAIN CRON — RANK/RESULT SHOW ONLY AFTER FULL EXAM COMPLETED
 // --------------------------------------------------------------------
-cron.schedule('*/15 * * * * *', async () => {
+cron.schedule('*/1 * * * * *', async () => {
   try {
     const markingSetting = await MarkingSetting.findOne().lean();
-    const bufferTime = markingSetting?.bufferTime
-      ? parseInt(markingSetting.bufferTime)
-      : 0;
+    const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
     if (!global.io) return;
 
+    // iterate active sockets
+    // io.sockets.sockets is a Map in modern socket.io; iterate entries
     for (const [socketId, socket] of io.sockets.sockets) {
       if (!socket.user) continue;
 
-      const query = { userId: socket.user._id };
-      if (socket.selectedCategory) query['category._id'] = socket.selectedCategory;
+      const filterQuery = { userId: socket.user._id };
 
-      const statuses = await ExamUserStatus.find(query)
-        .populate('examId', 'examDate ScheduleTime ExamTime publish')
+      if (socket.selectedCategory) {
+        try {
+          filterQuery['category._id'] = new mongoose.Types.ObjectId(socket.selectedCategory);
+        } catch (e) {}
+      }
+
+      const userExamStatuses = await ExamUserStatus.find(filterQuery)
+        .populate('examId', 'ScheduleTime ScheduleDate ExamTime publish examDate')
         .sort({ 'examId.examDate': 1, 'examId.ScheduleTime': 1 })
         .lean();
 
-      const sendData = [];
-      let hasFailed = false;
+      const userExams = [];
+      let hasFailed = false; // reset per user
 
-      for (const status of statuses) {
+      for (const status of userExamStatuses) {
         const exam = status.examId;
         if (!exam || !exam.publish) continue;
 
-        let dbStatus = status.statusManage;
-        let dbResult = status.result;
+        // Use the stored statusManage/result but compute current time windows
+        let statusManage = status.statusManage || 'Schedule';
+        let result = status.result;
 
-        const examDate = moment(exam.examDate).format('YYYY-MM-DD');
-        const examStart = moment.tz(
-          `${examDate} ${exam.ScheduleTime}`,
+        const examDateTime = moment.tz(
+          `${moment(exam.examDate).format('YYYY-MM-DD')} ${exam.ScheduleTime}`,
           'YYYY-MM-DD HH:mm:ss',
           'Asia/Kolkata'
         );
-        const ongoingStart = examStart.clone().add(bufferTime, 'minutes');
-        const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, 'minutes');
 
+        const ongoingStart = examDateTime.clone().add(bufferTime, 'minutes');
+        const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, 'minutes');
         const now = moment().tz('Asia/Kolkata');
 
-        let computedStatus = dbStatus;
+        // compute what the status should be based on time (but don't overwrite Completed results blindly)
+        let computedStatus = statusManage;
+        if (now.isBefore(ongoingStart)) computedStatus = 'Schedule';
+        else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) computedStatus = 'Ongoing';
+        else if (now.isSameOrAfter(ongoingEnd)) computedStatus = 'Completed';
 
-        // ⚡ STABLE STATUS LOGIC
-        if (dbStatus === 'Completed' || dbStatus === 'Not Eligible') {
-          // once completed/not eligible, never revert
-          computedStatus = dbStatus;
-        } else if (hasFailed && (now.isBefore(ongoingEnd))) {
-          // future exams after failure
-          computedStatus = 'Not Eligible';
-        } else if (now.isBefore(ongoingStart)) {
-          computedStatus = 'Schedule';
-        } else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) {
-          computedStatus = 'Ongoing';
-        } else if (now.isSameOrAfter(ongoingEnd)) {
-          computedStatus = 'Completed';
+        // If previous exam failed, apply Not Eligible only to future (Schedule/Ongoing) exams
+        if (hasFailed && (computedStatus === 'Schedule' || computedStatus === 'Ongoing')) {
+          // mark as Not Eligible (future exams only)
+          statusManage = 'Not Eligible';
+          result = null;
+          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage, result } });
+        } else {
+          // Update statusManage in DB if changed (but be safe)
+          if (statusManage !== computedStatus) {
+            statusManage = computedStatus;
+            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
+          }
+
+          // SET "Not Attempt" only when:
+          // - exam is Completed (time passed)
+          // - there is NO existing result in DB (null/undefined)
+          // - AND we have evidence user never attempted the exam (no marks, no attempts, haveStarted false)
+          // This prevents overwriting a legit passed/failed value that is temporarily null due to timing.
+          const userNeverAttempted =
+            (status.totalMarks === null || status.totalMarks === undefined || status.totalMarks === 0) &&
+            (!status.attemptedQuestions || status.attemptedQuestions === 0) &&
+            (status.haveStarted === false || status.haveStarted === undefined);
+
+          if (
+            statusManage === 'Completed' &&
+            (result === null || result === undefined) &&
+            userNeverAttempted
+          ) {
+            result = 'Not Attempt';
+            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
+          }
+
+          // IMPORTANT: mark failure AFTER processing current exam
+          // Only set hasFailed true if DB has result 'failed' (we don't infer failure from missing values)
+          if (status.result === 'failed') {
+            hasFailed = true;
+          }
         }
 
-        // update DB if changed
-        if (dbStatus !== computedStatus) {
-          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage: computedStatus } });
-          dbStatus = computedStatus;
-        }
+        const examFullyCompleted = await isExamFullyCompleted(exam._id);
 
-        // handle Not Attempt
-        const neverAttempted =
-          (!status.totalMarks || status.totalMarks === 0) &&
-          (!status.attemptedQuestions || status.attemptedQuestions === 0) &&
-          !status.haveStarted;
-
-        if (dbStatus === 'Completed' && !dbResult && neverAttempted) {
-          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result: 'Not Attempt' } });
-          dbResult = 'Not Attempt';
-        }
-
-        if (status.result === 'failed') hasFailed = true;
-
-        const examCompleted = await isExamFullyCompleted(exam._id);
-
-        const obj = {
+        let examObj = {
           examId: exam._id,
-          statusManage: dbStatus,
+          statusManage,
           ScheduleTime: exam.ScheduleTime,
-          ScheduleDate: exam.examDate,
-          updatedScheduleTime: ongoingStart.format('HH:mm:ss'),
+          ScheduleDate: exam.ScheduleDate,
           bufferTime,
+          updatedScheduleTime: ongoingStart.format('HH:mm:ss'),
         };
 
-        if (dbStatus === 'Completed') {
-          obj.result = dbResult;
-          if (examCompleted) {
-            obj.rank = status.rank || null;
+        if (statusManage === 'Schedule' || statusManage === 'Ongoing') {
+          examObj.result = null;
+          examObj.rank = null;
+        } else if (statusManage === 'Completed') {
+          // prefer DB result; fallback to computed result variable
+          examObj.result = status.result != null ? status.result : result || null;
+
+          if (examFullyCompleted) {
+            examObj.rank = status.rank || null;
+
             if (!status.rank) {
               await calculateFinalRank(exam._id);
-              const newS = await ExamUserStatus.findById(status._id).lean();
-              obj.rank = newS?.rank || null;
+              const updatedStatus = await ExamUserStatus.findById(status._id).lean();
+              examObj.rank = updatedStatus?.rank || null;
             }
-          } else obj.rank = null;
+          } else {
+            examObj.rank = null;
+          }
+        } else if (statusManage === 'Not Eligible') {
+          examObj.result = null;
+          examObj.rank = null;
         }
 
-        sendData.push(obj);
-      }
+        userExams.push(examObj);
+      } // end for statuses
 
-      if (sendData.length) {
-        socket.emit('examStatusUpdate', sendData);
+      if (userExams.length) {
+        socket.emit('examStatusUpdate', userExams);
       }
-    }
+    } // end for sockets
   } catch (err) {
-    console.error('OPTIMIZED CRON ERROR:', err);
+    console.error('CRON ERROR:', err);
   }
 });
 
