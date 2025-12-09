@@ -403,12 +403,12 @@ exports.getGroupMembers = async (req, res) => {
       
       // Fetch exam results for this member
       const results = await ExamResult.find({ userId: member._id })
-        .select("examId percentage completionTime createdAt"); // 👈 result removed
+        .select("examId percentage completionTime createdAt"); 
 
       const examPercentage = results.map(r => ({
         examId: r.examId,
         percentage: r.percentage,
-        completionTime: r.completionTime ?? null, // 👈 added
+        completionTime: r.Completiontime  ?? null, 
         createdAt: r.createdAt
       }));
 
