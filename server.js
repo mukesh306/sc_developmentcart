@@ -126,9 +126,6 @@ io.on('connection', (socket) => {
 
   socket.selectedCategory = null;
 
-  // 🔥 ADD: Store last emitted data (to avoid continuous spam)
-  socket.lastExamStatus = null;
-
   socket.on('joinExamCategory', (data) => {
     try {
       const catId = data?.categoryId;
@@ -137,7 +134,7 @@ io.on('connection', (socket) => {
       } else {
         socket.selectedCategory = null;
       }
-    } catch {
+    } catch (err) {
       socket.selectedCategory = null;
     }
   });
@@ -152,6 +149,7 @@ io.on('connection', (socket) => {
       if (!exam) return socket.emit('examTimeResponse', { error: 'Exam not found' });
 
       const examDuration = exam.ExamTime || 0;
+
       if (!examStartTimes[examId]) examStartTimes[examId] = Date.now();
 
       let elapsedSeconds = Math.floor((Date.now() - examStartTimes[examId]) / 1000);
@@ -175,7 +173,7 @@ io.on('connection', (socket) => {
       }, 1000);
 
       socket.on('disconnect', () => clearInterval(interval));
-    } catch {
+    } catch (err) {
       socket.emit('examTimeResponse', { error: 'Internal server error' });
     }
   });
@@ -186,7 +184,7 @@ io.on('connection', (socket) => {
 });
 
 // --------------------------------------------------------------------
-// MAIN CRON — EMIT ONLY IF DATA CHANGES
+// MAIN CRON — RANK/RESULT SHOW ONLY AFTER FULL EXAM COMPLETED
 // --------------------------------------------------------------------
 cron.schedule('*/1 * * * * *', async () => {
   try {
@@ -195,6 +193,8 @@ cron.schedule('*/1 * * * * *', async () => {
 
     if (!global.io) return;
 
+    // iterate active sockets
+    // io.sockets.sockets is a Map in modern socket.io; iterate entries
     for (const [socketId, socket] of io.sockets.sockets) {
       if (!socket.user) continue;
 
@@ -203,7 +203,7 @@ cron.schedule('*/1 * * * * *', async () => {
       if (socket.selectedCategory) {
         try {
           filterQuery['category._id'] = new mongoose.Types.ObjectId(socket.selectedCategory);
-        } catch {}
+        } catch (e) {}
       }
 
       const userExamStatuses = await ExamUserStatus.find(filterQuery)
@@ -212,12 +212,13 @@ cron.schedule('*/1 * * * * *', async () => {
         .lean();
 
       const userExams = [];
-      let hasFailed = false;
+      let hasFailed = false; // reset per user
 
       for (const status of userExamStatuses) {
         const exam = status.examId;
         if (!exam || !exam.publish) continue;
 
+        // Use the stored statusManage/result but compute current time windows
         let statusManage = status.statusManage || 'Schedule';
         let result = status.result;
 
@@ -231,21 +232,30 @@ cron.schedule('*/1 * * * * *', async () => {
         const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, 'minutes');
         const now = moment().tz('Asia/Kolkata');
 
+        // compute what the status should be based on time (but don't overwrite Completed results blindly)
         let computedStatus = statusManage;
         if (now.isBefore(ongoingStart)) computedStatus = 'Schedule';
         else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) computedStatus = 'Ongoing';
         else if (now.isSameOrAfter(ongoingEnd)) computedStatus = 'Completed';
 
+        // If previous exam failed, apply Not Eligible only to future (Schedule/Ongoing) exams
         if (hasFailed && (computedStatus === 'Schedule' || computedStatus === 'Ongoing')) {
+          // mark as Not Eligible (future exams only)
           statusManage = 'Not Eligible';
           result = null;
           await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage, result } });
         } else {
+          // Update statusManage in DB if changed (but be safe)
           if (statusManage !== computedStatus) {
             statusManage = computedStatus;
             await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
           }
 
+          // SET "Not Attempt" only when:
+          // - exam is Completed (time passed)
+          // - there is NO existing result in DB (null/undefined)
+          // - AND we have evidence user never attempted the exam (no marks, no attempts, haveStarted false)
+          // This prevents overwriting a legit passed/failed value that is temporarily null due to timing.
           const userNeverAttempted =
             (status.totalMarks === null || status.totalMarks === undefined || status.totalMarks === 0) &&
             (!status.attemptedQuestions || status.attemptedQuestions === 0) &&
@@ -260,7 +270,11 @@ cron.schedule('*/1 * * * * *', async () => {
             await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
           }
 
-          if (status.result === 'failed') hasFailed = true;
+          // IMPORTANT: mark failure AFTER processing current exam
+          // Only set hasFailed true if DB has result 'failed' (we don't infer failure from missing values)
+          if (status.result === 'failed') {
+            hasFailed = true;
+          }
         }
 
         const examFullyCompleted = await isExamFullyCompleted(exam._id);
@@ -278,6 +292,7 @@ cron.schedule('*/1 * * * * *', async () => {
           examObj.result = null;
           examObj.rank = null;
         } else if (statusManage === 'Completed') {
+          // prefer DB result; fallback to computed result variable
           examObj.result = status.result != null ? status.result : result || null;
 
           if (examFullyCompleted) {
@@ -297,17 +312,12 @@ cron.schedule('*/1 * * * * *', async () => {
         }
 
         userExams.push(examObj);
-      }
+      } // end for statuses
 
-      // 🔥 EMIT ONLY IF DATA CHANGED
       if (userExams.length) {
-        const newData = JSON.stringify(userExams);
-        if (socket.lastExamStatus !== newData) {
-          socket.emit('examStatusUpdate', userExams);
-          socket.lastExamStatus = newData;
-        }
+        socket.emit('examStatusUpdate', userExams);
       }
-    }
+    } // end for sockets
   } catch (err) {
     console.error('CRON ERROR:', err);
   }
