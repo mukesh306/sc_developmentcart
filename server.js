@@ -12,13 +12,14 @@ const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 const cron = require('node-cron');
 
-// MODELS
+// MODELS (assumed existing)
 const User = require('./models/User');
 const Schoolerexam = require('./models/Schoolerexam');
 const MarkingSetting = require('./models/markingSetting');
 const ExamUserStatus = require('./models/ExamUserStatus');
 
-// ROUTES
+
+// ROUTES (keep same as before)
 const authRoutes = require('./routes/authRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const learningRoutes = require('./routes/learningRoutes');
@@ -75,7 +76,7 @@ const io = new Server(server, {
 });
 global.io = io;
 
-// In-memory store for exam start timestamps
+// In-memory store for exam start timestamps (used by getExamTime)
 const examStartTimes = {};
 
 // ------------------------------
@@ -107,14 +108,123 @@ async function isExamFullyCompleted(examId) {
 }
 
 // -------------------------------------------
-// HELPER: FINAL RANK CALCULATION
+// HELPER: FINAL RANK CALCULATION (idempotent)
 // -------------------------------------------
 async function calculateFinalRank(examId) {
+  // Sort by totalMarks desc; if tie-handling needed, extend logic
   const users = await ExamUserStatus.find({ examId }).sort({ totalMarks: -1 }).lean();
   let rank = 1;
   for (const u of users) {
+    // update only if rank missing or different (optional)
     await ExamUserStatus.updateOne({ _id: u._id }, { $set: { rank } });
     rank++;
+  }
+}
+
+// Utility: emit examStatus update for a specific socket (keeps previous behavior)
+async function emitExamStatusForSocket(socket) {
+  try {
+    const filterQuery = { userId: socket.user._id };
+
+    if (socket.selectedCategory) {
+      try {
+        filterQuery['category._id'] = new mongoose.Types.ObjectId(socket.selectedCategory);
+      } catch (e) {
+        // ignore invalid category
+      }
+    }
+
+    const userExamStatuses = await ExamUserStatus.find(filterQuery)
+      .populate('examId', 'ScheduleTime ScheduleDate ExamTime publish examDate')
+      .sort({ 'examId.examDate': 1, 'examId.ScheduleTime': 1 })
+      .lean();
+
+    const markingSetting = await MarkingSetting.findOne().lean();
+    const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
+
+    const userExams = [];
+
+    for (const status of userExamStatuses) {
+      const exam = status.examId;
+      if (!exam || !exam.publish) continue;
+
+      let statusManage = status.statusManage || 'Schedule';
+      let result = status.result;
+
+      const examDateTime = moment.tz(
+        `${moment(exam.examDate).format('YYYY-MM-DD')} ${exam.ScheduleTime}`,
+        'YYYY-MM-DD HH:mm:ss',
+        'Asia/Kolkata'
+      );
+
+      const ongoingStart = examDateTime.clone().add(bufferTime, 'minutes');
+      const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, 'minutes');
+      const now = moment().tz('Asia/Kolkata');
+
+      let computedStatus = statusManage;
+      if (now.isBefore(ongoingStart)) computedStatus = 'Schedule';
+      else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) computedStatus = 'Ongoing';
+      else if (now.isSameOrAfter(ongoingEnd)) computedStatus = 'Completed';
+
+      // Update DB safely if status changed (keeps original intent)
+      if (statusManage !== computedStatus) {
+        statusManage = computedStatus;
+        await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
+      }
+
+      // determine Not Attempt (same conservative checks as before)
+      const userNeverAttempted =
+        (status.totalMarks === null || status.totalMarks === undefined || status.totalMarks === 0) &&
+        (!status.attemptedQuestions || status.attemptedQuestions === 0) &&
+        (status.haveStarted === false || status.haveStarted === undefined);
+
+      if (statusManage === 'Completed' && (result === null || result === undefined) && userNeverAttempted) {
+        result = 'Not Attempt';
+        await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
+      }
+
+      const examFullyCompleted = await isExamFullyCompleted(exam._id);
+
+      let examObj = {
+        examId: exam._id,
+        statusManage,
+        ScheduleTime: exam.ScheduleTime,
+        ScheduleDate: exam.ScheduleDate,
+        bufferTime,
+        updatedScheduleTime: ongoingStart.format('HH:mm:ss'),
+      };
+
+      if (statusManage === 'Schedule' || statusManage === 'Ongoing') {
+        examObj.result = null;
+        examObj.rank = null;
+      } else if (statusManage === 'Completed') {
+        examObj.result = status.result != null ? status.result : result || null;
+
+        if (examFullyCompleted) {
+          examObj.rank = status.rank || null;
+
+          if (!status.rank) {
+            // calculate ranks once and refresh
+            await calculateFinalRank(exam._id);
+            const updatedStatus = await ExamUserStatus.findById(status._id).lean();
+            examObj.rank = updatedStatus?.rank || null;
+          }
+        } else {
+          examObj.rank = null;
+        }
+      } else if (statusManage === 'Not Eligible') {
+        examObj.result = null;
+        examObj.rank = null;
+      }
+
+      userExams.push(examObj);
+    } // end for statuses
+
+    if (userExams.length) {
+      socket.emit('examStatusUpdate', userExams);
+    }
+  } catch (err) {
+    console.error('emitExamStatusForSocket error:', err);
   }
 }
 
@@ -139,6 +249,7 @@ io.on('connection', (socket) => {
     }
   });
 
+  // Keep per-socket getExamTime behaviour (countdown)
   socket.on('getExamTime', async (examId) => {
     try {
       if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
@@ -178,148 +289,68 @@ io.on('connection', (socket) => {
     }
   });
 
+  // --- When user requests their exams (emit current statuses)
+  socket.on('getMyExams', async () => {
+    await emitExamStatusForSocket(socket);
+  });
+
+  // ===================================================================
+  // ========== MAIN EVENT: USER SUBMITS EXAM (EVENT-DRIVEN RANK) =======
+  // ===================================================================
+  // Assumed event name: "examSubmitted" with payload { examId }
+  socket.on('examSubmitted', async ({ examId, marks, attemptedQuestions, haveStarted }) => {
+    try {
+      const userId = socket.user._id;
+
+      // Optionally record marks/attempts if provided
+      const updateFields = { statusManage: 'Completed' };
+      if (typeof marks !== 'undefined') updateFields.totalMarks = marks;
+      if (typeof attemptedQuestions !== 'undefined') updateFields.attemptedQuestions = attemptedQuestions;
+      if (typeof haveStarted !== 'undefined') updateFields.haveStarted = haveStarted;
+
+      await ExamUserStatus.updateOne(
+        { examId, userId },
+        { $set: updateFields }
+      );
+
+      // After updating this user's status, emit updated status back to them
+      await emitExamStatusForSocket(socket);
+
+      // Now check if everyone finished — if yes, calculate ranks ONCE and notify
+      const allDone = await isExamFullyCompleted(examId);
+      if (allDone) {
+        // calculateFinalRank is idempotent enough here (overwrites ranks deterministically)
+        await calculateFinalRank(examId);
+        // notify participants that rank is ready (can be handled on client)
+        io.emit('rankReady', { examId });
+      }
+    } catch (err) {
+      console.error('examSubmitted handler error:', err);
+    }
+  });
+
   socket.on('disconnect', () => {
     console.log(`❌ User disconnected: (${socket.id})`);
   });
 });
 
 // --------------------------------------------------------------------
-// MAIN CRON — RANK/RESULT SHOW ONLY AFTER FULL EXAM COMPLETED
+// LIGHTWEIGHT CRON — Health check (runs at second 0 of every minute)
 // --------------------------------------------------------------------
-cron.schedule('*/1 * * * * *', async () => {
+// This cron is intentionally lightweight: it does not loop through sockets or recalc ranks.
+// It's only for server health logging / optional cleanup tasks.
+// If you want no cron at all, remove this block.
+cron.schedule('0 * * * * *', async () => {
   try {
-    const markingSetting = await MarkingSetting.findOne().lean();
-    const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
-
-    if (!global.io) return;
-
-    // iterate active sockets
-    // io.sockets.sockets is a Map in modern socket.io; iterate entries
-    for (const [socketId, socket] of io.sockets.sockets) {
-      if (!socket.user) continue;
-
-      const filterQuery = { userId: socket.user._id };
-
-      if (socket.selectedCategory) {
-        try {
-          filterQuery['category._id'] = new mongoose.Types.ObjectId(socket.selectedCategory);
-        } catch (e) {}
-      }
-
-      const userExamStatuses = await ExamUserStatus.find(filterQuery)
-        .populate('examId', 'ScheduleTime ScheduleDate ExamTime publish examDate')
-        .sort({ 'examId.examDate': 1, 'examId.ScheduleTime': 1 })
-        .lean();
-
-      const userExams = [];
-      let hasFailed = false; // reset per user
-
-      for (const status of userExamStatuses) {
-        const exam = status.examId;
-        if (!exam || !exam.publish) continue;
-
-        // Use the stored statusManage/result but compute current time windows
-        let statusManage = status.statusManage || 'Schedule';
-        let result = status.result;
-
-        const examDateTime = moment.tz(
-          `${moment(exam.examDate).format('YYYY-MM-DD')} ${exam.ScheduleTime}`,
-          'YYYY-MM-DD HH:mm:ss',
-          'Asia/Kolkata'
-        );
-
-        const ongoingStart = examDateTime.clone().add(bufferTime, 'minutes');
-        const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, 'minutes');
-        const now = moment().tz('Asia/Kolkata');
-
-        // compute what the status should be based on time (but don't overwrite Completed results blindly)
-        let computedStatus = statusManage;
-        if (now.isBefore(ongoingStart)) computedStatus = 'Schedule';
-        else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) computedStatus = 'Ongoing';
-        else if (now.isSameOrAfter(ongoingEnd)) computedStatus = 'Completed';
-
-        // If previous exam failed, apply Not Eligible only to future (Schedule/Ongoing) exams
-        if (hasFailed && (computedStatus === 'Schedule' || computedStatus === 'Ongoing')) {
-          // mark as Not Eligible (future exams only)
-          statusManage = 'Not Eligible';
-          result = null;
-          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage, result } });
-        } else {
-          // Update statusManage in DB if changed (but be safe)
-          if (statusManage !== computedStatus) {
-            statusManage = computedStatus;
-            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
-          }
-
-          // SET "Not Attempt" only when:
-          // - exam is Completed (time passed)
-          // - there is NO existing result in DB (null/undefined)
-          // - AND we have evidence user never attempted the exam (no marks, no attempts, haveStarted false)
-          // This prevents overwriting a legit passed/failed value that is temporarily null due to timing.
-          const userNeverAttempted =
-            (status.totalMarks === null || status.totalMarks === undefined || status.totalMarks === 0) &&
-            (!status.attemptedQuestions || status.attemptedQuestions === 0) &&
-            (status.haveStarted === false || status.haveStarted === undefined);
-
-          if (
-            statusManage === 'Completed' &&
-            (result === null || result === undefined) &&
-            userNeverAttempted
-          ) {
-            result = 'Not Attempt';
-            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
-          }
-
-          // IMPORTANT: mark failure AFTER processing current exam
-          // Only set hasFailed true if DB has result 'failed' (we don't infer failure from missing values)
-          if (status.result === 'failed') {
-            hasFailed = true;
-          }
-        }
-
-        const examFullyCompleted = await isExamFullyCompleted(exam._id);
-
-        let examObj = {
-          examId: exam._id,
-          statusManage,
-          ScheduleTime: exam.ScheduleTime,
-          ScheduleDate: exam.ScheduleDate,
-          bufferTime,
-          updatedScheduleTime: ongoingStart.format('HH:mm:ss'),
-        };
-
-        if (statusManage === 'Schedule' || statusManage === 'Ongoing') {
-          examObj.result = null;
-          examObj.rank = null;
-        } else if (statusManage === 'Completed') {
-          // prefer DB result; fallback to computed result variable
-          examObj.result = status.result != null ? status.result : result || null;
-
-          if (examFullyCompleted) {
-            examObj.rank = status.rank || null;
-
-            if (!status.rank) {
-              await calculateFinalRank(exam._id);
-              const updatedStatus = await ExamUserStatus.findById(status._id).lean();
-              examObj.rank = updatedStatus?.rank || null;
-            }
-          } else {
-            examObj.rank = null;
-          }
-        } else if (statusManage === 'Not Eligible') {
-          examObj.result = null;
-          examObj.rank = null;
-        }
-
-        userExams.push(examObj);
-      } // end for statuses
-
-      if (userExams.length) {
-        socket.emit('examStatusUpdate', userExams);
-      }
-    } // end for sockets
+    console.log(`[${new Date().toISOString()}] Server health check - sockets:`, io.sockets.sockets.size);
+    // OPTIONAL: add lightweight cleanup tasks here (e.g., clear stale examStartTimes older than X hours)
+    // Example cleanup (non-blocking):
+    const cutoff = Date.now() - 1000 * 60 * 60 * 6; // 6 hours
+    for (const examId of Object.keys(examStartTimes)) {
+      if (examStartTimes[examId] < cutoff) delete examStartTimes[examId];
+    }
   } catch (err) {
-    console.error('CRON ERROR:', err);
+    console.error('Health-check cron error:', err);
   }
 });
 
