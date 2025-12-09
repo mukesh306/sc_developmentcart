@@ -408,7 +408,7 @@ exports.getGroupMembers = async (req, res) => {
       const examPercentage = results.map(r => ({
         examId: r.examId,
         percentage: r.percentage,
-        completionTime: r.completionTime ?? null, // 👈 added
+        completionTime: r.Completiontime  ?? null, // 👈 added
         createdAt: r.createdAt
       }));
 
