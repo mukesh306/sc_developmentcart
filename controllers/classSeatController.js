@@ -415,39 +415,42 @@ exports.getUserBuys = async (req, res) => {
     let totalSeatCount = 0;
 
     for (let buy of buys) {
-      const classId = buy.classSeatId;
+      const classId = buy.classSeatId;  // This is School/College ID
 
-      // Fetch School/College name
+      // 1️⃣ School/College fetch
       let classData = await School.findById(classId).select("name");
       if (!classData) {
         classData = await College.findById(classId).select("name");
       }
       if (!classData) continue;
 
-      // Fetch ClassSeat record
-      const classSeat = await ClassSeat.findById(classId).select("seat");
+      // 2️⃣ Find ClassSeat using className === School/College ID
+      const classSeat = await ClassSeat.findOne({
+        className: classId
+      }).select("seat className");
+
       if (!classSeat) continue;
 
-      // ⭐ Correct: Count users who belong to this class
+      // 3️⃣ Count allocated users (user.className == School/College ID)
       const allocatedUsersCount = await User.countDocuments({
-        className: classId   // ⭐ EXACT MATCH WITH USER SCHEMA
+        className: classId
       });
 
-      // ⭐ Remaining seats
-      const remainingSeats = Math.max((classSeat.seat || 0) - allocatedUsersCount, 0);
+      // 4️⃣ Remaining seats
+      const remainingSeats = Math.max(classSeat.seat - allocatedUsersCount, 0);
 
       buyRecords.push({
-        id: classSeat._id,
-        classId: classId,
+        id: classSeat._id,     // ClassSeat ka ID
+        classId: classId,      // School/College ka ID
         className: classData.name,
-        seat: remainingSeats,   // ⭐ Final remaining seats
+        seat: remainingSeats,  // final remaining seat
       });
 
       totalSeatCount += remainingSeats;
     }
 
     res.status(200).json({
-      totalRecords: totalSeatCount,   // ⭐ Total remaining seats
+      totalRecords: totalSeatCount,
       buyRecords,
     });
 
