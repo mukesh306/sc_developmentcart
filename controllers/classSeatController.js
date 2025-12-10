@@ -412,15 +412,13 @@ exports.getUserBuys = async (req, res) => {
     }
 
     const buyRecords = [];
-    let totalSeatCount = 0;
+    let totalSeatCount = 0; 
 
     for (let buy of buys) {
       const classId = buy.classSeatId;
 
-    
       let classData = await School.findById(classId).select("name");
 
-      
       if (!classData) {
         classData = await College.findById(classId).select("name");
       }
@@ -431,7 +429,7 @@ exports.getUserBuys = async (req, res) => {
         id: classId,
         classId: classId,
         className: classData.name,
-        seat: buy.seat
+        seat: buy.seat,
       });
 
       totalSeatCount += Number(buy.seat); 
@@ -446,6 +444,7 @@ exports.getUserBuys = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 
