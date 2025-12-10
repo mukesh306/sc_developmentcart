@@ -224,6 +224,7 @@ exports.getAllClassSeats = async (req, res) => {
 // };
 
 
+
 exports.buyClassSeats = async (req, res) => {
   try {
     const { classSeatIds, grandTotal } = req.body;
@@ -268,11 +269,14 @@ exports.buyClassSeats = async (req, res) => {
         seat: seatDoc.seat,
         price: classData.price || 0,
         totalPrice,
-        amountPaid: totalPrice, // har seat ka required total save karo
+        amountPaid: totalPrice,
         paymentStatus: true
       });
 
       await newBuy.save();
+
+      // 🔥 BUY HONE KE BAAD CLASS SEAT DELETE KAR DO
+      await ClassSeat.deleteOne({ _id: seatDoc._id });
 
       boughtRecords.push({
         classId: seatDoc._id,
@@ -294,7 +298,6 @@ exports.buyClassSeats = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
-
 
 
 
