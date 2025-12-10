@@ -249,6 +249,7 @@ exports.deleteClassSeat = async (req, res) => {
 //   }
 // };
 
+
 exports.buyClassSeats = async (req, res) => {
   try {
     const { classSeatIds, grandTotal } = req.body;
@@ -411,31 +412,33 @@ exports.getUserBuys = async (req, res) => {
     }
 
     const buyRecords = [];
+    let totalSeatCount = 0;
 
     for (let buy of buys) {
-      const classId = buy.classSeatId; // School/College ki ID
+      const classId = buy.classSeatId;
 
-      // Try School first
+    
       let classData = await School.findById(classId).select("name");
+
       
-      // If not School, try College
       if (!classData) {
         classData = await College.findById(classId).select("name");
       }
 
-      // If not found in both → skip
       if (!classData) continue;
 
       buyRecords.push({
-        id: classId,             // SAME FORMAT
-        classId: classId,        // SAME FORMAT
-        className: classData.name, // SCHOOL/COLLEGE NAME
-        seat: buy.seat           // BUY table se SEAT
+        id: classId,
+        classId: classId,
+        className: classData.name,
+        seat: buy.seat
       });
+
+      totalSeatCount += Number(buy.seat); 
     }
 
     res.status(200).json({
-      totalRecords: buyRecords.length,
+      totalRecords: totalSeatCount, 
       buyRecords,
     });
 
@@ -443,6 +446,7 @@ exports.getUserBuys = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 
