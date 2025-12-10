@@ -2,11 +2,8 @@ const mongoose = require("mongoose");
 
 const BuySchema = new mongoose.Schema(
   {
-    classSeatId: { 
-      type: mongoose.Schema.Types.ObjectId, 
-      ref: "ClassSeat", 
-      required: true 
-    },
+    classSeatId: { type: String, required: true },
+     
     userId: { 
       type: mongoose.Schema.Types.ObjectId, 
       ref: "OrganizationSign", 

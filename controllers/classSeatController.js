@@ -307,7 +307,7 @@ exports.buyClassSeats = async (req, res) => {
 //     const buys = await Buy.find({ userId })
 //       .populate({
 //         path: "classSeatId",
-//         select: "className seat", 
+//         select: "className seat",
 //       })
 //       .sort({ createdAt: -1 });
 
@@ -316,7 +316,7 @@ exports.buyClassSeats = async (req, res) => {
 //     }
 
 //     const buyRecords = [];
-//     let totalSeats = 0; // total remaining seats
+//     let totalSeats = 0;
 
 //     for (let buy of buys) {
 //       const classSeat = buy.classSeatId;
@@ -337,9 +337,10 @@ exports.buyClassSeats = async (req, res) => {
 //         const remainingSeats = Math.max((classSeat.seat || 0) - allocatedUsersCount, 0);
 
 //         buyRecords.push({
-//           classId: classSeat._id,
+//           id: classSeat._id,          // ✅ now seat table ID
+//           classId: classData._id,     // ✅ now real class ID (School/College)
 //           className: classData.className || classData.name,
-//           seat: remainingSeats, // only value updates, key stays the same
+//           seat: remainingSeats,
 //         });
 
 //         totalSeats += remainingSeats;
@@ -347,8 +348,8 @@ exports.buyClassSeats = async (req, res) => {
 //     }
 
 //     res.status(200).json({
-//       totalRecords: totalSeats, // same key, value updated
-//       buyRecords,               // same structure, seat value updated
+//       totalRecords: totalSeats,
+//       buyRecords,
 //     });
 //   } catch (err) {
 //     res.status(500).json({ message: err.message });
@@ -362,7 +363,7 @@ exports.getUserBuys = async (req, res) => {
     const buys = await Buy.find({ userId })
       .populate({
         path: "classSeatId",
-        select: "name seat",
+        select: "name seat className", 
       })
       .sort({ createdAt: -1 });
 
@@ -371,39 +372,28 @@ exports.getUserBuys = async (req, res) => {
     }
 
     const buyRecords = [];
-    let totalSeats = 0;
 
     for (let buy of buys) {
       const classSeat = buy.classSeatId;
       if (!classSeat) continue;
 
-      // Fetch class info from School or College
-      const classData =
+      // classSeat.className → actual School OR College ID
+      let classData =
         (await School.findById(classSeat.className).select("name className")) ||
         (await College.findById(classSeat.className).select("name className"));
 
       if (classData) {
-        // Count allocated users for this class
-        const allocatedUsersCount = await User.countDocuments({
-          className: classSeat.className,
-        });
-
-        // Calculate remaining seats
-        const remainingSeats = Math.max((classSeat.seat || 0) - allocatedUsersCount, 0);
-
         buyRecords.push({
-          id: classSeat._id,          // ✅ now seat table ID
-          classId: classData._id,     // ✅ now real class ID (School/College)
-          className: classData.className || classData.name,
-          seat: remainingSeats,
+          id: classSeat._id,                // SAME FORMAT (seat table ID)
+          classId: classData._id,           // School/College ID
+          className: classData.name,        // SAME FORMAT
+          seat: buy.seat                    // seat now coming from BUY table
         });
-
-        totalSeats += remainingSeats;
       }
     }
 
     res.status(200).json({
-      totalRecords: totalSeats,
+      totalRecords: buyRecords.length, // SAME FORMAT
       buyRecords,
     });
   } catch (err) {
