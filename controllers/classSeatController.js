@@ -412,31 +412,43 @@ exports.getUserBuys = async (req, res) => {
     }
 
     const buyRecords = [];
-    let totalSeatCount = 0; 
+    let totalSeatCount = 0;
 
     for (let buy of buys) {
       const classId = buy.classSeatId;
 
+      // Fetch School/College name
       let classData = await School.findById(classId).select("name");
-
       if (!classData) {
         classData = await College.findById(classId).select("name");
       }
-
       if (!classData) continue;
 
-      buyRecords.push({
-        id: classId,
-        classId: classId,
-        className: classData.name,
-        seat: buy.seat,
+      // 🔥 Find ClassSeat to get total seats
+      const classSeat = await ClassSeat.findById(classId).select("seat className");
+      if (!classSeat) continue;
+
+      // 🔥 Count allocated users of this class
+      const allocatedUsersCount = await User.countDocuments({
+        className: classSeat.className,
       });
 
-      totalSeatCount += Number(buy.seat); 
+      // 🔥 Calculate remaining seats
+      const remainingSeats = Math.max((classSeat.seat || 0) - allocatedUsersCount, 0);
+
+      // 🔥 Push final record
+      buyRecords.push({
+        id: classSeat._id,
+        classId: classId,
+        className: classData.name,
+        seat: remainingSeats,            // ⭐ FINAL remaining seats
+      });
+
+      totalSeatCount += remainingSeats;  // ⭐ Add to total
     }
 
     res.status(200).json({
-      totalRecords: totalSeatCount, 
+      totalRecords: totalSeatCount,  // ⭐ Now total remaining seats
       buyRecords,
     });
 
@@ -444,6 +456,7 @@ exports.getUserBuys = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 
