@@ -172,6 +172,32 @@ exports.getAllClassSeats = async (req, res) => {
 };
 
 
+exports.deleteClassSeat = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ message: "ClassSeat ID is required" });
+    }
+
+    const deletedClass = await ClassSeat.findByIdAndDelete(id);
+
+    if (!deletedClass) {
+      return res.status(404).json({ message: "ClassSeat not found" });
+    }
+
+    return res.status(200).json({
+      message: "ClassSeat deleted successfully",
+      data: deletedClass
+    });
+
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+
+
 // exports.buyClassSeats = async (req, res) => {
 //   try {
 //     const { classSeatIds } = req.body; 
