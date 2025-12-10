@@ -224,7 +224,6 @@ exports.getAllClassSeats = async (req, res) => {
 // };
 
 
-
 exports.buyClassSeats = async (req, res) => {
   try {
     const { classSeatIds, grandTotal } = req.body;
@@ -241,7 +240,7 @@ exports.buyClassSeats = async (req, res) => {
     let totalRequired = 0;
     const seatDocs = [];
 
-    // Pehle sab seats fetch karo aur total calculate karo
+    // Fetch and calculate
     for (let classSeatId of classSeatIds) {
       const seatDoc = await ClassSeat.findById(classSeatId);
       if (!seatDoc) continue;
@@ -256,15 +255,14 @@ exports.buyClassSeats = async (req, res) => {
       seatDocs.push({ seatDoc, classData, totalPrice });
     }
 
-    // Check if grandTotal is enough
     if (grandTotal < totalRequired) {
       return res.status(400).json({ message: `Grand total is less than required total: ${totalRequired}` });
     }
 
-    // Save each buy record
+    // Save buy record
     for (let { seatDoc, classData, totalPrice } of seatDocs) {
       const newBuy = new Buy({
-        classSeatId: seatDoc._id,
+        classSeatId: seatDoc.className,  // 🔥 classSeatId ki jagah className store hoga
         userId: req.user._id,
         seat: seatDoc.seat,
         price: classData.price || 0,
@@ -275,11 +273,11 @@ exports.buyClassSeats = async (req, res) => {
 
       await newBuy.save();
 
-      // 🔥 BUY HONE KE BAAD CLASS SEAT DELETE KAR DO
+      // Delete class seat entry
       await ClassSeat.deleteOne({ _id: seatDoc._id });
 
       boughtRecords.push({
-        classId: seatDoc._id,
+        classId: seatDoc.className,
         className: classData.name,
         seat: seatDoc.seat,
         totalPrice,
@@ -298,6 +296,7 @@ exports.buyClassSeats = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 
