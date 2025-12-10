@@ -223,7 +223,6 @@ exports.getAllClassSeats = async (req, res) => {
 //   }
 // };
 
-
 exports.buyClassSeats = async (req, res) => {
   try {
     const { classSeatIds, grandTotal } = req.body;
@@ -259,19 +258,37 @@ exports.buyClassSeats = async (req, res) => {
       return res.status(400).json({ message: `Grand total is less than required total: ${totalRequired}` });
     }
 
-    // Save buy record
+    // Save or update buy record
     for (let { seatDoc, classData, totalPrice } of seatDocs) {
-      const newBuy = new Buy({
-        classSeatId: seatDoc.className,  // 🔥 classSeatId ki jagah className store hoga
+      
+      // 🔎 Check existing buy for same user + same class
+      let existingBuy = await Buy.findOne({
         userId: req.user._id,
-        seat: seatDoc.seat,
-        price: classData.price || 0,
-        totalPrice,
-        amountPaid: totalPrice,
-        paymentStatus: true
+        classSeatId: seatDoc.className    // same class
       });
 
-      await newBuy.save();
+      if (existingBuy) {
+        // ✔️ Update seat count
+        existingBuy.seat = existingBuy.seat + seatDoc.seat;
+        existingBuy.totalPrice = (classData.price || 0) * existingBuy.seat;
+        existingBuy.amountPaid = existingBuy.totalPrice;
+
+        await existingBuy.save();
+
+      } else {
+        // Create new buy record
+        const newBuy = new Buy({
+          classSeatId: seatDoc.className,
+          userId: req.user._id,
+          seat: seatDoc.seat,
+          price: classData.price || 0,
+          totalPrice,
+          amountPaid: totalPrice,
+          paymentStatus: true
+        });
+
+        await newBuy.save();
+      }
 
       // Delete class seat entry
       await ClassSeat.deleteOne({ _id: seatDoc._id });
@@ -296,6 +313,7 @@ exports.buyClassSeats = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 
