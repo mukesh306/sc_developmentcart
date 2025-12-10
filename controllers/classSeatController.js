@@ -27,6 +27,7 @@ const User = require("../models/User");
 //   }
 // };
 
+
 exports.createClassSeat = async (req, res) => {
   try {
     const { className, seat } = req.body;
@@ -39,13 +40,14 @@ exports.createClassSeat = async (req, res) => {
     const existingClass = await ClassSeat.findOne({ className });
 
     if (existingClass) {
-      // Update seat instead of creating new
-      existingClass.seat = seat;
+      // Add seat instead of replacing
+      existingClass.seat = existingClass.seat + Number(seat); 
       existingClass.updatedBy = req.user ? req.user._id : null;
+
       await existingClass.save();
 
       return res.status(200).json({
-        message: "ClassSeat updated successfully",
+        message: "ClassSeat updated (seat added) successfully",
         data: existingClass
       });
     }
@@ -68,6 +70,7 @@ exports.createClassSeat = async (req, res) => {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 // exports.getAllClassSeats = async (req, res) => {
