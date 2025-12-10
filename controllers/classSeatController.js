@@ -360,12 +360,7 @@ exports.getUserBuys = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    const buys = await Buy.find({ userId })
-      .populate({
-        path: "classSeatId",
-        select: "name seat className", 
-      })
-      .sort({ createdAt: -1 });
+    const buys = await Buy.find({ userId }).sort({ createdAt: -1 });
 
     if (!buys || buys.length === 0) {
       return res.status(404).json({ message: "No purchases found" });
@@ -374,32 +369,37 @@ exports.getUserBuys = async (req, res) => {
     const buyRecords = [];
 
     for (let buy of buys) {
-      const classSeat = buy.classSeatId;
-      if (!classSeat) continue;
+      const classId = buy.classSeatId; // School/College ki ID
 
-      // classSeat.className → actual School OR College ID
-      let classData =
-        (await School.findById(classSeat.className).select("name className")) ||
-        (await College.findById(classSeat.className).select("name className"));
-
-      if (classData) {
-        buyRecords.push({
-          id: classSeat._id,                // SAME FORMAT (seat table ID)
-          classId: classData._id,           // School/College ID
-          className: classData.name,        // SAME FORMAT
-          seat: buy.seat                    // seat now coming from BUY table
-        });
+      // Try School first
+      let classData = await School.findById(classId).select("name");
+      
+      // If not School, try College
+      if (!classData) {
+        classData = await College.findById(classId).select("name");
       }
+
+      // If not found in both → skip
+      if (!classData) continue;
+
+      buyRecords.push({
+        id: classId,             // SAME FORMAT
+        classId: classId,        // SAME FORMAT
+        className: classData.name, // SCHOOL/COLLEGE NAME
+        seat: buy.seat           // BUY table se SEAT
+      });
     }
 
     res.status(200).json({
-      totalRecords: buyRecords.length, // SAME FORMAT
+      totalRecords: buyRecords.length,
       buyRecords,
     });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 exports.filterAvalibleSeat = async (req, res) => {
