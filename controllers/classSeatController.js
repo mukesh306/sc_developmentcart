@@ -4,6 +4,29 @@ const College = require('../models/college');
 const Buy = require('../models/buyseats');
 const User = require("../models/User");
 
+
+// exports.createClassSeat = async (req, res) => {
+//   try {
+//     const { className, seat } = req.body;
+
+//     if (!className || !seat) {
+//       return res.status(400).json({ message: "className and seat are required" });
+//     }
+//     const newSeat = new ClassSeat({
+//       className,
+//       seat,
+//       createdBy: req.user ? req.user._id : null   
+//     });
+//     await newSeat.save();
+//     res.status(201).json({
+//       message: "ClassSeat created successfully",
+//       data: newSeat
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
 exports.createClassSeat = async (req, res) => {
   try {
     const { className, seat } = req.body;
@@ -11,16 +34,36 @@ exports.createClassSeat = async (req, res) => {
     if (!className || !seat) {
       return res.status(400).json({ message: "className and seat are required" });
     }
+
+    // Check if class already exists
+    const existingClass = await ClassSeat.findOne({ className });
+
+    if (existingClass) {
+      // Update seat instead of creating new
+      existingClass.seat = seat;
+      existingClass.updatedBy = req.user ? req.user._id : null;
+      await existingClass.save();
+
+      return res.status(200).json({
+        message: "ClassSeat updated successfully",
+        data: existingClass
+      });
+    }
+
+    // Create new if not exist
     const newSeat = new ClassSeat({
       className,
       seat,
-      createdBy: req.user ? req.user._id : null   
+      createdBy: req.user ? req.user._id : null
     });
+
     await newSeat.save();
+
     res.status(201).json({
       message: "ClassSeat created successfully",
       data: newSeat
     });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
