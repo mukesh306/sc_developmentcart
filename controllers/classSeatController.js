@@ -362,7 +362,7 @@ exports.getUserBuys = async (req, res) => {
     const buys = await Buy.find({ userId })
       .populate({
         path: "classSeatId",
-        select: "className seat",
+        select: "name seat",
       })
       .sort({ createdAt: -1 });
 
