@@ -183,7 +183,6 @@ io.on('connection', (socket) => {
   });
 });
 
-
 cron.schedule('*/1 * * * * *', async () => {
   try {
     const markingSetting = await MarkingSetting.findOne().lean();
@@ -196,10 +195,6 @@ cron.schedule('*/1 * * * * *', async () => {
     const nowTime = now.format("HH:mm:ss");
 
     for (const [socketId, socket] of io.sockets.sockets) {
-      
-      // ⛔ STOP SOCKET IF RESULT & RANK RECEIVED
-      if (socket.stopExamUpdates) continue;
-
       if (!socket.user) continue;
 
       if (!socket.activeExams) socket.activeExams = new Set();
@@ -290,13 +285,10 @@ cron.schedule('*/1 * * * * *', async () => {
           updatedScheduleTime: examStartTime.format("HH:mm:ss"),
         };
 
-        let examDoneRank = false;
-
         if (statusManage === "Completed") {
           examObj.result = result;
           const examDone = await isExamFullyCompleted(exam._id);
           if (examDone) {
-            examDoneRank = true;
             examObj.rank = status.rank || null;
             if (!status.rank) {
               await calculateFinalRank(exam._id);
@@ -306,12 +298,7 @@ cron.schedule('*/1 * * * * *', async () => {
           }
         }
 
-        // ⛔ NEW CONDITION → Stop CRON for this socket
-        if (statusManage === "Completed" && result && (status.rank || examDoneRank)) {
-          socket.stopExamUpdates = true;
-        }
-
-        // first-time emit logic
+        // ✅ Emit **only once at the exact scheduled start time**
         if (examDate === today && examTime === nowTime) {
           const emitKey = `${exam._id.toString()}_${today}_${examTime}`;
           if (!socket.sentExams.has(emitKey)) {
@@ -319,12 +306,12 @@ cron.schedule('*/1 * * * * *', async () => {
             userExams.push(examObj);
           }
         } else if (computedStatus !== "Schedule") {
+          // For ongoing exams after start, continue to push without blocking
           userExams.push(examObj);
         }
       }
 
-      // Emit final
-      if (!socket.stopExamUpdates && userExams.length) {
+      if (userExams.length) {
         socket.emit("examStatusUpdate", userExams);
       }
     }
@@ -332,8 +319,6 @@ cron.schedule('*/1 * * * * *', async () => {
     console.error("CRON ERROR:", err);
   }
 });
-
-
 
 
 
