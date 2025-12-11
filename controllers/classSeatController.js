@@ -405,8 +405,7 @@ exports.buyClassSeats = async (req, res) => {
 
 exports.getUserBuys = async (req, res) => {
   try {
-    const userId = req.user._id;  // <-- token se login user ki ID
-
+    const userId = req.user._id;  
     const buys = await Buy.find({ userId }).sort({ createdAt: -1 });
 
     if (!buys || buys.length === 0) {
@@ -419,7 +418,7 @@ exports.getUserBuys = async (req, res) => {
     for (let buy of buys) {
       const classId = buy.classSeatId;
 
-      // 1️⃣ School/College Name
+      
       let classData = await School.findById(classId).select("name");
       if (!classData) {
         classData = await College.findById(classId).select("name");
