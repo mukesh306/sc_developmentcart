@@ -183,7 +183,6 @@ io.on('connection', (socket) => {
   });
 });
 
-
 cron.schedule('*/1 * * * * *', async () => {
   try {
     const markingSetting = await MarkingSetting.findOne().lean();
@@ -191,13 +190,17 @@ cron.schedule('*/1 * * * * *', async () => {
 
     if (!global.io) return;
 
+    const now = moment().tz("Asia/Kolkata");
+    const today = now.format("DD-MM-YYYY");
+    const nowTime = now.format("HH:mm:ss"); // Include seconds for exact match
+
     for (const [socketId, socket] of io.sockets.sockets) {
       if (!socket.user) continue;
 
       if (!socket.activeExams) socket.activeExams = new Set();
+      if (!socket.sentExams) socket.sentExams = new Set(); // ✅ Track emitted exams
 
       const filterQuery = { userId: socket.user._id };
-
       if (socket.selectedCategory) {
         try {
           filterQuery['category._id'] = new mongoose.Types.ObjectId(socket.selectedCategory);
@@ -209,10 +212,6 @@ cron.schedule('*/1 * * * * *', async () => {
         .sort({ 'examId.examDate': 1, 'examId.ScheduleTime': 1 })
         .lean();
 
-      const now = moment().tz("Asia/Kolkata");
-      const today = now.format("DD-MM-YYYY");
-      const nowTime = now.format("HH:mm"); 
-
       const userExams = [];
       let hasFailed = false;
 
@@ -220,10 +219,16 @@ cron.schedule('*/1 * * * * *', async () => {
         const exam = status.examId;
         if (!exam || !exam.publish) continue;
 
-       
         const examDate = moment(exam.ScheduleDate, "DD-MM-YYYY").format("DD-MM-YYYY");
-        const examTime = moment(exam.ScheduleTime, "HH:mm:ss").format("HH:mm");
+        const examTime = moment(exam.ScheduleTime, "HH:mm:ss").format("HH:mm:ss");
+
+        // ✅ Only process if date & time match exactly
         if (examDate !== today || examTime !== nowTime) continue;
+
+        // ✅ Emit only once per exam per socket
+        const emitKey = `${exam._id.toString()}_${today}_${examTime}`;
+        if (socket.sentExams.has(emitKey)) continue;
+        socket.sentExams.add(emitKey);
 
         const examStartTime = moment.tz(
           `${moment(exam.examDate).format("YYYY-MM-DD")} ${exam.ScheduleTime}`,
@@ -281,11 +286,6 @@ cron.schedule('*/1 * * * * *', async () => {
           socket.activeExams.delete(exam._id.toString());
         }
 
-        // EXAM NOT STARTED → NO EMIT
-        if (computedStatus === "Schedule") {
-          continue;
-        }
-
         // EXAM ONGOING → ONLY NOW EMIT
         if (computedStatus === "Ongoing") {
           socket.activeExams.add(exam._id.toString());
@@ -325,6 +325,7 @@ cron.schedule('*/1 * * * * *', async () => {
     console.error("CRON ERROR:", err);
   }
 });
+
 
 
 
