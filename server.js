@@ -211,7 +211,7 @@ cron.schedule('*/1 * * * * *', async () => {
 
       const now = moment().tz("Asia/Kolkata");
       const today = now.format("DD-MM-YYYY");
-      const nowTime = now.format("HH:mm"); // hour + minute
+      const nowHHmm = now.format("HH:mm"); // hour + minute
 
       const userExams = [];
       let hasFailed = false;
@@ -311,14 +311,13 @@ cron.schedule('*/1 * * * * *', async () => {
         // -----------------------------
         // CURRENT TIME ONE-TIME EMIT LOGIC
         // -----------------------------
-        const emitKey = `${exam._id.toString()}_${today}_${nowTime}`;
-        if (!socket.sentCurrentTimeExams.has(emitKey)) {
+        const scheduleHHmm = moment(exam.ScheduleTime, "HH:mm:ss").format("HH:mm");
+        const emitKey = `${exam._id.toString()}_${today}_${scheduleHHmm}`;
+        if (scheduleHHmm === nowHHmm && !socket.sentCurrentTimeExams.has(emitKey)) {
           socket.sentCurrentTimeExams.add(emitKey);
           userExams.push(examObj); // only push if current-time not emitted
         }
         // -----------------------------
-
-        // Existing logic remains unchanged
       }
 
       // ONLY SEND IF ANY EXAM IS ACTIVE
@@ -330,6 +329,7 @@ cron.schedule('*/1 * * * * *', async () => {
     console.error("CRON ERROR:", err);
   }
 });
+
 
 
 
