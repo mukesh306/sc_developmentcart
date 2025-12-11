@@ -209,8 +209,6 @@ cron.schedule('*/1 * * * * *', async () => {
         .lean();
 
       const now = moment().tz("Asia/Kolkata");
-      const today = now.format("DD-MM-YYYY");
-      const nowTime = now.format("HH:mm"); // hour + minute
 
       const userExams = [];
       let hasFailed = false;
@@ -218,11 +216,6 @@ cron.schedule('*/1 * * * * *', async () => {
       for (const status of userExamStatuses) {
         const exam = status.examId;
         if (!exam || !exam.publish) continue;
-
-        // ✅ Only current date + current time exams
-        const examDate = moment(exam.ScheduleDate, "DD-MM-YYYY").format("DD-MM-YYYY");
-        const examTime = moment(exam.ScheduleTime, "HH:mm:ss").format("HH:mm");
-        if (examDate !== today || examTime !== nowTime) continue;
 
         const examStartTime = moment.tz(
           `${moment(exam.examDate).format("YYYY-MM-DD")} ${exam.ScheduleTime}`,
