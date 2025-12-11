@@ -182,7 +182,6 @@ io.on('connection', (socket) => {
     console.log(`❌ User disconnected: (${socket.id})`);
   });
 });
-
 cron.schedule('*/1 * * * * *', async () => {
   try {
     const markingSetting = await MarkingSetting.findOne().lean();
@@ -194,7 +193,7 @@ cron.schedule('*/1 * * * * *', async () => {
       if (!socket.user) continue;
 
       if (!socket.activeExams) socket.activeExams = new Set();
-      if (!socket.sentCurrentTimeExams) socket.sentCurrentTimeExams = new Set(); // Track current-time emit
+      if (!socket.sentExams) socket.sentExams = new Set(); // Track emitted exams
 
       const filterQuery = { userId: socket.user._id };
 
@@ -211,7 +210,7 @@ cron.schedule('*/1 * * * * *', async () => {
 
       const now = moment().tz("Asia/Kolkata");
       const today = now.format("DD-MM-YYYY");
-      const nowHHmm = now.format("HH:mm"); // hour + minute
+      const nowTime = now.format("HH:mm"); // hour + minute
 
       const userExams = [];
       let hasFailed = false;
@@ -219,6 +218,16 @@ cron.schedule('*/1 * * * * *', async () => {
       for (const status of userExamStatuses) {
         const exam = status.examId;
         if (!exam || !exam.publish) continue;
+
+        // Format exam schedule date & time
+        const examDate = moment(exam.ScheduleDate, "DD-MM-YYYY").format("DD-MM-YYYY");
+        const examTime = moment(exam.ScheduleTime, "HH:mm:ss").format("HH:mm");
+
+        // ✅ Only current date + current time exams
+        if (examDate !== today || examTime !== nowTime) continue;
+
+        // ❌ Skip Completed exams
+        if (status.statusManage === "Completed") continue;
 
         const examStartTime = moment.tz(
           `${moment(exam.examDate).format("YYYY-MM-DD")} ${exam.ScheduleTime}`,
@@ -271,17 +280,12 @@ cron.schedule('*/1 * * * * *', async () => {
           if (status.result === "failed") hasFailed = true;
         }
 
-        // EXAM COMPLETED → STOP REALTIME EMIT
+        // EXAM COMPLETED → remove from active tracking
         if (statusManage === "Completed") {
           socket.activeExams.delete(exam._id.toString());
         }
 
-        // EXAM NOT STARTED → NO EMIT
-        if (computedStatus === "Schedule") {
-          continue;
-        }
-
-        // EXAM ONGOING → ONLY NOW EMIT
+        // EXAM ONGOING → add to active
         if (computedStatus === "Ongoing") {
           socket.activeExams.add(exam._id.toString());
         }
@@ -295,32 +299,16 @@ cron.schedule('*/1 * * * * *', async () => {
           updatedScheduleTime: examStartTime.format("HH:mm:ss"),
         };
 
-        if (statusManage === "Completed") {
-          examObj.result = result;
-          const examDone = await isExamFullyCompleted(exam._id);
-          if (examDone) {
-            examObj.rank = status.rank || null;
-            if (!status.rank) {
-              await calculateFinalRank(exam._id);
-              const latest = await ExamUserStatus.findById(status._id).lean();
-              examObj.rank = latest?.rank || null;
-            }
-          }
-        }
+        // ❌ Skip if already emitted in this minute
+        const emitKey = `${exam._id.toString()}_${today}_${nowTime}`;
+        if (socket.sentExams.has(emitKey)) continue;
+        socket.sentExams.add(emitKey);
 
-        // -----------------------------
-        // CURRENT TIME ONE-TIME EMIT LOGIC
-        // -----------------------------
-        const scheduleHHmm = moment(exam.ScheduleTime, "HH:mm:ss").format("HH:mm");
-        const emitKey = `${exam._id.toString()}_${today}_${scheduleHHmm}`;
-        if (scheduleHHmm === nowHHmm && !socket.sentCurrentTimeExams.has(emitKey)) {
-          socket.sentCurrentTimeExams.add(emitKey);
-          userExams.push(examObj); // only push if current-time not emitted
-        }
-        // -----------------------------
+        // Emit examObj
+        userExams.push(examObj);
       }
 
-      // ONLY SEND IF ANY EXAM IS ACTIVE
+      // Only send if any exam is ready
       if (userExams.length) {
         socket.emit("examStatusUpdate", userExams);
       }
@@ -329,6 +317,7 @@ cron.schedule('*/1 * * * * *', async () => {
     console.error("CRON ERROR:", err);
   }
 });
+
 
 
 
