@@ -192,13 +192,13 @@ cron.schedule('*/1 * * * * *', async () => {
 
     const now = moment().tz("Asia/Kolkata");
     const today = now.format("DD-MM-YYYY");
-    const nowTime = now.format("HH:mm:ss"); // Include seconds for exact match
+    const nowTime = now.format("HH:mm:ss");
 
     for (const [socketId, socket] of io.sockets.sockets) {
       if (!socket.user) continue;
 
       if (!socket.activeExams) socket.activeExams = new Set();
-      if (!socket.sentExams) socket.sentExams = new Set(); // ✅ Track emitted exams
+      if (!socket.sentExams) socket.sentExams = new Set(); // track emitted exams at exact start
 
       const filterQuery = { userId: socket.user._id };
       if (socket.selectedCategory) {
@@ -222,14 +222,6 @@ cron.schedule('*/1 * * * * *', async () => {
         const examDate = moment(exam.ScheduleDate, "DD-MM-YYYY").format("DD-MM-YYYY");
         const examTime = moment(exam.ScheduleTime, "HH:mm:ss").format("HH:mm:ss");
 
-        // ✅ Only process if date & time match exactly
-        if (examDate !== today || examTime !== nowTime) continue;
-
-        // ✅ Emit only once per exam per socket
-        const emitKey = `${exam._id.toString()}_${today}_${examTime}`;
-        if (socket.sentExams.has(emitKey)) continue;
-        socket.sentExams.add(emitKey);
-
         const examStartTime = moment.tz(
           `${moment(exam.examDate).format("YYYY-MM-DD")} ${exam.ScheduleTime}`,
           "YYYY-MM-DD HH:mm:ss",
@@ -247,7 +239,6 @@ cron.schedule('*/1 * * * * *', async () => {
           computedStatus = "Completed";
         }
 
-        // FAILED chain rule
         let statusManage = status.statusManage;
         let result = status.result;
 
@@ -260,10 +251,7 @@ cron.schedule('*/1 * * * * *', async () => {
         } else {
           if (computedStatus !== statusManage) {
             statusManage = computedStatus;
-            await ExamUserStatus.updateOne(
-              { _id: status._id },
-              { $set: { statusManage } }
-            );
+            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
           }
 
           if (
@@ -272,21 +260,18 @@ cron.schedule('*/1 * * * * *', async () => {
             (status.attemptedQuestions === 0 || !status.haveStarted)
           ) {
             result = "Not Attempt";
-            await ExamUserStatus.updateOne(
-              { _id: status._id },
-              { $set: { result } }
-            );
+            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
           }
 
           if (status.result === "failed") hasFailed = true;
         }
 
-        // EXAM COMPLETED → STOP REALTIME EMIT
+        // STOP tracking COMPLETED exams
         if (statusManage === "Completed") {
           socket.activeExams.delete(exam._id.toString());
         }
 
-        // EXAM ONGOING → ONLY NOW EMIT
+        // START tracking ONGOING exams
         if (computedStatus === "Ongoing") {
           socket.activeExams.add(exam._id.toString());
         }
@@ -313,10 +298,19 @@ cron.schedule('*/1 * * * * *', async () => {
           }
         }
 
-        userExams.push(examObj);
+        // ✅ Emit **only once at the exact scheduled start time**
+        if (examDate === today && examTime === nowTime) {
+          const emitKey = `${exam._id.toString()}_${today}_${examTime}`;
+          if (!socket.sentExams.has(emitKey)) {
+            socket.sentExams.add(emitKey);
+            userExams.push(examObj);
+          }
+        } else if (computedStatus !== "Schedule") {
+          // For ongoing exams after start, continue to push without blocking
+          userExams.push(examObj);
+        }
       }
 
-      // ONLY SEND IF ANY EXAM IS ACTIVE
       if (userExams.length) {
         socket.emit("examStatusUpdate", userExams);
       }
@@ -325,6 +319,9 @@ cron.schedule('*/1 * * * * *', async () => {
     console.error("CRON ERROR:", err);
   }
 });
+
+
+
 
 
 
