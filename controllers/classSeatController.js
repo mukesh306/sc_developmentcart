@@ -4,6 +4,30 @@ const College = require('../models/college');
 const Buy = require('../models/buyseats');
 const User = require("../models/User");
 
+
+// exports.createClassSeat = async (req, res) => {
+//   try {
+//     const { className, seat } = req.body;
+
+//     if (!className || !seat) {
+//       return res.status(400).json({ message: "className and seat are required" });
+//     }
+//     const newSeat = new ClassSeat({
+//       className,
+//       seat,
+//       createdBy: req.user ? req.user._id : null   
+//     });
+//     await newSeat.save();
+//     res.status(201).json({
+//       message: "ClassSeat created successfully",
+//       data: newSeat
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
+
 exports.createClassSeat = async (req, res) => {
   try {
     const { className, seat } = req.body;
@@ -11,20 +35,42 @@ exports.createClassSeat = async (req, res) => {
     if (!className || !seat) {
       return res.status(400).json({ message: "className and seat are required" });
     }
+
+    // Check if class already exists
+    const existingClass = await ClassSeat.findOne({ className });
+
+    if (existingClass) {
+      // Add seat instead of replacing
+      existingClass.seat = existingClass.seat + Number(seat); 
+      existingClass.updatedBy = req.user ? req.user._id : null;
+
+      await existingClass.save();
+
+      return res.status(200).json({
+        message: "ClassSeat updated (seat added) successfully",
+        data: existingClass
+      });
+    }
+
+    // Create new if not exist
     const newSeat = new ClassSeat({
       className,
       seat,
-      createdBy: req.user ? req.user._id : null   
+      createdBy: req.user ? req.user._id : null
     });
+
     await newSeat.save();
+
     res.status(201).json({
       message: "ClassSeat created successfully",
       data: newSeat
     });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
 
 
 // exports.getAllClassSeats = async (req, res) => {
@@ -126,6 +172,32 @@ exports.getAllClassSeats = async (req, res) => {
 };
 
 
+exports.deleteClassSeat = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return res.status(400).json({ message: "ClassSeat ID is required" });
+    }
+
+    const deletedClass = await ClassSeat.findByIdAndDelete(id);
+
+    if (!deletedClass) {
+      return res.status(404).json({ message: "ClassSeat not found" });
+    }
+
+    return res.status(200).json({
+      message: "ClassSeat deleted successfully",
+      data: deletedClass
+    });
+
+  } catch (err) {
+    return res.status(500).json({ message: err.message });
+  }
+};
+
+
+
 // exports.buyClassSeats = async (req, res) => {
 //   try {
 //     const { classSeatIds } = req.body; 
@@ -194,7 +266,7 @@ exports.buyClassSeats = async (req, res) => {
     let totalRequired = 0;
     const seatDocs = [];
 
-    // Pehle sab seats fetch karo aur total calculate karo
+    // Fetch and calculate
     for (let classSeatId of classSeatIds) {
       const seatDoc = await ClassSeat.findById(classSeatId);
       if (!seatDoc) continue;
@@ -209,27 +281,47 @@ exports.buyClassSeats = async (req, res) => {
       seatDocs.push({ seatDoc, classData, totalPrice });
     }
 
-    // Check if grandTotal is enough
     if (grandTotal < totalRequired) {
       return res.status(400).json({ message: `Grand total is less than required total: ${totalRequired}` });
     }
 
-    // Save each buy record
+    // Save or update buy record
     for (let { seatDoc, classData, totalPrice } of seatDocs) {
-      const newBuy = new Buy({
-        classSeatId: seatDoc._id,
+      
+      // 🔎 Check existing buy for same user + same class
+      let existingBuy = await Buy.findOne({
         userId: req.user._id,
-        seat: seatDoc.seat,
-        price: classData.price || 0,
-        totalPrice,
-        amountPaid: totalPrice, // har seat ka required total save karo
-        paymentStatus: true
+        classSeatId: seatDoc.className    // same class
       });
 
-      await newBuy.save();
+      if (existingBuy) {
+        // ✔️ Update seat count
+        existingBuy.seat = existingBuy.seat + seatDoc.seat;
+        existingBuy.totalPrice = (classData.price || 0) * existingBuy.seat;
+        existingBuy.amountPaid = existingBuy.totalPrice;
+
+        await existingBuy.save();
+
+      } else {
+        // Create new buy record
+        const newBuy = new Buy({
+          classSeatId: seatDoc.className,
+          userId: req.user._id,
+          seat: seatDoc.seat,
+          price: classData.price || 0,
+          totalPrice,
+          amountPaid: totalPrice,
+          paymentStatus: true
+        });
+
+        await newBuy.save();
+      }
+
+      // Delete class seat entry
+      await ClassSeat.deleteOne({ _id: seatDoc._id });
 
       boughtRecords.push({
-        classId: seatDoc._id,
+        classId: seatDoc.className,
         className: classData.name,
         seat: seatDoc.seat,
         totalPrice,
@@ -252,6 +344,7 @@ exports.buyClassSeats = async (req, res) => {
 
 
 
+
 // exports.getUserBuys = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -259,7 +352,7 @@ exports.buyClassSeats = async (req, res) => {
 //     const buys = await Buy.find({ userId })
 //       .populate({
 //         path: "classSeatId",
-//         select: "className seat", 
+//         select: "className seat",
 //       })
 //       .sort({ createdAt: -1 });
 
@@ -268,7 +361,7 @@ exports.buyClassSeats = async (req, res) => {
 //     }
 
 //     const buyRecords = [];
-//     let totalSeats = 0; // total remaining seats
+//     let totalSeats = 0;
 
 //     for (let buy of buys) {
 //       const classSeat = buy.classSeatId;
@@ -289,9 +382,10 @@ exports.buyClassSeats = async (req, res) => {
 //         const remainingSeats = Math.max((classSeat.seat || 0) - allocatedUsersCount, 0);
 
 //         buyRecords.push({
-//           classId: classSeat._id,
+//           id: classSeat._id,          // ✅ now seat table ID
+//           classId: classData._id,     // ✅ now real class ID (School/College)
 //           className: classData.className || classData.name,
-//           seat: remainingSeats, // only value updates, key stays the same
+//           seat: remainingSeats,
 //         });
 
 //         totalSeats += remainingSeats;
@@ -299,69 +393,74 @@ exports.buyClassSeats = async (req, res) => {
 //     }
 
 //     res.status(200).json({
-//       totalRecords: totalSeats, // same key, value updated
-//       buyRecords,               // same structure, seat value updated
+//       totalRecords: totalSeats,
+//       buyRecords,
 //     });
 //   } catch (err) {
 //     res.status(500).json({ message: err.message });
 //   }
 // };
 
+
+
 exports.getUserBuys = async (req, res) => {
   try {
-    const userId = req.user._id;
-
-    const buys = await Buy.find({ userId })
-      .populate({
-        path: "classSeatId",
-        select: "className seat",
-      })
-      .sort({ createdAt: -1 });
+    const userId = req.user._id;  
+    const buys = await Buy.find({ userId }).sort({ createdAt: -1 });
 
     if (!buys || buys.length === 0) {
       return res.status(404).json({ message: "No purchases found" });
     }
 
     const buyRecords = [];
-    let totalSeats = 0;
+    let totalRemainingSeats = 0;
 
     for (let buy of buys) {
-      const classSeat = buy.classSeatId;
-      if (!classSeat) continue;
+      const classId = buy.classSeatId;
 
-      // Fetch class info from School or College
-      const classData =
-        (await School.findById(classSeat.className).select("name className")) ||
-        (await College.findById(classSeat.className).select("name className"));
-
-      if (classData) {
-        // Count allocated users for this class
-        const allocatedUsersCount = await User.countDocuments({
-          className: classSeat.className,
-        });
-
-        // Calculate remaining seats
-        const remainingSeats = Math.max((classSeat.seat || 0) - allocatedUsersCount, 0);
-
-        buyRecords.push({
-          id: classSeat._id,          // ✅ now seat table ID
-          classId: classData._id,     // ✅ now real class ID (School/College)
-          className: classData.className || classData.name,
-          seat: remainingSeats,
-        });
-
-        totalSeats += remainingSeats;
+      
+      let classData = await School.findById(classId).select("name");
+      if (!classData) {
+        classData = await College.findById(classId).select("name");
       }
+      if (!classData) continue;
+
+      // 2️⃣ Total seats purchased from Buy table
+      const purchasedSeats = Number(buy.seat);
+
+      // 3️⃣ Count allocated users ONLY allocated by current login user
+      const allocatedUsersCount = await User.countDocuments({
+        className: classId,
+        allocatedBy: userId   // <-- yahi important hai
+      });
+
+      // 4️⃣ Remaining seats
+      const remainingSeats = Math.max(purchasedSeats - allocatedUsersCount, 0);
+
+      buyRecords.push({
+        id: classId,
+        classId: classId,
+        className: classData.name,
+        purchasedSeats: purchasedSeats,
+        allocatedSeats: allocatedUsersCount,
+        seat: remainingSeats
+      });
+
+      totalRemainingSeats += remainingSeats;
     }
 
     res.status(200).json({
-      totalRecords: totalSeats,
+      totalRecords: totalRemainingSeats,
       buyRecords,
     });
+
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
+
+
 
 
 exports.filterAvalibleSeat = async (req, res) => {

@@ -1,6 +1,7 @@
 
 const MarkingSetting = require('../models/markingSetting');
 const Schoolerexam = require("../models/Schoolerexam");
+const moment = require("moment-timezone");
 
 exports.createOrUpdateSettings = async (req, res) => {
   const {
@@ -95,6 +96,43 @@ exports.getSettings = async (req, res) => {
 };
 
 
+// exports.bufferTime = async (req, res) => {
+//   try {
+//     const { examId } = req.params;
+
+//     if (!examId) {
+//       return res.status(400).json({ message: "examId is required." });
+//     }
+
+//     // ✅ 1. Find the exam by ID
+//     const exam = await Schoolerexam.findById(examId)
+//       .select("ScheduleDate ScheduleTime");
+
+//     if (!exam) {
+//       return res.status(404).json({ message: "Exam not found." });
+//     }
+
+//     // ✅ 2. Get bufferTime from MarkingSetting
+//     const setting = await MarkingSetting.findOne()
+//       .select("bufferTime")
+
+//     if (!setting) {
+//       return res.status(404).json({ message: "Marking settings not found." });
+//     }
+
+//     // ✅ 3. Combine both results
+//     res.status(200).json({
+//       bufferTime: setting.bufferTime,
+//       createdBy: setting.createdBy,
+//       ScheduleDate: exam.ScheduleDate,
+//       ScheduleTime: exam.ScheduleTime,
+//     });
+
+//   } catch (err) {
+//     res.status(500).json({ message: err.message });
+//   }
+// };
+
 exports.bufferTime = async (req, res) => {
   try {
     const { examId } = req.params;
@@ -103,31 +141,50 @@ exports.bufferTime = async (req, res) => {
       return res.status(400).json({ message: "examId is required." });
     }
 
-    // ✅ 1. Find the exam by ID
     const exam = await Schoolerexam.findById(examId)
-      .select("ScheduleDate ScheduleTime");
+      .select("ScheduleDate ScheduleTime ScheduleTitle ScheduleType createdAt updatedAt");
 
     if (!exam) {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // ✅ 2. Get bufferTime from MarkingSetting
     const setting = await MarkingSetting.findOne()
-      .select("bufferTime")
+      .select("bufferTime createdBy");
 
     if (!setting) {
       return res.status(404).json({ message: "Marking settings not found." });
     }
 
-    // ✅ 3. Combine both results
+    const bufferDuration = setting.bufferTime * 60 * 1000;
+
+    // ✅ FIXED – use exam.ScheduleDate & exam.ScheduleTime (NOT undefined variables)
+    const dateString = `${exam.ScheduleDate} ${exam.ScheduleTime}`;
+    const formatString = "DD-MM-YYYY HH:mm:ss";
+
+    // 🔥 Convert to IST timestamp using Moment
+    const givenTime = moment
+      .tz(dateString, formatString, "Asia/Kolkata")
+      .valueOf();
+
     res.status(200).json({
       bufferTime: setting.bufferTime,
-      createdBy: setting.createdBy,
+      bufferDuration,
+      serverNow: Date.now(),
+      givenTime,               // ← FINAL IST TIMESTAMP
+
       ScheduleDate: exam.ScheduleDate,
       ScheduleTime: exam.ScheduleTime,
+      ScheduleTitle: exam.ScheduleTitle,
+      ScheduleType: exam.ScheduleType,
+      createdAt: exam.createdAt,
+      updatedAt: exam.updatedAt,
+      createdBy: setting.createdBy
     });
 
   } catch (err) {
     res.status(500).json({ message: err.message });
   }
 };
+
+
+

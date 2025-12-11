@@ -10,6 +10,8 @@ router.get("/schooler/category/:id", SchoolercategoryController.getSchoolercateg
 router.put("/schooler/Categoryupdate/:id", auth, SchoolercategoryController.updateSchoolercategory);
 router.delete("/schooler/Categorydelete/:id", auth, SchoolercategoryController.deleteSchoolercategory);
 
+router.get("/schooler/category/exam-type/:id", SchoolercategoryController.getExamTypeByCategoryId);
+
 
 
 
