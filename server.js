@@ -183,6 +183,7 @@ io.on('connection', (socket) => {
   });
 });
 
+
 cron.schedule('*/1 * * * * *', async () => {
   try {
     const markingSetting = await MarkingSetting.findOne().lean();
@@ -246,7 +247,7 @@ cron.schedule('*/1 * * * * *', async () => {
           statusManage = "Not Eligible";
           await ExamUserStatus.updateOne(
             { _id: status._id },
-            { $set: { statusManage, result: null } }
+            { $set: { statusManage, result: null }}
           );
         } else {
           if (computedStatus !== statusManage) {
@@ -298,7 +299,7 @@ cron.schedule('*/1 * * * * *', async () => {
           }
         }
 
-        // ✅ Emit **only once at the exact scheduled start time**
+        
         if (examDate === today && examTime === nowTime) {
           const emitKey = `${exam._id.toString()}_${today}_${examTime}`;
           if (!socket.sentExams.has(emitKey)) {
@@ -306,7 +307,7 @@ cron.schedule('*/1 * * * * *', async () => {
             userExams.push(examObj);
           }
         } else if (computedStatus !== "Schedule") {
-          // For ongoing exams after start, continue to push without blocking
+        
           userExams.push(examObj);
         }
       }
@@ -319,12 +320,6 @@ cron.schedule('*/1 * * * * *', async () => {
     console.error("CRON ERROR:", err);
   }
 });
-
-
-
-
-
-
 
 
 // --------------------------------------------------------------------
