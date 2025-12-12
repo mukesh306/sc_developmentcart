@@ -450,7 +450,6 @@ exports.addQuestionsToExam = async (req, res) => {
   }
 };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -639,7 +638,7 @@ exports.UsersExams = async (req, res) => {
         }
       }
 
-      
+     
 
       const passLimit = parseInt(exam.passout) || 1;
 
@@ -683,13 +682,14 @@ exports.UsersExams = async (req, res) => {
     return res.status(200).json(updatedExams);
 
   } catch (error) {
-    console.error("🔥 Error fetching exams:", error);
+    console.error("Error fetching exams:", error);
     return res.status(500).json({
       message: "Internal server error",
       error: error.message,
     });
   }
 };
+
 
 
 
