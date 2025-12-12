@@ -450,16 +450,20 @@ exports.addQuestionsToExam = async (req, res) => {
   }
 };
 
+
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
     const { category } = req.query;
 
+    // 1️⃣ Get user class
     const user = await User.findById(userId).select("className").lean();
     if (!user || !user.className) {
       return res.status(400).json({ message: "User class not found." });
     }
 
+    // 2️⃣ Find assigned group
     const assignedGroup = await UserExamGroup.findOne({
       members: userId,
       ...(category && mongoose.Types.ObjectId.isValid(category) ? { category } : {}),
@@ -469,6 +473,7 @@ exports.UsersExams = async (req, res) => {
       return res.status(200).json([]);
     }
 
+    // 3️⃣ Fetch exams
     let exams = await Schoolerexam.find({
       className: user.className,
       category: assignedGroup.category,
@@ -481,6 +486,7 @@ exports.UsersExams = async (req, res) => {
 
     if (!exams || exams.length === 0) return res.status(200).json([]);
 
+    // 4️⃣ Global buffer time
     const markingSetting = await MarkingSetting.findOne().lean();
     const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
@@ -489,6 +495,7 @@ exports.UsersExams = async (req, res) => {
     for (const exam of exams) {
       const examObj = { ...exam };
 
+      // 5️⃣ Class / College Info
       const classData =
         (await School.findById(exam.className).select("_id name className").lean()) ||
         (await College.findById(exam.className).select("_id name className").lean());
@@ -499,6 +506,7 @@ exports.UsersExams = async (req, res) => {
 
       examObj.totalQuestions = exam.topicQuestions?.length || 0;
 
+      // 6️⃣ Get user exam result
       const userResult = await ExamResult.findOne({
         userId,
         examId: exam._id,
@@ -517,6 +525,7 @@ exports.UsersExams = async (req, res) => {
         examObj.percentage = null;
       }
 
+      // 7️⃣ Ranking data
       const allResults = await ExamResult.find({
         examId: exam._id,
         userId: { $in: assignedGroup.members },
@@ -536,6 +545,7 @@ exports.UsersExams = async (req, res) => {
 
       examObj.totalParticipants = allResults.length;
 
+      // 8️⃣ PREVIOUS FAILED → NOT ELIGIBLE
       const previousFailed = await ExamUserStatus.findOne({
         userId,
         examId: { $ne: exam._id },
@@ -564,6 +574,7 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
+      // ⭐ Ongoing timing calculations
       const examDate = moment(exam.examDate)
         .tz("Asia/Kolkata")
         .format("YYYY-MM-DD");
@@ -578,12 +589,14 @@ exports.UsersExams = async (req, res) => {
       const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
       const now = moment().tz("Asia/Kolkata");
 
+      // ⭐ Ongoing Condition
       if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) {
         examObj.statusManage = "Ongoing";
         examObj.rank = null;
         examObj.result = null;
         examObj.updatedScheduleTime = ongoingStart.format("HH:mm:ss");
 
+        // ⭐ Attempt Status Logic (Ongoing)
         if (
           examObj.correct !== null ||
           examObj.finalScore !== null ||
@@ -598,6 +611,7 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
+      // 9️⃣ Normal Status Logic
       let statusManage = "Schedule";
 
       if (exam.publish === true) {
@@ -626,6 +640,7 @@ exports.UsersExams = async (req, res) => {
 
       examObj.statusManage = statusManage;
 
+      // ⭐ AttemptStatus only for Ongoing + Completed
       if (statusManage === "Ongoing" || statusManage === "Completed") {
         if (
           examObj.correct !== null ||
@@ -638,25 +653,20 @@ exports.UsersExams = async (req, res) => {
         }
       }
 
-     
-
+      // 🔟 Final Result
       const passLimit = parseInt(exam.passout) || 1;
 
-      if (statusManage === "Completed" && examObj.attemptStatus === "Not Attempted") {
-        examObj.result = null;
-      }
-      else if (statusManage === "Completed" && examObj.finalScore === null) {
+      if (statusManage === "Completed" && examObj.finalScore === null) {
         examObj.result = "Not Attempt";
-      }
-      else if (examObj.rank !== null) {
+      } else if (examObj.rank !== null) {
         examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
-      }
-      else {
+      } else {
         examObj.result = null;
       }
 
       updatedExams.push(examObj);
 
+      // 1️⃣2️⃣ Save ExamUserStatus
       await ExamUserStatus.findOneAndUpdate(
         { userId, examId: exam._id },
         {
@@ -682,15 +692,13 @@ exports.UsersExams = async (req, res) => {
     return res.status(200).json(updatedExams);
 
   } catch (error) {
-    console.error("Error fetching exams:", error);
+    console.error("🔥 Error fetching exams:", error);
     return res.status(500).json({
       message: "Internal server error",
       error: error.message,
     });
   }
 };
-
-
 
 
 
