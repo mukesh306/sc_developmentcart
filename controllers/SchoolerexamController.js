@@ -450,6 +450,8 @@ exports.addQuestionsToExam = async (req, res) => {
   }
 };
 
+
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -598,7 +600,8 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      let statusManage = "Schedule";
+      // let statusManage = "Schedule";
+      let statusManage = exam.publish === false ? "To Be Schedule" : "Schedule";
 
       if (exam.publish === true) {
         const examDate2 = moment(exam.examDate)
@@ -637,8 +640,6 @@ exports.UsersExams = async (req, res) => {
           examObj.attemptStatus = "Not Attempted";
         }
       }
-
-      
 
       const passLimit = parseInt(exam.passout) || 1;
 
