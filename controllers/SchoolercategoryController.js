@@ -102,7 +102,7 @@ exports.getSchoolercategoryById = async (req, res) => {
     let isUpdated = false;
 
     for (let i = 0; i < category.examType.length - 1; i++) {
-      const currentParticipants = category.examType[i].finelist;
+      const currentParticipants = category.examType[i].finalist;
 
       if (
         currentParticipants !== undefined &&
@@ -476,7 +476,7 @@ exports.deleteSchoolergroup = async (req, res) => {
 exports.updateParticipantsToExam = async (req, res) => {
   try {
     const examTypeId = req.params.id; 
-    const { finelist } = req.body;
+    const { finalist } = req.body;
 
     if (!examTypeId) {
       return res.status(400).json({
@@ -485,15 +485,15 @@ exports.updateParticipantsToExam = async (req, res) => {
     }
 
     
-    if (finelist === undefined) {
+    if (finalist === undefined) {
       return res.status(400).json({
-        message: "finelist is required to update."
+        message: "finalist is required to update."
       });
     }
 
-    if (isNaN(finelist) || finelist < 0) {
+    if (isNaN(finalist) || finalist < 0) {
       return res.status(400).json({
-        message: "finelist must be a valid number."
+        message: "finalist must be a valid number."
       });
     }
 
@@ -501,7 +501,7 @@ exports.updateParticipantsToExam = async (req, res) => {
       { "examType.id": examTypeId },
       {
         $set: {
-          "examType.$.finelist": Number(finelist)
+          "examType.$.finalist": Number(finalist)
         }
       },
       { new: true }
@@ -518,7 +518,7 @@ exports.updateParticipantsToExam = async (req, res) => {
     );
 
     return res.status(200).json({
-      message: "finelist updated successfully.",
+      message: "finalist updated successfully.",
       examType: updatedExam
     });
 
