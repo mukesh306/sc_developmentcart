@@ -693,11 +693,6 @@ exports.UsersExams = async (req, res) => {
 
 
 
-
-
-
-
-
 exports.ExamQuestion = async (req, res) => {
   try {
     const exam = await Schoolerexam.findById(req.params.id)
@@ -981,7 +976,6 @@ exports.topusers = async (req, res) => {
 
     const passoutLimit = parseInt(exam.passout) || 1;
 
-  
     const groups = await ExamGroup.find({ examId }).populate(
       "members",
       "firstName lastName email className"
@@ -1021,9 +1015,7 @@ exports.topusers = async (req, res) => {
         seen.add(userId);
         uniqueUsers.push(user);
       }
-    }
-
-    
+    } 
     const allResults = await ExamResult.find({ examId })
       .select("userId percentage createdAt")
       .sort({ percentage: -1, createdAt: 1 })
@@ -1048,7 +1040,6 @@ exports.topusers = async (req, res) => {
    
     uniqueUsers.sort((a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999));
 
-    
     const lastExam = await Schoolerexam.findOne({ category: exam.category })
       .sort({ createdAt: -1 })
       .lean();
@@ -1256,7 +1247,6 @@ exports.schoolerShipPrizes = async (req, res) => {
         examId = lastExam._id;
 
         const passoutLimit = parseInt(lastExam.passout) || 1;
-
         const groups = await ExamGroup.find({ examId: lastExam._id }).populate("members", "_id");
 
         let allTopUsers = [];

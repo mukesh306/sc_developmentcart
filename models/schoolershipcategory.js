@@ -8,10 +8,12 @@ const SchoolershipcategorySchema = new mongoose.Schema(
     groupSize: { type: Number,required: true},
     finalist: { type: Number,required: true},
     examSize: { type: Number,required: true},
-     examType: [
+    examType: [
       {
         name: { type: String },
         id: { type: String },
+        groupSize:{ type: Number },
+        passout:{ type: Number },
         count: { type: Number }
       }
     ],
