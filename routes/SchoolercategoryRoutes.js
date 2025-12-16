@@ -22,7 +22,7 @@ router.get("/schooler/allgroup", auth,SchoolercategoryController.getAllSchoolerg
 router.get("/schooler/group/:id", SchoolercategoryController.getSchoolergroupById);
 router.put("/schooler/groupupdate/:id", auth, SchoolercategoryController.updateSchoolergroup);
 router.delete("/schooler/groupdelete/:id", auth, SchoolercategoryController.deleteSchoolergroup);
-router.post("/schooler/add-participants/:id", auth, SchoolercategoryController.updateParticipantsToExam);
+router.put("/schooler/add-participants/:id", auth, SchoolercategoryController.updateParticipantsToExam);
 
 
 
