@@ -6,38 +6,6 @@ const ExamResult = require("../models/examResult");
 const CategoryTopUser = require("../models/CategoryTopUser");
 
 
-// exports.createSchoolercategory = async (req, res) => {
-//   try {
-//     const { name, price,groupSize , finalist,examSize } = req.body;
-//     const createdBy = req.user?._id;
-
-//    if (!name || !price || !groupSize || !finalist ||!examSize) {
-//       return res.status(400).json({ 
-//         message: "All fields (name, price, groupSize, finalist,ExamSize) are required." 
-//       });
-//     }
-//     // ✅ Create new category with price
-//     const newCategory = new Schoolercategory({
-//       name,
-//       price,
-//       groupSize , 
-//       finalist ,
-//       examSize ,
-//       createdBy,
-//     });
-
-//     await newCategory.save();
-
-//     res.status(201).json({
-//       message: "Category created successfully.",
-//       category: newCategory,
-//     });
-//   } catch (error) {
-//     res.status(500).json({ message: "Error creating category.", error: error.message });
-//   }
-// };
-
-
 exports.createSchoolercategory = async (req, res) => {
   try {
     const { name, price, groupSize, finalist, examSize } = req.body;
@@ -55,13 +23,14 @@ exports.createSchoolercategory = async (req, res) => {
       });
     }
 
-    // Create examType array
+    
     let examType = [];
     for (let i = 1; i <= examSize; i++) {
       examType.push({
         name: `Exam ${i}`,
         id: new mongoose.Types.ObjectId().toString(),
-        count: i
+        count: i,
+        groupSize: i === 1 ? groupSize : 0
       });
     }
 
