@@ -8,12 +8,12 @@ const CategoryTopUser = require("../models/CategoryTopUser");
 
 exports.createSchoolercategory = async (req, res) => {
   try {
-    const { name, price, groupSize, finalist, examSize } = req.body;
+    const { name, price, groupSize, examSize } = req.body;
     const createdBy = req.user?._id;
 
-    if (!name || !price || !groupSize || !finalist || !examSize) {
+    if (!name || !price || !groupSize || !examSize) {
       return res.status(400).json({
-        message: "All fields (name, price, groupSize, finalist, examSize) are required."
+        message: "All fields (name, price, groupSize, examSize) are required."
       });
     }
 
@@ -38,7 +38,6 @@ exports.createSchoolercategory = async (req, res) => {
       name,
       price,
       groupSize,
-      finalist,
       examSize,
       examType,
       createdBy,
@@ -88,7 +87,6 @@ exports.getAllSchoolercategories = async (req, res) => {
 //   }
 // };
 
-
 exports.getSchoolercategoryById = async (req, res) => {
   try {
     const category = await Schoolercategory.findById(req.params.id)
@@ -98,19 +96,28 @@ exports.getSchoolercategoryById = async (req, res) => {
       return res.status(404).json({ message: "Category not found." });
     }
 
-  
     let isUpdated = false;
 
-    for (let i = 0; i < category.examType.length - 1; i++) {
-      const currentParticipants = category.examType[i].finalist;
+    for (let i = 0; i < category.examType.length; i++) {
 
-      if (
-        currentParticipants !== undefined &&
-        currentParticipants !== null
-      ) {
-      
-        if (category.examType[i + 1].groupSize !== currentParticipants) {
-          category.examType[i + 1].groupSize = currentParticipants;
+      // 👉 Exam 1
+      if (i === 0) {
+        if (category.examType[i].groupSize === undefined) {
+          category.examType[i].groupSize = category.groupSize || 0;
+          isUpdated = true;
+        }
+      }
+
+      // 👉 Exam 2, 3, 4...
+      else {
+        const prevFinalist = category.examType[i - 1].finalist;
+
+        if (
+          category.examType[i].groupSize === undefined &&
+          prevFinalist !== undefined &&
+          prevFinalist !== null
+        ) {
+          category.examType[i].groupSize = prevFinalist;
           isUpdated = true;
         }
       }
@@ -119,13 +126,13 @@ exports.getSchoolercategoryById = async (req, res) => {
     if (isUpdated) {
       await category.save();
     }
-   
 
     res.status(200).json(category);
   } catch (error) {
     res.status(500).json({ message: "Error fetching category.", error });
   }
 };
+
 
 
 
@@ -156,24 +163,24 @@ exports.getSchoolercategoryById = async (req, res) => {
 
 exports.updateSchoolercategory = async (req, res) => {
   try {
-    const { name, price, groupSize, finalist, examSize } = req.body;
+    const { name, price, groupSize, examSize } = req.body;
 
-    // category exists?
+  
     let category = await Schoolercategory.findById(req.params.id);
     if (!category) {
       return res.status(404).json({ message: "Category not found." });
     }
 
-    // Update simple fields
+    
     if (name) category.name = name;
     if (price) category.price = price;
     if (groupSize) category.groupSize = groupSize;
-    if (finalist) category.finalist = finalist;
+    
 
-    // Check examSize changed
+   
     if (examSize && examSize !== category.examSize) {
 
-      // Update examSize
+      
       category.examSize = examSize;
 
       // Regenerate examType
