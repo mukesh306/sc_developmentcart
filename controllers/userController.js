@@ -1612,7 +1612,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
-    let { className, stateId, cityId, categoryId, page = 1, limit = 2, fields } = req.query;
+    let { className, stateId, cityId, categoryId, page = 1, limit = 10, fields } = req.query;
 
     page = parseInt(page);
     limit = parseInt(limit);

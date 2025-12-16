@@ -73,6 +73,22 @@ exports.getAllSchoolercategories = async (req, res) => {
 };
 
 
+// exports.getSchoolercategoryById = async (req, res) => {
+//   try {
+//     const category = await Schoolercategory.findById(req.params.id)
+//       .populate("createdBy", "firstName lastName email");
+
+//     if (!category) {
+//       return res.status(404).json({ message: "Category not found." });
+//     }
+
+//     res.status(200).json(category);
+//   } catch (error) {
+//     res.status(500).json({ message: "Error fetching category.", error });
+//   }
+// };
+
+
 exports.getSchoolercategoryById = async (req, res) => {
   try {
     const category = await Schoolercategory.findById(req.params.id)
@@ -82,11 +98,35 @@ exports.getSchoolercategoryById = async (req, res) => {
       return res.status(404).json({ message: "Category not found." });
     }
 
+  
+    let isUpdated = false;
+
+    for (let i = 0; i < category.examType.length - 1; i++) {
+      const currentParticipants = category.examType[i].participants;
+
+      if (
+        currentParticipants !== undefined &&
+        currentParticipants !== null
+      ) {
+      
+        if (category.examType[i + 1].groupSize !== currentParticipants) {
+          category.examType[i + 1].groupSize = currentParticipants;
+          isUpdated = true;
+        }
+      }
+    }
+
+    if (isUpdated) {
+      await category.save();
+    }
+   
+
     res.status(200).json(category);
   } catch (error) {
     res.status(500).json({ message: "Error fetching category.", error });
   }
 };
+
 
 
 // exports.updateSchoolercategory = async (req, res) => {
@@ -110,6 +150,9 @@ exports.getSchoolercategoryById = async (req, res) => {
 //     res.status(500).json({ message: "Error updating category.", error });
 //   }
 // };
+
+
+
 
 exports.updateSchoolercategory = async (req, res) => {
   try {
