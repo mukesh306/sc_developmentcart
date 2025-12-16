@@ -87,6 +87,7 @@ exports.getAllSchoolercategories = async (req, res) => {
 //   }
 // };
 
+
 exports.getSchoolercategoryById = async (req, res) => {
   try {
     const category = await Schoolercategory.findById(req.params.id)
@@ -96,28 +97,19 @@ exports.getSchoolercategoryById = async (req, res) => {
       return res.status(404).json({ message: "Category not found." });
     }
 
+  
     let isUpdated = false;
 
-    for (let i = 0; i < category.examType.length; i++) {
+    for (let i = 0; i < category.examType.length - 1; i++) {
+      const currentParticipants = category.examType[i].finalist;
 
-      // 👉 Exam 1
-      if (i === 0) {
-        if (category.examType[i].groupSize === undefined) {
-          category.examType[i].groupSize = category.groupSize || 0;
-          isUpdated = true;
-        }
-      }
-
-      // 👉 Exam 2, 3, 4...
-      else {
-        const prevFinalist = category.examType[i - 1].finalist;
-
-        if (
-          category.examType[i].groupSize === undefined &&
-          prevFinalist !== undefined &&
-          prevFinalist !== null
-        ) {
-          category.examType[i].groupSize = prevFinalist;
+      if (
+        currentParticipants !== undefined &&
+        currentParticipants !== null
+      ) {
+      
+        if (category.examType[i + 1].groupSize !== currentParticipants) {
+          category.examType[i + 1].groupSize = currentParticipants;
           isUpdated = true;
         }
       }
@@ -126,13 +118,13 @@ exports.getSchoolercategoryById = async (req, res) => {
     if (isUpdated) {
       await category.save();
     }
+   
 
     res.status(200).json(category);
   } catch (error) {
     res.status(500).json({ message: "Error fetching category.", error });
   }
 };
-
 
 
 
