@@ -13,7 +13,7 @@ const SchoolershipcategorySchema = new mongoose.Schema(
         name: { type: String },
         id: { type: String },
         groupSize:{ type: Number },
-        passout:{ type: Number },
+        participants:{ type: Number },
         count: { type: Number }
       }
     ],

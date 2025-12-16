@@ -88,6 +88,7 @@ exports.getSchoolercategoryById = async (req, res) => {
   }
 };
 
+
 // exports.updateSchoolercategory = async (req, res) => {
 //   try {
 //     const { name ,price,groupSize , finalist,examSize } = req.body;
@@ -418,3 +419,71 @@ exports.deleteSchoolergroup = async (req, res) => {
     res.status(500).json({ message: "Error deleting group.", error });
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+exports.updateParticipantsToExam = async (req, res) => {
+  try {
+    const examTypeId = req.params.id; 
+    const { participants } = req.body;
+
+    if (!examTypeId) {
+      return res.status(400).json({
+        message: "examTypeId is required."
+      });
+    }
+
+    
+    if (participants === undefined) {
+      return res.status(400).json({
+        message: "participants is required to update."
+      });
+    }
+
+    if (isNaN(participants) || participants < 0) {
+      return res.status(400).json({
+        message: "participants must be a valid number."
+      });
+    }
+
+    const result = await Schoolercategory.findOneAndUpdate(
+      { "examType.id": examTypeId },
+      {
+        $set: {
+          "examType.$.participants": Number(participants)
+        }
+      },
+      { new: true }
+    );
+
+    if (!result) {
+      return res.status(404).json({
+        message: "No category found for given examTypeId."
+      });
+    }
+
+    const updatedExam = result.examType.find(
+      (ex) => ex.id === examTypeId
+    );
+
+    return res.status(200).json({
+      message: "Participants updated successfully.",
+      examType: updatedExam
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Error updating participants.",
+      error: error.message
+    });
+  }
+};
+
