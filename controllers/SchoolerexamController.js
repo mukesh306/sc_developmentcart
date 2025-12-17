@@ -452,246 +452,6 @@ exports.addQuestionsToExam = async (req, res) => {
 
 
 
-exports.UsersExams = async (req, res) => {
-  try {
-    const userId = req.user._id;
-    const { category } = req.query;
-
-    const user = await User.findById(userId).select("className").lean();
-    if (!user || !user.className) {
-      return res.status(400).json({ message: "User class not found." });
-    }
-
-    const assignedGroup = await UserExamGroup.findOne({
-      members: userId,
-      ...(category && mongoose.Types.ObjectId.isValid(category) ? { category } : {}),
-    }).lean();
-
-    if (!assignedGroup) {
-      return res.status(200).json([]);
-    }
-
-    let exams = await Schoolerexam.find({
-      className: user.className,
-      category: assignedGroup.category,
-      assignedGroup: { $in: [assignedGroup._id] },
-    })
-      .populate("category", "name finalist")
-      .populate("createdBy", "name email")
-      .sort({ createdAt: 1 })
-      .lean();
-
-    if (!exams || exams.length === 0) return res.status(200).json([]);
-
-    const markingSetting = await MarkingSetting.findOne().lean();
-    const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
-
-    const updatedExams = [];
-
-    for (const exam of exams) {
-      const examObj = { ...exam };
-
-      const classData =
-        (await School.findById(exam.className).select("_id name className").lean()) ||
-        (await College.findById(exam.className).select("_id name className").lean());
-
-      examObj.className = classData
-        ? { _id: classData._id, name: classData.className || classData.name }
-        : null;
-
-      examObj.totalQuestions = exam.topicQuestions?.length || 0;
-
-      const userResult = await ExamResult.findOne({
-        userId,
-        examId: exam._id,
-      })
-        .select("correct finalScore percentage createdAt")
-        .lean();
-
-      examObj.correct = userResult?.correct ?? null;
-      examObj.finalScore = userResult?.finalScore ?? null;
-
-      if (userResult && examObj.totalQuestions > 0) {
-        examObj.percentage = parseFloat(
-          ((userResult.finalScore / examObj.totalQuestions) * 100).toFixed(2)
-        );
-      } else {
-        examObj.percentage = null;
-      }
-
-      const allResults = await ExamResult.find({
-        examId: exam._id,
-        userId: { $in: assignedGroup.members },
-      })
-        .select("userId percentage Completiontime")
-        .sort({ percentage: -1, Completiontime: 1 })
-        .lean();
-
-      if (userResult && allResults.length > 0) {
-        const rank = allResults.findIndex(
-          (r) => r.userId.toString() === userId.toString()
-        );
-        examObj.rank = rank >= 0 ? rank + 1 : null;
-      } else {
-        examObj.rank = null;
-      }
-
-      examObj.totalParticipants = allResults.length;
-
-      const previousFailed = await ExamUserStatus.findOne({
-        userId,
-        examId: { $ne: exam._id },
-        result: "failed",
-      }).lean();
-
-      if (previousFailed) {
-        examObj.statusManage = "Not Eligible";
-        examObj.result = null;
-        examObj.rank = null;
-
-        await ExamUserStatus.findOneAndUpdate(
-          { userId, examId: exam._id },
-          {
-            userId,
-            examId: exam._id,
-            category: exam.category,
-            statusManage: "Not Eligible",
-            result: null,
-            publish: exam.publish,
-          },
-          { upsert: true }
-        );
-
-        updatedExams.push(examObj);
-        continue;
-      }
-
-      const examDate = moment(exam.examDate)
-        .tz("Asia/Kolkata")
-        .format("YYYY-MM-DD");
-
-      const scheduleDateTime = moment.tz(
-        `${examDate} ${exam.ScheduleTime}`,
-        "YYYY-MM-DD HH:mm:ss",
-        "Asia/Kolkata"
-      );
-
-      const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
-      const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
-      const now = moment().tz("Asia/Kolkata");
-
-      if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) {
-        examObj.statusManage = "Ongoing";
-        examObj.rank = null;
-        examObj.result = null;
-        examObj.updatedScheduleTime = ongoingStart.format("HH:mm:ss");
-
-        if (
-          examObj.correct !== null ||
-          examObj.finalScore !== null ||
-          examObj.percentage !== null
-        ) {
-          examObj.attemptStatus = "Attempted";
-        } else {
-          examObj.attemptStatus = "Not Attempted";
-        }
-
-        updatedExams.push(examObj);
-        continue;
-      }
-
-      // let statusManage = "Schedule";
-      let statusManage = exam.publish === false ? "To Be Schedule" : "Schedule";
-
-      if (exam.publish === true) {
-        const examDate2 = moment(exam.examDate)
-          .tz("Asia/Kolkata")
-          .format("YYYY-MM-DD");
-
-        const scheduleDateTime2 = moment.tz(
-          `${examDate2} ${exam.ScheduleTime}`,
-          "YYYY-MM-DD HH:mm:ss",
-          "Asia/Kolkata"
-        );
-
-        const ongoingStart2 = scheduleDateTime2.clone().add(bufferTime, "minutes");
-        const ongoingEnd2 = ongoingStart2.clone().add(exam.ExamTime, "minutes");
-
-        const now2 = moment().tz("Asia/Kolkata");
-
-        if (now2.isBefore(ongoingStart2)) statusManage = "Schedule";
-        else if (now2.isSameOrAfter(ongoingStart2) && now2.isBefore(ongoingEnd2))
-          statusManage = "Ongoing";
-        else if (now2.isSameOrAfter(ongoingEnd2)) statusManage = "Completed";
-
-        examObj.updatedScheduleTime = ongoingStart2.format("HH:mm:ss");
-      }
-
-      examObj.statusManage = statusManage;
-
-      if (statusManage === "Ongoing" || statusManage === "Completed") {
-        if (
-          examObj.correct !== null ||
-          examObj.finalScore !== null ||
-          examObj.percentage !== null
-        ) {
-          examObj.attemptStatus = "Attempted";
-        } else {
-          examObj.attemptStatus = "Not Attempted";
-        }
-      }
-
-      const passLimit = parseInt(exam.passout) || 1;
-
-      if (statusManage === "Completed" && examObj.attemptStatus === "Not Attempted") {
-        examObj.result = null;
-      }
-      else if (statusManage === "Completed" && examObj.finalScore === null) {
-        examObj.result = "Not Attempt";
-      }
-      else if (examObj.rank !== null) {
-        examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
-      }
-      else {
-        examObj.result = null;
-      }
-
-      updatedExams.push(examObj);
-
-      await ExamUserStatus.findOneAndUpdate(
-        { userId, examId: exam._id },
-        {
-          userId,
-          examId: exam._id,
-          category: exam.category,
-          className: examObj.className,
-          totalQuestions: examObj.totalQuestions,
-          correct: examObj.correct,
-          finalScore: examObj.finalScore,
-          percentage: examObj.percentage,
-          rank: examObj.rank,
-          totalParticipants: examObj.totalParticipants,
-          result: examObj.result,
-          publish: exam.publish,
-          statusManage,
-          attemptStatus: examObj.attemptStatus || null,
-        },
-        { upsert: true }
-      );
-    }
-
-    return res.status(200).json(updatedExams);
-
-  } catch (error) {
-    console.error(" Error fetching exams:", error);
-    return res.status(500).json({
-      message: "Internal server error",
-      error: error.message,
-    });
-  }
-};
-
-
 // exports.UsersExams = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -704,9 +464,7 @@ exports.UsersExams = async (req, res) => {
 
 //     const assignedGroup = await UserExamGroup.findOne({
 //       members: userId,
-//       ...(category && mongoose.Types.ObjectId.isValid(category)
-//         ? { category }
-//         : {}),
+//       ...(category && mongoose.Types.ObjectId.isValid(category) ? { category } : {}),
 //     }).lean();
 
 //     if (!assignedGroup) {
@@ -720,34 +478,22 @@ exports.UsersExams = async (req, res) => {
 //     })
 //       .populate("category", "name finalist")
 //       .populate("createdBy", "name email")
-//       .sort({ createdAt: 1 }) 
+//       .sort({ createdAt: 1 })
 //       .lean();
 
-//     if (!exams || exams.length === 0) {
-//       return res.status(200).json([]);
-//     }
+//     if (!exams || exams.length === 0) return res.status(200).json([]);
 
 //     const markingSetting = await MarkingSetting.findOne().lean();
-//     const bufferTime = markingSetting?.bufferTime
-//       ? parseInt(markingSetting.bufferTime)
-//       : 0;
+//     const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
 
 //     const updatedExams = [];
-
-    
-//     let hasFailedPreviously = false;
 
 //     for (const exam of exams) {
 //       const examObj = { ...exam };
 
-     
 //       const classData =
-//         (await School.findById(exam.className)
-//           .select("_id name className")
-//           .lean()) ||
-//         (await College.findById(exam.className)
-//           .select("_id name className")
-//           .lean());
+//         (await School.findById(exam.className).select("_id name className").lean()) ||
+//         (await College.findById(exam.className).select("_id name className").lean());
 
 //       examObj.className = classData
 //         ? { _id: classData._id, name: classData.className || classData.name }
@@ -755,12 +501,11 @@ exports.UsersExams = async (req, res) => {
 
 //       examObj.totalQuestions = exam.topicQuestions?.length || 0;
 
-      
 //       const userResult = await ExamResult.findOne({
 //         userId,
 //         examId: exam._id,
 //       })
-//         .select("correct finalScore percentage Completiontime")
+//         .select("correct finalScore percentage createdAt")
 //         .lean();
 
 //       examObj.correct = userResult?.correct ?? null;
@@ -774,7 +519,6 @@ exports.UsersExams = async (req, res) => {
 //         examObj.percentage = null;
 //       }
 
-      
 //       const allResults = await ExamResult.find({
 //         examId: exam._id,
 //         userId: { $in: assignedGroup.members },
@@ -794,8 +538,13 @@ exports.UsersExams = async (req, res) => {
 
 //       examObj.totalParticipants = allResults.length;
 
-      
-//       if (hasFailedPreviously) {
+//       const previousFailed = await ExamUserStatus.findOne({
+//         userId,
+//         examId: { $ne: exam._id },
+//         result: "failed",
+//       }).lean();
+
+//       if (previousFailed) {
 //         examObj.statusManage = "Not Eligible";
 //         examObj.result = null;
 //         examObj.rank = null;
@@ -817,71 +566,98 @@ exports.UsersExams = async (req, res) => {
 //         continue;
 //       }
 
-     
-//       let statusManage =
-//         exam.publish === false ? "To Be Schedule" : "Schedule";
+//       const examDate = moment(exam.examDate)
+//         .tz("Asia/Kolkata")
+//         .format("YYYY-MM-DD");
+
+//       const scheduleDateTime = moment.tz(
+//         `${examDate} ${exam.ScheduleTime}`,
+//         "YYYY-MM-DD HH:mm:ss",
+//         "Asia/Kolkata"
+//       );
+
+//       const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
+//       const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
+//       const now = moment().tz("Asia/Kolkata");
+
+//       if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) {
+//         examObj.statusManage = "Ongoing";
+//         examObj.rank = null;
+//         examObj.result = null;
+//         examObj.updatedScheduleTime = ongoingStart.format("HH:mm:ss");
+
+//         if (
+//           examObj.correct !== null ||
+//           examObj.finalScore !== null ||
+//           examObj.percentage !== null
+//         ) {
+//           examObj.attemptStatus = "Attempted";
+//         } else {
+//           examObj.attemptStatus = "Not Attempted";
+//         }
+
+//         updatedExams.push(examObj);
+//         continue;
+//       }
+
+//       // let statusManage = "Schedule";
+//       let statusManage = exam.publish === false ? "To Be Schedule" : "Schedule";
 
 //       if (exam.publish === true) {
-//         const examDate = moment(exam.examDate)
+//         const examDate2 = moment(exam.examDate)
 //           .tz("Asia/Kolkata")
 //           .format("YYYY-MM-DD");
 
-//         const scheduleDateTime = moment.tz(
-//           `${examDate} ${exam.ScheduleTime}`,
+//         const scheduleDateTime2 = moment.tz(
+//           `${examDate2} ${exam.ScheduleTime}`,
 //           "YYYY-MM-DD HH:mm:ss",
 //           "Asia/Kolkata"
 //         );
 
-//         const ongoingStart = scheduleDateTime
-//           .clone()
-//           .add(bufferTime, "minutes");
-//         const ongoingEnd = ongoingStart
-//           .clone()
-//           .add(exam.ExamTime, "minutes");
+//         const ongoingStart2 = scheduleDateTime2.clone().add(bufferTime, "minutes");
+//         const ongoingEnd2 = ongoingStart2.clone().add(exam.ExamTime, "minutes");
 
-//         const now = moment().tz("Asia/Kolkata");
+//         const now2 = moment().tz("Asia/Kolkata");
 
-//         if (now.isBefore(ongoingStart)) statusManage = "Schedule";
-//         else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
+//         if (now2.isBefore(ongoingStart2)) statusManage = "Schedule";
+//         else if (now2.isSameOrAfter(ongoingStart2) && now2.isBefore(ongoingEnd2))
 //           statusManage = "Ongoing";
-//         else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
+//         else if (now2.isSameOrAfter(ongoingEnd2)) statusManage = "Completed";
 
-//         examObj.updatedScheduleTime = ongoingStart.format("HH:mm:ss");
+//         examObj.updatedScheduleTime = ongoingStart2.format("HH:mm:ss");
 //       }
 
 //       examObj.statusManage = statusManage;
 
-      
 //       if (statusManage === "Ongoing" || statusManage === "Completed") {
-//         examObj.attemptStatus =
-//           examObj.finalScore !== null ? "Attempted" : "Not Attempted";
+//         if (
+//           examObj.correct !== null ||
+//           examObj.finalScore !== null ||
+//           examObj.percentage !== null
+//         ) {
+//           examObj.attemptStatus = "Attempted";
+//         } else {
+//           examObj.attemptStatus = "Not Attempted";
+//         }
 //       }
 
-      
 //       const passLimit = parseInt(exam.passout) || 1;
 
-//       if (
-//         statusManage === "Completed" &&
-//         examObj.attemptStatus === "Not Attempted"
-//       ) {
-//         examObj.result = null;
-//       } else if (statusManage === "Completed" && examObj.finalScore === null) {
-//         examObj.result = "Not Attempt";
-//       } else if (examObj.rank !== null) {
-//         examObj.result =
-//           examObj.rank <= passLimit ? "passed" : "failed";
-//       } else {
+//       if (statusManage === "Completed" && examObj.attemptStatus === "Not Attempted") {
 //         examObj.result = null;
 //       }
-
-     
-//       if (examObj.result === "failed") {
-//         hasFailedPreviously = true;
+//       else if (statusManage === "Completed" && examObj.finalScore === null) {
+//         examObj.result = "Not Attempt";
+//       }
+//       else if (examObj.rank !== null) {
+//         examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
+//       }
+//       else {
+//         examObj.result = null;
 //       }
 
 //       updatedExams.push(examObj);
 
-     
 //       await ExamUserStatus.findOneAndUpdate(
 //         { userId, examId: exam._id },
 //         {
@@ -905,14 +681,238 @@ exports.UsersExams = async (req, res) => {
 //     }
 
 //     return res.status(200).json(updatedExams);
+
 //   } catch (error) {
-//     console.error("Error fetching exams:", error);
+//     console.error(" Error fetching exams:", error);
 //     return res.status(500).json({
 //       message: "Internal server error",
 //       error: error.message,
 //     });
 //   }
 // };
+
+
+exports.UsersExams = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const { category } = req.query;
+
+    const user = await User.findById(userId).select("className").lean();
+    if (!user || !user.className) {
+      return res.status(400).json({ message: "User class not found." });
+    }
+
+    const assignedGroup = await UserExamGroup.findOne({
+      members: userId,
+      ...(category && mongoose.Types.ObjectId.isValid(category)
+        ? { category }
+        : {}),
+    }).lean();
+
+    if (!assignedGroup) {
+      return res.status(200).json([]);
+    }
+
+    let exams = await Schoolerexam.find({
+      className: user.className,
+      category: assignedGroup.category,
+      assignedGroup: { $in: [assignedGroup._id] },
+    })
+      .populate("category", "name finalist")
+      .populate("createdBy", "name email")
+      .sort({ createdAt: 1 }) 
+      .lean();
+
+    if (!exams || exams.length === 0) {
+      return res.status(200).json([]);
+    }
+
+    const markingSetting = await MarkingSetting.findOne().lean();
+    const bufferTime = markingSetting?.bufferTime
+      ? parseInt(markingSetting.bufferTime)
+      : 0;
+
+    const updatedExams = [];
+
+    
+    let hasFailedPreviously = false;
+
+    for (const exam of exams) {
+      const examObj = { ...exam };
+
+     
+      const classData =
+        (await School.findById(exam.className)
+          .select("_id name className")
+          .lean()) ||
+        (await College.findById(exam.className)
+          .select("_id name className")
+          .lean());
+
+      examObj.className = classData
+        ? { _id: classData._id, name: classData.className || classData.name }
+        : null;
+
+      examObj.totalQuestions = exam.topicQuestions?.length || 0;
+
+      
+      const userResult = await ExamResult.findOne({
+        userId,
+        examId: exam._id,
+      })
+        .select("correct finalScore percentage Completiontime")
+        .lean();
+
+      examObj.correct = userResult?.correct ?? null;
+      examObj.finalScore = userResult?.finalScore ?? null;
+
+      if (userResult && examObj.totalQuestions > 0) {
+        examObj.percentage = parseFloat(
+          ((userResult.finalScore / examObj.totalQuestions) * 100).toFixed(2)
+        );
+      } else {
+        examObj.percentage = null;
+      }
+
+      
+      const allResults = await ExamResult.find({
+        examId: exam._id,
+        userId: { $in: assignedGroup.members },
+      })
+        .select("userId percentage Completiontime")
+        .sort({ percentage: -1, Completiontime: 1 })
+        .lean();
+
+      if (userResult && allResults.length > 0) {
+        const rank = allResults.findIndex(
+          (r) => r.userId.toString() === userId.toString()
+        );
+        examObj.rank = rank >= 0 ? rank + 1 : null;
+      } else {
+        examObj.rank = null;
+      }
+
+      examObj.totalParticipants = allResults.length;
+
+      
+      if (hasFailedPreviously) {
+        examObj.statusManage = "Not Eligible";
+        examObj.result = null;
+        examObj.rank = null;
+
+        await ExamUserStatus.findOneAndUpdate(
+          { userId, examId: exam._id },
+          {
+            userId,
+            examId: exam._id,
+            category: exam.category,
+            statusManage: "Not Eligible",
+            result: null,
+            publish: exam.publish,
+          },
+          { upsert: true }
+        );
+
+        updatedExams.push(examObj);
+        continue;
+      }
+
+     
+      let statusManage =
+        exam.publish === false ? "To Be Schedule" : "Schedule";
+
+      if (exam.publish === true) {
+        const examDate = moment(exam.examDate)
+          .tz("Asia/Kolkata")
+          .format("YYYY-MM-DD");
+
+        const scheduleDateTime = moment.tz(
+          `${examDate} ${exam.ScheduleTime}`,
+          "YYYY-MM-DD HH:mm:ss",
+          "Asia/Kolkata"
+        );
+
+        const ongoingStart = scheduleDateTime
+          .clone()
+          .add(bufferTime, "minutes");
+        const ongoingEnd = ongoingStart
+          .clone()
+          .add(exam.ExamTime, "minutes");
+
+        const now = moment().tz("Asia/Kolkata");
+
+        if (now.isBefore(ongoingStart)) statusManage = "Schedule";
+        else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
+          statusManage = "Ongoing";
+        else if (now.isSameOrAfter(ongoingEnd)) statusManage = "Completed";
+
+        examObj.updatedScheduleTime = ongoingStart.format("HH:mm:ss");
+      }
+
+      examObj.statusManage = statusManage;
+
+      
+      if (statusManage === "Ongoing" || statusManage === "Completed") {
+        examObj.attemptStatus =
+          examObj.finalScore !== null ? "Attempted" : "Not Attempted";
+      }
+
+      
+      const passLimit = parseInt(exam.passout) || 1;
+
+      if (
+        statusManage === "Completed" &&
+        examObj.attemptStatus === "Not Attempted"
+      ) {
+        examObj.result = null;
+      } else if (statusManage === "Completed" && examObj.finalScore === null) {
+        examObj.result = "Not Attempt";
+      } else if (examObj.rank !== null) {
+        examObj.result =
+          examObj.rank <= passLimit ? "passed" : "failed";
+      } else {
+        examObj.result = null;
+      }
+
+     
+      if (examObj.result === "failed") {
+        hasFailedPreviously = true;
+      }
+
+      updatedExams.push(examObj);
+
+     
+      await ExamUserStatus.findOneAndUpdate(
+        { userId, examId: exam._id },
+        {
+          userId,
+          examId: exam._id,
+          category: exam.category,
+          className: examObj.className,
+          totalQuestions: examObj.totalQuestions,
+          correct: examObj.correct,
+          finalScore: examObj.finalScore,
+          percentage: examObj.percentage,
+          rank: examObj.rank,
+          totalParticipants: examObj.totalParticipants,
+          result: examObj.result,
+          publish: exam.publish,
+          statusManage,
+          attemptStatus: examObj.attemptStatus || null,
+        },
+        { upsert: true }
+      );
+    }
+
+    return res.status(200).json(updatedExams);
+  } catch (error) {
+    console.error("Error fetching exams:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
+  }
+};
 
 
 exports.ExamQuestion = async (req, res) => {
