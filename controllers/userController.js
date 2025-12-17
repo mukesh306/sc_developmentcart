@@ -1546,7 +1546,6 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //   }
 // };
 
-
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -1558,8 +1557,10 @@ exports.userforAdmin = async (req, res) => {
 
     const admin = await Admin1.findById(adminId).select("startDate endDate");
     if (!admin) return res.status(404).json({ message: "Admin not found." });
-    if (!admin.startDate || !admin.endDate)
+
+    if (!admin.startDate || !admin.endDate) {
       return res.status(400).json({ message: "Admin session dates missing." });
+    }
 
     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
@@ -1579,20 +1580,19 @@ exports.userforAdmin = async (req, res) => {
       else filterQuery.cityId = cityId;
     }
 
-    
     let users = await User.find(filterQuery)
       .populate("countryId", "name")
       .populate("stateId", "name")
       .populate("cityId", "name")
       .populate("updatedBy", "email session startDate endDate name role");
 
-    
-    const latestCategoryPerUser = await CategoryTopUser.aggregate([
+    // 🔹 Latest schoolerStatus per user
+    const latestStatusPerUser = await CategoryTopUser.aggregate([
       { $sort: { createdAt: -1 } },
       {
         $group: {
           _id: "$userId",
-          categoryId: { $first: "$schoolerStatus" }
+          schoolerStatus: { $first: "$schoolerStatus" }
         }
       },
       {
@@ -1600,20 +1600,20 @@ exports.userforAdmin = async (req, res) => {
           from: "schoolercategories",
           localField: "schoolerStatus",
           foreignField: "_id",
-          as: "category"
+          as: "schoolerStatusData"
         }
       },
       {
         $unwind: {
-          path: "$category",
+          path: "$schoolerStatusData",
           preserveNullAndEmptyArrays: true
         }
       }
     ]);
 
-    const categoryMap = {};
-    latestCategoryPerUser.forEach(item => {
-      categoryMap[item._id.toString()] = item;
+    const statusMap = {};
+    latestStatusPerUser.forEach(item => {
+      statusMap[item._id.toString()] = item;
     });
 
     let finalUsers = [];
@@ -1636,9 +1636,8 @@ exports.userforAdmin = async (req, res) => {
           (await College.findById(user.className));
       }
 
-      const latestCategory = categoryMap[user._id.toString()] || null;
+      const latestStatus = statusMap[user._id.toString()] || null;
 
-     
       finalUsers.push({
         ...user._doc,
         country: user.countryId?.name || "",
@@ -1649,13 +1648,13 @@ exports.userforAdmin = async (req, res) => {
         institutionType: user.studentType || "",
         classOrYear: classDetails?.name || "",
 
-       
-        categoryId: latestCategory?.schoolerStatus || null,
-        categoryName: latestCategory?.category?.name || "NA"
+        // ✅ REQUIRED CHANGE
+        schoolerStatusId: latestStatus?.schoolerStatus || null,
+        schoolerStatusName: latestStatus?.schoolerStatusData?.name || "NA"
       });
     }
 
-    
+    // 🔹 Fields filter
     if (fields) {
       const requested = fields.split(",").map(f => f.trim());
       finalUsers = finalUsers.map(u => {
@@ -1681,9 +1680,10 @@ exports.userforAdmin = async (req, res) => {
 
   } catch (error) {
     console.error("userforAdmin Error:", error);
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
