@@ -1586,7 +1586,7 @@ exports.userforAdmin = async (req, res) => {
       .populate("cityId", "name")
       .populate("updatedBy", "email session startDate endDate name role");
 
-    // 🔹 Latest schoolerStatus per user
+    
     const latestStatusPerUser = await CategoryTopUser.aggregate([
       { $sort: { createdAt: -1 } },
       {
@@ -1624,7 +1624,10 @@ exports.userforAdmin = async (req, res) => {
         const userStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
         const userEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
 
-        if (!userStart.isSameOrAfter(adminStart) || !userEnd.isSameOrBefore(adminEnd)) {
+        if (
+          !userStart.isSameOrAfter(adminStart) ||
+          !userEnd.isSameOrBefore(adminEnd)
+        ) {
           continue;
         }
       }
@@ -1648,13 +1651,13 @@ exports.userforAdmin = async (req, res) => {
         institutionType: user.studentType || "",
         classOrYear: classDetails?.name || "",
 
-        // ✅ REQUIRED CHANGE
+       
         schoolerStatusId: latestStatus?.schoolerStatus || null,
-        schoolerStatusName: latestStatus?.schoolerStatusData?.name || "NA"
+        categoryName: latestStatus?.schoolerStatusData?.name || "NA"
       });
     }
 
-    // 🔹 Fields filter
+   
     if (fields) {
       const requested = fields.split(",").map(f => f.trim());
       finalUsers = finalUsers.map(u => {
@@ -1669,12 +1672,18 @@ exports.userforAdmin = async (req, res) => {
     const totalUsers = finalUsers.length;
     const paginatedUsers = finalUsers.slice(skip, skip + limit);
 
+   
+    const from = totalUsers === 0 ? 0 : skip + 1;
+    const to = Math.min(skip + paginatedUsers.length, totalUsers);
+
     return res.status(200).json({
       message: "Users fetched successfully",
       page,
       limit,
       totalUsers,
       totalPages: Math.ceil(totalUsers / limit),
+      from,
+      to,
       users: paginatedUsers
     });
 
