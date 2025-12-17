@@ -845,14 +845,14 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      let statusManage = exam.publish === false ? "To Be Schedule" : "Schedule";
+      let statusManage = exam.publish === false ? "To Be Schedule" : "Scheduled";
 
       if (exam.publish === true) {
         const ongoingStart2 = scheduleDateTime.clone().add(bufferTime, "minutes");
         const ongoingEnd2 = ongoingStart2.clone().add(exam.ExamTime, "minutes");
         const now2 = moment().tz("Asia/Kolkata");
 
-        if (now2.isBefore(ongoingStart2)) statusManage = "Schedule";
+        if (now2.isBefore(ongoingStart2)) statusManage = "Scheduled";
         else if (now2.isSameOrAfter(ongoingStart2) && now2.isBefore(ongoingEnd2))
           statusManage = "Ongoing";
         else if (now2.isSameOrAfter(ongoingEnd2)) statusManage = "Completed";
