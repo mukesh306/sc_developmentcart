@@ -1623,6 +1623,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //   }
 // };
 
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -1662,7 +1663,6 @@ exports.userforAdmin = async (req, res) => {
       .populate("updatedBy", "email session startDate endDate name role");
 
     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
-    const defaultExamCount = 3;
     let finalUsers = [];
 
     for (let user of users) {
@@ -1688,108 +1688,20 @@ exports.userforAdmin = async (req, res) => {
       user.aadharCard = setFileUrl(user.aadharCard);
       user.marksheet = setFileUrl(user.marksheet);
 
-      let userExamStatus = await ExamUserStatus.find({ userId: user._id })
-        .populate({
-          path: "examId",
-          select: "title category publish result",
-          populate: { path: "category", select: "_id name" },
-        })
-        .lean();
-
-      if (categoryId) {
-        const categoryArray = Array.isArray(categoryId)
-          ? categoryId
-          : categoryId.split(",");
-        userExamStatus = userExamStatus.filter(
-          (ex) =>
-            ex.examId?.category?._id &&
-            categoryArray.includes(ex.examId.category._id.toString())
-        );
-      }
-
-      if (!userExamStatus.length && categoryId) continue;
-
-      let userCategory = null;
-      if (userExamStatus.length > 0 && userExamStatus[0].examId?.category) {
-        userCategory = {
-          _id: userExamStatus[0].examId.category._id,
-          name: userExamStatus[0].examId.category.name,
-        };
-      }
-
-      let exams = [];
-      let examIndex = 1;
-      let failedFound = false;
-
-      for (let ex of userExamStatus) {
-        const categoryName = ex.examId?.category?.name || "";
-
-        let statesType = "";
-        if (failedFound) statesType = "Not Eligible";
-        else if (!ex.publish) statesType = "To Be Scheduled";
-        else if (ex.publish && (!ex.result || ex.result === "")) statesType = "Scheduled";
-        else if (ex.publish && ["passed", "failed"].includes(ex.result?.toLowerCase()))
-          statesType = "Completed";
-
-        if (ex.result?.toLowerCase() === "failed") failedFound = true;
-
-        exams.push({
-          type: `Exam ${examIndex}`,
-          category: categoryName,
-          status: ex.status,
-          publish: ex.publish,
-          attend: ex.attend,
-          visible: ex.visible,
-          isEligible: ex.isEligible,
-          statesType,
-        });
-
-        exams.push({
-          type: `Exam ${examIndex} Status`,
-          result: ex.result || "",
-          statesType,
-        });
-
-        examIndex++;
-      }
-
-      const totalRequired = Math.max(defaultExamCount, userExamStatus.length);
-      while (examIndex <= totalRequired) {
-        exams.push({
-          type: `Exam ${examIndex}`,
-          category: "",
-          status: null,
-          publish: null,
-          attend: null,
-          visible: null,
-          isEligible: null,
-          statesType: null,
-        });
-
-        exams.push({
-          type: `Exam ${examIndex} Status`,
-          result: null,
-          statesType: null,
-        });
-
-        examIndex++;
-      }
-
       finalUsers.push({
         ...user._doc,
         country: user.countryId?.name || "",
         state: user.stateId?.name || "",
         city: user.cityId?.name || "",
-        institutionName: user.schoolName || user.collegeName || user.instituteName || "",
+        institutionName:
+          user.schoolName || user.collegeName || user.instituteName || "",
         institutionType: user.studentType || "",
         classOrYear: classDetails?.name || "",
         updatedBy: user.updatedBy || null,
-        category: userCategory,
-        exams,
       });
     }
 
-    
+    // 🔹 Fields filter
     if (fields) {
       const requested = fields.split(",").map(f => f.trim());
       finalUsers = finalUsers.map(u => {
@@ -1801,7 +1713,6 @@ exports.userforAdmin = async (req, res) => {
       });
     }
 
-    
     const totalUsers = finalUsers.length;
     const paginatedUsers = finalUsers.slice(skip, skip + limit);
 
@@ -1814,8 +1725,8 @@ exports.userforAdmin = async (req, res) => {
       limit,
       totalUsers,
       totalPages: Math.ceil(totalUsers / limit),
-      from,  
-      to,     
+      from,
+      to,
       users: paginatedUsers,
     });
 
@@ -1824,5 +1735,209 @@ exports.userforAdmin = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// exports.userforAdmin = async (req, res) => {
+//   try {
+//     const adminId = req.user._id;
+//     let { className, stateId, cityId, categoryId, page = 1, limit = 10, fields } = req.query;
+
+//     page = parseInt(page);
+//     limit = parseInt(limit);
+//     const skip = (page - 1) * limit;
+
+//     const admin = await Admin1.findById(adminId).select("startDate endDate");
+//     if (!admin) return res.status(404).json({ message: "Admin not found." });
+//     if (!admin.startDate || !admin.endDate)
+//       return res.status(400).json({ message: "Admin session dates missing." });
+
+//     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
+//     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
+
+//     let filterQuery = {};
+//     if (className) filterQuery.className = className;
+
+//     if (stateId) {
+//       if (Array.isArray(stateId)) filterQuery.stateId = { $in: stateId };
+//       else if (stateId.includes(",")) filterQuery.stateId = { $in: stateId.split(",") };
+//       else filterQuery.stateId = stateId;
+//     }
+
+//     if (cityId) {
+//       if (Array.isArray(cityId)) filterQuery.cityId = { $in: cityId };
+//       else if (cityId.includes(",")) filterQuery.cityId = { $in: cityId.split(",") };
+//       else filterQuery.cityId = cityId;
+//     }
+
+//     let users = await User.find(filterQuery)
+//       .populate("countryId", "name")
+//       .populate("stateId", "name")
+//       .populate("cityId", "name")
+//       .populate("updatedBy", "email session startDate endDate name role");
+
+//     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
+//     const defaultExamCount = 3;
+//     let finalUsers = [];
+
+//     for (let user of users) {
+//       if (!user.startDate || !user.endDate) continue;
+
+//       const userStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
+//       const userEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
+
+//       if (!userStart.isSameOrAfter(adminStart) || !userEnd.isSameOrBefore(adminEnd)) continue;
+
+//       let classDetails = null;
+//       if (mongoose.Types.ObjectId.isValid(user.className)) {
+//         classDetails =
+//           (await School.findById(user.className)) ||
+//           (await College.findById(user.className));
+//       }
+
+//       const setFileUrl = (filePath) =>
+//         filePath && fs.existsSync(filePath)
+//           ? `${baseUrl}/uploads/${path.basename(filePath)}`
+//           : "";
+
+//       user.aadharCard = setFileUrl(user.aadharCard);
+//       user.marksheet = setFileUrl(user.marksheet);
+
+//       let userExamStatus = await ExamUserStatus.find({ userId: user._id })
+//         .populate({
+//           path: "examId",
+//           select: "title category publish result",
+//           populate: { path: "category", select: "_id name" },
+//         })
+//         .lean();
+
+//       if (categoryId) {
+//         const categoryArray = Array.isArray(categoryId)
+//           ? categoryId
+//           : categoryId.split(",");
+//         userExamStatus = userExamStatus.filter(
+//           (ex) =>
+//             ex.examId?.category?._id &&
+//             categoryArray.includes(ex.examId.category._id.toString())
+//         );
+//       }
+
+//       if (!userExamStatus.length && categoryId) continue;
+
+//       let userCategory = null;
+//       if (userExamStatus.length > 0 && userExamStatus[0].examId?.category) {
+//         userCategory = {
+//           _id: userExamStatus[0].examId.category._id,
+//           name: userExamStatus[0].examId.category.name,
+//         };
+//       }
+
+//       let exams = [];
+//       let examIndex = 1;
+//       let failedFound = false;
+
+//       for (let ex of userExamStatus) {
+//         const categoryName = ex.examId?.category?.name || "";
+
+//         let statesType = "";
+//         if (failedFound) statesType = "Not Eligible";
+//         else if (!ex.publish) statesType = "To Be Scheduled";
+//         else if (ex.publish && (!ex.result || ex.result === "")) statesType = "Scheduled";
+//         else if (ex.publish && ["passed", "failed"].includes(ex.result?.toLowerCase()))
+//           statesType = "Completed";
+
+//         if (ex.result?.toLowerCase() === "failed") failedFound = true;
+
+//         exams.push({
+//           type: `Exam ${examIndex}`,
+//           category: categoryName,
+//           status: ex.status,
+//           publish: ex.publish,
+//           attend: ex.attend,
+//           visible: ex.visible,
+//           isEligible: ex.isEligible,
+//           statesType,
+//         });
+
+//         exams.push({
+//           type: `Exam ${examIndex} Status`,
+//           result: ex.result || "",
+//           statesType,
+//         });
+
+//         examIndex++;
+//       }
+
+//       const totalRequired = Math.max(defaultExamCount, userExamStatus.length);
+//       while (examIndex <= totalRequired) {
+//         exams.push({
+//           type: `Exam ${examIndex}`,
+//           category: "",
+//           status: null,
+//           publish: null,
+//           attend: null,
+//           visible: null,
+//           isEligible: null,
+//           statesType: null,
+//         });
+
+//         exams.push({
+//           type: `Exam ${examIndex} Status`,
+//           result: null,
+//           statesType: null,
+//         });
+
+//         examIndex++;
+//       }
+
+//       finalUsers.push({
+//         ...user._doc,
+//         country: user.countryId?.name || "",
+//         state: user.stateId?.name || "",
+//         city: user.cityId?.name || "",
+//         institutionName: user.schoolName || user.collegeName || user.instituteName || "",
+//         institutionType: user.studentType || "",
+//         classOrYear: classDetails?.name || "",
+//         updatedBy: user.updatedBy || null,
+//         category: userCategory,
+//         exams,
+//       });
+//     }
+
+    
+//     if (fields) {
+//       const requested = fields.split(",").map(f => f.trim());
+//       finalUsers = finalUsers.map(u => {
+//         const obj = { _id: u._id };
+//         requested.forEach(key => {
+//           if (u[key] !== undefined) obj[key] = u[key];
+//         });
+//         return obj;
+//       });
+//     }
+
+    
+//     const totalUsers = finalUsers.length;
+//     const paginatedUsers = finalUsers.slice(skip, skip + limit);
+
+//     const from = totalUsers === 0 ? 0 : skip + 1;
+//     const to = Math.min(skip + paginatedUsers.length, totalUsers);
+
+//     return res.status(200).json({
+//       message: "Users fetched successfully",
+//       page,
+//       limit,
+//       totalUsers,
+//       totalPages: Math.ceil(totalUsers / limit),
+//       from,  
+//       to,     
+//       users: paginatedUsers,
+//     });
+
+//   } catch (error) {
+//     console.error("userforAdmin Error:", error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
