@@ -458,11 +458,11 @@ exports.getGroupMembers = async (req, res) => {
 exports.getAllActiveUsers = async (req, res) => {
   try {
     const { className, groupId, stateId, cityId, category } = req.query;
-    const allowedCategoryId = "6909f6ea193d765a50c836f9";
+    const allowedCategoryId = "694234ab07da0be15f1f32f1";
 
-    // ✅ Case 1: Agar category id allowed wali nahi hai aur koi aur category id di gayi hai
+   
     if (category && category !== allowedCategoryId) {
-      // 👇 Filter by both categoryId and className (if provided)
+     
       let topUserFilter = { categoryId: category };
       if (className && mongoose.Types.ObjectId.isValid(className)) {
         topUserFilter.className = className;
