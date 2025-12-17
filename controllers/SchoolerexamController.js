@@ -1186,6 +1186,152 @@ exports.calculateExamResult = async (req, res) => {
 
 
 
+// exports.topusers = async (req, res) => {
+//   try {
+//     const examId = req.params.id;
+
+//     if (!examId) {
+//       return res.status(400).json({ message: "examId required." });
+//     }
+
+   
+//     const exam = await Schoolerexam.findById(examId);
+//     if (!exam) {
+//       return res.status(404).json({ message: "Exam not found." });
+//     }
+
+//     const passoutLimit = parseInt(exam.passout) || 1;
+
+//     const groups = await ExamGroup.find({ examId }).populate(
+//       "members",
+//       "firstName lastName email className"
+//     );
+
+//     if (!groups || groups.length === 0) {
+//       return res.status(200).json({
+//         message: "No groups found for this exam.",
+//         users: [],
+//       });
+//     }
+
+//     let allUsers = [];
+
+  
+//     for (const group of groups) {
+//       const memberIds = group.members.map((m) => m._id);
+
+//       const scores = await ExamResult.find({
+//         examId,
+//         userId: { $in: memberIds },
+//       })
+//         .populate("userId", "firstName lastName email className")
+//         .sort({ finalScore: -1, Completiontime: 1 });
+
+     
+//       const passedUsers = scores.slice(0, passoutLimit);
+//       allUsers.push(...passedUsers);
+//     }
+
+  
+//     const uniqueUsers = [];
+//     const seen = new Set();
+//     for (const user of allUsers) {
+//       const userId = user.userId?._id?.toString();
+//       if (userId && !seen.has(userId)) {
+//         seen.add(userId);
+//         uniqueUsers.push(user);
+//       }
+//     } 
+//     const allResults = await ExamResult.find({ examId })
+//       .select("userId percentage createdAt")
+//       .sort({ percentage: -1, createdAt: 1 })
+//       .lean();
+
+//     const ranks = new Map();
+//     allResults.forEach((result, index) => {
+//       ranks.set(result.userId.toString(), index + 1);
+//     });
+
+//     for (let i = 0; i < uniqueUsers.length; i++) {
+//       const userId = uniqueUsers[i].userId?._id?.toString();
+//       const rank = ranks.get(userId) || null;
+
+//       uniqueUsers[i]._doc = {
+//         ...uniqueUsers[i]._doc,
+//         rank,
+//         Completiontime: uniqueUsers[i].Completiontime || null,
+//       };
+//     }
+
+   
+//     uniqueUsers.sort((a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999));
+
+//     const lastExam = await Schoolerexam.findOne({ category: exam.category })
+//       .sort({ createdAt: -1 })
+//       .lean();
+
+//     if (lastExam && lastExam._id.toString() === examId.toString()) {
+//       console.log(" This is the last exam of the category. Saving passed users...");
+
+//       const allCategories = await Schoolercategory.find().sort({ createdAt: 1 }).lean();
+//       const currentIndex = allCategories.findIndex(
+//         (c) => c._id.toString() === exam.category.toString()
+//       );
+
+//       const nextCategory =
+//         currentIndex !== -1 && currentIndex + 1 < allCategories.length
+//           ? allCategories[currentIndex + 1]
+//           : null;
+
+//       const categoryToSave = nextCategory ? nextCategory._id : exam.category;
+
+    
+//       for (const u of uniqueUsers) {
+//         const classNameId = u.userId?.className || null;
+
+//         await CategoryTopUser.findOneAndUpdate(
+//           { userId: u.userId._id, examId, categoryId: categoryToSave },
+//           {
+//             userId: u.userId._id,
+//             examId,
+//             categoryId: categoryToSave,
+//             className: classNameId,
+//             percentage: u.percentage,
+//             rank: u._doc.rank,
+//           },
+//           { upsert: true, new: true }
+//         );
+//       }
+//     }
+
+   
+//     return res.status(200).json({
+//       message: `Top ${passoutLimit} passed users fetched successfully for Exam "${exam.name || exam._id}".`,
+//       examId: exam._id,
+//       categoryId: exam.category,
+//       passoutLimit,
+//       users: uniqueUsers.map((u) => ({
+//         userId: u.userId?._id,
+//         firstName: u.userId?.firstName,
+//         lastName: u.userId?.lastName,
+//         email: u.userId?.email,
+//         className: u.userId?.className || null,
+//         finalScore: u.finalScore,
+//         percentage: u.percentage,
+//         rank: u._doc.rank,
+//         Completiontime: u._doc.Completiontime,
+//       })),
+//     });
+//   } catch (error) {
+//     console.error("🔥 Error in topusers:", error);
+//     return res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
 exports.topusers = async (req, res) => {
   try {
     const examId = req.params.id;
@@ -1194,7 +1340,6 @@ exports.topusers = async (req, res) => {
       return res.status(400).json({ message: "examId required." });
     }
 
-   
     const exam = await Schoolerexam.findById(examId);
     if (!exam) {
       return res.status(404).json({ message: "Exam not found." });
@@ -1216,7 +1361,7 @@ exports.topusers = async (req, res) => {
 
     let allUsers = [];
 
-  
+    
     for (const group of groups) {
       const memberIds = group.members.map((m) => m._id);
 
@@ -1227,53 +1372,58 @@ exports.topusers = async (req, res) => {
         .populate("userId", "firstName lastName email className")
         .sort({ finalScore: -1, Completiontime: 1 });
 
-     
       const passedUsers = scores.slice(0, passoutLimit);
       allUsers.push(...passedUsers);
     }
 
-  
+    
     const uniqueUsers = [];
     const seen = new Set();
+
     for (const user of allUsers) {
-      const userId = user.userId?._id?.toString();
-      if (userId && !seen.has(userId)) {
-        seen.add(userId);
+      const uid = user.userId?._id?.toString();
+      if (uid && !seen.has(uid)) {
+        seen.add(uid);
         uniqueUsers.push(user);
       }
-    } 
+    }
+
+ 
     const allResults = await ExamResult.find({ examId })
       .select("userId percentage createdAt")
       .sort({ percentage: -1, createdAt: 1 })
       .lean();
 
     const ranks = new Map();
-    allResults.forEach((result, index) => {
-      ranks.set(result.userId.toString(), index + 1);
+    allResults.forEach((r, index) => {
+      ranks.set(r.userId.toString(), index + 1);
     });
 
     for (let i = 0; i < uniqueUsers.length; i++) {
-      const userId = uniqueUsers[i].userId?._id?.toString();
-      const rank = ranks.get(userId) || null;
-
+      const uid = uniqueUsers[i].userId?._id?.toString();
       uniqueUsers[i]._doc = {
         ...uniqueUsers[i]._doc,
-        rank,
+        rank: ranks.get(uid) || null,
         Completiontime: uniqueUsers[i].Completiontime || null,
       };
     }
 
-   
-    uniqueUsers.sort((a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999));
+    uniqueUsers.sort(
+      (a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999)
+    );
 
+    
     const lastExam = await Schoolerexam.findOne({ category: exam.category })
       .sort({ createdAt: -1 })
       .lean();
 
     if (lastExam && lastExam._id.toString() === examId.toString()) {
-      console.log("✅ This is the last exam of the category. Saving passed users...");
+      console.log("Last exam of category, saving passed users");
 
-      const allCategories = await Schoolercategory.find().sort({ createdAt: 1 }).lean();
+      const allCategories = await Schoolercategory.find()
+        .sort({ createdAt: 1 })
+        .lean();
+
       const currentIndex = allCategories.findIndex(
         (c) => c._id.toString() === exam.category.toString()
       );
@@ -1283,18 +1433,25 @@ exports.topusers = async (req, res) => {
           ? allCategories[currentIndex + 1]
           : null;
 
-      const categoryToSave = nextCategory ? nextCategory._id : exam.category;
+      const categoryToSave = nextCategory
+        ? nextCategory._id
+        : exam.category;
 
-    
+     
       for (const u of uniqueUsers) {
         const classNameId = u.userId?.className || null;
 
         await CategoryTopUser.findOneAndUpdate(
-          { userId: u.userId._id, examId, categoryId: categoryToSave },
           {
             userId: u.userId._id,
             examId,
             categoryId: categoryToSave,
+          },
+          {
+            userId: u.userId._id,
+            examId,
+            categoryId: categoryToSave,     
+            schoolerStatus: exam.category, 
             className: classNameId,
             percentage: u.percentage,
             rank: u._doc.rank,
@@ -1323,14 +1480,13 @@ exports.topusers = async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error("🔥 Error in topusers:", error);
+    console.error(" Error in topusers:", error);
     return res.status(500).json({
       message: "Internal server error",
       error: error.message,
     });
   }
 };
-
 
 
 
