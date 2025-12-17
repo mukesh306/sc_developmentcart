@@ -1629,6 +1629,7 @@ exports.userforAdmin = async (req, res) => {
     const adminId = req.user._id;
     let { className, stateId, cityId, categoryId, page = 1, limit = 10, fields } = req.query;
 
+    
     page = parseInt(page);
     limit = parseInt(limit);
     const skip = (page - 1) * limit;
