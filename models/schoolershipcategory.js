@@ -6,7 +6,7 @@ const SchoolershipcategorySchema = new mongoose.Schema(
     name: { type: String, required: true },
     price: { type: Number,required: true},
     groupSize: { type: Number,required: true},
-    // finalist: { type: Number,required: true},
+   
     examSize: { type: Number,required: true},
     examType: [
       {
