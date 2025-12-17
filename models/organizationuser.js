@@ -48,7 +48,7 @@ const organizationuserSchema = new mongoose.Schema({
     enum: ['no', 'yes'],
     default: 'no'
   },
-//   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
+
  createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'OrganizationSign' 
