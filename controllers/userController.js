@@ -1651,7 +1651,7 @@ exports.userforAdmin = async (req, res) => {
 
        
         categoryId: latestCategory?.categoryId || null,
-        categoryName: latestCategory?.category?.name || ""
+        categoryName: latestCategory?.category?.name || "NA"
       });
     }
 

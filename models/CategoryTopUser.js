@@ -1,7 +1,13 @@
 const mongoose = require("mongoose");
 
 const categoryTopUserSchema = new mongoose.Schema({
+
   categoryId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: "Schoolercategory",
+    required: true,
+  },
+  schoolerStatus: {
     type: mongoose.Schema.Types.ObjectId,
     ref: "Schoolercategory",
     required: true,
