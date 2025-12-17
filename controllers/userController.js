@@ -1666,12 +1666,19 @@ exports.userforAdmin = async (req, res) => {
     let finalUsers = [];
 
     for (let user of users) {
-      if (!user.startDate || !user.endDate) continue;
 
-      const userStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
-      const userEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
+     
+      if (user.startDate && user.endDate) {
+        const userStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
+        const userEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
 
-      if (!userStart.isSameOrAfter(adminStart) || !userEnd.isSameOrBefore(adminEnd)) continue;
+        if (
+          !userStart.isSameOrAfter(adminStart) ||
+          !userEnd.isSameOrBefore(adminEnd)
+        ) {
+          continue;
+        }
+      }
 
       let classDetails = null;
       if (mongoose.Types.ObjectId.isValid(user.className)) {
@@ -1701,7 +1708,7 @@ exports.userforAdmin = async (req, res) => {
       });
     }
 
-    // 🔹 Fields filter
+    
     if (fields) {
       const requested = fields.split(",").map(f => f.trim());
       finalUsers = finalUsers.map(u => {
@@ -1735,6 +1742,9 @@ exports.userforAdmin = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
 
 
 
