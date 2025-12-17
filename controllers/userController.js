@@ -1592,13 +1592,13 @@ exports.userforAdmin = async (req, res) => {
       {
         $group: {
           _id: "$userId",
-          categoryId: { $first: "$categoryId" }
+          categoryId: { $first: "$schoolerStatus" }
         }
       },
       {
         $lookup: {
           from: "schoolercategories",
-          localField: "categoryId",
+          localField: "schoolerStatus",
           foreignField: "_id",
           as: "category"
         }
@@ -1650,7 +1650,7 @@ exports.userforAdmin = async (req, res) => {
         classOrYear: classDetails?.name || "",
 
        
-        categoryId: latestCategory?.categoryId || null,
+        categoryId: latestCategory?.schoolerStatus || null,
         categoryName: latestCategory?.category?.name || "NA"
       });
     }
