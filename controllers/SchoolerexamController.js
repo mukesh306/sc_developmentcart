@@ -1946,6 +1946,92 @@ exports.getAllExamGroups = async (req, res) => {
 };
 
 
+// exports.schoolerShipPrizes = async (req, res) => {
+//   try {
+//     const userId = req.user?._id;
+
+//     if (!userId) {
+//       return res.status(401).json({ message: "Unauthorized" });
+//     }
+
+    
+//     const categories = await Schoolercategory.find();
+
+//     let result = [];
+//     let totalAmount = 0; 
+
+//     for (const category of categories) {
+   
+//       const lastExam = await Schoolerexam.findOne({ category: category._id }).sort({ createdAt: -1 });
+
+//       let status = false; 
+//       let percentage = null;
+//       let finalScore = null;
+//       let examId = null;
+
+//       if (lastExam) {
+//         examId = lastExam._id;
+
+//         const passoutLimit = parseInt(lastExam.passout) || 1;
+//         const groups = await ExamGroup.find({ examId: lastExam._id }).populate("members", "_id");
+
+//         let allTopUsers = [];
+
+//         for (const group of groups) {
+//           const memberIds = group.members.map((m) => m._id);
+
+//           const scores = await ExamResult.find({
+//             examId: lastExam._id,
+//             userId: { $in: memberIds }
+//           })
+//             .select("userId percentage finalScore")
+//             .sort({ finalScore: -1 });
+
+//           const topUsers = scores.slice(0, passoutLimit);
+//           allTopUsers.push(...topUsers);
+//         }
+
+       
+//         const unique = [...new Map(allTopUsers.map(u => [u.userId.toString(), u])).values()];
+
+      
+//         const isWinner = unique.find(u => u.userId.toString() === userId.toString());
+
+//         if (isWinner) {
+//           status = true;
+//           percentage = isWinner.percentage;
+//           finalScore = isWinner.finalScore;
+//           totalAmount += Number(category.price) || 0; 
+//         }
+//       }
+
+    
+//       result.push({
+//         categoryId: category._id,
+//         categoryName: category.name,
+//         prize: category.price,
+//         examId,
+//         status,           
+//         percentage,
+//         finalScore
+//       });
+//     }
+
+//     return res.status(200).json({
+//       message: "User category prize status fetched successfully.",
+//       userId,
+//       totalCategories: result.length,
+//       totalAmount, 
+//       categories: result,
+//     });
+
+//   } catch (error) {
+//     console.error("🔥 Error:", error);
+//     res.status(500).json({ message: "Server Error", error: error.message });
+//   }
+// };
+
+
 exports.schoolerShipPrizes = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -1954,17 +2040,19 @@ exports.schoolerShipPrizes = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    
     const categories = await Schoolercategory.find();
 
     let result = [];
-    let totalAmount = 0; 
+    let totalAmount = 0;
 
     for (const category of categories) {
-   
-      const lastExam = await Schoolerexam.findOne({ category: category._id }).sort({ createdAt: -1 });
 
-      let status = false; 
+     
+      const lastExam = await Schoolerexam
+        .findOne({ category: category._id })
+        .sort({ createdAt: -1 });
+
+      let status = false;
       let percentage = null;
       let finalScore = null;
       let examId = null;
@@ -1972,13 +2060,41 @@ exports.schoolerShipPrizes = async (req, res) => {
       if (lastExam) {
         examId = lastExam._id;
 
+        
+        const userExamStatus = await ExamUserStatus.findOne({
+          userId,
+          examId: lastExam._id
+        }).select("rank result");
+
+        
+        if (
+          !userExamStatus ||
+          userExamStatus.rank == null ||
+          userExamStatus.result == null
+        ) {
+          result.push({
+            categoryId: category._id,
+            categoryName: category.name,
+            prize: category.price,
+            examId,
+            status: false,
+            percentage: null,
+            finalScore: null
+          });
+          continue; 
+        }
+
+       
         const passoutLimit = parseInt(lastExam.passout) || 1;
-        const groups = await ExamGroup.find({ examId: lastExam._id }).populate("members", "_id");
+
+        const groups = await ExamGroup
+          .find({ examId: lastExam._id })
+          .populate("members", "_id");
 
         let allTopUsers = [];
 
         for (const group of groups) {
-          const memberIds = group.members.map((m) => m._id);
+          const memberIds = group.members.map(m => m._id);
 
           const scores = await ExamResult.find({
             examId: lastExam._id,
@@ -1991,27 +2107,33 @@ exports.schoolerShipPrizes = async (req, res) => {
           allTopUsers.push(...topUsers);
         }
 
-       
-        const unique = [...new Map(allTopUsers.map(u => [u.userId.toString(), u])).values()];
+        
+        const unique = [
+          ...new Map(
+            allTopUsers.map(u => [u.userId.toString(), u])
+          ).values()
+        ];
 
-      
-        const isWinner = unique.find(u => u.userId.toString() === userId.toString());
+     
+        const isWinner = unique.find(
+          u => u.userId.toString() === userId.toString()
+        );
 
         if (isWinner) {
           status = true;
           percentage = isWinner.percentage;
           finalScore = isWinner.finalScore;
-          totalAmount += Number(category.price) || 0; 
+          totalAmount += Number(category.price) || 0;
         }
       }
 
-    
+     
       result.push({
         categoryId: category._id,
         categoryName: category.name,
         prize: category.price,
         examId,
-        status,           
+        status,
         percentage,
         finalScore
       });
@@ -2021,12 +2143,15 @@ exports.schoolerShipPrizes = async (req, res) => {
       message: "User category prize status fetched successfully.",
       userId,
       totalCategories: result.length,
-      totalAmount, 
-      categories: result,
+      totalAmount,
+      categories: result
     });
 
   } catch (error) {
-    console.error("🔥 Error:", error);
-    res.status(500).json({ message: "Server Error", error: error.message });
+    console.error(" Error:", error);
+    return res.status(500).json({
+      message: "Server Error",
+      error: error.message
+    });
   }
 };
