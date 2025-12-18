@@ -833,6 +833,11 @@ exports.UsersExams = async (req, res) => {
         examObj.correct = null;
         examObj.finalScore = null;
         examObj.percentage = null;
+
+        examObj.attemptStatus =
+    examObj.correct !== null || examObj.finalScore !== null
+      ? "Attempted"
+      : "Not Attempted";
       }
 
       
