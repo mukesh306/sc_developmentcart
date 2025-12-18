@@ -18,6 +18,7 @@ const ExamUserStatusSchema = new mongoose.Schema(
 attemptStatus: {
   type: String,
   enum: ["Attempted", "Not Attempted"],
+  default: null,
 
 },
 
