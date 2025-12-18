@@ -734,27 +734,20 @@ exports.UsersExams = async (req, res) => {
 
     const updatedExams = [];
 
-    // 🔹 existing failed logic (UNCHANGED)
-    const failedStatus = await ExamUserStatus.findOne({
-      userId,
-      result: "failed",
-    })
-      .populate("examId", "createdAt")
-      .sort({ createdAt: 1 })
-      .lean();
-
-    // 🔹 NEW: Completed + Not Attempted status (ONLY ADDITION)
-    const notAttemptedCompletedStatus = await ExamUserStatus.findOne({
-      userId,
-      statusManage: "Completed",
-      attemptStatus: "Not Attempted",
-    })
-      .populate("examId", "createdAt")
-      .sort({ createdAt: 1 })
-      .lean();
+   
+    let lockNextExams = false;
 
     for (const exam of exams) {
       const examObj = { ...exam };
+
+    
+      if (lockNextExams) {
+        examObj.statusManage = "Not Eligible";
+        examObj.result = null;
+        examObj.rank = null;
+        updatedExams.push(examObj);
+        continue;
+      }
 
       const existingStatus = await ExamUserStatus.findOne({
         userId,
@@ -797,40 +790,6 @@ exports.UsersExams = async (req, res) => {
         .sort({ percentage: -1, Completiontime: 1 })
         .lean();
 
-      const isAfterFailedExam =
-        failedStatus &&
-        failedStatus.examId?.createdAt &&
-        exam.createdAt > failedStatus.examId.createdAt;
-
-      // 🔹 NEW condition
-      const isAfterNotAttemptedCompletedExam =
-        notAttemptedCompletedStatus &&
-        notAttemptedCompletedStatus.examId?.createdAt &&
-        exam.createdAt > notAttemptedCompletedStatus.examId.createdAt;
-
-      // 🔹 SAME Not Eligible block (sirf OR add hua)
-      if (isAfterFailedExam || isAfterNotAttemptedCompletedExam) {
-        examObj.statusManage = "Not Eligible";
-        examObj.result = null;
-        examObj.rank = null;
-
-        await ExamUserStatus.findOneAndUpdate(
-          { userId, examId: exam._id },
-          {
-            userId,
-            examId: exam._id,
-            category: exam.category,
-            statusManage: "Not Eligible",
-            result: null,
-            publish: exam.publish,
-          },
-          { upsert: true }
-        );
-
-        updatedExams.push(examObj);
-        continue;
-      }
-
       const scheduleDateTime = moment(exam.examDate)
         .tz("Asia/Kolkata")
         .set({
@@ -858,7 +817,7 @@ exports.UsersExams = async (req, res) => {
 
       examObj.statusManage = statusManage;
 
-      // --- Ongoing logic (UNCHANGED)
+     
       if (statusManage === "Ongoing") {
         examObj.rank = null;
         examObj.result = null;
@@ -868,7 +827,6 @@ exports.UsersExams = async (req, res) => {
             : "Not Attempted";
       }
 
-      // --- Completed logic (UNCHANGED)
       if (statusManage === "Completed") {
         const userResult = await ExamResult.findOne({
           userId,
@@ -930,10 +888,14 @@ exports.UsersExams = async (req, res) => {
             result: examObj.result,
             publish: exam.publish,
             statusManage,
-            attemptStatus: examObj.attemptStatus || null,
           },
           { upsert: true }
         );
+
+       
+        if (examObj.attemptStatus === "Not Attempted") {
+          lockNextExams = true;
+        }
       }
 
       updatedExams.push(examObj);
@@ -948,6 +910,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
