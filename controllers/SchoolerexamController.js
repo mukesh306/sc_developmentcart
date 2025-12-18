@@ -690,14 +690,16 @@ exports.UsersExams = async (req, res) => {
 
     const assignedGroup = await UserExamGroup.findOne({
       members: userId,
-      ...(category && mongoose.Types.ObjectId.isValid(category) ? { category } : {}),
+      ...(category && mongoose.Types.ObjectId.isValid(category)
+        ? { category }
+        : {}),
     }).lean();
 
     if (!assignedGroup) {
       return res.status(200).json([]);
     }
 
-    let exams = await Schoolerexam.find({
+    const exams = await Schoolerexam.find({
       className: user.className,
       category: assignedGroup.category,
       assignedGroup: { $in: [assignedGroup._id] },
@@ -735,7 +737,12 @@ exports.UsersExams = async (req, res) => {
         examId: exam._id,
       }).lean();
 
-      if (existingStatus?.statusManage) {
+      const today = moment().tz("Asia/Kolkata").format("YYYY-MM-DD");
+      const examDay = moment(exam.examDate)
+        .tz("Asia/Kolkata")
+        .format("YYYY-MM-DD");
+
+      if (existingStatus?.statusManage && today !== examDay) {
         examObj.statusManage = existingStatus.statusManage;
         examObj.result = existingStatus.result || null;
         examObj.rank = existingStatus.rank || null;
@@ -745,7 +752,7 @@ exports.UsersExams = async (req, res) => {
         continue; 
       }
 
-     
+      
       const classData =
         (await School.findById(exam.className)
           .select("_id name className")
@@ -825,7 +832,7 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-    
+     
       const scheduleDateTime = moment(exam.examDate)
         .tz("Asia/Kolkata")
         .set({
