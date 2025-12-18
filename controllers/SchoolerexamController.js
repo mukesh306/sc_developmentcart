@@ -692,7 +692,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -735,7 +734,7 @@ exports.UsersExams = async (req, res) => {
 
     const updatedExams = [];
 
-    
+    // 🔹 existing failed logic (UNCHANGED)
     const failedStatus = await ExamUserStatus.findOne({
       userId,
       result: "failed",
@@ -744,7 +743,7 @@ exports.UsersExams = async (req, res) => {
       .sort({ createdAt: 1 })
       .lean();
 
-    
+    // 🔹 NEW: Completed + Not Attempted status (ONLY ADDITION)
     const notAttemptedCompletedStatus = await ExamUserStatus.findOne({
       userId,
       statusManage: "Completed",
@@ -772,7 +771,6 @@ exports.UsersExams = async (req, res) => {
         examObj.result = existingStatus.result || null;
         examObj.rank = existingStatus.rank || null;
         examObj.attemptStatus = existingStatus.attemptStatus || null;
-
         updatedExams.push(examObj);
         continue;
       }
@@ -799,18 +797,19 @@ exports.UsersExams = async (req, res) => {
         .sort({ percentage: -1, Completiontime: 1 })
         .lean();
 
-      
       const isAfterFailedExam =
         failedStatus &&
         failedStatus.examId?.createdAt &&
         exam.createdAt > failedStatus.examId.createdAt;
 
-      const isAfterNotAttemptedExam =
+      // 🔹 NEW condition
+      const isAfterNotAttemptedCompletedExam =
         notAttemptedCompletedStatus &&
         notAttemptedCompletedStatus.examId?.createdAt &&
         exam.createdAt > notAttemptedCompletedStatus.examId.createdAt;
 
-      if (isAfterFailedExam || isAfterNotAttemptedExam) {
+      // 🔹 SAME Not Eligible block (sirf OR add hua)
+      if (isAfterFailedExam || isAfterNotAttemptedCompletedExam) {
         examObj.statusManage = "Not Eligible";
         examObj.result = null;
         examObj.rank = null;
@@ -859,23 +858,17 @@ exports.UsersExams = async (req, res) => {
 
       examObj.statusManage = statusManage;
 
-     
+      // --- Ongoing logic (UNCHANGED)
       if (statusManage === "Ongoing") {
         examObj.rank = null;
         examObj.result = null;
-
-        if (
-          examObj.correct === null &&
-          examObj.finalScore === null &&
-          examObj.percentage === null
-        ) {
-          examObj.attemptStatus = "Not Attempted";
-        } else {
-          examObj.attemptStatus = "Attempted";
-        }
+        examObj.attemptStatus =
+          examObj.correct !== null || examObj.finalScore !== null
+            ? "Attempted"
+            : "Not Attempted";
       }
 
-    
+      // --- Completed logic (UNCHANGED)
       if (statusManage === "Completed") {
         const userResult = await ExamResult.findOne({
           userId,
@@ -955,6 +948,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
