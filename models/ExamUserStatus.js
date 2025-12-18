@@ -15,6 +15,11 @@ const ExamUserStatusSchema = new mongoose.Schema(
       _id: mongoose.Schema.Types.ObjectId,
       name: String,
     },
+attemptStatus: {
+  type: String,
+  enum: ["Attempted", "Not Attempted"],
+
+},
 
     totalQuestions: Number,
     correct: Number,
