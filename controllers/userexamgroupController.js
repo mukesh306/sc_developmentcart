@@ -10,6 +10,7 @@ const CategoryTopUser = require('../models/CategoryTopUser');
 const Schoolerexam = require('../models/Schoolerexam');
 const ExamResult = require("../models/examResult");
 const ExamUserStatus = require("../models/ExamUserStatus");
+const Category = require("../models/schoolershipcategory");
 
 
 // exports.createGroup = async (req, res) => {
