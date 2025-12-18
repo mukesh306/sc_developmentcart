@@ -693,7 +693,6 @@ exports.addQuestionsToExam = async (req, res) => {
 // };
 
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -732,9 +731,13 @@ exports.UsersExams = async (req, res) => {
 
     const updatedExams = [];
 
-    const failedStatus = await ExamUserStatus.findOne({
+    // Fetch previous failed or Not Attempted completed exam
+    const previousBlockedExam = await ExamUserStatus.findOne({
       userId,
-      result: "failed",
+      $or: [
+        { result: "failed" },
+        { attemptStatus: "Not Attempted", statusManage: "Completed" },
+      ],
     })
       .populate("examId", "createdAt")
       .sort({ createdAt: 1 })
@@ -785,15 +788,16 @@ exports.UsersExams = async (req, res) => {
         .lean();
 
       // Not Eligible check
-      const isAfterFailedExam =
-        failedStatus &&
-        failedStatus.examId?.createdAt &&
-        exam.createdAt > failedStatus.examId.createdAt;
+      const isAfterBlockedExam =
+        previousBlockedExam &&
+        previousBlockedExam.examId?.createdAt &&
+        exam.createdAt > previousBlockedExam.examId.createdAt;
 
-      if (isAfterFailedExam) {
+      if (isAfterBlockedExam) {
         examObj.statusManage = "Not Eligible";
         examObj.result = null;
         examObj.rank = null;
+        examObj.attemptStatus = "Not Attempted";
 
         await ExamUserStatus.findOneAndUpdate(
           { userId, examId: exam._id },
@@ -804,6 +808,7 @@ exports.UsersExams = async (req, res) => {
             statusManage: "Not Eligible",
             result: null,
             publish: exam.publish,
+            attemptStatus: "Not Attempted",
           },
           { upsert: true }
         );
@@ -915,7 +920,7 @@ exports.UsersExams = async (req, res) => {
             result: examObj.result,
             publish: exam.publish,
             statusManage,
-            attemptStatus: examObj.attemptStatus, 
+            attemptStatus: examObj.attemptStatus,
           },
           { upsert: true }
         );
