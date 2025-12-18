@@ -692,6 +692,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -734,9 +735,20 @@ exports.UsersExams = async (req, res) => {
 
     const updatedExams = [];
 
+    
     const failedStatus = await ExamUserStatus.findOne({
       userId,
       result: "failed",
+    })
+      .populate("examId", "createdAt")
+      .sort({ createdAt: 1 })
+      .lean();
+
+    
+    const notAttemptedCompletedStatus = await ExamUserStatus.findOne({
+      userId,
+      statusManage: "Completed",
+      attemptStatus: "Not Attempted",
     })
       .populate("examId", "createdAt")
       .sort({ createdAt: 1 })
@@ -787,12 +799,18 @@ exports.UsersExams = async (req, res) => {
         .sort({ percentage: -1, Completiontime: 1 })
         .lean();
 
+      
       const isAfterFailedExam =
         failedStatus &&
         failedStatus.examId?.createdAt &&
         exam.createdAt > failedStatus.examId.createdAt;
 
-      if (isAfterFailedExam) {
+      const isAfterNotAttemptedExam =
+        notAttemptedCompletedStatus &&
+        notAttemptedCompletedStatus.examId?.createdAt &&
+        exam.createdAt > notAttemptedCompletedStatus.examId.createdAt;
+
+      if (isAfterFailedExam || isAfterNotAttemptedExam) {
         examObj.statusManage = "Not Eligible";
         examObj.result = null;
         examObj.rank = null;
@@ -856,8 +874,8 @@ exports.UsersExams = async (req, res) => {
           examObj.attemptStatus = "Attempted";
         }
       }
-      
 
+    
       if (statusManage === "Completed") {
         const userResult = await ExamResult.findOne({
           userId,
@@ -937,6 +955,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 exports.ExamQuestion = async (req, res) => {
