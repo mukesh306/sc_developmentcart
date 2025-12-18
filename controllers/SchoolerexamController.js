@@ -731,7 +731,7 @@ exports.UsersExams = async (req, res) => {
     for (const exam of exams) {
       const examObj = { ...exam };
 
-    
+      
       const existingStatus = await ExamUserStatus.findOne({
         userId,
         examId: exam._id,
@@ -749,10 +749,10 @@ exports.UsersExams = async (req, res) => {
         examObj.attemptStatus = existingStatus.attemptStatus || null;
 
         updatedExams.push(examObj);
-        continue; 
+        continue;
       }
 
-      
+     
       const classData =
         (await School.findById(exam.className)
           .select("_id name className")
@@ -804,7 +804,7 @@ exports.UsersExams = async (req, res) => {
 
       examObj.totalParticipants = allResults.length;
 
-    
+     
       const isAfterFailedExam =
         failedStatus &&
         failedStatus.examId?.createdAt &&
@@ -860,6 +860,12 @@ exports.UsersExams = async (req, res) => {
 
       examObj.statusManage = statusManage;
 
+     
+      if (statusManage === "Ongoing") {
+        examObj.rank = null;
+        examObj.result = null;
+      }
+
       if (statusManage === "Ongoing" || statusManage === "Completed") {
         examObj.attemptStatus =
           examObj.correct !== null ||
@@ -871,13 +877,16 @@ exports.UsersExams = async (req, res) => {
 
       const passLimit = parseInt(exam.passout) || 1;
 
-      if (statusManage === "Completed" && examObj.attemptStatus === "Not Attempted") {
+      if (
+        statusManage === "Completed" &&
+        examObj.attemptStatus === "Not Attempted"
+      ) {
         examObj.result = null;
       } else if (statusManage === "Completed" && examObj.finalScore === null) {
         examObj.result = "Not Attempt";
-      } else if (examObj.rank !== null) {
+      } else if (statusManage === "Completed" && examObj.rank !== null) {
         examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
-      } else {
+      } else if (statusManage !== "Ongoing") {
         examObj.result = null;
       }
 
@@ -914,6 +923,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
