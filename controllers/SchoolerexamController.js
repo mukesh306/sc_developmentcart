@@ -1963,12 +1963,11 @@ exports.schoolerShipPrizes = async (req, res) => {
 // };
 
 
-
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
     const { categoryId, classId } = req.query;
 
-    // Match criteria
+    
     const match = {
       prizeStatus: false,
       rank: { $ne: null },
@@ -1981,16 +1980,16 @@ exports.getPrizeStatusTrue = async (req, res) => {
     }
 
     if (classId) {
-      match["className"] = new mongoose.Types.ObjectId(classId);
+      match["className._id"] = new mongoose.Types.ObjectId(classId);
     }
 
     const data = await ExamUserStatus.aggregate([
       { $match: match },
 
-      // Lookup for category
+      
       {
         $lookup: {
-          from: "schoolercategories", // category collection name
+          from: "schoolercategories",
           localField: "category._id",
           foreignField: "_id",
           as: "categoryDetails"
@@ -1998,18 +1997,18 @@ exports.getPrizeStatusTrue = async (req, res) => {
       },
       { $unwind: "$categoryDetails" },
 
-      // Lookup for className
+      
       {
         $lookup: {
-          from: "classes", // replace with your actual class collection name
-          localField: "className",
+          from: "schoolerclasses", 
+          localField: "className._id",
           foreignField: "_id",
           as: "classDetails"
         }
       },
       { $unwind: "$classDetails" },
 
-      // Project final structure
+    
       {
         $project: {
           _id: 0,
@@ -2022,13 +2021,13 @@ exports.getPrizeStatusTrue = async (req, res) => {
           },
           className: {
             _id: "$classDetails._id",
-            name: "$classDetails.name" // add other fields if needed
+            name: "$classDetails.name"
           }
         }
       }
     ]);
 
-    // Populate user details
+    
     await ExamUserStatus.populate(data, {
       path: "userId",
       select: "firstName middleName lastName mobileNumber email status"
@@ -2048,6 +2047,75 @@ exports.getPrizeStatusTrue = async (req, res) => {
     });
   }
 };
+
+
+// exports.getPrizeStatusTrue = async (req, res) => {
+//   try {
+//     const { categoryId, classId } = req.query;
+
+//     const match = {
+//       prizeStatus: false,
+//       rank: { $ne: null },
+//       result: { $ne: null },
+//       finalScore: { $ne: null }
+//     };
+
+//     if (categoryId) {
+//       match["category._id"] = new mongoose.Types.ObjectId(categoryId);
+//     }
+
+//     if (classId) {
+//       match["className._id"] = new mongoose.Types.ObjectId(classId);
+//     }
+
+//     const data = await ExamUserStatus.aggregate([
+//       { $match: match },
+
+//       {
+//         $lookup: {
+//           from: "schoolercategories",
+//           localField: "category._id",
+//           foreignField: "_id",
+//           as: "categoryDetails"
+//         }
+//       },
+//       { $unwind: "$categoryDetails" },
+
+//       {
+//         $project: {
+//           _id: 0,
+//           prizeStatus: 1,
+//           className: 1,
+//           userId: 1,
+//           category: {
+//             _id: "$categoryDetails._id",
+//             name: "$categoryDetails.name",
+//             price: "$categoryDetails.price"
+//           }
+//         }
+//       }
+//     ]);
+
+//     await ExamUserStatus.populate(data, {
+//       path: "userId",
+//       select: "firstName middleName lastName mobileNumber email status"
+//     });
+
+    
+//     res.status(200).json({
+//       success: true,
+//       count: data.length,
+//       data: data || []
+//     });
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error"
+//     });
+//   }
+// };
 
 
 exports.updatePrizeStatusTrue = async (req, res) => {
