@@ -1912,6 +1912,7 @@ exports.getAllExamGroups = async (req, res) => {
 //   }
 // };
 
+
 exports.schoolerShipPrizes = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -1920,28 +1921,31 @@ exports.schoolerShipPrizes = async (req, res) => {
     }
 
     const categories = await Schoolercategory.find();
+
     let result = [];
-    let totalAmount = 0;
+    let totalAmount = 0; // abhi always 0 rahega kyunki status false/null hai
 
     for (const category of categories) {
+
+      // ✅ IMPORTANT: schoolerStatus ke base par check
       const topUser = await CategoryTopUser.findOne({
-        categoryId: category._id,
         userId,
+        schoolerStatus: category._id,
       }).select("percentage rank examId className");
 
       let examId = null;
       let percentage = null;
       let finalScore = null;
-      let status = null; // default null
+      let status = null; // default
 
       if (topUser) {
-        // agar topUser me hai → status false
+        // 🔹 TOP USER FOUND → status FALSE
         examId = topUser.examId;
         percentage = topUser.percentage;
         finalScore = topUser.rank;
-        status = false; // false save kare ExamUserStatus me
-       
-        // ExamUserStatus me update/save
+        status = false;
+
+        // 🔹 ExamUserStatus UPDATE / INSERT
         await ExamUserStatus.updateOne(
           { userId, examId },
           {
@@ -1960,7 +1964,7 @@ exports.schoolerShipPrizes = async (req, res) => {
         );
 
       } else {
-        // agar topUser me nahi hai → status null
+        // 🔹 TOP USER NOT FOUND → status NULL
         const lastExam = await Schoolerexam
           .findOne({ category: category._id })
           .sort({ createdAt: -1 });
@@ -1986,6 +1990,7 @@ exports.schoolerShipPrizes = async (req, res) => {
         }
       }
 
+      // 🔹 RESPONSE PUSH
       result.push({
         categoryId: category._id,
         categoryName: category.name,
@@ -2013,6 +2018,7 @@ exports.schoolerShipPrizes = async (req, res) => {
     });
   }
 };
+
 
 
 
