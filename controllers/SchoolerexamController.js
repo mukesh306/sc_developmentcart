@@ -1964,11 +1964,11 @@ exports.schoolerShipPrizes = async (req, res) => {
 
 
 
-
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
     const { categoryId, classId } = req.query;
 
+    // Match criteria
     const match = {
       prizeStatus: false,
       rank: { $ne: null },
@@ -1981,15 +1981,16 @@ exports.getPrizeStatusTrue = async (req, res) => {
     }
 
     if (classId) {
-      match["className._id"] = new mongoose.Types.ObjectId(classId);
+      match["className"] = new mongoose.Types.ObjectId(classId);
     }
 
     const data = await ExamUserStatus.aggregate([
       { $match: match },
 
+      // Lookup for category
       {
         $lookup: {
-          from: "schoolercategories",
+          from: "schoolercategories", // category collection name
           localField: "category._id",
           foreignField: "_id",
           as: "categoryDetails"
@@ -1997,27 +1998,42 @@ exports.getPrizeStatusTrue = async (req, res) => {
       },
       { $unwind: "$categoryDetails" },
 
+      // Lookup for className
+      {
+        $lookup: {
+          from: "classes", // replace with your actual class collection name
+          localField: "className",
+          foreignField: "_id",
+          as: "classDetails"
+        }
+      },
+      { $unwind: "$classDetails" },
+
+      // Project final structure
       {
         $project: {
           _id: 0,
           prizeStatus: 1,
-          className: 1,
           userId: 1,
           category: {
             _id: "$categoryDetails._id",
             name: "$categoryDetails.name",
             price: "$categoryDetails.price"
+          },
+          className: {
+            _id: "$classDetails._id",
+            name: "$classDetails.name" // add other fields if needed
           }
         }
       }
     ]);
 
+    // Populate user details
     await ExamUserStatus.populate(data, {
       path: "userId",
       select: "firstName middleName lastName mobileNumber email status"
     });
 
-    
     res.status(200).json({
       success: true,
       count: data.length,
