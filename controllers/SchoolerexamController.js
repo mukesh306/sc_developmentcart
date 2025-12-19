@@ -2004,7 +2004,6 @@ exports.schoolerShipPrizes = async (req, res) => {
 
 
 
-
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
     const { categoryId, classId } = req.query;
@@ -2032,15 +2031,16 @@ exports.getPrizeStatusTrue = async (req, res) => {
           className: 1,
           userId: 1,
           prizeStatus: 1,
-          rank: 1,
-          result: 1,
-          finalScore: 1,
-          _id: 0
+          _id: 0          
         }
       )
       .populate({
         path: "userId",
-        select: "firstName middleName lastName"
+        select: "firstName middleName lastName mobileNumber email status"
+      })
+      .populate({
+        path: "category._id",
+        select: "name price"
       });
 
     if (!data || data.length === 0) {
@@ -2065,6 +2065,7 @@ exports.getPrizeStatusTrue = async (req, res) => {
     });
   }
 };
+
 
 
 // exports.getPrizeStatusTrue = async (req, res) => {
