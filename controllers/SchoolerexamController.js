@@ -1963,59 +1963,90 @@ exports.schoolerShipPrizes = async (req, res) => {
 // };
 
 
-const data = await ExamUserStatus.aggregate([
-  { $match: match },
+exports.getPrizeStatusTrue = async (req, res) => {
+  try {
+    const { categoryId, classId } = req.query;
 
-  // Lookup category details
-  {
-    $lookup: {
-      from: "schoolercategories",
-      localField: "category._id",
-      foreignField: "_id",
-      as: "categoryDetails"
+    
+    const match = {
+      prizeStatus: false,
+      rank: { $ne: null },
+      result: { $ne: null },
+      finalScore: { $ne: null }
+    };
+
+    if (categoryId) {
+      match["category._id"] = new mongoose.Types.ObjectId(categoryId);
     }
-  },
-  { $unwind: "$categoryDetails" },
 
-  // Lookup class details
-  {
-    $lookup: {
-      from: "schoolerclasses",  // replace with your class collection name
-      localField: "className._id",
-      foreignField: "_id",
-      as: "classDetails"
+    if (classId) {
+      match["className._id"] = new mongoose.Types.ObjectId(classId);
     }
-  },
-  { $unwind: "$classDetails" },
 
-  {
-    $project: {
-      _id: 0,
-      prizeStatus: 1,
-      userId: 1,
-      category: {
-        _id: "$categoryDetails._id",
-        name: "$categoryDetails.name",
-        price: "$categoryDetails.price"
+    const data = await ExamUserStatus.aggregate([
+      { $match: match },
+
+      
+      {
+        $lookup: {
+          from: "schoolercategories",
+          localField: "category._id",
+          foreignField: "_id",
+          as: "categoryDetails"
+        }
       },
-      className: {
-        _id: "$classDetails._id",
-        name: "$classDetails.name"
+      { $unwind: "$categoryDetails" },
+
+      
+      {
+        $lookup: {
+          from: "schoolerclasses", 
+          localField: "className._id",
+          foreignField: "_id",
+          as: "classDetails"
+        }
+      },
+      { $unwind: "$classDetails" },
+
+    
+      {
+        $project: {
+          _id: 0,
+          prizeStatus: 1,
+          userId: 1,
+          category: {
+            _id: "$categoryDetails._id",
+            name: "$categoryDetails.name",
+            price: "$categoryDetails.price"
+          },
+          className: {
+            _id: "$classDetails._id",
+            name: "$classDetails.name"
+          }
+        }
       }
-    }
+    ]);
+
+    
+    await ExamUserStatus.populate(data, {
+      path: "userId",
+      select: "firstName middleName lastName mobileNumber email status"
+    });
+
+    res.status(200).json({
+      success: true,
+      count: data.length,
+      data: data || []
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
   }
-]);
-
-await ExamUserStatus.populate(data, {
-  path: "userId",
-  select: "firstName middleName lastName mobileNumber email status"
-});
-
-res.status(200).json({
-  success: true,
-  count: data.length,
-  data: data || []
-});
+};
 
 
 // exports.getPrizeStatusTrue = async (req, res) => {
