@@ -2026,6 +2026,7 @@ exports.schoolerShipPrizes = async (req, res) => {
 
 
 
+
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
     const { categoryId, classId } = req.query;
@@ -2048,7 +2049,6 @@ exports.getPrizeStatusTrue = async (req, res) => {
     const data = await ExamUserStatus.aggregate([
       { $match: match },
 
-      // 🔹 CATEGORY LOOKUP
       {
         $lookup: {
           from: "schoolercategories",
@@ -2059,45 +2059,28 @@ exports.getPrizeStatusTrue = async (req, res) => {
       },
       { $unwind: "$categoryDetails" },
 
-      // 🔹 CLASS LOOKUP (important)
-      {
-        $lookup: {
-          from: "schoolerclasses",
-          localField: "className._id",
-          foreignField: "_id",
-          as: "classDetails"
-        }
-      },
-      { $unwind: "$classDetails" },
-
-      // 🔹 FINAL RESPONSE SHAPE (same as before)
       {
         $project: {
           _id: 0,
           prizeStatus: 1,
+          className: 1,
           userId: 1,
-
           category: {
             _id: "$categoryDetails._id",
             name: "$categoryDetails.name",
             price: "$categoryDetails.price"
-          },
-
-          className: {
-            _id: "$classDetails._id",
-            name: "$classDetails.name"
           }
         }
       }
     ]);
 
-    // 🔹 USER POPULATE
     await ExamUserStatus.populate(data, {
       path: "userId",
       select: "firstName middleName lastName mobileNumber email status"
     });
 
-    return res.status(200).json({
+    
+    res.status(200).json({
       success: true,
       count: data.length,
       data: data || []
@@ -2105,7 +2088,7 @@ exports.getPrizeStatusTrue = async (req, res) => {
 
   } catch (error) {
     console.error(error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: "Server error"
     });
