@@ -1860,7 +1860,7 @@ exports.schoolerShipPrizes = async (req, res) => {
         u => u.userId.toString() === userId.toString()
       );
 
-      // STEP 5: Save prize if user is winner
+     
       if (isWinner) {
         await ExamUserStatus.updateOne(
           { userId, examId },
@@ -2002,7 +2002,6 @@ exports.schoolerShipPrizes = async (req, res) => {
 //   }
 // };
 
-
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
     const { categoryId, classId } = req.query;
@@ -2025,16 +2024,14 @@ exports.getPrizeStatusTrue = async (req, res) => {
     const data = await ExamUserStatus.aggregate([
       { $match: match },
 
-      // 🔗 Join with Schoolercategory
       {
         $lookup: {
-          from: "schoolercategories", // Mongo collection name
+          from: "schoolercategories",
           localField: "category._id",
           foreignField: "_id",
           as: "categoryDetails"
         }
       },
-
       { $unwind: "$categoryDetails" },
 
       {
@@ -2052,23 +2049,16 @@ exports.getPrizeStatusTrue = async (req, res) => {
       }
     ]);
 
-    // populate user separately
     await ExamUserStatus.populate(data, {
       path: "userId",
       select: "firstName middleName lastName mobileNumber email status"
     });
 
-    if (!data.length) {
-      return res.status(404).json({
-        success: false,
-        message: "No records found."
-      });
-    }
-
+    // ✅ Always return 200 with array
     res.status(200).json({
       success: true,
       count: data.length,
-      data
+      data: data || []
     });
 
   } catch (error) {
