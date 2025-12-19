@@ -1742,177 +1742,6 @@ exports.getAllExamGroups = async (req, res) => {
 };
 
 
-// exports.schoolerShipPrizes = async (req, res) => {
-//   try {
-//     const userId = req.user?._id;
-
-//     if (!userId) {
-//       return res.status(401).json({ message: "Unauthorized" });
-//     }
-
-//     const categories = await Schoolercategory.find();
-
-//     let result = [];
-//     let totalAmount = 0;
-
-//     for (const category of categories) {
-
-//       // 🔐 STEP 1: Check if user already won prize in this category
-//       const alreadyWon = await ExamUserStatus
-//         .findOne({
-//           userId,
-//           "category._id": category._id,
-//           prizeStatus: true,
-//         })
-//         .select("examId percentage finalScore");
-
-//       if (alreadyWon) {
-//         result.push({
-//           categoryId: category._id,
-//           categoryName: category.name,
-//           prize: category.price,
-//           examId: alreadyWon.examId,
-//           status: true,
-//           percentage: alreadyWon.percentage ?? null,
-//           finalScore: alreadyWon.finalScore ?? null,
-//         });
-
-//         totalAmount += Number(category.price) || 0;
-//         continue; // 🔒 Category locked → new exam ignore
-//       }
-
-//       // STEP 2: Get latest exam (only if prize not won yet)
-//       const lastExam = await Schoolerexam
-//         .findOne({ category: category._id })
-//         .sort({ createdAt: -1 });
-
-//       let status = false;
-//       let percentage = null;
-//       let finalScore = null;
-//       let examId = null;
-
-//       if (!lastExam) {
-//         result.push({
-//           categoryId: category._id,
-//           categoryName: category.name,
-//           prize: category.price,
-//           examId: null,
-//           status: false,
-//           percentage: null,
-//           finalScore: null,
-//         });
-//         continue;
-//       }
-
-//       examId = lastExam._id;
-
-//       // STEP 3: Check user exam status
-//       const userExamStatus = await ExamUserStatus
-//         .findOne({ userId, examId })
-//         .select("rank result");
-
-//       if (
-//         !userExamStatus ||
-//         userExamStatus.rank == null ||
-//         userExamStatus.result == null
-//       ) {
-//         result.push({
-//           categoryId: category._id,
-//           categoryName: category.name,
-//           prize: category.price,
-//           examId,
-//           status: false,
-//           percentage: null,
-//           finalScore: null,
-//         });
-//         continue;
-//       }
-
-//       // STEP 4: Find winners
-//       const passoutLimit = parseInt(lastExam.passout) || 1;
-
-//       const groups = await ExamGroup
-//         .find({ examId })
-//         .populate("members", "_id");
-
-//       let allTopUsers = [];
-
-//       for (const group of groups) {
-//         const memberIds = group.members.map(m => m._id);
-
-//         const scores = await ExamResult.find({
-//           examId,
-//           userId: { $in: memberIds },
-//         })
-//           .select("userId percentage finalScore")
-//           .sort({ finalScore: -1 });
-
-//         allTopUsers.push(...scores.slice(0, passoutLimit));
-//       }
-
-//       const uniqueTopUsers = [
-//         ...new Map(
-//           allTopUsers.map(u => [u.userId.toString(), u])
-//         ).values(),
-//       ];
-
-//       const isWinner = uniqueTopUsers.find(
-//         u => u.userId.toString() === userId.toString()
-//       );
-
-//       // STEP 5: Save prize if user is winner
-//       if (isWinner) {
-//         await ExamUserStatus.updateOne(
-//           { userId, examId },
-//           {
-//             $set: {
-//               prizeStatus: true,
-//               percentage: isWinner.percentage,
-//               finalScore: isWinner.finalScore,
-//               category: {
-//                 _id: category._id,
-//                 name: category.name,
-//               },
-//             },
-//           },
-//           { upsert: true }
-//         );
-
-//         status = true;
-//         percentage = isWinner.percentage;
-//         finalScore = isWinner.finalScore;
-//         totalAmount += Number(category.price) || 0;
-//       }
-
-//       result.push({
-//         categoryId: category._id,
-//         categoryName: category.name,
-//         prize: category.price,
-//         examId,
-//         status,
-//         percentage,
-//         finalScore,
-//       });
-//     }
-
-//     return res.status(200).json({
-//       message: "User category prize status fetched successfully.",
-//       userId,
-//       totalCategories: result.length,
-//       totalAmount,
-//       categories: result,
-//     });
-
-//   } catch (error) {
-//     console.error("Error:", error);
-//     return res.status(500).json({
-//       message: "Server Error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-
 exports.schoolerShipPrizes = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -1921,70 +1750,151 @@ exports.schoolerShipPrizes = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    
-    const categories = await Schoolercategory.find().lean();
+    const categories = await Schoolercategory.find();
 
     let result = [];
     let totalAmount = 0;
 
     for (const category of categories) {
 
-     
-      const topUser = await CategoryTopUser.findOne({
-        userId,
-        categoryId: category._id,
-      }).lean();
+      // 🔐 STEP 1: Check if user already won prize in this category
+      const alreadyWon = await ExamUserStatus
+        .findOne({
+          userId,
+          "category._id": category._id,
+          prizeStatus: true,
+        })
+        .select("examId percentage finalScore");
 
-      if (topUser) {
-       
-        await ExamUserStatus.findOneAndUpdate(
-          {
-            userId,
-            examId: topUser.examId,
-            "category._id": category._id,
-          },
+      if (alreadyWon) {
+        result.push({
+          categoryId: category._id,
+          categoryName: category.name,
+          prize: category.price,
+          examId: alreadyWon.examId,
+          status: true,
+          percentage: alreadyWon.percentage ?? null,
+          finalScore: alreadyWon.finalScore ?? null,
+        });
+
+        totalAmount += Number(category.price) || 0;
+        continue; // 🔒 Category locked → new exam ignore
+      }
+
+      // STEP 2: Get latest exam (only if prize not won yet)
+      const lastExam = await Schoolerexam
+        .findOne({ category: category._id })
+        .sort({ createdAt: -1 });
+
+      let status = false;
+      let percentage = null;
+      let finalScore = null;
+      let examId = null;
+
+      if (!lastExam) {
+        result.push({
+          categoryId: category._id,
+          categoryName: category.name,
+          prize: category.price,
+          examId: null,
+          status: false,
+          percentage: null,
+          finalScore: null,
+        });
+        continue;
+      }
+
+      examId = lastExam._id;
+
+      // STEP 3: Check user exam status
+      const userExamStatus = await ExamUserStatus
+        .findOne({ userId, examId })
+        .select("rank result");
+
+      if (
+        !userExamStatus ||
+        userExamStatus.rank == null ||
+        userExamStatus.result == null
+      ) {
+        result.push({
+          categoryId: category._id,
+          categoryName: category.name,
+          prize: category.price,
+          examId,
+          status: false,
+          percentage: null,
+          finalScore: null,
+        });
+        continue;
+      }
+
+      // STEP 4: Find winners
+      const passoutLimit = parseInt(lastExam.passout) || 1;
+
+      const groups = await ExamGroup
+        .find({ examId })
+        .populate("members", "_id");
+
+      let allTopUsers = [];
+
+      for (const group of groups) {
+        const memberIds = group.members.map(m => m._id);
+
+        const scores = await ExamResult.find({
+          examId,
+          userId: { $in: memberIds },
+        })
+          .select("userId percentage finalScore")
+          .sort({ finalScore: -1 });
+
+        allTopUsers.push(...scores.slice(0, passoutLimit));
+      }
+
+      const uniqueTopUsers = [
+        ...new Map(
+          allTopUsers.map(u => [u.userId.toString(), u])
+        ).values(),
+      ];
+
+      const isWinner = uniqueTopUsers.find(
+        u => u.userId.toString() === userId.toString()
+      );
+
+      // STEP 5: Save prize if user is winner
+      if (isWinner) {
+        await ExamUserStatus.updateOne(
+          { userId, examId },
           {
             $set: {
               prizeStatus: true,
-              percentage: topUser.percentage ?? null,
-              finalScore: null,
+              percentage: isWinner.percentage,
+              finalScore: isWinner.finalScore,
               category: {
                 _id: category._id,
                 name: category.name,
               },
             },
           },
-          { upsert: true, new: true }
+          { upsert: true }
         );
 
-       
-        result.push({
-          categoryId: category._id,
-          categoryName: category.name,
-          prize: category.price,
-          examId: topUser.examId,
-          status: true,
-          percentage: topUser.percentage ?? null,
-          finalScore: null,
-        });
-
+        status = true;
+        percentage = isWinner.percentage;
+        finalScore = isWinner.finalScore;
         totalAmount += Number(category.price) || 0;
-        continue;
       }
 
-      
       result.push({
         categoryId: category._id,
         categoryName: category.name,
         prize: category.price,
-        examId: null,
-        status: false,
-        percentage: null,
-        finalScore: null,
+        examId,
+        status,
+        percentage,
+        finalScore,
       });
     }
 
-   
     return res.status(200).json({
       message: "User category prize status fetched successfully.",
       userId,
@@ -1994,13 +1904,15 @@ exports.schoolerShipPrizes = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error in schoolerShipPrizes:", error);
+    console.error("Error:", error);
     return res.status(500).json({
       message: "Server Error",
       error: error.message,
     });
   }
 };
+
+
 
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
