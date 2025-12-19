@@ -2002,3 +2002,29 @@ exports.schoolerShipPrizes = async (req, res) => {
   }
 };
 
+exports.getPrizeStatusTrue = async (req, res) => {
+  try {
+   
+    const data = await ExamUserStatus.find({ prizeStatus: true });
+
+    if (!data || data.length === 0) {
+      return res.status(404).json({ 
+        success: false,
+        message: "No records found with prizeStatus true." 
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      count: data.length,
+      data,
+    });
+  } catch (error) {
+    console.error("Error fetching prizeStatus true records:", error);
+    res.status(500).json({ 
+      success: false,
+      message: "Server error",
+      error: error.message 
+    });
+  }
+};
