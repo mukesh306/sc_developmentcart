@@ -2003,10 +2003,19 @@ exports.schoolerShipPrizes = async (req, res) => {
 // };
 
 
+
+
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
     const { categoryId, classId } = req.query;
-    const filter = { prizeStatus: true };
+
+    const filter = {
+      prizeStatus: true,
+      rank: { $ne: null },
+      result: { $ne: null },
+      finalScore: { $ne: null }
+    };
+
     if (categoryId) {
       filter["category._id"] = categoryId;
     }
@@ -2023,6 +2032,9 @@ exports.getPrizeStatusTrue = async (req, res) => {
           className: 1,
           userId: 1,
           prizeStatus: 1,
+          rank: 1,
+          result: 1,
+          finalScore: 1,
           _id: 0
         }
       )
@@ -2053,4 +2065,56 @@ exports.getPrizeStatusTrue = async (req, res) => {
     });
   }
 };
+
+
+// exports.getPrizeStatusTrue = async (req, res) => {
+//   try {
+//     const { categoryId, classId } = req.query;
+//     const filter = { prizeStatus: true };
+//     if (categoryId) {
+//       filter["category._id"] = categoryId;
+//     }
+
+//     if (classId) {
+//       filter["className._id"] = classId;
+//     }
+
+//     const data = await ExamUserStatus
+//       .find(
+//         filter,
+//         {
+//           category: 1,
+//           className: 1,
+//           userId: 1,
+//           prizeStatus: 1,
+//           _id: 0
+//         }
+//       )
+//       .populate({
+//         path: "userId",
+//         select: "firstName middleName lastName"
+//       });
+
+//     if (!data || data.length === 0) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "No records found."
+//       });
+//     }
+
+//     res.status(200).json({
+//       success: true,
+//       count: data.length,
+//       data
+//     });
+
+//   } catch (error) {
+//     console.error("Error fetching prizeStatus true records:", error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error",
+//       error: error.message
+//     });
+//   }
+// };
 
