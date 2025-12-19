@@ -23,7 +23,7 @@ attemptStatus: {
 },
 prizeStatus: {
   type: Boolean,
-  default: false,
+  default: null
 },
     totalQuestions: Number,
     correct: Number,
