@@ -21,7 +21,10 @@ attemptStatus: {
   default: null,
 
 },
-
+prizeStatus: {
+  type: Boolean,
+  default: false,
+},
     totalQuestions: Number,
     correct: Number,
     finalScore: Number,
