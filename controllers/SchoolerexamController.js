@@ -2104,7 +2104,7 @@ exports.updatePrizeStatusTrue = async (req, res) => {
     res.status(200).json({
       success: true,
       message: "Prize status updated successfully",
-      data: updatedData
+      // data: updatedData
     });
 
   } catch (error) {
