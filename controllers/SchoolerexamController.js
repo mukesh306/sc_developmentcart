@@ -1924,14 +1924,12 @@ exports.schoolerShipPrizes = async (req, res) => {
     let totalAmount = 0;
 
     for (const category of categories) {
-
-     
+      
       const existingStatus = await ExamUserStatus.findOne({
         userId,
         "category._id": category._id,
       }).select("examId prizeStatus percentage finalScore");
 
-      
       if (existingStatus) {
         result.push({
           categoryId: category._id,
@@ -1949,7 +1947,7 @@ exports.schoolerShipPrizes = async (req, res) => {
         continue;
       }
 
-      
+     
       const lastExam = await Schoolerexam
         .findOne({ category: category._id })
         .sort({ createdAt: -1 });
@@ -1969,16 +1967,12 @@ exports.schoolerShipPrizes = async (req, res) => {
 
       const examId = lastExam._id;
 
-      
+     
       const userExamStatus = await ExamUserStatus
         .findOne({ userId, examId })
         .select("rank result");
 
-      if (
-        !userExamStatus ||
-        userExamStatus.rank == null ||
-        userExamStatus.result == null
-      ) {
+      if (!userExamStatus || userExamStatus.rank == null || userExamStatus.result == null) {
         result.push({
           categoryId: category._id,
           categoryName: category.name,
@@ -1991,9 +1985,9 @@ exports.schoolerShipPrizes = async (req, res) => {
         continue;
       }
 
+      
       const passoutLimit = parseInt(lastExam.passout) || 1;
       const groups = await ExamGroup.find({ examId }).populate("members", "_id");
-
       let allTopUsers = [];
 
       for (const group of groups) {
@@ -2003,26 +1997,29 @@ exports.schoolerShipPrizes = async (req, res) => {
           userId: { $in: memberIds },
         })
           .select("userId percentage finalScore")
-          .sort({ finalScore: -1 });
+          .sort({ finalScore: -1 }); 
 
         allTopUsers.push(...scores.slice(0, passoutLimit));
       }
 
+      
       const uniqueTopUsers = [
         ...new Map(allTopUsers.map(u => [u.userId.toString(), u])).values(),
       ];
 
-      const isWinner = uniqueTopUsers.find(
-        u => u.userId.toString() === userId.toString()
-      );
+     
+      const isWinner = uniqueTopUsers.find(u => {
+        const uid = u.userId._id ? u.userId._id.toString() : u.userId.toString();
+        return uid === userId.toString();
+      });
 
-      
       if (isWinner) {
+        
         await ExamUserStatus.updateOne(
           { userId, examId },
           {
             $set: {
-              prizeStatus: false, 
+              prizeStatus: false,
               percentage: isWinner.percentage,
               finalScore: isWinner.finalScore,
               category: {
@@ -2039,12 +2036,11 @@ exports.schoolerShipPrizes = async (req, res) => {
           categoryName: category.name,
           prize: category.price,
           examId,
-          status: false,
+          status: false, // winner gets false
           percentage: isWinner.percentage,
           finalScore: isWinner.finalScore,
         });
       } else {
-       
         result.push({
           categoryId: category._id,
           categoryName: category.name,
@@ -2073,6 +2069,7 @@ exports.schoolerShipPrizes = async (req, res) => {
     });
   }
 };
+
 
 
 
