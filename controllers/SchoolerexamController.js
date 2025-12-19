@@ -1912,7 +1912,6 @@ exports.getAllExamGroups = async (req, res) => {
 //   }
 // };
 
-
 exports.schoolerShipPrizes = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -1923,11 +1922,11 @@ exports.schoolerShipPrizes = async (req, res) => {
     const categories = await Schoolercategory.find();
 
     let result = [];
-    let totalAmount = 0; // abhi always 0 rahega kyunki status false/null hai
+    let totalAmount = 0;
 
     for (const category of categories) {
 
-      // ✅ IMPORTANT: schoolerStatus ke base par check
+      // ✅ schoolerStatus ke base par check
       const topUser = await CategoryTopUser.findOne({
         userId,
         schoolerStatus: category._id,
@@ -1936,16 +1935,19 @@ exports.schoolerShipPrizes = async (req, res) => {
       let examId = null;
       let percentage = null;
       let finalScore = null;
-      let status = null; // default
+      let status = null;
 
       if (topUser) {
-        // 🔹 TOP USER FOUND → status FALSE
+        // 🔹 status = false
         examId = topUser.examId;
         percentage = topUser.percentage;
         finalScore = topUser.rank;
         status = false;
 
-        // 🔹 ExamUserStatus UPDATE / INSERT
+        // ✅ ADD PRICE TO totalAmount
+        totalAmount += Number(category.price) || 0;
+
+        // 🔹 update ExamUserStatus
         await ExamUserStatus.updateOne(
           { userId, examId },
           {
@@ -1964,7 +1966,7 @@ exports.schoolerShipPrizes = async (req, res) => {
         );
 
       } else {
-        // 🔹 TOP USER NOT FOUND → status NULL
+        // 🔹 status = null
         const lastExam = await Schoolerexam
           .findOne({ category: category._id })
           .sort({ createdAt: -1 });
@@ -1990,7 +1992,6 @@ exports.schoolerShipPrizes = async (req, res) => {
         }
       }
 
-      // 🔹 RESPONSE PUSH
       result.push({
         categoryId: category._id,
         categoryName: category.name,
@@ -2006,7 +2007,7 @@ exports.schoolerShipPrizes = async (req, res) => {
       message: "User category prize status fetched successfully.",
       userId,
       totalCategories: result.length,
-      totalAmount,
+      totalAmount, // ✅ yahan correct total aayega
       categories: result,
     });
 
@@ -2018,6 +2019,7 @@ exports.schoolerShipPrizes = async (req, res) => {
     });
   }
 };
+
 
 
 
