@@ -2002,23 +2002,39 @@ exports.schoolerShipPrizes = async (req, res) => {
 //   }
 // };
 
+
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
-    const data = await ExamUserStatus.find(
-      { prizeStatus: true },
-      {
-        category: 1,
-        className: 1,
-        userId: 1,
-        prizeStatus: 1,
-        _id: 0 
-      }
-    );
+    const { categoryId, classId } = req.query;
+    const filter = { prizeStatus: true };
+    if (categoryId) {
+      filter["category._id"] = categoryId;
+    }
+
+    if (classId) {
+      filter["className._id"] = classId;
+    }
+
+    const data = await ExamUserStatus
+      .find(
+        filter,
+        {
+          category: 1,
+          className: 1,
+          userId: 1,
+          prizeStatus: 1,
+          _id: 0
+        }
+      )
+      .populate({
+        path: "userId",
+        select: "firstName middleName lastName"
+      });
 
     if (!data || data.length === 0) {
       return res.status(404).json({
         success: false,
-        message: "No records found with prizeStatus true."
+        message: "No records found."
       });
     }
 
@@ -2037,3 +2053,4 @@ exports.getPrizeStatusTrue = async (req, res) => {
     });
   }
 };
+
