@@ -1235,6 +1235,7 @@ exports.calculateExamResult = async (req, res) => {
 //       return res.status(400).json({ message: "examId required." });
 //     }
 
+   
 //     const exam = await Schoolerexam.findById(examId);
 //     if (!exam) {
 //       return res.status(404).json({ message: "Exam not found." });
@@ -1256,7 +1257,7 @@ exports.calculateExamResult = async (req, res) => {
 
 //     let allUsers = [];
 
-//     // ✅ STEP 1: group-wise toppers
+  
 //     for (const group of groups) {
 //       const memberIds = group.members.map((m) => m._id);
 
@@ -1267,61 +1268,53 @@ exports.calculateExamResult = async (req, res) => {
 //         .populate("userId", "firstName lastName email className")
 //         .sort({ finalScore: -1, Completiontime: 1 });
 
+     
 //       const passedUsers = scores.slice(0, passoutLimit);
 //       allUsers.push(...passedUsers);
 //     }
 
-//     // ✅ STEP 2: remove duplicate users
+  
 //     const uniqueUsers = [];
 //     const seen = new Set();
-
 //     for (const user of allUsers) {
-//       const uid = user.userId?._id?.toString();
-//       if (uid && !seen.has(uid)) {
-//         seen.add(uid);
+//       const userId = user.userId?._id?.toString();
+//       if (userId && !seen.has(userId)) {
+//         seen.add(userId);
 //         uniqueUsers.push(user);
 //       }
-//     }
-
-//     // ✅ STEP 3: calculate GLOBAL rank
+//     } 
 //     const allResults = await ExamResult.find({ examId })
 //       .select("userId percentage createdAt")
 //       .sort({ percentage: -1, createdAt: 1 })
 //       .lean();
 
 //     const ranks = new Map();
-//     allResults.forEach((r, index) => {
-//       ranks.set(r.userId.toString(), index + 1);
+//     allResults.forEach((result, index) => {
+//       ranks.set(result.userId.toString(), index + 1);
 //     });
 
-//     uniqueUsers.forEach((u) => {
-//       const uid = u.userId?._id?.toString();
-//       u._doc = {
-//         ...u._doc,
-//         rank: ranks.get(uid) || null,
-//         Completiontime: u.Completiontime || null,
+//     for (let i = 0; i < uniqueUsers.length; i++) {
+//       const userId = uniqueUsers[i].userId?._id?.toString();
+//       const rank = ranks.get(userId) || null;
+
+//       uniqueUsers[i]._doc = {
+//         ...uniqueUsers[i]._doc,
+//         rank,
+//         Completiontime: uniqueUsers[i].Completiontime || null,
 //       };
-//     });
+//     }
 
-//     // ✅ STEP 4: GLOBAL SORT + LIMIT (🔥 MAIN FIX)
-//     uniqueUsers.sort(
-//       (a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999)
-//     );
+   
+//     uniqueUsers.sort((a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999));
 
-//     const usersToSave = uniqueUsers.slice(0, passoutLimit);
-
-//     // ✅ STEP 5: check LAST EXAM of CATEGORY
 //     const lastExam = await Schoolerexam.findOne({ category: exam.category })
 //       .sort({ createdAt: -1 })
 //       .lean();
 
 //     if (lastExam && lastExam._id.toString() === examId.toString()) {
-//       console.log("Last exam of category, saving top users");
+//       console.log(" This is the last exam of the category. Saving passed users...");
 
-//       const allCategories = await Schoolercategory.find()
-//         .sort({ createdAt: 1 })
-//         .lean();
-
+//       const allCategories = await Schoolercategory.find().sort({ createdAt: 1 }).lean();
 //       const currentIndex = allCategories.findIndex(
 //         (c) => c._id.toString() === exam.category.toString()
 //       );
@@ -1331,25 +1324,18 @@ exports.calculateExamResult = async (req, res) => {
 //           ? allCategories[currentIndex + 1]
 //           : null;
 
-//       const categoryToSave = nextCategory
-//         ? nextCategory._id
-//         : exam.category;
+//       const categoryToSave = nextCategory ? nextCategory._id : exam.category;
 
-//       // ✅ STEP 6: SAVE ONLY GLOBAL TOP USERS
-//       for (const u of usersToSave) {
+    
+//       for (const u of uniqueUsers) {
 //         const classNameId = u.userId?.className || null;
 
 //         await CategoryTopUser.findOneAndUpdate(
+//           { userId: u.userId._id, examId, categoryId: categoryToSave },
 //           {
 //             userId: u.userId._id,
 //             examId,
 //             categoryId: categoryToSave,
-//           },
-//           {
-//             userId: u.userId._id,
-//             examId,
-//             categoryId: categoryToSave,
-//             schoolerStatus: exam.category,
 //             className: classNameId,
 //             percentage: u.percentage,
 //             rank: u._doc.rank,
@@ -1359,9 +1345,9 @@ exports.calculateExamResult = async (req, res) => {
 //       }
 //     }
 
-//     // ✅ RESPONSE
+   
 //     return res.status(200).json({
-//       message: `Top ${passoutLimit} passed users fetched successfully.`,
+//       message: `Top ${passoutLimit} passed users fetched successfully for Exam "${exam.name || exam._id}".`,
 //       examId: exam._id,
 //       categoryId: exam.category,
 //       passoutLimit,
@@ -1378,13 +1364,14 @@ exports.calculateExamResult = async (req, res) => {
 //       })),
 //     });
 //   } catch (error) {
-//     console.error("Error in topusers:", error);
+//     console.error("🔥 Error in topusers:", error);
 //     return res.status(500).json({
 //       message: "Internal server error",
 //       error: error.message,
 //     });
 //   }
 // };
+
 
 exports.topusers = async (req, res) => {
   try {
@@ -1399,47 +1386,26 @@ exports.topusers = async (req, res) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    if (!exam.assignedGroup || exam.assignedGroup.length === 0) {
+    const passoutLimit = parseInt(exam.passout) || 1;
+
+    const groups = await ExamGroup.find({ examId }).populate(
+      "members",
+      "firstName lastName email className"
+    );
+
+    if (!groups || groups.length === 0) {
       return res.status(200).json({
-        message: "No assigned groups for this exam.",
+        message: "No groups found for this exam.",
         users: [],
       });
     }
 
-    let finalUsersToSave = [];
-    let appliedPassoutLimit = 0;
+    let allUsers = [];
 
-    
-    for (const groupId of exam.assignedGroup) {
-    
-      const lastGroupExam = await Schoolerexam.findOne({
-        assignedGroup: groupId,
-      })
-        .sort({ createdAt: -1 })
-        .lean();
-
-     
-      if (!lastGroupExam || lastGroupExam._id.toString() !== examId.toString()) {
-        continue;
-      }
-
-     
-      const passoutLimit = parseInt(lastGroupExam.passout) || 1;
-      appliedPassoutLimit = passoutLimit;
-
-      
-      const group = await ExamGroup.findById(groupId).populate(
-        "members",
-        "firstName lastName email className"
-      );
-
-      if (!group || !group.members || group.members.length === 0) {
-        continue;
-      }
-
+    // ✅ STEP 1: group-wise toppers
+    for (const group of groups) {
       const memberIds = group.members.map((m) => m._id);
 
-      
       const scores = await ExamResult.find({
         examId,
         userId: { $in: memberIds },
@@ -1447,25 +1413,15 @@ exports.topusers = async (req, res) => {
         .populate("userId", "firstName lastName email className")
         .sort({ finalScore: -1, Completiontime: 1 });
 
-      const groupTopUsers = scores.slice(0, passoutLimit);
-
-      finalUsersToSave.push(...groupTopUsers);
+      const passedUsers = scores.slice(0, passoutLimit);
+      allUsers.push(...passedUsers);
     }
 
-   
-    if (finalUsersToSave.length === 0) {
-      return res.status(200).json({
-        message:
-          "This exam is not the last exam of any assigned group. No users saved.",
-        users: [],
-      });
-    }
-
-   
+    // ✅ STEP 2: remove duplicate users
     const uniqueUsers = [];
     const seen = new Set();
 
-    for (const user of finalUsersToSave) {
+    for (const user of allUsers) {
       const uid = user.userId?._id?.toString();
       if (uid && !seen.has(uid)) {
         seen.add(uid);
@@ -1473,7 +1429,7 @@ exports.topusers = async (req, res) => {
       }
     }
 
-    
+    // ✅ STEP 3: calculate GLOBAL rank
     const allResults = await ExamResult.find({ examId })
       .select("userId percentage createdAt")
       .sort({ percentage: -1, createdAt: 1 })
@@ -1493,38 +1449,68 @@ exports.topusers = async (req, res) => {
       };
     });
 
-    
+    // ✅ STEP 4: GLOBAL SORT + LIMIT (🔥 MAIN FIX)
     uniqueUsers.sort(
       (a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999)
     );
 
-   
-    for (const u of uniqueUsers) {
-      await CategoryTopUser.findOneAndUpdate(
-        {
-          userId: u.userId._id,
-          examId,
-          categoryId: exam.category,
-        },
-        {
-          userId: u.userId._id,
-          examId,
-          categoryId: exam.category,
-          schoolerStatus: exam.category,
-          className: u.userId?.className || null,
-          percentage: u.percentage,
-          rank: u._doc.rank,
-        },
-        { upsert: true, new: true }
+    const usersToSave = uniqueUsers.slice(0, passoutLimit);
+
+    // ✅ STEP 5: check LAST EXAM of CATEGORY
+    const lastExam = await Schoolerexam.findOne({ category: exam.category })
+      .sort({ createdAt: -1 })
+      .lean();
+
+    if (lastExam && lastExam._id.toString() === examId.toString()) {
+      console.log("Last exam of category, saving top users");
+
+      const allCategories = await Schoolercategory.find()
+        .sort({ createdAt: 1 })
+        .lean();
+
+      const currentIndex = allCategories.findIndex(
+        (c) => c._id.toString() === exam.category.toString()
       );
+
+      const nextCategory =
+        currentIndex !== -1 && currentIndex + 1 < allCategories.length
+          ? allCategories[currentIndex + 1]
+          : null;
+
+      const categoryToSave = nextCategory
+        ? nextCategory._id
+        : exam.category;
+
+      // ✅ STEP 6: SAVE ONLY GLOBAL TOP USERS
+      for (const u of usersToSave) {
+        const classNameId = u.userId?.className || null;
+
+        await CategoryTopUser.findOneAndUpdate(
+          {
+            userId: u.userId._id,
+            examId,
+            categoryId: categoryToSave,
+          },
+          {
+            userId: u.userId._id,
+            examId,
+            categoryId: categoryToSave,
+            schoolerStatus: exam.category,
+            className: classNameId,
+            percentage: u.percentage,
+            rank: u._doc.rank,
+          },
+          { upsert: true, new: true }
+        );
+      }
     }
 
-    
+    // ✅ RESPONSE
     return res.status(200).json({
-      message: `Top users saved group-wise (last exam only).`,
+      message: `Top ${passoutLimit} passed users fetched successfully.`,
       examId: exam._id,
       categoryId: exam.category,
-      passoutLimit: appliedPassoutLimit,
+      passoutLimit,
       users: uniqueUsers.map((u) => ({
         userId: u.userId?._id,
         firstName: u.userId?.firstName,
@@ -1849,66 +1835,148 @@ exports.schoolerShipPrizes = async (req, res) => {
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const categories = await Schoolercategory.find().lean();
+    const categories = await Schoolercategory.find();
 
     let result = [];
     let totalAmount = 0;
 
     for (const category of categories) {
 
-      // ✅ STEP 1: Check user in CategoryTopUser (FINAL SOURCE)
-      const topUser = await CategoryTopUser.findOne({
-        userId,
-        categoryId: category._id,
-      })
-        .select("examId percentage rank")
-        .lean();
+      // 🔐 STEP 1: Check if user already won prize in this category
+      const alreadyWon = await ExamUserStatus
+        .findOne({
+          userId,
+          "category._id": category._id,
+          prizeStatus: true,
+        })
+        .select("examId percentage finalScore");
 
-      if (topUser) {
-        // 🔹 save/update ExamUserStatus (lock prize)
-        await ExamUserStatus.findOneAndUpdate(
-          {
-            userId,
-            examId: topUser.examId,
-            "category._id": category._id,
-          },
+      if (alreadyWon) {
+        result.push({
+          categoryId: category._id,
+          categoryName: category.name,
+          prize: category.price,
+          examId: alreadyWon.examId,
+          status: true,
+          percentage: alreadyWon.percentage ?? null,
+          finalScore: alreadyWon.finalScore ?? null,
+        });
+
+        totalAmount += Number(category.price) || 0;
+        continue; // 🔒 Category locked → new exam ignore
+      }
+
+      // STEP 2: Get latest exam (only if prize not won yet)
+      const lastExam = await Schoolerexam
+        .findOne({ category: category._id })
+        .sort({ createdAt: -1 });
+
+      let status = false;
+      let percentage = null;
+      let finalScore = null;
+      let examId = null;
+
+      if (!lastExam) {
+        result.push({
+          categoryId: category._id,
+          categoryName: category.name,
+          prize: category.price,
+          examId: null,
+          status: false,
+          percentage: null,
+          finalScore: null,
+        });
+        continue;
+      }
+
+      examId = lastExam._id;
+
+      // STEP 3: Check user exam status
+      const userExamStatus = await ExamUserStatus
+        .findOne({ userId, examId })
+        .select("rank result");
+
+      if (
+        !userExamStatus ||
+        userExamStatus.rank == null ||
+        userExamStatus.result == null
+      ) {
+        result.push({
+          categoryId: category._id,
+          categoryName: category.name,
+          prize: category.price,
+          examId,
+          status: false,
+          percentage: null,
+          finalScore: null,
+        });
+        continue;
+      }
+
+      // STEP 4: Find winners
+      const passoutLimit = parseInt(lastExam.passout) || 1;
+
+      const groups = await ExamGroup
+        .find({ examId })
+        .populate("members", "_id");
+
+      let allTopUsers = [];
+
+      for (const group of groups) {
+        const memberIds = group.members.map(m => m._id);
+
+        const scores = await ExamResult.find({
+          examId,
+          userId: { $in: memberIds },
+        })
+          .select("userId percentage finalScore")
+          .sort({ finalScore: -1 });
+
+        allTopUsers.push(...scores.slice(0, passoutLimit));
+      }
+
+      const uniqueTopUsers = [
+        ...new Map(
+          allTopUsers.map(u => [u.userId.toString(), u])
+        ).values(),
+      ];
+
+      const isWinner = uniqueTopUsers.find(
+        u => u.userId.toString() === userId.toString()
+      );
+
+      // STEP 5: Save prize if user is winner
+      if (isWinner) {
+        await ExamUserStatus.updateOne(
+          { userId, examId },
           {
             $set: {
               prizeStatus: true,
-              percentage: topUser.percentage ?? null,
-              finalScore: null,
+              percentage: isWinner.percentage,
+              finalScore: isWinner.finalScore,
               category: {
                 _id: category._id,
                 name: category.name,
               },
             },
           },
-          { upsert: true, new: true }
+          { upsert: true }
         );
 
-        result.push({
-          categoryId: category._id,
-          categoryName: category.name,
-          prize: category.price,
-          examId: topUser.examId,
-          status: true,
-          percentage: topUser.percentage ?? null,
-          finalScore: null,
-        });
-
+        status = true;
+        percentage = isWinner.percentage;
+        finalScore = isWinner.finalScore;
         totalAmount += Number(category.price) || 0;
-        continue;
       }
 
-      // ❌ NOT A TOPPER → FALSE
       result.push({
         categoryId: category._id,
         categoryName: category.name,
         prize: category.price,
-        examId: null,
-        status: false,
-        percentage: null,
-        finalScore: null,
+        examId,
+        status,
+        percentage,
+        finalScore,
       });
     }
 
@@ -1921,14 +1989,13 @@ exports.schoolerShipPrizes = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error in schoolerShipPrizes:", error);
+    console.error("Error:", error);
     return res.status(500).json({
       message: "Server Error",
       error: error.message,
     });
   }
 };
-
 
 
 
