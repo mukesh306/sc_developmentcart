@@ -1912,7 +1912,6 @@ exports.getAllExamGroups = async (req, res) => {
 //   }
 // };
 
-
 exports.schoolerShipPrizes = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -1925,94 +1924,76 @@ exports.schoolerShipPrizes = async (req, res) => {
     let totalAmount = 0;
 
     for (const category of categories) {
-      
-      const existingStatus = await ExamUserStatus.findOne({
-        userId,
-        "category._id": category._id,
-      }).select("examId prizeStatus percentage finalScore");
-
-      if (existingStatus) {
-        result.push({
-          categoryId: category._id,
-          categoryName: category.name,
-          prize: category.price,
-          examId: existingStatus.examId ?? null,
-          status: existingStatus.prizeStatus ?? null,
-          percentage: existingStatus.percentage ?? null,
-          finalScore: existingStatus.finalScore ?? null,
-        });
-
-        if (existingStatus.prizeStatus === true) {
-          totalAmount += Number(category.price) || 0;
-        }
-        continue;
-      }
-
-     
-      const lastExam = await Schoolerexam
-        .findOne({ category: category._id })
-        .sort({ createdAt: -1 });
-
-      if (!lastExam) {
-        result.push({
-          categoryId: category._id,
-          categoryName: category.name,
-          prize: category.price,
-          examId: null,
-          status: null,
-          percentage: null,
-          finalScore: null,
-        });
-        continue;
-      }
-
-      const examId = lastExam._id;
-
-      
       const topUser = await CategoryTopUser.findOne({
         categoryId: category._id,
         userId,
-      }).select("percentage rank");
+      }).select("percentage rank examId className");
+
+      let examId = null;
+      let percentage = null;
+      let finalScore = null;
+      let status = null; // default null
 
       if (topUser) {
+        // agar topUser me hai → status false
+        examId = topUser.examId;
+        percentage = topUser.percentage;
+        finalScore = topUser.rank;
+        status = false; // false save kare ExamUserStatus me
        
+        // ExamUserStatus me update/save
         await ExamUserStatus.updateOne(
           { userId, examId },
           {
             $set: {
               prizeStatus: false,
-              percentage: topUser.percentage,
-              finalScore: topUser.rank,
+              percentage,
+              finalScore,
               category: {
                 _id: category._id,
                 name: category.name,
               },
+              className: topUser.className,
             },
           },
           { upsert: true }
         );
 
-        result.push({
-          categoryId: category._id,
-          categoryName: category.name,
-          prize: category.price,
-          examId,
-          status: false, 
-          percentage: topUser.percentage,
-          finalScore: topUser.rank,
-        });
-        continue;
+      } else {
+        // agar topUser me nahi hai → status null
+        const lastExam = await Schoolerexam
+          .findOne({ category: category._id })
+          .sort({ createdAt: -1 });
+
+        if (lastExam) {
+          examId = lastExam._id;
+
+          await ExamUserStatus.updateOne(
+            { userId, examId },
+            {
+              $set: {
+                prizeStatus: null,
+                percentage: null,
+                finalScore: null,
+                category: {
+                  _id: category._id,
+                  name: category.name,
+                },
+              },
+            },
+            { upsert: true }
+          );
+        }
       }
 
-      
       result.push({
         categoryId: category._id,
         categoryName: category.name,
         prize: category.price,
         examId,
-        status: null,
-        percentage: null,
-        finalScore: null,
+        status,
+        percentage,
+        finalScore,
       });
     }
 
@@ -2023,6 +2004,7 @@ exports.schoolerShipPrizes = async (req, res) => {
       totalAmount,
       categories: result,
     });
+
   } catch (error) {
     console.error(error);
     return res.status(500).json({
@@ -2031,6 +2013,7 @@ exports.schoolerShipPrizes = async (req, res) => {
     });
   }
 };
+
 
 
 
