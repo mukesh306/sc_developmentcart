@@ -1372,6 +1372,7 @@ exports.calculateExamResult = async (req, res) => {
 //   }
 // };
 
+
 exports.topusers = async (req, res) => {
   try {
     const examId = req.params.id;
@@ -1401,7 +1402,7 @@ exports.topusers = async (req, res) => {
 
     let allUsers = [];
 
-    // ✅ STEP 1: group-wise toppers
+    
     for (const group of groups) {
       const memberIds = group.members.map((m) => m._id);
 
@@ -1416,7 +1417,7 @@ exports.topusers = async (req, res) => {
       allUsers.push(...passedUsers);
     }
 
-    // ✅ STEP 2: remove duplicate users
+    
     const uniqueUsers = [];
     const seen = new Set();
 
@@ -1428,7 +1429,7 @@ exports.topusers = async (req, res) => {
       }
     }
 
-    // ✅ STEP 3: calculate GLOBAL rank
+ 
     const allResults = await ExamResult.find({ examId })
       .select("userId percentage createdAt")
       .sort({ percentage: -1, createdAt: 1 })
@@ -1439,29 +1440,26 @@ exports.topusers = async (req, res) => {
       ranks.set(r.userId.toString(), index + 1);
     });
 
-    uniqueUsers.forEach((u) => {
-      const uid = u.userId?._id?.toString();
-      u._doc = {
-        ...u._doc,
+    for (let i = 0; i < uniqueUsers.length; i++) {
+      const uid = uniqueUsers[i].userId?._id?.toString();
+      uniqueUsers[i]._doc = {
+        ...uniqueUsers[i]._doc,
         rank: ranks.get(uid) || null,
-        Completiontime: u.Completiontime || null,
+        Completiontime: uniqueUsers[i].Completiontime || null,
       };
-    });
+    }
 
-    // ✅ STEP 4: GLOBAL SORT + LIMIT (🔥 MAIN FIX)
     uniqueUsers.sort(
       (a, b) => (a._doc.rank || 9999) - (b._doc.rank || 9999)
     );
 
-    const usersToSave = uniqueUsers.slice(0, passoutLimit);
-
-    // ✅ STEP 5: check LAST EXAM of CATEGORY
+    
     const lastExam = await Schoolerexam.findOne({ category: exam.category })
       .sort({ createdAt: -1 })
       .lean();
 
     if (lastExam && lastExam._id.toString() === examId.toString()) {
-      console.log("Last exam of category, saving top users");
+      console.log("Last exam of category, saving passed users");
 
       const allCategories = await Schoolercategory.find()
         .sort({ createdAt: 1 })
@@ -1480,8 +1478,8 @@ exports.topusers = async (req, res) => {
         ? nextCategory._id
         : exam.category;
 
-      // ✅ STEP 6: SAVE ONLY GLOBAL TOP USERS
-      for (const u of usersToSave) {
+     
+      for (const u of uniqueUsers) {
         const classNameId = u.userId?.className || null;
 
         await CategoryTopUser.findOneAndUpdate(
@@ -1493,8 +1491,8 @@ exports.topusers = async (req, res) => {
           {
             userId: u.userId._id,
             examId,
-            categoryId: categoryToSave,
-            schoolerStatus: exam.category,
+            categoryId: categoryToSave,     
+            schoolerStatus: exam.category, 
             className: classNameId,
             percentage: u.percentage,
             rank: u._doc.rank,
@@ -1504,9 +1502,9 @@ exports.topusers = async (req, res) => {
       }
     }
 
-    // ✅ RESPONSE
+   
     return res.status(200).json({
-      message: `Top ${passoutLimit} passed users fetched successfully.`,
+      message: `Top ${passoutLimit} passed users fetched successfully for Exam "${exam.name || exam._id}".`,
       examId: exam._id,
       categoryId: exam.category,
       passoutLimit,
@@ -1523,7 +1521,7 @@ exports.topusers = async (req, res) => {
       })),
     });
   } catch (error) {
-    console.error("Error in topusers:", error);
+    console.error(" Error in topusers:", error);
     return res.status(500).json({
       message: "Internal server error",
       error: error.message,
