@@ -2032,7 +2032,7 @@ exports.getPrizeStatusTrue = async (req, res) => {
     const { categoryId, classId } = req.query;
 
     const match = {
-      prizeStatus: true,
+      prizeStatus: false,
       rank: { $ne: null },
       result: { $ne: null },
       finalScore: { $ne: null }
