@@ -2002,6 +2002,7 @@ exports.schoolerShipPrizes = async (req, res) => {
 //   }
 // };
 
+
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
     const { categoryId, classId } = req.query;
@@ -2054,11 +2055,56 @@ exports.getPrizeStatusTrue = async (req, res) => {
       select: "firstName middleName lastName mobileNumber email status"
     });
 
-    // ✅ Always return 200 with array
+    
     res.status(200).json({
       success: true,
       count: data.length,
       data: data || []
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
+  }
+};
+
+
+exports.updatePrizeStatusTrue = async (req, res) => {
+  try {
+    const { userId, categoryId } = req.body;
+
+    if (!userId || !categoryId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId and categoryId are required"
+      });
+    }
+
+    const updatedData = await ExamUserStatus.findOneAndUpdate(
+      {
+        userId: new mongoose.Types.ObjectId(userId),
+        "category._id": new mongoose.Types.ObjectId(categoryId)
+      },
+      {
+        $set: { prizeStatus: true }
+      },
+      { new: true }
+    );
+
+    if (!updatedData) {
+      return res.status(404).json({
+        success: false,
+        message: "Record not found"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Prize status updated successfully",
+      data: updatedData
     });
 
   } catch (error) {
