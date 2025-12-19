@@ -1913,30 +1913,127 @@ exports.schoolerShipPrizes = async (req, res) => {
 };
 
 
+// exports.schoolerShipPrizes = async (req, res) => {
+//   try {
+//     const userId = req.user?._id;
+
+//     if (!userId) {
+//       return res.status(401).json({ message: "Unauthorized" });
+//     }
+
+    
+//     const categories = await Schoolercategory.find().lean();
+
+//     let result = [];
+//     let totalAmount = 0;
+
+//     for (const category of categories) {
+
+     
+//       const topUser = await CategoryTopUser.findOne({
+//         userId,
+//         categoryId: category._id,
+//       }).lean();
+
+//       if (topUser) {
+       
+//         await ExamUserStatus.findOneAndUpdate(
+//           {
+//             userId,
+//             examId: topUser.examId,
+//             "category._id": category._id,
+//           },
+//           {
+//             $set: {
+//               prizeStatus: true,
+//               percentage: topUser.percentage ?? null,
+//               finalScore: null,
+//               category: {
+//                 _id: category._id,
+//                 name: category.name,
+//               },
+//             },
+//           },
+//           { upsert: true, new: true }
+//         );
+
+       
+//         result.push({
+//           categoryId: category._id,
+//           categoryName: category.name,
+//           prize: category.price,
+//           examId: topUser.examId,
+//           status: true,
+//           percentage: topUser.percentage ?? null,
+//           finalScore: null,
+//         });
+
+//         totalAmount += Number(category.price) || 0;
+//         continue;
+//       }
+
+      
+//       result.push({
+//         categoryId: category._id,
+//         categoryName: category.name,
+//         prize: category.price,
+//         examId: null,
+//         status: false,
+//         percentage: null,
+//         finalScore: null,
+//       });
+//     }
+
+   
+//     return res.status(200).json({
+//       message: "User category prize status fetched successfully.",
+//       userId,
+//       totalCategories: result.length,
+//       totalAmount,
+//       categories: result,
+//     });
+
+//   } catch (error) {
+//     console.error("Error in schoolerShipPrizes:", error);
+//     return res.status(500).json({
+//       message: "Server Error",
+//       error: error.message,
+//     });
+//   }
+// };
 
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
-   
-    const data = await ExamUserStatus.find({ prizeStatus: true });
+    const data = await ExamUserStatus.find(
+      { prizeStatus: true },
+      {
+        category: 1,
+        className: 1,
+        userId: 1,
+        prizeStatus: 1,
+        _id: 0 
+      }
+    );
 
     if (!data || data.length === 0) {
-      return res.status(404).json({ 
+      return res.status(404).json({
         success: false,
-        message: "No records found with prizeStatus true." 
+        message: "No records found with prizeStatus true."
       });
     }
 
     res.status(200).json({
       success: true,
       count: data.length,
-      data,
+      data
     });
+
   } catch (error) {
     console.error("Error fetching prizeStatus true records:", error);
-    res.status(500).json({ 
+    res.status(500).json({
       success: false,
       message: "Server error",
-      error: error.message 
+      error: error.message
     });
   }
 };
