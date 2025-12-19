@@ -1912,6 +1912,8 @@ exports.getAllExamGroups = async (req, res) => {
 //   }
 // };
 
+
+
 exports.schoolerShipPrizes = async (req, res) => {
   try {
     const userId = req.user?._id;
@@ -2007,7 +2009,7 @@ exports.schoolerShipPrizes = async (req, res) => {
       message: "User category prize status fetched successfully.",
       userId,
       totalCategories: result.length,
-      totalAmount, // ✅ yahan correct total aayega
+      totalAmount, 
       categories: result,
     });
 
@@ -2026,11 +2028,11 @@ exports.schoolerShipPrizes = async (req, res) => {
 
 
 
+
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
     const { categoryId, classId } = req.query;
 
-    // 🔹 MATCH: only prizeStatus = false
     const match = {
       prizeStatus: false,
       rank: { $ne: null },
@@ -2049,7 +2051,6 @@ exports.getPrizeStatusTrue = async (req, res) => {
     const data = await ExamUserStatus.aggregate([
       { $match: match },
 
-      // 🔹 CATEGORY lookup (price ke liye)
       {
         $lookup: {
           from: "schoolercategories",
@@ -2060,35 +2061,28 @@ exports.getPrizeStatusTrue = async (req, res) => {
       },
       { $unwind: "$categoryDetails" },
 
-      // 🔹 FINAL SHAPE (same as before)
       {
         $project: {
           _id: 0,
           prizeStatus: 1,
+          className: 1,
           userId: 1,
-
           category: {
             _id: "$categoryDetails._id",
             name: "$categoryDetails.name",
             price: "$categoryDetails.price"
-          },
-
-          // 👇 FIXED: force object form
-          className: {
-            _id: "$className._id",
-            name: "$className.name"
           }
         }
       }
     ]);
 
-    // 🔹 Populate user
     await ExamUserStatus.populate(data, {
       path: "userId",
       select: "firstName middleName lastName mobileNumber email status"
     });
 
-    return res.status(200).json({
+    
+    res.status(200).json({
       success: true,
       count: data.length,
       data: data || []
@@ -2096,7 +2090,7 @@ exports.getPrizeStatusTrue = async (req, res) => {
 
   } catch (error) {
     console.error(error);
-    return res.status(500).json({
+    res.status(500).json({
       success: false,
       message: "Server error"
     });
