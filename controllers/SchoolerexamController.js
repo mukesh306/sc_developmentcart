@@ -2003,12 +2003,11 @@ exports.schoolerShipPrizes = async (req, res) => {
 // };
 
 
-
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
     const { categoryId, classId } = req.query;
 
-    const filter = {
+    const match = {
       prizeStatus: true,
       rank: { $ne: null },
       result: { $ne: null },
@@ -2016,34 +2015,50 @@ exports.getPrizeStatusTrue = async (req, res) => {
     };
 
     if (categoryId) {
-      filter["category._id"] = categoryId;
+      match["category._id"] = new mongoose.Types.ObjectId(categoryId);
     }
 
     if (classId) {
-      filter["className._id"] = classId;
+      match["className._id"] = new mongoose.Types.ObjectId(classId);
     }
 
-    const data = await ExamUserStatus
-      .find(
-        filter,
-        {
-          category: 1,
+    const data = await ExamUserStatus.aggregate([
+      { $match: match },
+
+      // 🔗 Join with Schoolercategory
+      {
+        $lookup: {
+          from: "schoolercategories", // Mongo collection name
+          localField: "category._id",
+          foreignField: "_id",
+          as: "categoryDetails"
+        }
+      },
+
+      { $unwind: "$categoryDetails" },
+
+      {
+        $project: {
+          _id: 0,
+          prizeStatus: 1,
           className: 1,
           userId: 1,
-          prizeStatus: 1,
-          _id: 0          
+          category: {
+            _id: "$categoryDetails._id",
+            name: "$categoryDetails.name",
+            price: "$categoryDetails.price"
+          }
         }
-      )
-      .populate({
-        path: "userId",
-        select: "firstName middleName lastName mobileNumber email status"
-      })
-      .populate({
-        path: "category._id",
-        select: "name price"
-      });
+      }
+    ]);
 
-    if (!data || data.length === 0) {
+    // populate user separately
+    await ExamUserStatus.populate(data, {
+      path: "userId",
+      select: "firstName middleName lastName mobileNumber email status"
+    });
+
+    if (!data.length) {
       return res.status(404).json({
         success: false,
         message: "No records found."
@@ -2057,14 +2072,14 @@ exports.getPrizeStatusTrue = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("Error fetching prizeStatus true records:", error);
+    console.error(error);
     res.status(500).json({
       success: false,
-      message: "Server error",
-      error: error.message
+      message: "Server error"
     });
   }
 };
+
 
 
 
