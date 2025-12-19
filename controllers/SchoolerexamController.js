@@ -1970,7 +1970,7 @@ exports.getPrizeStatusTrue = async (req, res) => {
 
     // Match criteria
     const match = {
-      prizeStatus: false,
+      prizeStatus: { $in: [false, null] }, // include false or null
       rank: { $ne: null },
       result: { $ne: null },
       finalScore: { $ne: null }
@@ -1990,24 +1990,24 @@ exports.getPrizeStatusTrue = async (req, res) => {
       // Lookup for category
       {
         $lookup: {
-          from: "schoolercategories", // category collection name
+          from: "schoolercategories", // your category collection name
           localField: "category._id",
           foreignField: "_id",
           as: "categoryDetails"
         }
       },
-      { $unwind: "$categoryDetails" },
+      { $unwind: { path: "$categoryDetails", preserveNullAndEmptyArrays: true } },
 
       // Lookup for className
       {
         $lookup: {
-          from: "classes", // replace with your actual class collection name
-          localField: "className",
+          from: "classes", // your class collection name
+          localField: "className", // simple ObjectId
           foreignField: "_id",
           as: "classDetails"
         }
       },
-      { $unwind: "$classDetails" },
+      { $unwind: { path: "$classDetails", preserveNullAndEmptyArrays: true } },
 
       // Project final structure
       {
@@ -2022,7 +2022,7 @@ exports.getPrizeStatusTrue = async (req, res) => {
           },
           className: {
             _id: "$classDetails._id",
-            name: "$classDetails.name" // add other fields if needed
+            name: "$classDetails.name"
           }
         }
       }
@@ -2048,6 +2048,7 @@ exports.getPrizeStatusTrue = async (req, res) => {
     });
   }
 };
+
 
 
 exports.updatePrizeStatusTrue = async (req, res) => {
