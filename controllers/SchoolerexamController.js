@@ -692,6 +692,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -730,7 +731,6 @@ exports.UsersExams = async (req, res) => {
 
     const updatedExams = [];
 
-    
     const previousBlockedExam = await ExamUserStatus.findOne({
       userId,
       $or: [
@@ -751,19 +751,30 @@ exports.UsersExams = async (req, res) => {
       }).lean();
 
       const today = moment().tz("Asia/Kolkata").format("YYYY-MM-DD");
-      const examDay = moment(exam.examDate).tz("Asia/Kolkata").format("YYYY-MM-DD");
+      const examDay = moment(exam.examDate)
+        .tz("Asia/Kolkata")
+        .format("YYYY-MM-DD");
 
-      if (existingStatus?.statusManage && today !== examDay) {
+     
+      if (
+        existingStatus?.statusManage &&
+        moment(examDay).isBefore(today)
+      ) {
         examObj.statusManage = existingStatus.statusManage;
-        examObj.result = existingStatus.result || null;
-        examObj.rank = existingStatus.rank || null;
+        examObj.result = existingStatus.result ?? null;
+        examObj.rank = existingStatus.rank ?? null;
+        examObj.correct = existingStatus.correct ?? null;
+        examObj.finalScore = existingStatus.finalScore ?? null;
+        examObj.percentage = existingStatus.percentage ?? null;
+        examObj.totalParticipants =
+          existingStatus.totalParticipants ?? null;
         examObj.attemptStatus = existingStatus.attemptStatus ?? null;
 
         updatedExams.push(examObj);
         continue;
       }
+      
 
-     
       const classData =
         (await School.findById(exam.className)
           .select("_id name className")
@@ -786,7 +797,6 @@ exports.UsersExams = async (req, res) => {
         .sort({ percentage: -1, Completiontime: 1 })
         .lean();
 
-      
       const isAfterBlockedExam =
         previousBlockedExam &&
         previousBlockedExam.examId?.createdAt &&
@@ -796,7 +806,7 @@ exports.UsersExams = async (req, res) => {
         examObj.statusManage = "Not Eligible";
         examObj.result = null;
         examObj.rank = null;
-        examObj.attemptStatus = null; 
+        examObj.attemptStatus = null;
 
         await ExamUserStatus.findOneAndUpdate(
           { userId, examId: exam._id },
@@ -807,7 +817,7 @@ exports.UsersExams = async (req, res) => {
             statusManage: "Not Eligible",
             result: null,
             publish: exam.publish,
-            attemptStatus: null, 
+            attemptStatus: null,
           },
           { upsert: true }
         );
@@ -816,7 +826,6 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      
       const scheduleDateTime = moment(exam.examDate)
         .tz("Asia/Kolkata")
         .set({
@@ -825,8 +834,12 @@ exports.UsersExams = async (req, res) => {
           second: moment(exam.ScheduleTime, "HH:mm:ss").second(),
         });
 
-      const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
-      const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
+      const ongoingStart = scheduleDateTime
+        .clone()
+        .add(bufferTime, "minutes");
+      const ongoingEnd = ongoingStart
+        .clone()
+        .add(exam.ExamTime, "minutes");
       const now = moment().tz("Asia/Kolkata");
 
       let statusManage =
@@ -834,7 +847,10 @@ exports.UsersExams = async (req, res) => {
 
       if (exam.publish === true) {
         if (now.isBefore(ongoingStart)) statusManage = "Scheduled";
-        else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
+        else if (
+          now.isSameOrAfter(ongoingStart) &&
+          now.isBefore(ongoingEnd)
+        )
           statusManage = "Ongoing";
         else if (now.isSameOrAfter(ongoingEnd))
           statusManage = "Completed";
@@ -844,24 +860,26 @@ exports.UsersExams = async (req, res) => {
 
       examObj.statusManage = statusManage;
 
-     
       if (statusManage === "Ongoing") {
         examObj.rank = null;
         examObj.result = null;
 
-        examObj.attemptStatus =
-          examObj.correct !== null || examObj.finalScore !== null
-            ? "Attempted"
-            : "Not Attempted";
+        const ongoingResult = await ExamResult.findOne({
+          userId,
+          examId: exam._id,
+        }).select("_id").lean();
+
+        examObj.attemptStatus = ongoingResult
+          ? "Attempted"
+          : "Not Attempted";
       }
 
-      
       if (statusManage === "Completed") {
         const userResult = await ExamResult.findOne({
           userId,
           examId: exam._id,
         })
-          .select("correct finalScore percentage createdAt")
+          .select("correct finalScore percentage")
           .lean();
 
         examObj.correct = userResult?.correct ?? null;
@@ -869,7 +887,10 @@ exports.UsersExams = async (req, res) => {
 
         if (userResult && examObj.totalQuestions > 0) {
           examObj.percentage = parseFloat(
-            ((userResult.finalScore / examObj.totalQuestions) * 100).toFixed(2)
+            (
+              (userResult.finalScore / examObj.totalQuestions) *
+              100
+            ).toFixed(2)
           );
         } else {
           examObj.percentage = null;
@@ -886,7 +907,6 @@ exports.UsersExams = async (req, res) => {
 
         examObj.totalParticipants = allResults.length;
 
-        
         examObj.attemptStatus =
           examObj.correct !== null || examObj.finalScore !== null
             ? "Attempted"
@@ -899,10 +919,10 @@ exports.UsersExams = async (req, res) => {
         } else if (examObj.finalScore === null) {
           examObj.result = "Not Attempt";
         } else if (examObj.rank !== null) {
-          examObj.result = examObj.rank <= passLimit ? "passed" : "failed";
+          examObj.result =
+            examObj.rank <= passLimit ? "passed" : "failed";
         }
 
-       
         await ExamUserStatus.findOneAndUpdate(
           { userId, examId: exam._id },
           {
@@ -937,6 +957,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 exports.ExamQuestion = async (req, res) => {
