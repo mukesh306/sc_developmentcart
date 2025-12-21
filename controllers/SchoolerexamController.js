@@ -1780,22 +1780,28 @@ exports.schoolerShipPrizes = async (req, res) => {
         totalAmount += Number(category.price) || 0;
 
         // 🔹 update ExamUserStatus
-        await ExamUserStatus.updateOne(
-          { userId, examId },
-          {
-            $set: {
-              prizeStatus: false,
-              percentage,
-              finalScore,
-              category: {
-                _id: category._id,
-                name: category.name,
-              },
-              className: topUser.className,
-            },
-          },
-          { upsert: true }
-        );
+       await ExamUserStatus.updateOne(
+  { userId, examId },
+  {
+    $set: {
+      prizeStatus: false,
+      percentage,
+      finalScore,
+      category: {
+        _id: category._id,
+        name: category.name,
+      },
+      className: topUser.className
+        ? {
+            _id: topUser.className._id,
+            name: topUser.className.name,
+          }
+        : null,
+    },
+  },
+  { upsert: true }
+);
+
 
       } else {
         // 🔹 status = null
