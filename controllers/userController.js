@@ -14,7 +14,7 @@ const ExamUserStatus = require("../models/ExamUserStatus");
 const Location = require("../models/location");
 const CategoryTopUser = require("../models/CategoryTopUser");
 const userexamGroup = require("../models/userExamGroup");
-
+const Schoolercategory = require("../models/schoolershipcategory");
 const fs = require('fs');
 const path = require('path');
 // const moment = require('moment');
