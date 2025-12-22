@@ -1574,7 +1574,6 @@ exports.getCategoriesFromUsers = async (req, res) => {
 // };
 
 
-
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -1601,37 +1600,55 @@ exports.userforAdmin = async (req, res) => {
     if (className) filterQuery.className = className;
 
     if (stateId) {
-      if (Array.isArray(stateId)) {
-        filterQuery.stateId = { $in: stateId };
-      } else if (stateId.includes(",")) {
-        filterQuery.stateId = { $in: stateId.split(",") };
-      } else {
-        filterQuery.stateId = stateId;
-      }
+      if (Array.isArray(stateId)) filterQuery.stateId = { $in: stateId };
+      else if (stateId.includes(",")) filterQuery.stateId = { $in: stateId.split(",") };
+      else filterQuery.stateId = stateId;
     }
 
     if (cityId) {
-      if (Array.isArray(cityId)) {
-        filterQuery.cityId = { $in: cityId };
-      } else if (cityId.includes(",")) {
-        filterQuery.cityId = { $in: cityId.split(",") };
-      } else {
-        filterQuery.cityId = cityId;
-      }
+      if (Array.isArray(cityId)) filterQuery.cityId = { $in: cityId };
+      else if (cityId.includes(",")) filterQuery.cityId = { $in: cityId.split(",") };
+      else filterQuery.cityId = cityId;
     }
 
-   
+    /* ---------------- FETCH USERS ---------------- */
     let users = await User.find(filterQuery)
       .populate("countryId", "name")
       .populate("stateId", "name")
       .populate("cityId", "name")
       .populate("updatedBy", "email session startDate endDate name role");
 
+    const userIds = users.map(u => u._id);
+
+    /* ---------------- FETCH GROUPS (LATEST FIRST) ---------------- */
+    const groups = await userexamGroup.find({
+      members: { $in: userIds }
+    })
+      .sort({ createdAt: -1 })
+      .populate("category", "_id name")
+      .lean();
+
+    /* userId -> latest group category */
+    const userLatestGroupCategory = {};
+    groups.forEach(group => {
+      group.members.forEach(uid => {
+        const id = uid.toString();
+        if (!userLatestGroupCategory[id] && group.category) {
+          userLatestGroupCategory[id] = group.category;
+        }
+      });
+    });
+
+    /* ---------------- DEFAULT CATEGORIES ---------------- */
+    const defaultCategories = await Schoolercategory.find()
+      .select("_id name")
+      .lean();
+
     let finalUsers = [];
 
     for (let user of users) {
 
-     
+      /* -------- ADMIN SESSION DATE CHECK -------- */
       if (user.startDate && user.endDate) {
         const userStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
         const userEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
@@ -1644,7 +1661,7 @@ exports.userforAdmin = async (req, res) => {
         }
       }
 
-      
+      /* -------- CLASS / YEAR -------- */
       let classDetails = null;
       if (mongoose.Types.ObjectId.isValid(user.className)) {
         classDetails =
@@ -1652,7 +1669,21 @@ exports.userforAdmin = async (req, res) => {
           (await College.findById(user.className));
       }
 
-     
+      /* -------- SCHOOLERSHIP LOGIC -------- */
+      let schoolershipstatus = "NA";
+      let category = "NA";
+
+      if (user.status === "yes") {
+        schoolershipstatus = "participant";
+
+        const grpCat = userLatestGroupCategory[user._id.toString()];
+        if (grpCat) {
+          category = grpCat; // latest group category
+        } else {
+          category = defaultCategories; // no group → default
+        }
+      }
+
       finalUsers.push({
         ...user._doc,
         country: user.countryId?.name || "",
@@ -1661,11 +1692,13 @@ exports.userforAdmin = async (req, res) => {
         institutionName:
           user.schoolName || user.collegeName || user.instituteName || "",
         institutionType: user.studentType || "",
-        classOrYear: classDetails?.name || ""
+        classOrYear: classDetails?.name || "",
+        schoolershipstatus,
+        category
       });
     }
 
-   
+    /* ---------------- FIELD FILTER ---------------- */
     if (fields) {
       const requested = fields.split(",").map(f => f.trim());
       finalUsers = finalUsers.map(u => {
@@ -1677,7 +1710,7 @@ exports.userforAdmin = async (req, res) => {
       });
     }
 
-   
+    /* ---------------- PAGINATION ---------------- */
     const totalUsers = finalUsers.length;
     const paginatedUsers = finalUsers.slice(skip, skip + limit);
 
@@ -1700,6 +1733,7 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
