@@ -47,7 +47,7 @@ router.post(
   router.get("/user-states", userController.getStatesFromUsers);
 router.get("/user-cities", userController.getCitiesFromUsers);
 router.get("/user-categories", userController.getCategoriesFromUsers);
-router.get("/schoolershipstatus-filter", userController.getAvailableSchoolershipStatus);
+router.get("/schoolershipstatus-filter",auth, userController.getAvailableSchoolershipStatus);
 
 
   
