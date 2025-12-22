@@ -1773,5 +1773,106 @@ exports.userforAdmin = async (req, res) => {
 
 
 
+exports.getAvailableSchoolershipStatus = async (req, res) => {
+  try {
+    const adminId = req.user._id;
+
+    const admin = await Admin1.findById(adminId).select("startDate endDate");
+    if (!admin) {
+      return res.status(404).json({ message: "Admin not found." });
+    }
+
+    const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
+    const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
+
+    const users = await User.find({});
+    const userIds = users.map(u => u._id);
+
+    const groups = await userexamGroup.find({
+      members: { $in: userIds }
+    }).populate("category", "_id name").lean();
+
+    const userGroupCategoryMap = {};
+    groups.forEach(g => {
+      g.members.forEach(uid => {
+        if (!userGroupCategoryMap[uid] && g.category) {
+          userGroupCategoryMap[uid] = g.category;
+        }
+      });
+    });
+
+    const defaultCategory = await Schoolercategory.findOne()
+      .select("_id name")
+      .sort({ createdAt: 1 })
+      .lean();
+
+    const examStatuses = await ExamUserStatus.find({
+      userId: { $in: userIds }
+    }).select("userId category result attemptStatus").lean();
+
+    const failedMap = {};
+    examStatuses.forEach(es => {
+      if (es.result === "failed" && es.category?._id) {
+        failedMap[`${es.userId}_${es.category._id}`] = true;
+      }
+    });
+
+    const categoryTopUsers = await CategoryTopUser.find({
+      userId: { $in: userIds }
+    }).select("userId schoolerStatus").lean();
+
+    const finalistMap = {};
+    categoryTopUsers.forEach(ctu => {
+      finalistMap[`${ctu.userId}_${ctu.schoolerStatus}`] = true;
+    });
+
+    const statusSet = new Set();
+
+    for (let user of users) {
+
+      if (user.startDate && user.endDate) {
+        const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
+        const uEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
+        if (!uStart.isSameOrAfter(adminStart) || !uEnd.isSameOrBefore(adminEnd)) {
+          continue;
+        }
+      }
+
+      let status = "NA";
+      const category = userGroupCategoryMap[user._id] || defaultCategory;
+
+      if (user.status === "yes") {
+        status = "Participant";
+
+        if (category?._id) {
+          const key = `${user._id}_${category._id}`;
+
+          if (failedMap[key]) status = "Eliminated";
+
+          const notAttempted = examStatuses.find(
+            es =>
+              es.userId.toString() === user._id.toString() &&
+              es.category?._id.toString() === category._id.toString() &&
+              es.attemptStatus === "Not Attempted"
+          );
+          if (notAttempted) status = "Eliminated";
+
+          if (finalistMap[key]) status = "Finalist";
+        }
+      }
+
+      statusSet.add(status);
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: Array.from(statusSet)
+    });
+
+  } catch (error) {
+    console.error("getAvailableSchoolershipStatus Error:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
 
 
