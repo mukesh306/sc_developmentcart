@@ -1579,13 +1579,13 @@ exports.getCategoriesFromUsers = async (req, res) => {
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
-    let { className, stateId, cityId, page = 1, limit = 10, fields } = req.query;
+    let { className, stateId, cityId, categoryId, page = 1, limit = 10, fields } = req.query;
 
     page = parseInt(page);
     limit = parseInt(limit);
     const skip = (page - 1) * limit;
 
-   
+    
     const admin = await Admin1.findById(adminId).select("startDate endDate");
     if (!admin) {
       return res.status(404).json({ message: "Admin not found." });
@@ -1610,7 +1610,7 @@ exports.userforAdmin = async (req, res) => {
         : cityId;
     }
 
-  
+   
     const users = await User.find(filterQuery)
       .populate("countryId", "name")
       .populate("stateId", "name")
@@ -1619,7 +1619,7 @@ exports.userforAdmin = async (req, res) => {
 
     const userIds = users.map(u => u._id);
 
-    
+   
     const groups = await userexamGroup.find({
       members: { $in: userIds }
     })
@@ -1636,7 +1636,7 @@ exports.userforAdmin = async (req, res) => {
       });
     });
 
-    
+   
     const defaultCategory = await Schoolercategory.findOne()
       .select("_id name")
       .sort({ createdAt: 1 })
@@ -1657,7 +1657,7 @@ exports.userforAdmin = async (req, res) => {
       }
     });
 
-  
+    
     const categoryTopUsers = await CategoryTopUser.find({
       userId: { $in: userIds }
     })
@@ -1674,7 +1674,7 @@ exports.userforAdmin = async (req, res) => {
     let finalUsers = [];
 
     for (let user of users) {
-
+     
       if (user.startDate && user.endDate) {
         const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
         const uEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
@@ -1683,7 +1683,7 @@ exports.userforAdmin = async (req, res) => {
         }
       }
 
-      let category = "NA";
+      let category = { _id: null, name: "NA" };
       let schoolershipstatus = "NA";
 
       if (user.status === "yes") {
@@ -1692,17 +1692,17 @@ exports.userforAdmin = async (req, res) => {
         category =
           userGroupCategoryMap[user._id] ||
           defaultCategory ||
-          "NA";
+          { _id: null, name: "NA" };
 
         if (category?._id) {
           const key = `${user._id}_${category._id}`;
 
-         
+          
           if (failedMap[key]) {
             schoolershipstatus = "Eliminated";
           }
 
-         
+          
           const notAttempted = examStatuses.find(
             es => es.userId.toString() === user._id.toString() &&
                   es.category?._id.toString() === category._id.toString() &&
@@ -1712,7 +1712,7 @@ exports.userforAdmin = async (req, res) => {
             schoolershipstatus = "Eliminated";
           }
 
-        
+          
           if (finalistMap[key]) {
             schoolershipstatus = "Finalist";
           }
@@ -1730,6 +1730,14 @@ exports.userforAdmin = async (req, res) => {
         category,
         schoolershipstatus
       });
+    }
+
+   
+    if (categoryId) {
+      const categoriesArray = categoryId.split(",");
+      finalUsers = finalUsers.filter(u => 
+        u.category?._id && categoriesArray.includes(u.category._id.toString())
+      );
     }
 
    
@@ -1762,7 +1770,6 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 
