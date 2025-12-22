@@ -1968,12 +1968,12 @@ exports.schoolerShipPrizes = async (req, res) => {
 //   }
 // };
 
-
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
     const { categoryId, classId } = req.query;
 
     const match = {
+      prizeStatus: { $in: [true, false] }, 
       rank: { $ne: null },
       result: { $ne: null },
       finalScore: { $ne: null }
@@ -2004,7 +2004,7 @@ exports.getPrizeStatusTrue = async (req, res) => {
         $project: {
           _id: 0,
           examId: 1,
-          prizeStatus: 1,   
+          prizeStatus: 1,
           className: 1,
           userId: 1,
           category: {
@@ -2035,6 +2035,7 @@ exports.getPrizeStatusTrue = async (req, res) => {
     });
   }
 };
+
 
 
 
