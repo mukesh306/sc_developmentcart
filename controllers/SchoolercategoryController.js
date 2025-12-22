@@ -6,46 +6,14 @@ const ExamResult = require("../models/examResult");
 const CategoryTopUser = require("../models/CategoryTopUser");
 
 
-// exports.createSchoolercategory = async (req, res) => {
-//   try {
-//     const { name, price,groupSize , finalist,examSize } = req.body;
-//     const createdBy = req.user?._id;
-
-//    if (!name || !price || !groupSize || !finalist ||!examSize) {
-//       return res.status(400).json({ 
-//         message: "All fields (name, price, groupSize, finalist,ExamSize) are required." 
-//       });
-//     }
-//     // ✅ Create new category with price
-//     const newCategory = new Schoolercategory({
-//       name,
-//       price,
-//       groupSize , 
-//       finalist ,
-//       examSize ,
-//       createdBy,
-//     });
-
-//     await newCategory.save();
-
-//     res.status(201).json({
-//       message: "Category created successfully.",
-//       category: newCategory,
-//     });
-//   } catch (error) {
-//     res.status(500).json({ message: "Error creating category.", error: error.message });
-//   }
-// };
-
-
 exports.createSchoolercategory = async (req, res) => {
   try {
-    const { name, price, groupSize, finalist, examSize } = req.body;
+    const { name, price, groupSize, examSize } = req.body;
     const createdBy = req.user?._id;
 
-    if (!name || !price || !groupSize || !finalist || !examSize) {
+    if (!name || !price || !groupSize || !examSize) {
       return res.status(400).json({
-        message: "All fields (name, price, groupSize, finalist, examSize) are required."
+        message: "All fields (name, price, groupSize, examSize) are required."
       });
     }
 
@@ -55,13 +23,14 @@ exports.createSchoolercategory = async (req, res) => {
       });
     }
 
-    // Create examType array
+    
     let examType = [];
     for (let i = 1; i <= examSize; i++) {
       examType.push({
         name: `Exam ${i}`,
         id: new mongoose.Types.ObjectId().toString(),
-        count: i
+        count: i,
+        groupSize: i === 1 ? groupSize : 0
       });
     }
 
@@ -69,7 +38,6 @@ exports.createSchoolercategory = async (req, res) => {
       name,
       price,
       groupSize,
-      finalist,
       examSize,
       examType,
       createdBy,
@@ -104,6 +72,22 @@ exports.getAllSchoolercategories = async (req, res) => {
 };
 
 
+// exports.getSchoolercategoryById = async (req, res) => {
+//   try {
+//     const category = await Schoolercategory.findById(req.params.id)
+//       .populate("createdBy", "firstName lastName email");
+
+//     if (!category) {
+//       return res.status(404).json({ message: "Category not found." });
+//     }
+
+//     res.status(200).json(category);
+//   } catch (error) {
+//     res.status(500).json({ message: "Error fetching category.", error });
+//   }
+// };
+
+
 exports.getSchoolercategoryById = async (req, res) => {
   try {
     const category = await Schoolercategory.findById(req.params.id)
@@ -113,11 +97,36 @@ exports.getSchoolercategoryById = async (req, res) => {
       return res.status(404).json({ message: "Category not found." });
     }
 
+  
+    let isUpdated = false;
+
+    for (let i = 0; i < category.examType.length - 1; i++) {
+      const currentParticipants = category.examType[i].finalist;
+
+      if (
+        currentParticipants !== undefined &&
+        currentParticipants !== null
+      ) {
+      
+        if (category.examType[i + 1].groupSize !== currentParticipants) {
+          category.examType[i + 1].groupSize = currentParticipants;
+          isUpdated = true;
+        }
+      }
+    }
+
+    if (isUpdated) {
+      await category.save();
+    }
+   
+
     res.status(200).json(category);
   } catch (error) {
     res.status(500).json({ message: "Error fetching category.", error });
   }
 };
+
+
 
 // exports.updateSchoolercategory = async (req, res) => {
 //   try {
@@ -141,26 +150,29 @@ exports.getSchoolercategoryById = async (req, res) => {
 //   }
 // };
 
+
+
+
 exports.updateSchoolercategory = async (req, res) => {
   try {
-    const { name, price, groupSize, finalist, examSize } = req.body;
+    const { name, price, groupSize, examSize } = req.body;
 
-    // category exists?
+  
     let category = await Schoolercategory.findById(req.params.id);
     if (!category) {
       return res.status(404).json({ message: "Category not found." });
     }
 
-    // Update simple fields
+    
     if (name) category.name = name;
     if (price) category.price = price;
     if (groupSize) category.groupSize = groupSize;
-    if (finalist) category.finalist = finalist;
+    
 
-    // Check examSize changed
+   
     if (examSize && examSize !== category.examSize) {
 
-      // Update examSize
+      
       category.examSize = examSize;
 
       // Regenerate examType
@@ -449,3 +461,71 @@ exports.deleteSchoolergroup = async (req, res) => {
     res.status(500).json({ message: "Error deleting group.", error });
   }
 };
+
+
+
+
+
+
+
+
+
+
+
+exports.updateParticipantsToExam = async (req, res) => {
+  try {
+    const examTypeId = req.params.id; 
+    const { finalist } = req.body;
+
+    if (!examTypeId) {
+      return res.status(400).json({
+        message: "examTypeId is required."
+      });
+    }
+
+    
+    if (finalist === undefined) {
+      return res.status(400).json({
+        message: "finalist is required to update."
+      });
+    }
+
+    if (isNaN(finalist) || finalist < 0) {
+      return res.status(400).json({
+        message: "finalist must be a valid number."
+      });
+    }
+
+    const result = await Schoolercategory.findOneAndUpdate(
+      { "examType.id": examTypeId },
+      {
+        $set: {
+          "examType.$.finalist": Number(finalist)
+        }
+      },
+      { new: true }
+    );
+
+    if (!result) {
+      return res.status(404).json({
+        message: "No category found for given examTypeId."
+      });
+    }
+
+    const updatedExam = result.examType.find(
+      (ex) => ex.id === examTypeId
+    );
+
+    return res.status(200).json({
+      message: "finalist updated successfully.",
+      examType: updatedExam
+    });
+
+  } catch (error) {
+    return res.status(500).json({
+      message: "Error updating finelist.",
+      error: error.message
+    });
+  }
+};
+

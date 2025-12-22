@@ -28,6 +28,9 @@ router.post("/schooler/calculateExamResult", auth, SchoolerexamController.calcul
 router.get("/schooler/Leaderboard/:id",auth, SchoolerexamController.Leaderboard);
 router.get("/schooler/topusers/:id", SchoolerexamController.topusers);
 router.get('/schooler/groupall', SchoolerexamController.getAllExamGroups);
+router.get('/schooler/prize-status', SchoolerexamController.getPrizeStatusTrue);
+router.post('/schooler/update-prize-status',auth, SchoolerexamController.updatePrizeStatusTrue);
+
 
 router.get('/schooler/SchoolerShipPrizes',auth, SchoolerexamController.schoolerShipPrizes);
 

@@ -1,4 +1,4 @@
-// server.js
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -10,15 +10,10 @@ const { Server } = require('socket.io');
 const moment = require('moment-timezone');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
-const cron = require('node-cron');
 
-// MODELS
 const User = require('./models/User');
 const Schoolerexam = require('./models/Schoolerexam');
-const MarkingSetting = require('./models/markingSetting');
-const ExamUserStatus = require('./models/ExamUserStatus');
 
-// ROUTES
 const authRoutes = require('./routes/authRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const learningRoutes = require('./routes/learningRoutes');
@@ -39,16 +34,13 @@ const classSeatRoutes = require('./routes/classSeatRoutes');
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// DB CONNECT
 connectDB();
 
-// MIDDLEWARE
 app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
-// ROUTES
 app.use('/api/auth', authRoutes);
 app.use('/api/v1', locationRoutes);
 app.use('/api/v1', learningRoutes);
@@ -66,21 +58,13 @@ app.use('/api/v1', userexamGroupRoutes);
 app.use('/api/v1', organizationSignRoutes);
 app.use('/api/v1', classSeatRoutes);
 
-// ------------------------------------------------------------------
-// SOCKET.IO SETUP
-// ------------------------------------------------------------------
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
 global.io = io;
 
-// In-memory store for exam start timestamps
-const examStartTimes = {};
 
-// ------------------------------
-// AUTH MIDDLEWARE FOR SOCKET
-// ------------------------------
 io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
   if (!token) return next(new Error('Authentication error: Token required'));
@@ -96,48 +80,12 @@ io.use(async (socket, next) => {
   }
 });
 
-// -------------------------------------------
-// HELPER: CHECK IF EXAM FULLY COMPLETED
-// -------------------------------------------
-async function isExamFullyCompleted(examId) {
-  const statuses = await ExamUserStatus.find({ examId }).lean();
-  return statuses.every(
-    (s) => s.statusManage === 'Completed' || s.statusManage === 'Not Eligible'
-  );
-}
 
-// -------------------------------------------
-// HELPER: FINAL RANK CALCULATION
-// -------------------------------------------
-async function calculateFinalRank(examId) {
-  const users = await ExamUserStatus.find({ examId }).sort({ totalMarks: -1 }).lean();
-  let rank = 1;
-  for (const u of users) {
-    await ExamUserStatus.updateOne({ _id: u._id }, { $set: { rank } });
-    rank++;
-  }
-}
+const examStartTimes = {};
 
-// ------------------------------
-// SOCKET EVENTS
-// ------------------------------
+
 io.on('connection', (socket) => {
   console.log(`✅ User connected: ${socket.user?.firstName || 'Unknown'} (${socket.id})`);
-
-  socket.selectedCategory = null;
-
-  socket.on('joinExamCategory', (data) => {
-    try {
-      const catId = data?.categoryId;
-      if (catId && mongoose.Types.ObjectId.isValid(catId)) {
-        socket.selectedCategory = catId.toString();
-      } else {
-        socket.selectedCategory = null;
-      }
-    } catch (err) {
-      socket.selectedCategory = null;
-    }
-  });
 
   socket.on('getExamTime', async (examId) => {
     try {
@@ -179,140 +127,13 @@ io.on('connection', (socket) => {
   });
 
   socket.on('disconnect', () => {
-    console.log(`❌ User disconnected: (${socket.id})`);
+    console.log(` User disconnected: (${socket.id})`);
   });
 });
 
 
-cron.schedule('*/1 * * * * *', async () => {
-  try {
-    const markingSetting = await MarkingSetting.findOne().lean();
-    const bufferTime = markingSetting?.bufferTime ? parseInt(markingSetting.bufferTime) : 0;
-
-    if (!global.io) return;
-
-
-    for (const [socketId, socket] of io.sockets.sockets) {
-      if (!socket.user) continue;
-
-      const filterQuery = { userId: socket.user._id };
-
-      if (socket.selectedCategory) {
-        try {
-          filterQuery['category._id'] = new mongoose.Types.ObjectId(socket.selectedCategory);
-        } catch (e) {}
-      }
-
-      const userExamStatuses = await ExamUserStatus.find(filterQuery)
-        .populate('examId', 'ScheduleTime ScheduleDate ExamTime publish examDate')
-        .sort({ 'examId.examDate': 1, 'examId.ScheduleTime': 1 })
-        .lean();
-
-      const userExams = [];
-      let hasFailed = false; 
-
-      for (const status of userExamStatuses) {
-        const exam = status.examId;
-        if (!exam || !exam.publish) continue;
-
-       
-        let statusManage = status.statusManage || 'Schedule';
-        let result = status.result;
-
-        const examDateTime = moment.tz(
-          `${moment(exam.examDate).format('YYYY-MM-DD')} ${exam.ScheduleTime}`,
-          'YYYY-MM-DD HH:mm:ss',
-          'Asia/Kolkata'
-        );
-
-        const ongoingStart = examDateTime.clone().add(bufferTime, 'minutes');
-        const ongoingEnd = ongoingStart.clone().add(exam.ExamTime || 0, 'minutes');
-        const now = moment().tz('Asia/Kolkata');
-
-         let computedStatus = statusManage;
-        if (now.isBefore(ongoingStart)) computedStatus = 'Schedule';
-        else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd)) computedStatus = 'Ongoing';
-        else if (now.isSameOrAfter(ongoingEnd)) computedStatus = 'Completed';
-
-        
-        if (hasFailed && (computedStatus === 'Schedule' || computedStatus === 'Ongoing')) {
-         
-          statusManage = 'Not Eligible';
-          result = null;
-          await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage, result } });
-        } else {
-         
-          if (statusManage !== computedStatus) {
-            statusManage = computedStatus;
-            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { statusManage } });
-          }
-       const userNeverAttempted =
-            (status.totalMarks === null || status.totalMarks === undefined || status.totalMarks === 0) &&
-            (!status.attemptedQuestions || status.attemptedQuestions === 0) &&
-            (status.haveStarted === false || status.haveStarted === undefined);
-
-          if (
-            statusManage === 'Completed' &&
-            (result === null || result === undefined) &&
-            userNeverAttempted
-          ) {
-            result = 'Not Attempt';
-            await ExamUserStatus.updateOne({ _id: status._id }, { $set: { result } });
-          }
-
-          
-          if (status.result === 'failed') {
-            hasFailed = true;
-          }
-        }
-
-        const examFullyCompleted = await isExamFullyCompleted(exam._id);
-
-        let examObj = {
-          examId: exam._id,
-          statusManage,
-          ScheduleTime: exam.ScheduleTime,
-          ScheduleDate: exam.ScheduleDate,
-          bufferTime,
-          updatedScheduleTime: ongoingStart.format('HH:mm:ss'),
-        };
-
-        if (statusManage === 'Schedule' || statusManage === 'Ongoing') {
-          examObj.result = null;
-          examObj.rank = null;
-        } else if (statusManage === 'Completed') {
-          
-          examObj.result = status.result != null ? status.result : result || null;
-
-          if (examFullyCompleted) {
-            examObj.rank = status.rank || null;
-
-            if (!status.rank) {
-              await calculateFinalRank(exam._id);
-              const updatedStatus = await ExamUserStatus.findById(status._id).lean();
-              examObj.rank = updatedStatus?.rank || null;
-            }
-          } else {
-            examObj.rank = null;
-          }
-        } else if (statusManage === 'Not Eligible') {
-          examObj.result = null;
-          examObj.rank = null;
-        }
-
-        userExams.push(examObj);
-      } // end for statuses
-
-      if (userExams.length) {
-        socket.emit('examStatusUpdate', userExams);
-      }
-    } // end for sockets
-  } catch (err) {
-    console.error('CRON ERROR:', err);
-  }
-});
-
-// --------------------------------------------------------------------
-// START SERVER
-// --------------------------------------------------------------------
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+
+
+
