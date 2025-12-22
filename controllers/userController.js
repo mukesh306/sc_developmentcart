@@ -1576,10 +1576,12 @@ exports.getCategoriesFromUsers = async (req, res) => {
 // };
 
 
+
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
-    let { className, stateId, cityId, categoryId,schoolershipstatus, page = 1, limit = 10, fields } = req.query;
+    let { className, stateId, cityId, categoryId,schoolershipstatus,status, page = 1, limit = 10, fields } = req.query;
 
     page = parseInt(page);
     limit = parseInt(limit);
@@ -1747,6 +1749,12 @@ exports.userforAdmin = async (req, res) => {
       );
     }
 
+     if (status) {
+      const statusArray = status.split(",").map(s => s.trim().toLowerCase());
+      finalUsers = finalUsers.filter(u =>
+        u.status && statusArray.includes(u.status.toLowerCase())
+      );
+    }
    
     if (fields) {
       const reqFields = fields.split(",").map(f => f.trim());
