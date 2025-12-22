@@ -1758,7 +1758,7 @@ exports.schoolerShipPrizes = async (req, res) => {
 
     for (const category of categories) {
 
-      // ✅ schoolerStatus ke base par check
+     
       const topUser = await CategoryTopUser.findOne({
         userId,
         schoolerStatus: category._id,
@@ -1770,16 +1770,16 @@ exports.schoolerShipPrizes = async (req, res) => {
       let status = null;
 
       if (topUser) {
-        // 🔹 status = false
+       
         examId = topUser.examId;
         percentage = topUser.percentage;
         finalScore = topUser.rank;
         status = false;
 
-        // ✅ ADD PRICE TO totalAmount
+        
         totalAmount += Number(category.price) || 0;
 
-        // 🔹 update ExamUserStatus
+        
        await ExamUserStatus.updateOne(
   { userId, examId },
   {
@@ -1804,7 +1804,7 @@ exports.schoolerShipPrizes = async (req, res) => {
 
 
       } else {
-        // 🔹 status = null
+       
         const lastExam = await Schoolerexam
           .findOne({ category: category._id })
           .sort({ createdAt: -1 });
@@ -1969,13 +1969,11 @@ exports.schoolerShipPrizes = async (req, res) => {
 // };
 
 
-
 exports.getPrizeStatusTrue = async (req, res) => {
   try {
     const { categoryId, classId } = req.query;
 
     const match = {
-      prizeStatus: false,
       rank: { $ne: null },
       result: { $ne: null },
       finalScore: { $ne: null }
@@ -2005,7 +2003,8 @@ exports.getPrizeStatusTrue = async (req, res) => {
       {
         $project: {
           _id: 0,
-          prizeStatus: 1,
+          examId: 1,
+          prizeStatus: 1,   
           className: 1,
           userId: 1,
           category: {
@@ -2022,56 +2021,10 @@ exports.getPrizeStatusTrue = async (req, res) => {
       select: "firstName middleName lastName mobileNumber email status"
     });
 
-    
     res.status(200).json({
       success: true,
       count: data.length,
       data: data || []
-    });
-
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({
-      success: false,
-      message: "Server error"
-    });
-  }
-};
-
-
-exports.updatePrizeStatusTrue = async (req, res) => {
-  try {
-    const { userId, categoryId } = req.body;
-
-    if (!userId || !categoryId) {
-      return res.status(400).json({
-        success: false,
-        message: "userId and categoryId are required"
-      });
-    }
-
-    const updatedData = await ExamUserStatus.findOneAndUpdate(
-      {
-        userId: new mongoose.Types.ObjectId(userId),
-        "category._id": new mongoose.Types.ObjectId(categoryId)
-      },
-      {
-        $set: { prizeStatus: true }
-      },
-      { new: true }
-    );
-
-    if (!updatedData) {
-      return res.status(404).json({
-        success: false,
-        message: "Record not found"
-      });
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "Prize status updated successfully",
-      // data: updatedData
     });
 
   } catch (error) {
@@ -2089,51 +2042,162 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 // exports.getPrizeStatusTrue = async (req, res) => {
 //   try {
 //     const { categoryId, classId } = req.query;
-//     const filter = { prizeStatus: true };
+
+//     const match = {
+//       prizeStatus: false,
+//       rank: { $ne: null },
+//       result: { $ne: null },
+//       finalScore: { $ne: null }
+//     };
+
 //     if (categoryId) {
-//       filter["category._id"] = categoryId;
+//       match["category._id"] = new mongoose.Types.ObjectId(categoryId);
 //     }
 
 //     if (classId) {
-//       filter["className._id"] = classId;
+//       match["className._id"] = new mongoose.Types.ObjectId(classId);
 //     }
 
-//     const data = await ExamUserStatus
-//       .find(
-//         filter,
-//         {
-//           category: 1,
+//     const data = await ExamUserStatus.aggregate([
+//       { $match: match },
+
+//       {
+//         $lookup: {
+//           from: "schoolercategories",
+//           localField: "category._id",
+//           foreignField: "_id",
+//           as: "categoryDetails"
+//         }
+//       },
+//       { $unwind: "$categoryDetails" },
+
+//       {
+//         $project: {
+//           _id: 0,
+//           prizeStatus: 1,
 //           className: 1,
 //           userId: 1,
-//           prizeStatus: 1,
-//           _id: 0
+//           category: {
+//             _id: "$categoryDetails._id",
+//             name: "$categoryDetails.name",
+//             price: "$categoryDetails.price"
+//           }
 //         }
-//       )
-//       .populate({
-//         path: "userId",
-//         select: "firstName middleName lastName"
-//       });
+//       }
+//     ]);
 
-//     if (!data || data.length === 0) {
+//     await ExamUserStatus.populate(data, {
+//       path: "userId",
+//       select: "firstName middleName lastName mobileNumber email status"
+//     });
+
+    
+//     res.status(200).json({
+//       success: true,
+//       count: data.length,
+//       data: data || []
+//     });
+
+//   } catch (error) {
+//     console.error(error);
+//     res.status(500).json({
+//       success: false,
+//       message: "Server error"
+//     });
+//   }
+// };
+
+
+exports.updatePrizeStatusTrue = async (req, res) => {
+  try {
+    const { userId, categoryId, examId } = req.body;
+
+    if (!userId || !categoryId || !examId) {
+      return res.status(400).json({
+        success: false,
+        message: "userId, categoryId and examId are required"
+      });
+    }
+
+    const updatedData = await ExamUserStatus.findOneAndUpdate(
+      {
+        userId: new mongoose.Types.ObjectId(userId),
+        examId: new mongoose.Types.ObjectId(examId),
+        "category._id": new mongoose.Types.ObjectId(categoryId),
+        prizeStatus: false   
+      },
+      {
+        $set: { prizeStatus: true }
+      },
+      { new: true }
+    );
+
+    if (!updatedData) {
+      return res.status(200).json({
+        success: true,
+        message: "Prize status already true or null, update not required"
+      });
+    }
+
+    res.status(200).json({
+      success: true,
+      message: "Prize status updated successfully"
+    });
+
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({
+      success: false,
+      message: "Server error"
+    });
+  }
+};
+
+
+
+
+// exports.updatePrizeStatusTrue = async (req, res) => {
+//   try {
+//     const { userId, categoryId } = req.body;
+
+//     if (!userId || !categoryId) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "userId and categoryId are required"
+//       });
+//     }
+
+//     const updatedData = await ExamUserStatus.findOneAndUpdate(
+//       {
+//         userId: new mongoose.Types.ObjectId(userId),
+//         "category._id": new mongoose.Types.ObjectId(categoryId)
+//       },
+//       {
+//         $set: { prizeStatus: true }
+//       },
+//       { new: true }
+//     );
+
+//     if (!updatedData) {
 //       return res.status(404).json({
 //         success: false,
-//         message: "No records found."
+//         message: "Record not found"
 //       });
 //     }
 
 //     res.status(200).json({
 //       success: true,
-//       count: data.length,
-//       data
+//       message: "Prize status updated successfully",
+     
 //     });
 
 //   } catch (error) {
-//     console.error("Error fetching prizeStatus true records:", error);
+//     console.error(error);
 //     res.status(500).json({
 //       success: false,
-//       message: "Server error",
-//       error: error.message
+//       message: "Server error"
 //     });
 //   }
 // };
+
 
