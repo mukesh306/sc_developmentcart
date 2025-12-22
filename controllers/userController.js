@@ -1579,7 +1579,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
-    let { className, stateId, cityId, categoryId, page = 1, limit = 10, fields } = req.query;
+    let { className, stateId, cityId, categoryId,schoolershipstatus, page = 1, limit = 10, fields } = req.query;
 
     page = parseInt(page);
     limit = parseInt(limit);
@@ -1737,6 +1737,13 @@ exports.userforAdmin = async (req, res) => {
       const categoriesArray = categoryId.split(",");
       finalUsers = finalUsers.filter(u => 
         u.category?._id && categoriesArray.includes(u.category._id.toString())
+      );
+    }
+
+ if (schoolershipstatus) {
+      const statusArray = schoolershipstatus.split(",").map(s => s.trim());
+      finalUsers = finalUsers.filter(u =>
+        statusArray.includes(u.schoolershipstatus)
       );
     }
 
