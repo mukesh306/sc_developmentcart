@@ -1887,17 +1887,19 @@ exports.schoolerShipPrizes = async (req, res) => {
         examId = topUser.examId;
         percentage = topUser.percentage;
         finalScore = topUser.rank;
-        status = false;
 
         totalAmount += Number(category.price) || 0;
 
-        
+       
         const existingPrize = await ExamUserStatus.findOne(
           { userId, examId },
           { prizeStatus: 1 }
         );
 
-       
+        
+        status = existingPrize?.prizeStatus === true ? true : false;
+
+        
         if (!existingPrize || existingPrize.prizeStatus !== true) {
           await ExamUserStatus.updateOne(
             { userId, examId },
@@ -1947,6 +1949,8 @@ exports.schoolerShipPrizes = async (req, res) => {
             { upsert: true }
           );
         }
+
+        status = null;
       }
 
       result.push({
@@ -1954,7 +1958,7 @@ exports.schoolerShipPrizes = async (req, res) => {
         categoryName: category.name,
         prize: category.price,
         examId,
-        status,
+        status,          
         percentage,
         finalScore,
       });
@@ -1976,6 +1980,7 @@ exports.schoolerShipPrizes = async (req, res) => {
     });
   }
 };
+
 
 
 exports.getPrizeStatusTrue = async (req, res) => {
