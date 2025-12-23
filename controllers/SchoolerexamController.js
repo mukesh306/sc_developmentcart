@@ -2217,7 +2217,6 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 //   }
 // };
 
-
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
@@ -2241,12 +2240,21 @@ exports.getExamsByAssignedGroup = async (req, res) => {
         },
       },
       { $unwind: "$category" },
-      { $unwind: "$category.examType" },
+
+      // 🔹 examType array ko unwind
+      {
+        $unwind: "$category.examType",
+      },
+
+      // 🔹 examType.id match
       {
         $match: {
-          $expr: { $eq: ["$examType", "$category.examType.id"] },
+          $expr: {
+            $eq: ["$examType", "$category.examType.id"],
+          },
         },
       },
+
       {
         $project: {
           examName: 1,
@@ -2255,10 +2263,12 @@ exports.getExamsByAssignedGroup = async (req, res) => {
           ExamTime: 1,
           passout: 1,
           publish: 1,
+
           category: {
             _id: "$category._id",
             name: "$category.name",
           },
+
           examType: {
             id: "$category.examType.id",
             name: "$category.examType.name",
@@ -2267,7 +2277,13 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       },
     ]);
 
-   
+    if (!exams.length) {
+      return res.status(404).json({
+        message: "No exams found for this group",
+        exams: [],
+      });
+    }
+
     res.status(200).json({
       message: "Exams fetched successfully",
       total: exams.length,
@@ -2275,10 +2291,8 @@ exports.getExamsByAssignedGroup = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching exams by group:", error);
-    res.status(500).json({
-      message: "Internal server error",
-      error,
-    });
+    res.status(500).json({ message: "Internal server error", error });
   }
 };
+
 
