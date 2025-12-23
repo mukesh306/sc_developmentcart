@@ -2217,7 +2217,6 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 //   }
 // };
 
-
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
@@ -2228,7 +2227,6 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       });
     }
 
-    // 🔹 bufferTime
     const markingSetting = await MarkingSetting.findOne({})
       .sort({ createdAt: -1 })
       .select("bufferTime")
@@ -2238,7 +2236,6 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       ? parseInt(markingSetting.bufferTime)
       : 0;
 
-    // 🔹 exams
     const exams = await Schoolerexam.find({
       assignedGroup: groupId,
     })
@@ -2268,17 +2265,19 @@ exports.getExamsByAssignedGroup = async (req, res) => {
         examTypeName = matchedType?.name || null;
       }
 
-     
       let ExamStatus = exam.publish ? "Scheduled" : "To Be Schedule";
 
-      
       if (
         exam.publish &&
         exam.ScheduleDate &&
         exam.ScheduleTime &&
         exam.ExamTime
       ) {
-        const scheduleDateTime = moment(exam.ScheduleDate)
+        // ✅ FIXED DATE PARSING
+        const scheduleDateTime = moment(
+          exam.ScheduleDate,
+          "DD-MM-YYYY"
+        )
           .tz("Asia/Kolkata")
           .set({
             hour: moment(exam.ScheduleTime, "HH:mm:ss").hour(),
@@ -2292,7 +2291,7 @@ exports.getExamsByAssignedGroup = async (req, res) => {
 
         const ongoingEnd = ongoingStart
           .clone()
-          .add(exam.ExamTime, "minutes");
+          .add(parseInt(exam.ExamTime), "minutes");
 
         if (now.isBefore(ongoingStart)) {
           ExamStatus = "Scheduled";
@@ -2326,7 +2325,7 @@ exports.getExamsByAssignedGroup = async (req, res) => {
         seat: exam.seat,
         publish: exam.publish,
 
-        ExamStatus, 
+        ExamStatus,
         bufferTime,
       };
     });
