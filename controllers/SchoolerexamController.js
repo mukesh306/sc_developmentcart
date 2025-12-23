@@ -693,6 +693,7 @@ exports.addQuestionsToExam = async (req, res) => {
 // };
 
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -2217,3 +2218,45 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 // };
 
 
+exports.getExamsByAssignedGroup = async (req, res) => {
+  try {
+    const { groupId } = req.query;
+
+    if (!groupId) {
+      return res.status(400).json({
+        message: "groupId is required",
+      });
+    }
+
+    const exams = await Schoolerexam.find({
+      assignedGroup: groupId,
+    })
+      .populate("category", "name")
+      .populate("className", "className")
+      .populate("examType", "name")
+      .populate("assignedGroup", "groupName")
+      .select(
+        "examName ScheduleDate ScheduleTime ExamTime Negativemark passout seat publish createdAt"
+      )
+      .lean();
+
+    if (!exams.length) {
+      return res.status(404).json({
+        message: "No exams found for this group",
+        exams: [],
+      });
+    }
+
+    res.status(200).json({
+      message: "Exams fetched successfully",
+      total: exams.length,
+      exams,
+    });
+  } catch (error) {
+    console.error("Error fetching exams by group:", error);
+    res.status(500).json({
+      message: "Internal server error",
+      error,
+    });
+  }
+};
