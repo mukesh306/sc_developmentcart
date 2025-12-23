@@ -472,8 +472,6 @@ exports.getGroupMembers = async (req, res) => {
 
     const memberIds = group.members.map(m => m._id);
 
-   
-
     const examStatuses = await ExamUserStatus.find({
       userId: { $in: memberIds },
       examId,

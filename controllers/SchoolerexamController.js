@@ -2217,6 +2217,7 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 //   }
 // };
 
+
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
@@ -2232,7 +2233,7 @@ exports.getExamsByAssignedGroup = async (req, res) => {
     })
       .populate("category", "name examType")
       .select(
-        "examName category examType ScheduleDate ScheduleTime ExamTime passout publish"
+        "examName category examType ScheduleDate ScheduleTime ExamTime seat passout publish"
       )
       .lean();
 
