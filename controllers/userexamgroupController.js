@@ -328,28 +328,24 @@ exports.deleteGroup = async (req, res) => {
 };
 
 
+
 // exports.getGroupMembers = async (req, res) => {
 //   try {
 //     const { groupId } = req.params;
-//     const { examId } = req.query; 
+//     const { examId } = req.query;
+
 //     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
-//       return res.status(400).json({
-//         message: "Valid groupId is required.",
-//       });
+//       return res.status(400).json({ message: "Valid groupId is required." });
 //     }
 
-    
 //     if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
-//       return res.status(400).json({
-//         message: "Valid examId is required.",
-//       });
+//       return res.status(400).json({ message: "Valid examId is required." });
 //     }
 
-  
 //     const examExists = await Schoolerexam.findOne({
 //       _id: examId,
 //       assignedGroup: groupId,
-//     }).select("_id");
+//     }).select("_id category");
 
 //     if (!examExists) {
 //       return res.status(200).json({
@@ -360,24 +356,83 @@ exports.deleteGroup = async (req, res) => {
 //       });
 //     }
 
-   
-//     const group = await UserExamGroup.findById(groupId)
-//       .populate("members", "firstName middleName lastName status schoolershipstatus email category _id");
+//     const group = await UserExamGroup.findById(groupId).populate(
+//       "members",
+//       "firstName middleName lastName status email category schoolershipstatus _id"
+//     );
 
 //     if (!group) {
-//       return res.status(404).json({
-//         message: "Group not found.",
-//       });
+//       return res.status(404).json({ message: "Group not found." });
 //     }
+
+//     const memberIds = group.members.map(m => m._id);
+
+//     const examStatuses = await ExamUserStatus.find({
+//       userId: { $in: memberIds },
+//       examId,
+//     })
+//       .select("userId result attemptStatus")
+//       .lean();
+
+//     const examStatusMap = {};
+//     examStatuses.forEach(es => {
+//       examStatusMap[es.userId.toString()] = es;
+//     });
+
+//     const finalistUsers = await CategoryTopUser.find({
+//       userId: { $in: memberIds },
+//     })
+//       .select("userId")
+//       .lean();
+
+//     const finalistMap = {};
+//     finalistUsers.forEach(f => {
+//       finalistMap[f.userId.toString()] = true;
+//     });
+
+   
 
 //     const membersWithExamData = [];
 
 //     for (const member of group.members) {
+//       let computedSchoolershipstatus = "NA";
 
-     
+//       if (member.status === "yes") {
+//         computedSchoolershipstatus = "Participant";
+
+//         const es = examStatusMap[member._id.toString()];
+
+//         if (
+//           es?.result === "failed" ||
+//           es?.attemptStatus === "Not Attempted"
+//         ) {
+//           computedSchoolershipstatus = "Eliminated";
+//         }
+
+//         if (finalistMap[member._id.toString()]) {
+//           computedSchoolershipstatus = "Finalist";
+//         }
+//       }
+
+    
+
+//       if (member.schoolershipstatus !== computedSchoolershipstatus) {
+//         await User.updateOne(
+//           { _id: member._id },
+//           {
+//             $set: {
+//               schoolershipstatus: computedSchoolershipstatus,
+//               category: member.category ?? null,
+//             },
+//           }
+//         );
+//       }
+
+      
+
 //       const results = await ExamResult.find({
 //         userId: member._id,
-//         examId: examId,
+//         examId,
 //       })
 //         .select("examId percentage Completiontime createdAt")
 //         .lean();
@@ -385,11 +440,9 @@ exports.deleteGroup = async (req, res) => {
 //       const examPercentage = [];
 
 //       for (const r of results) {
-
-       
-//         const status = await ExamUserStatus.findOne({
+//         const rankData = await ExamUserStatus.findOne({
 //           userId: member._id,
-//           examId: examId,
+//           examId,
 //         })
 //           .select("rank totalParticipants")
 //           .lean();
@@ -399,23 +452,22 @@ exports.deleteGroup = async (req, res) => {
 //           percentage: r.percentage,
 //           completionTime: r.Completiontime ?? null,
 //           createdAt: r.createdAt,
-//           rank: status?.rank ?? null,
-//           totalParticipants: status?.totalParticipants ?? null,
+//           rank: rankData?.rank ?? null,
+//           totalParticipants: rankData?.totalParticipants ?? null,
 //         });
 //       }
 
-//     membersWithExamData.push({
-//   _id: member._id,
-//   firstName: member.firstName,
-//   middleName: member.middleName,
-//   lastName: member.lastName,
-//   email: member.email,
-//   status: member.status,
-//   schoolershipstatus: member.schoolershipstatus,
-//   category: member.category,
-//   examPercentage,
-// });
-
+//       membersWithExamData.push({
+//         _id: member._id,
+//         firstName: member.firstName,
+//         middleName: member.middleName,
+//         lastName: member.lastName,
+//         email: member.email,
+//         status: member.status,
+//         category: member.category,
+//         schoolershipstatus: computedSchoolershipstatus,
+//         examPercentage,
+//       });
 //     }
 
 //     return res.status(200).json({
@@ -424,10 +476,9 @@ exports.deleteGroup = async (req, res) => {
 //       examId,
 //       members: membersWithExamData,
 //     });
-
 //   } catch (error) {
-//     console.error("Error fetching group members:", error);
-//     res.status(500).json({
+//     console.error("getGroupMembers Error:", error);
+//     return res.status(500).json({
 //       message: "Internal server error",
 //       error: error.message,
 //     });
@@ -495,8 +546,6 @@ exports.getGroupMembers = async (req, res) => {
       finalistMap[f.userId.toString()] = true;
     });
 
-   
-
     const membersWithExamData = [];
 
     for (const member of group.members) {
@@ -519,8 +568,7 @@ exports.getGroupMembers = async (req, res) => {
         }
       }
 
-    
-
+      
       if (member.schoolershipstatus !== computedSchoolershipstatus) {
         await User.updateOne(
           { _id: member._id },
@@ -534,33 +582,12 @@ exports.getGroupMembers = async (req, res) => {
       }
 
       
-
-      const results = await ExamResult.find({
+      const examResult = await ExamResult.findOne({
         userId: member._id,
         examId,
       })
-        .select("examId percentage Completiontime createdAt")
+        .select("percentage Completiontime")
         .lean();
-
-      const examPercentage = [];
-
-      for (const r of results) {
-        const rankData = await ExamUserStatus.findOne({
-          userId: member._id,
-          examId,
-        })
-          .select("rank totalParticipants")
-          .lean();
-
-        examPercentage.push({
-          examId: r.examId,
-          percentage: r.percentage,
-          completionTime: r.Completiontime ?? null,
-          createdAt: r.createdAt,
-          rank: rankData?.rank ?? null,
-          totalParticipants: rankData?.totalParticipants ?? null,
-        });
-      }
 
       membersWithExamData.push({
         _id: member._id,
@@ -571,7 +598,10 @@ exports.getGroupMembers = async (req, res) => {
         status: member.status,
         category: member.category,
         schoolershipstatus: computedSchoolershipstatus,
-        examPercentage,
+
+      
+        percentage: examResult?.percentage ?? null,
+        completionTime: examResult?.Completiontime ?? null,
       });
     }
 
@@ -589,7 +619,6 @@ exports.getGroupMembers = async (req, res) => {
     });
   }
 };
-
 
 
 exports.getAllActiveUsers = async (req, res) => {
