@@ -2230,8 +2230,9 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       assignedGroup: groupId,
     })
       .populate("category", "name") 
+      
       .select(
-        "examName ScheduleDate ScheduleTime ExamTime  passout  publish "
+        "examName examType ScheduleDate ScheduleTime ExamTime  passout  publish "
       )
       .lean();
 
