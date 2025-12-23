@@ -472,12 +472,18 @@ exports.getGroupMembers = async (req, res) => {
         });
       }
 
-      membersWithExamData.push({
-        _id: member._id,
-        firstName: member.firstName,
-        email: member.email,
-        examPercentage,
-      });
+    membersWithExamData.push({
+  _id: member._id,
+  firstName: member.firstName,
+  middleName: member.middleName,
+  lastName: member.lastName,
+  email: member.email,
+  status: member.status,
+  schoolershipstatus: member.schoolershipstatus,
+  category: member.category,
+  examPercentage,
+});
+
     }
 
     return res.status(200).json({
