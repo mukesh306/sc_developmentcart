@@ -2221,18 +2221,20 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
+
     if (!groupId) {
       return res.status(400).json({
         message: "groupId is required",
       });
     }
+
     const exams = await Schoolerexam.find({
       assignedGroup: groupId,
     })
-      .populate("category", "name") 
-      
+      .populate("category", "name")
+      .populate("examType", "examType") // 👈 full examType array
       .select(
-        "examName examType ScheduleDate ScheduleTime ExamTime  passout  publish "
+        "examName examType ScheduleDate ScheduleTime ExamTime passout publish"
       )
       .lean();
 
@@ -2243,10 +2245,27 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       });
     }
 
+    // 🔥 examType name map karo
+    const formattedExams = exams.map((exam) => {
+      let examTypeName = null;
+
+      if (exam.examType && exam.examType.examType?.length) {
+        const matchedType = exam.examType.examType.find(
+          (et) => et.id === exam.examType._id.toString()
+        );
+        examTypeName = matchedType?.name || null;
+      }
+
+      return {
+        ...exam,
+        examTypeName, // ✅ final output
+      };
+    });
+
     res.status(200).json({
       message: "Exams fetched successfully",
-      total: exams.length,
-      exams,
+      total: formattedExams.length,
+      exams: formattedExams,
     });
   } catch (error) {
     console.error("Error fetching exams by group:", error);
