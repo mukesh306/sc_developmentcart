@@ -2232,7 +2232,7 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       assignedGroup: groupId,
     })
       .populate("category", "name")
-      .populate("examType", "examType") // 👈 full examType array
+      .populate("examType", "examType") 
       .select(
         "examName examType ScheduleDate ScheduleTime ExamTime passout publish"
       )
@@ -2245,7 +2245,7 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       });
     }
 
-    // 🔥 examType name map karo
+    
     const formattedExams = exams.map((exam) => {
       let examTypeName = null;
 
@@ -2258,7 +2258,7 @@ exports.getExamsByAssignedGroup = async (req, res) => {
 
       return {
         ...exam,
-        examTypeName, // ✅ final output
+        examTypeName, 
       };
     });
 
