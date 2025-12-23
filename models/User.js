@@ -18,6 +18,17 @@ const userSchema = new mongoose.Schema({
   studentType: { type: String, enum: ['school', 'college', 'institute'] }, 
   instituteName: { type: String },
   className: { type: mongoose.Schema.Types.ObjectId, ref: 'Adminschool' },
+  
+schoolershipstatus: {
+  type: String,
+  enum: ["Participant", "Eliminated", "Finalist", "NA"],
+  default: "NA"
+},
+category: {
+  _id: { type: mongoose.Schema.Types.ObjectId, ref: "Schoolercategory" },
+  name: String
+},
+
   session: { type: String },
    startDate: {
     type: String, 
