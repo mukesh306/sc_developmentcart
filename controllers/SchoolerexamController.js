@@ -2218,6 +2218,8 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 // };
 
 
+
+
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
@@ -2228,6 +2230,14 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       });
     }
 
+   
+    const markingSetting = await MarkingSetting.findOne({})
+      .sort({ createdAt: -1 })
+      .select("bufferTime")
+      .lean();
+
+    const bufferTime = markingSetting?.bufferTime || 0;
+
     const exams = await Schoolerexam.find({
       assignedGroup: groupId,
     })
@@ -2237,12 +2247,11 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       )
       .lean();
 
-   
     if (!exams.length) {
       return res.status(200).json({
         message: "No exams found for this group",
         total: 0,
-        exams: [],
+        exams: [], 
       });
     }
 
@@ -2279,13 +2288,15 @@ exports.getExamsByAssignedGroup = async (req, res) => {
         seat: exam.seat,
         publish: exam.publish,
         ExamStatus,
+
+        bufferTime, 
       };
     });
 
     res.status(200).json({
       message: "Exams fetched successfully",
       total: formattedExams.length,
-      exams: formattedExams,
+      exams: formattedExams, 
     });
   } catch (error) {
     console.error("Error fetching exams by group:", error);
@@ -2295,4 +2306,85 @@ exports.getExamsByAssignedGroup = async (req, res) => {
     });
   }
 };
+
+
+
+
+// exports.getExamsByAssignedGroup = async (req, res) => {
+//   try {
+//     const { groupId } = req.query;
+
+//     if (!groupId) {
+//       return res.status(400).json({
+//         message: "groupId is required",
+//       });
+//     }
+
+//     const exams = await Schoolerexam.find({
+//       assignedGroup: groupId,
+//     })
+//       .populate("category", "name examType")
+//       .select(
+//         "examName category examType ScheduleDate ScheduleTime ExamTime seat passout publish"
+//       )
+//       .lean();
+
+   
+//     if (!exams.length) {
+//       return res.status(200).json({
+//         message: "No exams found for this group",
+//         total: 0,
+//         exams: [],
+//       });
+//     }
+
+//     const formattedExams = exams.map((exam) => {
+//       let examTypeName = null;
+
+//       if (exam.category?.examType?.length && exam.examType) {
+//         const matchedType = exam.category.examType.find(
+//           (et) => et._id.toString() === exam.examType.toString()
+//         );
+
+//         examTypeName = matchedType?.name || null;
+//       }
+
+//       const ExamStatus = exam.publish ? "scheduled" : "to be scheduled";
+
+//       return {
+//         _id: exam._id,
+//         examName: exam.examName,
+
+//         category: {
+//           _id: exam.category._id,
+//           name: exam.category.name,
+//         },
+
+//         examTypeId: exam.examType,
+//         examTypeName,
+
+//         ScheduleDate: exam.ScheduleDate,
+//         ScheduleTime: exam.ScheduleTime,
+//         ExamTime: exam.ExamTime,
+
+//         passout: exam.passout,
+//         seat: exam.seat,
+//         publish: exam.publish,
+//         ExamStatus,
+//       };
+//     });
+
+//     res.status(200).json({
+//       message: "Exams fetched successfully",
+//       total: formattedExams.length,
+//       exams: formattedExams,
+//     });
+//   } catch (error) {
+//     console.error("Error fetching exams by group:", error);
+//     res.status(500).json({
+//       message: "Internal server error",
+//       error,
+//     });
+//   }
+// };
 
