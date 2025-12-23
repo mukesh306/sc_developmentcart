@@ -2217,22 +2217,19 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 //   }
 // };
 
-
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
 
     if (!groupId) {
-      return res.status(400).json({
-        message: "groupId is required",
-      });
+      return res.status(400).json({ message: "groupId is required" });
     }
 
     const exams = await Schoolerexam.find({
       assignedGroup: groupId,
     })
       .populate("category", "name")
-      .populate("examType", "examType") 
+      .populate("examType", "examType") // category ke examType array ke liye
       .select(
         "examName examType ScheduleDate ScheduleTime ExamTime passout publish"
       )
@@ -2245,20 +2242,20 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       });
     }
 
-    
     const formattedExams = exams.map((exam) => {
       let examTypeName = null;
 
       if (exam.examType && exam.examType.examType?.length) {
         const matchedType = exam.examType.examType.find(
-          (et) => et.id === exam.examType._id.toString()
+          (et) => et._id.toString() === exam.examType._id.toString()
         );
+
         examTypeName = matchedType?.name || null;
       }
 
       return {
         ...exam,
-        examTypeName, 
+        examTypeName,
       };
     });
 
