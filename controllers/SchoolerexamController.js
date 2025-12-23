@@ -2218,7 +2218,6 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 // };
 
 
-
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
@@ -2232,9 +2231,9 @@ exports.getExamsByAssignedGroup = async (req, res) => {
     const exams = await Schoolerexam.find({
       assignedGroup: groupId,
     })
-      .populate("category", "name examType") // ✅ ONLY THIS
+      .populate("category", "name examType")
       .select(
-        "examName examType ScheduleDate ScheduleTime ExamTime passout publish"
+        "examName category examType ScheduleDate ScheduleTime ExamTime passout publish"
       )
       .lean();
 
@@ -2259,8 +2258,15 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       return {
         _id: exam._id,
         examName: exam.examName,
-        category: exam.category,
-        examTypeName, // ✅ NOW IT WILL COME
+
+        category: {
+          _id: exam.category._id,
+          name: exam.category.name,
+        },
+
+        examTypeId: exam.examType, // ✅ Schoolerexam me save wali ID
+        examTypeName,              // ✅ name from category.examType[]
+
         ScheduleDate: exam.ScheduleDate,
         ScheduleTime: exam.ScheduleTime,
         ExamTime: exam.ExamTime,
