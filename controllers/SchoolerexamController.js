@@ -2217,7 +2217,6 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 //   }
 // };
 
-
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
@@ -2237,9 +2236,11 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       )
       .lean();
 
+   
     if (!exams.length) {
-      return res.status(404).json({
+      return res.status(200).json({
         message: "No exams found for this group",
+       
         exams: [],
       });
     }
@@ -2255,6 +2256,8 @@ exports.getExamsByAssignedGroup = async (req, res) => {
         examTypeName = matchedType?.name || null;
       }
 
+      const ExamStatus = exam.publish ? "scheduled" : "to be scheduled";
+
       return {
         _id: exam._id,
         examName: exam.examName,
@@ -2264,20 +2267,22 @@ exports.getExamsByAssignedGroup = async (req, res) => {
           name: exam.category.name,
         },
 
-        examTypeId: exam.examType, // ✅ Schoolerexam me save wali ID
-        examTypeName,              // ✅ name from category.examType[]
+        examTypeId: exam.examType,
+        examTypeName,
 
         ScheduleDate: exam.ScheduleDate,
         ScheduleTime: exam.ScheduleTime,
         ExamTime: exam.ExamTime,
+
         passout: exam.passout,
         publish: exam.publish,
+        ExamStatus,
       };
     });
 
     res.status(200).json({
       message: "Exams fetched successfully",
-      total: formattedExams.length,
+    
       exams: formattedExams,
     });
   } catch (error) {
