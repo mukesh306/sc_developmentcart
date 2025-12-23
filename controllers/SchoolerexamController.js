@@ -2221,64 +2221,30 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
-
     if (!groupId) {
-      return res.status(400).json({ message: "groupId is required" });
+      return res.status(400).json({
+        message: "groupId is required",
+      });
+    }
+    const exams = await Schoolerexam.find({
+      assignedGroup: groupId,
+    })
+      .populate("category", "name") 
+      
+      .select(
+        "examName examType ScheduleDate ScheduleTime ExamTime  passout  publish "
+      )
+      .lean();
+
+    if (!exams.length) {
+      return res.status(404).json({
+        message: "No exams found for this group",
+        exams: [],
+      });
     }
 
-    const exams = await Schoolerexam.aggregate([
-      {
-        $match: {
-          assignedGroup: {
-            $in: [new mongoose.Types.ObjectId(groupId)],
-          },
-        },
-      },
-      {
-        $lookup: {
-          from: "schoolercategories",
-          localField: "category",
-          foreignField: "_id",
-          as: "category",
-        },
-      },
-      { $unwind: "$category" },
-
-      {
-        $unwind: "$category.examType",
-      },
-      {
-        $match: {
-          $expr: {
-            $eq: ["$examType", "$category.examType.id"],
-          },
-        },
-      },
-      {
-        $project: {
-          examName: 1,
-          ScheduleDate: 1,
-          ScheduleTime: 1,
-          ExamTime: 1,
-          passout: 1,
-          publish: 1,
-          category: {
-            _id: "$category._id",
-            name: "$category.name",
-          },
-          examType: {
-            id: "$category.examType.id",
-            name: "$category.examType.name",
-          },
-        },
-      },
-    ]);
-
-    // ✅ Ab agar exam na mile to bhi blank array hi jayega
-    return res.status(200).json({
-      message: exams.length
-        ? "Exams fetched successfully"
-        : "No exams found for this group",
+    res.status(200).json({
+      message: "Exams fetched successfully",
       total: exams.length,
       exams,
     });
@@ -2290,6 +2256,3 @@ exports.getExamsByAssignedGroup = async (req, res) => {
     });
   }
 };
-
-
-
