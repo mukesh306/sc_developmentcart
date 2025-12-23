@@ -2221,22 +2221,17 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
-
     if (!groupId) {
       return res.status(400).json({
         message: "groupId is required",
       });
     }
-
     const exams = await Schoolerexam.find({
       assignedGroup: groupId,
     })
-      .populate("category", "name")
-      .populate("className", "className")
-      .populate("examType", "name")
-      .populate("assignedGroup", "groupName")
+      .populate("category", "name") 
       .select(
-        "examName ScheduleDate ScheduleTime ExamTime Negativemark passout seat publish createdAt"
+        "examName ScheduleDate ScheduleTime ExamTime  passout  publish "
       )
       .lean();
 
