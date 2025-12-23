@@ -2240,7 +2240,7 @@ exports.getExamsByAssignedGroup = async (req, res) => {
     if (!exams.length) {
       return res.status(200).json({
         message: "No exams found for this group",
-       
+        total: 0,
         exams: [],
       });
     }
@@ -2282,7 +2282,7 @@ exports.getExamsByAssignedGroup = async (req, res) => {
 
     res.status(200).json({
       message: "Exams fetched successfully",
-    
+      total: formattedExams.length,
       exams: formattedExams,
     });
   } catch (error) {
