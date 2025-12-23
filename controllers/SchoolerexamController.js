@@ -2218,8 +2218,6 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 // };
 
 
-
-
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
@@ -2230,14 +2228,17 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       });
     }
 
-   
+    // 🔹 bufferTime
     const markingSetting = await MarkingSetting.findOne({})
       .sort({ createdAt: -1 })
       .select("bufferTime")
       .lean();
 
-    const bufferTime = markingSetting?.bufferTime || 0;
+    const bufferTime = markingSetting?.bufferTime
+      ? parseInt(markingSetting.bufferTime)
+      : 0;
 
+    // 🔹 exams
     const exams = await Schoolerexam.find({
       assignedGroup: groupId,
     })
@@ -2251,9 +2252,11 @@ exports.getExamsByAssignedGroup = async (req, res) => {
       return res.status(200).json({
         message: "No exams found for this group",
         total: 0,
-        exams: [], 
+        exams: [],
       });
     }
+
+    const now = moment().tz("Asia/Kolkata");
 
     const formattedExams = exams.map((exam) => {
       let examTypeName = null;
@@ -2262,11 +2265,46 @@ exports.getExamsByAssignedGroup = async (req, res) => {
         const matchedType = exam.category.examType.find(
           (et) => et._id.toString() === exam.examType.toString()
         );
-
         examTypeName = matchedType?.name || null;
       }
 
-      const ExamStatus = exam.publish ? "scheduled" : "to be scheduled";
+     
+      let ExamStatus = exam.publish ? "Scheduled" : "To Be Schedule";
+
+      
+      if (
+        exam.publish &&
+        exam.ScheduleDate &&
+        exam.ScheduleTime &&
+        exam.ExamTime
+      ) {
+        const scheduleDateTime = moment(exam.ScheduleDate)
+          .tz("Asia/Kolkata")
+          .set({
+            hour: moment(exam.ScheduleTime, "HH:mm:ss").hour(),
+            minute: moment(exam.ScheduleTime, "HH:mm:ss").minute(),
+            second: moment(exam.ScheduleTime, "HH:mm:ss").second(),
+          });
+
+        const ongoingStart = scheduleDateTime
+          .clone()
+          .add(bufferTime, "minutes");
+
+        const ongoingEnd = ongoingStart
+          .clone()
+          .add(exam.ExamTime, "minutes");
+
+        if (now.isBefore(ongoingStart)) {
+          ExamStatus = "Scheduled";
+        } else if (
+          now.isSameOrAfter(ongoingStart) &&
+          now.isBefore(ongoingEnd)
+        ) {
+          ExamStatus = "Ongoing";
+        } else if (now.isSameOrAfter(ongoingEnd)) {
+          ExamStatus = "Completed";
+        }
+      }
 
       return {
         _id: exam._id,
@@ -2287,27 +2325,25 @@ exports.getExamsByAssignedGroup = async (req, res) => {
         passout: exam.passout,
         seat: exam.seat,
         publish: exam.publish,
-        ExamStatus,
 
-        bufferTime, 
+        ExamStatus, 
+        bufferTime,
       };
     });
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Exams fetched successfully",
       total: formattedExams.length,
-      exams: formattedExams, 
+      exams: formattedExams,
     });
   } catch (error) {
     console.error("Error fetching exams by group:", error);
-    res.status(500).json({
+    return res.status(500).json({
       message: "Internal server error",
-      error,
+      error: error.message,
     });
   }
 };
-
-
 
 
 // exports.getExamsByAssignedGroup = async (req, res) => {
@@ -2320,6 +2356,14 @@ exports.getExamsByAssignedGroup = async (req, res) => {
 //       });
 //     }
 
+   
+//     const markingSetting = await MarkingSetting.findOne({})
+//       .sort({ createdAt: -1 })
+//       .select("bufferTime")
+//       .lean();
+
+//     const bufferTime = markingSetting?.bufferTime || 0;
+
 //     const exams = await Schoolerexam.find({
 //       assignedGroup: groupId,
 //     })
@@ -2329,12 +2373,11 @@ exports.getExamsByAssignedGroup = async (req, res) => {
 //       )
 //       .lean();
 
-   
 //     if (!exams.length) {
 //       return res.status(200).json({
 //         message: "No exams found for this group",
 //         total: 0,
-//         exams: [],
+//         exams: [], 
 //       });
 //     }
 
@@ -2371,13 +2414,15 @@ exports.getExamsByAssignedGroup = async (req, res) => {
 //         seat: exam.seat,
 //         publish: exam.publish,
 //         ExamStatus,
+
+//         bufferTime, 
 //       };
 //     });
 
 //     res.status(200).json({
 //       message: "Exams fetched successfully",
 //       total: formattedExams.length,
-//       exams: formattedExams,
+//       exams: formattedExams, 
 //     });
 //   } catch (error) {
 //     console.error("Error fetching exams by group:", error);
@@ -2387,4 +2432,6 @@ exports.getExamsByAssignedGroup = async (req, res) => {
 //     });
 //   }
 // };
+
+
 
