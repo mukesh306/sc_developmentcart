@@ -430,7 +430,7 @@ exports.getGroupMembers = async (req, res) => {
 
    
     const group = await UserExamGroup.findById(groupId)
-      .populate("members", "firstName middleName lastName  status schoolershipstatus email category _id");
+      .populate("members", "firstName middleName lastName status schoolershipstatus email category _id");
 
     if (!group) {
       return res.status(404).json({
