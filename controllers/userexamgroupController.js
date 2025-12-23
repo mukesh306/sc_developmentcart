@@ -330,6 +330,7 @@ exports.deleteGroup = async (req, res) => {
 
 
 
+
 // exports.getGroupMembers = async (req, res) => {
 //   try {
 //     const { groupId } = req.params;
@@ -338,7 +339,6 @@ exports.deleteGroup = async (req, res) => {
 //       return res.status(400).json({ message: "Valid groupId is required." });
 //     }
 
-    
 //     const group = await UserExamGroup.findById(groupId)
 //       .populate("members", "firstName email _id");
 
@@ -349,23 +349,34 @@ exports.deleteGroup = async (req, res) => {
 //     const membersWithExamData = [];
 
 //     for (const member of group.members) {
-      
+    
 //       const results = await ExamResult.find({ userId: member._id })
-//         .select("examId percentage result createdAt");
+//         .select("examId percentage Completiontime createdAt")
+//         .lean();
 
-     
-//       const examPercentage = results.map(r => ({
-//         examId: r.examId,
-//         percentage: r.percentage,
-//         result: r.result,
-//         createdAt: r.createdAt
-//       }));
+//       const examPercentage = [];
+//       for (const r of results) {       
+//         const status = await ExamUserStatus.findOne({
+//           userId: member._id,
+//           examId: r.examId
+//         })
+//         .select("rank totalParticipants")
+//         .lean();
+//         examPercentage.push({
+//           examId: r.examId,
+//           percentage: r.percentage,
+//           completionTime: r.Completiontime ?? null,
+//           createdAt: r.createdAt,
+//           rank: status?.rank ?? null,
+//           totalParticipants: status?.totalParticipants ?? null,
+//         });
+//       }
 
 //       membersWithExamData.push({
 //         _id: member._id,
 //         firstName: member.firstName,
 //         email: member.email,
-//         examPercentage 
+//         examPercentage
 //       });
 //     }
 
@@ -384,42 +395,71 @@ exports.deleteGroup = async (req, res) => {
 //   }
 // };
 
-
 exports.getGroupMembers = async (req, res) => {
   try {
     const { groupId } = req.params;
-
+    const { examId } = req.query; 
     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
-      return res.status(400).json({ message: "Valid groupId is required." });
+      return res.status(400).json({
+        message: "Valid groupId is required.",
+      });
     }
 
+    
+    if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({
+        message: "Valid examId is required.",
+      });
+    }
+
+  
+    const examExists = await Schoolerexam.findOne({
+      _id: examId,
+      assignedGroup: groupId,
+    }).select("_id");
+
+    if (!examExists) {
+      return res.status(200).json({
+        message: "No data found for this group and exam.",
+        groupId,
+        examId,
+        members: [],
+      });
+    }
+
+   
     const group = await UserExamGroup.findById(groupId)
       .populate("members", "firstName email _id");
 
     if (!group) {
-      return res.status(404).json({ message: "Group not found." });
+      return res.status(404).json({
+        message: "Group not found.",
+      });
     }
 
     const membersWithExamData = [];
 
     for (const member of group.members) {
 
-      // Fetch exam results
-      const results = await ExamResult.find({ userId: member._id })
+     
+      const results = await ExamResult.find({
+        userId: member._id,
+        examId: examId,
+      })
         .select("examId percentage Completiontime createdAt")
         .lean();
 
       const examPercentage = [];
 
       for (const r of results) {
-        
-        // 👇 Fetch rank from ExamUserStatus
+
+       
         const status = await ExamUserStatus.findOne({
           userId: member._id,
-          examId: r.examId
+          examId: examId,
         })
-        .select("rank totalParticipants")
-        .lean();
+          .select("rank totalParticipants")
+          .lean();
 
         examPercentage.push({
           examId: r.examId,
@@ -435,13 +475,14 @@ exports.getGroupMembers = async (req, res) => {
         _id: member._id,
         firstName: member.firstName,
         email: member.email,
-        examPercentage
+        examPercentage,
       });
     }
 
     return res.status(200).json({
       message: "Group members fetched successfully.",
-      groupId: group._id,
+      groupId,
+      examId,
       members: membersWithExamData,
     });
 
