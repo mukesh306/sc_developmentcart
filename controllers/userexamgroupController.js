@@ -395,6 +395,7 @@ exports.deleteGroup = async (req, res) => {
 //   }
 // };
 
+
 exports.getGroupMembers = async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -429,7 +430,7 @@ exports.getGroupMembers = async (req, res) => {
 
    
     const group = await UserExamGroup.findById(groupId)
-      .populate("members", "firstName email _id");
+      .populate("members", "firstName middleName lastName  status schoolershipstatus email category _id");
 
     if (!group) {
       return res.status(404).json({
