@@ -2276,6 +2276,7 @@ exports.getExamsByAssignedGroup = async (req, res) => {
         ExamTime: exam.ExamTime,
 
         passout: exam.passout,
+        seat: exam.seat,
         publish: exam.publish,
         ExamStatus,
       };
