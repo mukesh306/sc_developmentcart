@@ -390,8 +390,6 @@ exports.deleteGroup = async (req, res) => {
 //       finalistMap[f.userId.toString()] = true;
 //     });
 
-   
-
 //     const membersWithExamData = [];
 
 //     for (const member of group.members) {
@@ -414,8 +412,7 @@ exports.deleteGroup = async (req, res) => {
 //         }
 //       }
 
-    
-
+      
 //       if (member.schoolershipstatus !== computedSchoolershipstatus) {
 //         await User.updateOne(
 //           { _id: member._id },
@@ -429,33 +426,12 @@ exports.deleteGroup = async (req, res) => {
 //       }
 
       
-
-//       const results = await ExamResult.find({
+//       const examResult = await ExamResult.findOne({
 //         userId: member._id,
 //         examId,
 //       })
-//         .select("examId percentage Completiontime createdAt")
+//         .select("percentage Completiontime")
 //         .lean();
-
-//       const examPercentage = [];
-
-//       for (const r of results) {
-//         const rankData = await ExamUserStatus.findOne({
-//           userId: member._id,
-//           examId,
-//         })
-//           .select("rank totalParticipants")
-//           .lean();
-
-//         examPercentage.push({
-//           examId: r.examId,
-//           percentage: r.percentage,
-//           completionTime: r.Completiontime ?? null,
-//           createdAt: r.createdAt,
-//           rank: rankData?.rank ?? null,
-//           totalParticipants: rankData?.totalParticipants ?? null,
-//         });
-//       }
 
 //       membersWithExamData.push({
 //         _id: member._id,
@@ -466,7 +442,10 @@ exports.deleteGroup = async (req, res) => {
 //         status: member.status,
 //         category: member.category,
 //         schoolershipstatus: computedSchoolershipstatus,
-//         examPercentage,
+
+      
+//         percentage: examResult?.percentage ?? null,
+//         completionTime: examResult?.Completiontime ?? null,
 //       });
 //     }
 
@@ -498,12 +477,13 @@ exports.getGroupMembers = async (req, res) => {
       return res.status(400).json({ message: "Valid examId is required." });
     }
 
-    const examExists = await Schoolerexam.findOne({
+    // 🔹 Check exam exists in group
+    const currentExam = await Schoolerexam.findOne({
       _id: examId,
       assignedGroup: groupId,
-    }).select("_id category");
+    }).select("_id createdAt category");
 
-    if (!examExists) {
+    if (!currentExam) {
       return res.status(200).json({
         message: "No data found for this group and exam.",
         groupId,
@@ -512,6 +492,32 @@ exports.getGroupMembers = async (req, res) => {
       });
     }
 
+    // 🔹 Get previous exams of same group
+    const previousExams = await Schoolerexam.find({
+      assignedGroup: groupId,
+      createdAt: { $lt: currentExam.createdAt },
+    }).select("_id");
+
+    const previousExamIds = previousExams.map(e => e._id);
+
+    // 🔹 Get users eliminated in previous exams
+    let eliminatedUserSet = new Set();
+
+    if (previousExamIds.length > 0) {
+      const eliminatedUsers = await ExamUserStatus.find({
+        examId: { $in: previousExamIds },
+        $or: [
+          { result: "failed" },
+          { attemptStatus: "Not Attempted" },
+        ],
+      }).select("userId").lean();
+
+      eliminatedUsers.forEach(e => {
+        eliminatedUserSet.add(e.userId.toString());
+      });
+    }
+
+    // 🔹 Get group with members
     const group = await UserExamGroup.findById(groupId).populate(
       "members",
       "firstName middleName lastName status email category schoolershipstatus _id"
@@ -523,6 +529,7 @@ exports.getGroupMembers = async (req, res) => {
 
     const memberIds = group.members.map(m => m._id);
 
+    // 🔹 Current exam status
     const examStatuses = await ExamUserStatus.find({
       userId: { $in: memberIds },
       examId,
@@ -535,6 +542,7 @@ exports.getGroupMembers = async (req, res) => {
       examStatusMap[es.userId.toString()] = es;
     });
 
+    // 🔹 Finalist users
     const finalistUsers = await CategoryTopUser.find({
       userId: { $in: memberIds },
     })
@@ -549,6 +557,12 @@ exports.getGroupMembers = async (req, res) => {
     const membersWithExamData = [];
 
     for (const member of group.members) {
+
+      // ❌ IMPORTANT: skip if eliminated in ANY previous exam
+      if (eliminatedUserSet.has(member._id.toString())) {
+        continue;
+      }
+
       let computedSchoolershipstatus = "NA";
 
       if (member.status === "yes") {
@@ -568,7 +582,7 @@ exports.getGroupMembers = async (req, res) => {
         }
       }
 
-      
+      // 🔹 Update user only if changed
       if (member.schoolershipstatus !== computedSchoolershipstatus) {
         await User.updateOne(
           { _id: member._id },
@@ -581,7 +595,7 @@ exports.getGroupMembers = async (req, res) => {
         );
       }
 
-      
+      // 🔹 Exam result
       const examResult = await ExamResult.findOne({
         userId: member._id,
         examId,
@@ -598,8 +612,6 @@ exports.getGroupMembers = async (req, res) => {
         status: member.status,
         category: member.category,
         schoolershipstatus: computedSchoolershipstatus,
-
-      
         percentage: examResult?.percentage ?? null,
         completionTime: examResult?.Completiontime ?? null,
       });

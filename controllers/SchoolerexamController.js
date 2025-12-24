@@ -2217,6 +2217,7 @@ exports.updatePrizeStatusTrue = async (req, res) => {
 //   }
 // };
 
+
 exports.getExamsByAssignedGroup = async (req, res) => {
   try {
     const { groupId } = req.query;
