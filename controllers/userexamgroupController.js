@@ -446,7 +446,6 @@ exports.getGroupMembers = async (req, res) => {
     const membersWithExamData = [];
 
     for (const member of group.members) {
-      // ❌ Skip previously eliminated users
       if (eliminatedUserSet.has(member._id.toString())) continue;
 
       const es = examStatusMap[member._id.toString()];
@@ -466,15 +465,20 @@ exports.getGroupMembers = async (req, res) => {
       if (member.status === "yes") {
         computedSchoolershipstatus = "Participant";
 
-        // ❌ Failed users
+        // ❌ Failed
         if (isResultStarted && es?.result === "failed") {
           computedSchoolershipstatus = "Eliminated";
         }
 
-        // ❌ Result declared + NOT ATTEMPTED users only
+        // ❌ NEW CONDITION: Not Attempted → Eliminated
+        if (isResultStarted && es?.attemptStatus === "Not Attempted") {
+          computedSchoolershipstatus = "Eliminated";
+        }
+
+        // ❌ Result declared + NOT ATTEMPTED (no percentage)
         if (
           isResultStarted &&
-          !hasAttempted &&                 // ⭐ FIX
+          !hasAttempted &&
           computedSchoolershipstatus === "Participant" &&
           rankDeclared &&
           es?.rank == null
@@ -482,13 +486,13 @@ exports.getGroupMembers = async (req, res) => {
           computedSchoolershipstatus = "Eliminated";
         }
 
-        // ✅ Finalist override (highest priority)
+        // ✅ Finalist override
         if (finalistMap[member._id.toString()]) {
           computedSchoolershipstatus = "Finalist";
         }
       }
 
-      /* ---------------- DB UPDATE ONLY IF CHANGED ---------------- */
+      /* ---------------- UPDATE DB ONLY IF CHANGED ---------------- */
 
       if (member.schoolershipstatus !== computedSchoolershipstatus) {
         await User.updateOne(
@@ -532,6 +536,9 @@ exports.getGroupMembers = async (req, res) => {
     });
   }
 };
+
+
+
 
 
 
