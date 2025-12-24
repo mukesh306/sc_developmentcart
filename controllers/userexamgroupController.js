@@ -327,7 +327,6 @@ exports.deleteGroup = async (req, res) => {
   }
 };
 
-
 exports.getGroupMembers = async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -355,8 +354,7 @@ exports.getGroupMembers = async (req, res) => {
       });
     }
 
-    /* ---------------- PREVIOUS EXAMS LOGIC (UNCHANGED) ---------------- */
-
+   
     const previousExams = await Schoolerexam.find({
       assignedGroup: groupId,
       createdAt: { $lt: currentExam.createdAt },
@@ -391,8 +389,7 @@ exports.getGroupMembers = async (req, res) => {
       );
     }
 
-    /* ---------------- GROUP MEMBERS ---------------- */
-
+    
     const group = await UserExamGroup.findById(groupId).populate(
       "members",
       "firstName middleName lastName status email category schoolershipstatus _id"
@@ -404,8 +401,7 @@ exports.getGroupMembers = async (req, res) => {
 
     const memberIds = group.members.map(m => m._id);
 
-    /* ---------------- EXAM STATUS ---------------- */
-
+    
     const examStatuses = await ExamUserStatus.find({
       userId: { $in: memberIds },
       examId,
@@ -418,93 +414,28 @@ exports.getGroupMembers = async (req, res) => {
       examStatusMap[es.userId.toString()] = es;
     });
 
-    const rankDeclared = examStatuses.some(es => es.rank !== null);
-
-    /* ---------------- FINALIST ---------------- */
-
-    const finalistUsers = await CategoryTopUser.find({
+   
+    const examResults = await ExamResult.find({
       userId: { $in: memberIds },
+      examId,
     })
-      .select("userId")
+      .select("userId percentage Completiontime")
       .lean();
 
-    const finalistMap = {};
-    finalistUsers.forEach(
-      f => (finalistMap[f.userId.toString()] = true)
-    );
-
-    /* ---------------- RESULT START CHECK ---------------- */
-
-    const isResultStarted = await ExamResult.exists({
-      examId,
-      percentage: { $ne: null },
-      Completiontime: { $ne: null },
+    const examResultMap = {};
+    examResults.forEach(er => {
+      examResultMap[er.userId.toString()] = er;
     });
 
-    /* ---------------- FINAL RESPONSE BUILD ---------------- */
-
+   
     const membersWithExamData = [];
 
     for (const member of group.members) {
+      
       if (eliminatedUserSet.has(member._id.toString())) continue;
 
       const es = examStatusMap[member._id.toString()];
-      let computedSchoolershipstatus = "NA";
-
-      const examResult = await ExamResult.findOne({
-        userId: member._id,
-        examId,
-      })
-        .select("percentage Completiontime")
-        .lean();
-
-      const hasAttempted =
-        examResult?.percentage !== null &&
-        examResult?.Completiontime !== null;
-
-      if (member.status === "yes") {
-        computedSchoolershipstatus = "Participant";
-
-        // ❌ Failed
-        if (isResultStarted && es?.result === "failed") {
-          computedSchoolershipstatus = "Eliminated";
-        }
-
-        // ❌ NEW CONDITION: Not Attempted → Eliminated
-        if (isResultStarted && es?.attemptStatus === "Not Attempted") {
-          computedSchoolershipstatus = "Eliminated";
-        }
-
-        // ❌ Result declared + NOT ATTEMPTED (no percentage)
-        if (
-          isResultStarted &&
-          !hasAttempted &&
-          computedSchoolershipstatus === "Participant" &&
-          rankDeclared &&
-          es?.rank == null
-        ) {
-          computedSchoolershipstatus = "Eliminated";
-        }
-
-        // ✅ Finalist override
-        if (finalistMap[member._id.toString()]) {
-          computedSchoolershipstatus = "Finalist";
-        }
-      }
-
-      /* ---------------- UPDATE DB ONLY IF CHANGED ---------------- */
-
-      if (member.schoolershipstatus !== computedSchoolershipstatus) {
-        await User.updateOne(
-          { _id: member._id },
-          {
-            $set: {
-              schoolershipstatus: computedSchoolershipstatus,
-              category: member.category ?? null,
-            },
-          }
-        );
-      }
+      const er = examResultMap[member._id.toString()];
 
       membersWithExamData.push({
         _id: member._id,
@@ -514,9 +445,12 @@ exports.getGroupMembers = async (req, res) => {
         email: member.email,
         status: member.status,
         category: member.category,
-        schoolershipstatus: computedSchoolershipstatus,
-        percentage: examResult?.percentage ?? null,
-        completionTime: examResult?.Completiontime ?? null,
+
+      
+        schoolershipstatus: member.schoolershipstatus ?? "NA",
+
+        percentage: er?.percentage ?? null,
+        completionTime: er?.Completiontime ?? null,
         rank: es?.rank ?? null,
         attemptStatus: es?.attemptStatus ?? null,
       });
