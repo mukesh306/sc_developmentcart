@@ -533,7 +533,7 @@ exports.getGroupMembers = async (req, res) => {
       });
     }
 
-    // 🔹 Previous exams of this group
+   
     const previousExams = await Schoolerexam.find({
       assignedGroup: groupId,
       createdAt: { $lt: currentExam.createdAt },
@@ -544,7 +544,7 @@ exports.getGroupMembers = async (req, res) => {
     const eliminatedUserSet = new Set();
 
     if (previousExamIds.length > 0) {
-      // 🔹 Users eliminated in previous exams (failed / Not Attempted)
+      // 🔹 Failed / Not Attempted users
       const eliminatedUsers = await ExamUserStatus.find({
         examId: { $in: previousExamIds },
         $or: [{ result: "failed" }, { attemptStatus: "Not Attempted" }],
@@ -552,7 +552,7 @@ exports.getGroupMembers = async (req, res) => {
 
       eliminatedUsers.forEach(e => eliminatedUserSet.add(e.userId.toString()));
 
-      // 🔹 Users with null percentage/completionTime/rank
+      // 🔹 Null result users
       const nullResultUsers = await ExamResult.find({
         examId: { $in: previousExamIds },
         percentage: null,
@@ -563,7 +563,7 @@ exports.getGroupMembers = async (req, res) => {
       nullResultUsers.forEach(u => eliminatedUserSet.add(u.userId.toString()));
     }
 
-    // 🔹 Fetch group and members
+    // 🔹 Group members
     const group = await UserExamGroup.findById(groupId).populate(
       "members",
       "firstName middleName lastName status email category schoolershipstatus _id"
@@ -575,7 +575,7 @@ exports.getGroupMembers = async (req, res) => {
 
     const memberIds = group.members.map(m => m._id);
 
-    // 🔹 Current exam statuses (rank included)
+    // 🔹 Exam status (rank source)
     const examStatuses = await ExamUserStatus.find({
       userId: { $in: memberIds },
       examId,
@@ -590,7 +590,7 @@ exports.getGroupMembers = async (req, res) => {
 
     const rankDeclared = examStatuses.some(es => es.rank !== null);
 
-    // 🔹 Finalist users
+    // 🔹 Finalists
     const finalistUsers = await CategoryTopUser.find({
       userId: { $in: memberIds },
     })
@@ -600,7 +600,7 @@ exports.getGroupMembers = async (req, res) => {
     const finalistMap = {};
     finalistUsers.forEach(f => (finalistMap[f.userId.toString()] = true));
 
-    // 🔹 Check if any user has result started
+    // 🔹 Check result started
     const isResultStarted = await ExamResult.exists({
       examId,
       percentage: { $ne: null },
@@ -610,7 +610,7 @@ exports.getGroupMembers = async (req, res) => {
     const membersWithExamData = [];
 
     for (const member of group.members) {
-      // ❌ Skip if eliminated in previous exams OR had Not Attempted & rank null in previous exam
+      // ❌ Skip previous eliminated users
       if (eliminatedUserSet.has(member._id.toString())) continue;
 
       const es = examStatusMap[member._id.toString()];
@@ -619,26 +619,37 @@ exports.getGroupMembers = async (req, res) => {
       const examResult = await ExamResult.findOne({
         userId: member._id,
         examId,
-      })
-        .select("percentage Completiontime rank")
-        .lean();
+      }).select("percentage Completiontime").lean();
 
+      // ✅ AttemptStatus logic (FIXED)
       let attemptStatus = null;
-      if (isResultStarted && examResult?.percentage !== null && examResult?.Completiontime !== null) {
+      if (
+        isResultStarted &&
+        examResult?.percentage !== null &&
+        examResult?.Completiontime !== null
+      ) {
         attemptStatus = "Attempted";
       }
 
       if (member.status === "yes") {
         computedSchoolershipstatus = "Participant";
 
+        // 🔹 Failed OR Not Attempted (ONLY when no result)
         if (
           isResultStarted &&
           (es?.result === "failed" || es?.attemptStatus === "Not Attempted")
         ) {
           computedSchoolershipstatus = "Eliminated";
-          attemptStatus = "Not Attempted";
+
+          if (
+            examResult?.percentage === null ||
+            examResult?.Completiontime === null
+          ) {
+            attemptStatus = "Not Attempted";
+          }
         }
 
+        // 🔹 Rank declared but user has no rank (ONLY when no result)
         if (
           isResultStarted &&
           computedSchoolershipstatus === "Participant" &&
@@ -646,7 +657,13 @@ exports.getGroupMembers = async (req, res) => {
           es?.rank == null
         ) {
           computedSchoolershipstatus = "Eliminated";
-          attemptStatus = "Not Attempted";
+
+          if (
+            examResult?.percentage === null ||
+            examResult?.Completiontime === null
+          ) {
+            attemptStatus = "Not Attempted";
+          }
         }
 
         if (finalistMap[member._id.toString()]) {
@@ -654,6 +671,7 @@ exports.getGroupMembers = async (req, res) => {
         }
       }
 
+      // 🔹 Update DB only if changed
       if (member.schoolershipstatus !== computedSchoolershipstatus) {
         await User.updateOne(
           { _id: member._id },
@@ -677,7 +695,7 @@ exports.getGroupMembers = async (req, res) => {
         schoolershipstatus: computedSchoolershipstatus,
         percentage: examResult?.percentage ?? null,
         completionTime: examResult?.Completiontime ?? null,
-        rank: es?.rank ?? null,
+        rank: es?.rank ?? null, // ✅ same source
         attemptStatus,
       });
     }
