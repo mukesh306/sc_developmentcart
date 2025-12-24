@@ -521,7 +521,7 @@ exports.getGroupMembers = async (req, res) => {
     const currentExam = await Schoolerexam.findOne({
       _id: examId,
       assignedGroup: groupId,
-    }).select("_id createdAt category");
+    }).select("_id createdAt");
 
     if (!currentExam) {
       return res.status(200).json({
@@ -532,7 +532,7 @@ exports.getGroupMembers = async (req, res) => {
       });
     }
 
-   
+    
     const previousExams = await Schoolerexam.find({
       assignedGroup: groupId,
       createdAt: { $lt: currentExam.createdAt },
@@ -540,10 +540,11 @@ exports.getGroupMembers = async (req, res) => {
 
     const previousExamIds = previousExams.map(e => e._id);
 
-    
     const eliminatedUserSet = new Set();
 
     if (previousExamIds.length > 0) {
+
+     
       const eliminatedUsers = await ExamUserStatus.find({
         examId: { $in: previousExamIds },
         $or: [
@@ -554,6 +555,18 @@ exports.getGroupMembers = async (req, res) => {
 
       eliminatedUsers.forEach(e =>
         eliminatedUserSet.add(e.userId.toString())
+      );
+
+      
+      const nullResultUsers = await ExamResult.find({
+        examId: { $in: previousExamIds },
+        percentage: null,
+        Completiontime: null,
+        rank: null,
+      }).select("userId").lean();
+
+      nullResultUsers.forEach(u =>
+        eliminatedUserSet.add(u.userId.toString())
       );
     }
 
@@ -569,28 +582,21 @@ exports.getGroupMembers = async (req, res) => {
 
     const memberIds = group.members.map(m => m._id);
 
-    
     const examStatuses = await ExamUserStatus.find({
       userId: { $in: memberIds },
       examId,
-    })
-      .select("userId result attemptStatus rank")
-      .lean();
+    }).select("userId result attemptStatus rank").lean();
 
     const examStatusMap = {};
     examStatuses.forEach(es => {
       examStatusMap[es.userId.toString()] = es;
     });
 
-   
     const rankDeclared = examStatuses.some(es => es.rank !== null);
 
-    
     const finalistUsers = await CategoryTopUser.find({
       userId: { $in: memberIds },
-    })
-      .select("userId")
-      .lean();
+    }).select("userId").lean();
 
     const finalistMap = {};
     finalistUsers.forEach(f => {
@@ -600,18 +606,18 @@ exports.getGroupMembers = async (req, res) => {
     const membersWithExamData = [];
 
     for (const member of group.members) {
+
+      
       if (eliminatedUserSet.has(member._id.toString())) continue;
 
       const es = examStatusMap[member._id.toString()];
       let computedSchoolershipstatus = "NA";
 
-     
       const examResult = await ExamResult.findOne({
         userId: member._id,
         examId,
-      }).select("percentage Completiontime").lean();
+      }).select("percentage Completiontime rank").lean();
 
-      
       let attemptStatus = null;
       if (examResult?.percentage !== null && examResult?.Completiontime !== null) {
         attemptStatus = "Attempted";
@@ -620,7 +626,6 @@ exports.getGroupMembers = async (req, res) => {
       if (member.status === "yes") {
         computedSchoolershipstatus = "Participant";
 
-       
         if (
           es?.result === "failed" ||
           es?.attemptStatus === "Not Attempted"
@@ -629,7 +634,6 @@ exports.getGroupMembers = async (req, res) => {
           attemptStatus = "Not Attempted";
         }
 
-        
         if (
           computedSchoolershipstatus === "Participant" &&
           rankDeclared &&
@@ -644,7 +648,6 @@ exports.getGroupMembers = async (req, res) => {
         }
       }
 
-   
       if (member.schoolershipstatus !== computedSchoolershipstatus) {
         await User.updateOne(
           { _id: member._id },
@@ -668,7 +671,7 @@ exports.getGroupMembers = async (req, res) => {
         schoolershipstatus: computedSchoolershipstatus,
         percentage: examResult?.percentage ?? null,
         completionTime: examResult?.Completiontime ?? null,
-        rank: es?.rank ?? null,
+        rank: examResult?.rank ?? null,
         attemptStatus,
       });
     }
@@ -679,6 +682,7 @@ exports.getGroupMembers = async (req, res) => {
       examId,
       members: membersWithExamData,
     });
+
   } catch (error) {
     console.error("getGroupMembers Error:", error);
     return res.status(500).json({
@@ -687,6 +691,7 @@ exports.getGroupMembers = async (req, res) => {
     });
   }
 };
+
 
 
 exports.getAllActiveUsers = async (req, res) => {
