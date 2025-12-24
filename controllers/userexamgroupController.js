@@ -510,7 +510,9 @@ exports.getGroupMembers = async (req, res) => {
           { result: "failed" },
           { attemptStatus: "Not Attempted" },
         ],
-      }).select("userId").lean();
+      })
+        .select("userId")
+        .lean();
 
       eliminatedUsers.forEach(e => {
         eliminatedUserSet.add(e.userId.toString());
@@ -529,12 +531,12 @@ exports.getGroupMembers = async (req, res) => {
 
     const memberIds = group.members.map(m => m._id);
 
-    // 🔹 Current exam status
+    // 🔹 Current exam status (rank added)
     const examStatuses = await ExamUserStatus.find({
       userId: { $in: memberIds },
       examId,
     })
-      .select("userId result attemptStatus")
+      .select("userId result attemptStatus rank")
       .lean();
 
     const examStatusMap = {};
@@ -603,6 +605,8 @@ exports.getGroupMembers = async (req, res) => {
         .select("percentage Completiontime")
         .lean();
 
+      const es = examStatusMap[member._id.toString()];
+
       membersWithExamData.push({
         _id: member._id,
         firstName: member.firstName,
@@ -614,6 +618,9 @@ exports.getGroupMembers = async (req, res) => {
         schoolershipstatus: computedSchoolershipstatus,
         percentage: examResult?.percentage ?? null,
         completionTime: examResult?.Completiontime ?? null,
+
+        // ✅ Rank added (NO logic change)
+        rank: es?.rank ?? null,
       });
     }
 
@@ -631,6 +638,7 @@ exports.getGroupMembers = async (req, res) => {
     });
   }
 };
+
 
 
 exports.getAllActiveUsers = async (req, res) => {
