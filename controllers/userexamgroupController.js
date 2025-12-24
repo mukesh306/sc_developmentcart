@@ -505,6 +505,7 @@ exports.deleteGroup = async (req, res) => {
 //   }
 // };
 
+
 exports.getGroupMembers = async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -543,7 +544,7 @@ exports.getGroupMembers = async (req, res) => {
     const eliminatedUserSet = new Set();
 
     if (previousExamIds.length > 0) {
-      // 🔹 Users eliminated in previous exams
+      // 🔹 Users eliminated in previous exams (failed / Not Attempted)
       const eliminatedUsers = await ExamUserStatus.find({
         examId: { $in: previousExamIds },
         $or: [{ result: "failed" }, { attemptStatus: "Not Attempted" }],
@@ -551,7 +552,7 @@ exports.getGroupMembers = async (req, res) => {
 
       eliminatedUsers.forEach(e => eliminatedUserSet.add(e.userId.toString()));
 
-      // 🔹 Users with null result, completionTime, rank in previous exams
+      // 🔹 Users with null percentage/completionTime/rank
       const nullResultUsers = await ExamResult.find({
         examId: { $in: previousExamIds },
         percentage: null,
@@ -609,13 +610,12 @@ exports.getGroupMembers = async (req, res) => {
     const membersWithExamData = [];
 
     for (const member of group.members) {
-      // ❌ Skip if eliminated in previous exams
+      // ❌ Skip if eliminated in previous exams OR had Not Attempted & rank null in previous exam
       if (eliminatedUserSet.has(member._id.toString())) continue;
 
       const es = examStatusMap[member._id.toString()];
       let computedSchoolershipstatus = "NA";
 
-      // 🔹 Current exam result
       const examResult = await ExamResult.findOne({
         userId: member._id,
         examId,
@@ -654,7 +654,6 @@ exports.getGroupMembers = async (req, res) => {
         }
       }
 
-      // 🔹 Update DB only if changed
       if (member.schoolershipstatus !== computedSchoolershipstatus) {
         await User.updateOne(
           { _id: member._id },
@@ -697,6 +696,7 @@ exports.getGroupMembers = async (req, res) => {
     });
   }
 };
+
 
 
 
