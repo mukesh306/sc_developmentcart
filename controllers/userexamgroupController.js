@@ -505,6 +505,7 @@ exports.deleteGroup = async (req, res) => {
 //   }
 // };
 
+
 exports.getGroupMembers = async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -581,7 +582,6 @@ exports.getGroupMembers = async (req, res) => {
     }
 
     const memberIds = group.members.map(m => m._id);
-
     const examStatuses = await ExamUserStatus.find({
       userId: { $in: memberIds },
       examId,
@@ -671,7 +671,7 @@ exports.getGroupMembers = async (req, res) => {
         schoolershipstatus: computedSchoolershipstatus,
         percentage: examResult?.percentage ?? null,
         completionTime: examResult?.Completiontime ?? null,
-        rank: examResult?.rank ?? null,
+        rank: es?.rank ?? null, 
         attemptStatus,
       });
     }
