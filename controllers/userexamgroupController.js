@@ -543,11 +543,13 @@ exports.getGroupMembers = async (req, res) => {
     const eliminatedUserSet = new Set();
 
     if (previousExamIds.length > 0) {
-      // 🔹 Failed / Not Attempted users
+      // 🔹 Failed / Not Attempted users (from DB)
       const eliminatedUsers = await ExamUserStatus.find({
         examId: { $in: previousExamIds },
         $or: [{ result: "failed" }, { attemptStatus: "Not Attempted" }],
-      }).select("userId").lean();
+      })
+        .select("userId")
+        .lean();
 
       eliminatedUsers.forEach(e =>
         eliminatedUserSet.add(e.userId.toString())
@@ -559,7 +561,9 @@ exports.getGroupMembers = async (req, res) => {
         percentage: null,
         Completiontime: null,
         rank: null,
-      }).select("userId").lean();
+      })
+        .select("userId")
+        .lean();
 
       nullResultUsers.forEach(u =>
         eliminatedUserSet.add(u.userId.toString())
@@ -578,12 +582,12 @@ exports.getGroupMembers = async (req, res) => {
 
     const memberIds = group.members.map(m => m._id);
 
-    // 🔹 Exam status (rank source)
+    // 🔹 Exam status (rank + attemptStatus source)
     const examStatuses = await ExamUserStatus.find({
       userId: { $in: memberIds },
       examId,
     })
-      .select("userId result rank")
+      .select("userId result rank attemptStatus")
       .lean();
 
     const examStatusMap = {};
@@ -624,7 +628,9 @@ exports.getGroupMembers = async (req, res) => {
       const examResult = await ExamResult.findOne({
         userId: member._id,
         examId,
-      }).select("percentage Completiontime").lean();
+      })
+        .select("percentage Completiontime")
+        .lean();
 
       if (member.status === "yes") {
         computedSchoolershipstatus = "Participant";
@@ -674,7 +680,8 @@ exports.getGroupMembers = async (req, res) => {
         schoolershipstatus: computedSchoolershipstatus,
         percentage: examResult?.percentage ?? null,
         completionTime: examResult?.Completiontime ?? null,
-        rank: es?.rank ?? null, // ✅ same rank source
+        rank: es?.rank ?? null,              // ✅ from ExamUserStatus
+        attemptStatus: es?.attemptStatus ?? null, // ✅ DIRECT FROM DB
       });
     }
 
