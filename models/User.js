@@ -42,6 +42,8 @@ category: {
 platformDetails:{
  type: String,
 },
+
+
   aadharCard: { type: String },
   marksheet: { type: String },
   resetPasswordOTP: { type: String },
@@ -77,6 +79,23 @@ platformDetails:{
     enum: ['no', 'yes'],
     default: 'no'
   },
+
+   userDetails: [
+    {
+      category: {
+        _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Schoolercategory' },
+        name: String
+      },
+      examTypes: [
+        {
+          _id: String,
+          name: String
+        }
+      ],
+      status: { type: String, default: "NA" }, 
+            result: { type: String, default: "NA" }
+    }
+  ],
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
   allocatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'OrganizationSign' },
 

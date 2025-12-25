@@ -1633,6 +1633,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
 // };
 
 
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -1653,27 +1654,15 @@ exports.userforAdmin = async (req, res) => {
     const skip = (page - 1) * limit;
 
     const admin = await Admin1.findById(adminId).select("startDate endDate");
-    if (!admin) {
-      return res.status(404).json({ message: "Admin not found." });
-    }
+    if (!admin) return res.status(404).json({ message: "Admin not found." });
 
     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
 
     let filterQuery = {};
     if (className) filterQuery.className = className;
-
-    if (stateId) {
-      filterQuery.stateId = stateId.includes(",")
-        ? { $in: stateId.split(",") }
-        : stateId;
-    }
-
-    if (cityId) {
-      filterQuery.cityId = cityId.includes(",")
-        ? { $in: cityId.split(",") }
-        : cityId;
-    }
+    if (stateId) filterQuery.stateId = stateId.includes(",") ? { $in: stateId.split(",") } : stateId;
+    if (cityId) filterQuery.cityId = cityId.includes(",") ? { $in: cityId.split(",") } : cityId;
 
     const users = await User.find(filterQuery)
       .populate("countryId", "name")
@@ -1683,30 +1672,17 @@ exports.userforAdmin = async (req, res) => {
 
     const userIds = users.map(u => u._id);
 
-    const groups = await userexamGroup.find({
-      members: { $in: userIds }
-    })
+    const groups = await userexamGroup.find({ members: { $in: userIds } })
       .sort({ createdAt: -1 })
-      .populate("category", "_id name")
+      .populate("category", "_id name examType")
       .lean();
 
-    const userGroupCategoryMap = {};
-    groups.forEach(g => {
-      g.members.forEach(uid => {
-        if (!userGroupCategoryMap[uid] && g.category) {
-          userGroupCategoryMap[uid] = g.category;
-        }
-      });
-    });
-
     const defaultCategory = await Schoolercategory.findOne()
-      .select("_id name")
+      .select("_id name examType")
       .sort({ createdAt: 1 })
       .lean();
 
-    const examStatuses = await ExamUserStatus.find({
-      userId: { $in: userIds }
-    })
+    const examStatuses = await ExamUserStatus.find({ userId: { $in: userIds } })
       .select("userId category result attemptStatus")
       .lean();
 
@@ -1718,9 +1694,7 @@ exports.userforAdmin = async (req, res) => {
       }
     });
 
-    const categoryTopUsers = await CategoryTopUser.find({
-      userId: { $in: userIds }
-    })
+    const categoryTopUsers = await CategoryTopUser.find({ userId: { $in: userIds } })
       .select("userId schoolerStatus")
       .lean();
 
@@ -1736,80 +1710,67 @@ exports.userforAdmin = async (req, res) => {
       if (user.startDate && user.endDate) {
         const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
         const uEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
-        if (!uStart.isSameOrAfter(adminStart) || !uEnd.isSameOrBefore(adminEnd)) {
-          continue;
-        }
+        if (!uStart.isSameOrAfter(adminStart) || !uEnd.isSameOrBefore(adminEnd)) continue;
       }
 
-      let category = { _id: null, name: "NA" };
-      let computedSchoolershipstatus = "NA";
+      let userDetails = [];
 
+      
       if (user.status === "yes") {
-        computedSchoolershipstatus = "Participant";
+        const userGroups = groups.filter(g =>
+          g.members.some(uid => uid.toString() === user._id.toString())
+        );
 
-        category =
-          userGroupCategoryMap[user._id] ||
-          defaultCategory ||
-          { _id: null, name: "NA" };
+        userGroups.forEach((g, index) => {
+          const category = g.category || defaultCategory || { _id: null, name: "NA" };
+          const examTypes = (category.examType || []).map(et => ({
+            _id: et.id,
+            name: et.name
+          }));
 
-        if (category?._id) {
-          const key = `${user._id}_${category._id}`;
+          
+          const statusField = index === 0 ? "Eligible" : "NA";
+          const resultField = "NA";
 
-          if (failedMap[key]) {
-            computedSchoolershipstatus = "Eliminated";
-          }
-
-          const notAttempted = examStatuses.find(
-            es =>
-              es.userId.toString() === user._id.toString() &&
-              es.category?._id.toString() === category._id.toString() &&
-              es.attemptStatus === "Not Attempted"
-          );
-
-          if (notAttempted) {
-            computedSchoolershipstatus = "Eliminated";
-          }
-
-          if (finalistMap[key]) {
-            computedSchoolershipstatus = "Finalist";
-          }
-        }
+          userDetails.push({
+            category,
+            examTypes,
+            status: statusField,
+            result: resultField
+          });
+        });
       }
-  
-      await User.updateOne(
-        { _id: user._id },
-        {
-          $set: {
-            schoolershipstatus: computedSchoolershipstatus,
-            category
-          }
-        }
-      );
 
+     
+      await User.updateOne({ _id: user._id }, { $set: { userDetails } });
+
+      
       finalUsers.push({
         ...user._doc,
         country: user.countryId?.name || "",
         state: user.stateId?.name || "",
         city: user.cityId?.name || "",
-        institutionName:
-          user.schoolName || user.collegeName || user.instituteName || "",
+        institutionName: user.schoolName || user.collegeName || user.instituteName || "",
         institutionType: user.studentType || "",
-        category,
-        schoolershipstatus: computedSchoolershipstatus
+     
+        category: user.category || null,
+        schoolershipstatus: user.schoolershipstatus || "NA",
+        userDetails
       });
     }
 
+   
     if (categoryId) {
       const categoriesArray = categoryId.split(",");
       finalUsers = finalUsers.filter(u =>
-        u.category?._id && categoriesArray.includes(u.category._id.toString())
+        u.userDetails.some(ud => ud.category?._id && categoriesArray.includes(ud.category._id.toString()))
       );
     }
 
     if (schoolershipstatus) {
       const statusArray = schoolershipstatus.split(",").map(s => s.trim());
       finalUsers = finalUsers.filter(u =>
-        statusArray.includes(u.schoolershipstatus)
+        u.userDetails.some(ud => statusArray.includes(ud.schoolershipstatus))
       );
     }
 
@@ -1833,7 +1794,6 @@ exports.userforAdmin = async (req, res) => {
 
     const totalUsers = finalUsers.length;
     const paginated = finalUsers.slice(skip, skip + limit);
-
     const from = totalUsers === 0 ? 0 : skip + 1;
     const to = Math.min(skip + paginated.length, totalUsers);
 
@@ -1853,6 +1813,231 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
+
+
+
+// exports.userforAdmin = async (req, res) => {
+//   try {
+//     const adminId = req.user._id;
+//     let {
+//       className,
+//       stateId,
+//       cityId,
+//       categoryId,
+//       schoolershipstatus,
+//       status,
+//       page = 1,
+//       limit = 10,
+//       fields
+//     } = req.query;
+
+//     page = parseInt(page);
+//     limit = parseInt(limit);
+//     const skip = (page - 1) * limit;
+
+//     const admin = await Admin1.findById(adminId).select("startDate endDate");
+//     if (!admin) {
+//       return res.status(404).json({ message: "Admin not found." });
+//     }
+
+//     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
+//     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
+
+//     let filterQuery = {};
+//     if (className) filterQuery.className = className;
+
+//     if (stateId) {
+//       filterQuery.stateId = stateId.includes(",")
+//         ? { $in: stateId.split(",") }
+//         : stateId;
+//     }
+
+//     if (cityId) {
+//       filterQuery.cityId = cityId.includes(",")
+//         ? { $in: cityId.split(",") }
+//         : cityId;
+//     }
+
+//     const users = await User.find(filterQuery)
+//       .populate("countryId", "name")
+//       .populate("stateId", "name")
+//       .populate("cityId", "name")
+//       .populate("updatedBy", "email name role");
+
+//     const userIds = users.map(u => u._id);
+
+//     const groups = await userexamGroup.find({
+//       members: { $in: userIds }
+//     })
+//       .sort({ createdAt: -1 })
+//       .populate("category", "_id name")
+//       .lean();
+
+//     const userGroupCategoryMap = {};
+//     groups.forEach(g => {
+//       g.members.forEach(uid => {
+//         if (!userGroupCategoryMap[uid] && g.category) {
+//           userGroupCategoryMap[uid] = g.category;
+//         }
+//       });
+//     });
+
+//     const defaultCategory = await Schoolercategory.findOne()
+//       .select("_id name")
+//       .sort({ createdAt: 1 })
+//       .lean();
+
+//     const examStatuses = await ExamUserStatus.find({
+//       userId: { $in: userIds }
+//     })
+//       .select("userId category result attemptStatus")
+//       .lean();
+
+//     const failedMap = {};
+//     examStatuses.forEach(es => {
+//       if (es.result === "failed" && es.category?._id) {
+//         const key = `${es.userId}_${es.category._id}`;
+//         failedMap[key] = true;
+//       }
+//     });
+
+//     const categoryTopUsers = await CategoryTopUser.find({
+//       userId: { $in: userIds }
+//     })
+//       .select("userId schoolerStatus")
+//       .lean();
+
+//     const finalistMap = {};
+//     categoryTopUsers.forEach(ctu => {
+//       const key = `${ctu.userId}_${ctu.schoolerStatus}`;
+//       finalistMap[key] = true;
+//     });
+
+//     let finalUsers = [];
+
+//     for (let user of users) {
+//       if (user.startDate && user.endDate) {
+//         const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
+//         const uEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
+//         if (!uStart.isSameOrAfter(adminStart) || !uEnd.isSameOrBefore(adminEnd)) {
+//           continue;
+//         }
+//       }
+
+//       let category = { _id: null, name: "NA" };
+//       let computedSchoolershipstatus = "NA";
+
+//       if (user.status === "yes") {
+//         computedSchoolershipstatus = "Participant";
+
+//         category =
+//           userGroupCategoryMap[user._id] ||
+//           defaultCategory ||
+//           { _id: null, name: "NA" };
+
+//         if (category?._id) {
+//           const key = `${user._id}_${category._id}`;
+
+//           if (failedMap[key]) {
+//             computedSchoolershipstatus = "Eliminated";
+//           }
+
+//           const notAttempted = examStatuses.find(
+//             es =>
+//               es.userId.toString() === user._id.toString() &&
+//               es.category?._id.toString() === category._id.toString() &&
+//               es.attemptStatus === "Not Attempted"
+//           );
+
+//           if (notAttempted) {
+//             computedSchoolershipstatus = "Eliminated";
+//           }
+
+//           if (finalistMap[key]) {
+//             computedSchoolershipstatus = "Finalist";
+//           }
+//         }
+//       }
+  
+//       await User.updateOne(
+//         { _id: user._id },
+//         {
+//           $set: {
+//             schoolershipstatus: computedSchoolershipstatus,
+//             category
+//           }
+//         }
+//       );
+
+//       finalUsers.push({
+//         ...user._doc,
+//         country: user.countryId?.name || "",
+//         state: user.stateId?.name || "",
+//         city: user.cityId?.name || "",
+//         institutionName:
+//           user.schoolName || user.collegeName || user.instituteName || "",
+//         institutionType: user.studentType || "",
+//         category,
+//         schoolershipstatus: computedSchoolershipstatus
+//       });
+//     }
+
+//     if (categoryId) {
+//       const categoriesArray = categoryId.split(",");
+//       finalUsers = finalUsers.filter(u =>
+//         u.category?._id && categoriesArray.includes(u.category._id.toString())
+//       );
+//     }
+
+//     if (schoolershipstatus) {
+//       const statusArray = schoolershipstatus.split(",").map(s => s.trim());
+//       finalUsers = finalUsers.filter(u =>
+//         statusArray.includes(u.schoolershipstatus)
+//       );
+//     }
+
+//     if (status) {
+//       const statusArray = status.split(",").map(s => s.trim().toLowerCase());
+//       finalUsers = finalUsers.filter(
+//         u => u.status && statusArray.includes(u.status.toLowerCase())
+//       );
+//     }
+
+//     if (fields) {
+//       const reqFields = fields.split(",").map(f => f.trim());
+//       finalUsers = finalUsers.map(u => {
+//         const obj = { _id: u._id };
+//         reqFields.forEach(f => {
+//           if (u[f] !== undefined) obj[f] = u[f];
+//         });
+//         return obj;
+//       });
+//     }
+
+//     const totalUsers = finalUsers.length;
+//     const paginated = finalUsers.slice(skip, skip + limit);
+
+//     const from = totalUsers === 0 ? 0 : skip + 1;
+//     const to = Math.min(skip + paginated.length, totalUsers);
+
+//     return res.status(200).json({
+//       message: "Users fetched successfully",
+//       page,
+//       limit,
+//       totalUsers,
+//       totalPages: Math.ceil(totalUsers / limit),
+//       from,
+//       to,
+//       users: paginated
+//     });
+
+//   } catch (error) {
+//     console.error("userforAdmin Error:", error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 
@@ -2005,7 +2190,7 @@ exports.getUserById = async (req, res) => {
 
       const groupIds = userGroups.map(g => g._id);
 
-      // 🔹 get exams
+      
       exams = await SchoolerExam.find({
         examType: { $in: examType.map(et => et._id) },
         assignedGroup: { $in: groupIds },
