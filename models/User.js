@@ -136,7 +136,7 @@ userDetails: [
       }
     ]
   }
-]
+],
 
 
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
