@@ -246,7 +246,6 @@ exports.publishExam = async (req, res) => {
 //     res.status(500).json({ message: "Internal server error", error });
 //   }
 // };
-
 exports.assignGroupToExam = async (req, res) => {
   try {
     const { examId, examType, groupId } = req.body;
@@ -257,7 +256,6 @@ exports.assignGroupToExam = async (req, res) => {
       });
     }
 
-    
     const exam = await Schoolerexam.findById(examId);
     if (!exam) {
       return res.status(404).json({ message: "Exam not found" });
@@ -269,7 +267,6 @@ exports.assignGroupToExam = async (req, res) => {
       await exam.save();
     }
 
-   
     const group = await UserExamGroup.findById(groupId)
       .populate("members", "_id");
 
@@ -278,28 +275,33 @@ exports.assignGroupToExam = async (req, res) => {
     }
 
     
+    if (!exam.categoryId) {
+      return res.status(400).json({
+        message: "Exam categoryId is missing. Cannot map exam to user category."
+      });
+    }
+
     for (const member of group.members) {
       const user = await User.findById(member._id);
       if (!user) continue;
 
-     
       const userCategory = user.userDetails.find(
         ud =>
           ud.category &&
           ud.category._id &&
+          exam.categoryId &&
           ud.category._id.toString() === exam.categoryId.toString()
       );
 
-      if (!userCategory) continue; 
+      if (!userCategory) continue;
 
-      
       const examTypeObj = userCategory.examTypes.find(
         et => et.name === examType
       );
 
       if (!examTypeObj) continue;
 
-      
+   
       if (!examTypeObj._id) {
         examTypeObj._id = exam._id;
         await user.save();
@@ -308,7 +310,7 @@ exports.assignGroupToExam = async (req, res) => {
 
     res.status(200).json({
       success: true,
-      message: "Exam ID successfully saved in userDetails",
+      message: "Exam ID saved successfully in userDetails",
       examId,
       groupId
     });
@@ -322,6 +324,7 @@ exports.assignGroupToExam = async (req, res) => {
     });
   }
 };
+
 
 
 
