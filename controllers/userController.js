@@ -15,6 +15,8 @@ const Location = require("../models/location");
 const CategoryTopUser = require("../models/CategoryTopUser");
 const userexamGroup = require("../models/userExamGroup");
 const Schoolercategory = require("../models/schoolershipcategory");
+// const SchoolerExam = require("../models/Schoolerexam");
+const UserExamGroup = require("../models/userExamGroup");
 const fs = require('fs');
 const path = require('path');
 // const moment = require('moment');
@@ -1956,6 +1958,7 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
   }
 };
 
+
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -1968,7 +1971,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-   
+    
     const user = await User.findById(userId)
       .select("firstName status category schoolershipstatus")
       .populate("category._id", "name")
@@ -1982,16 +1985,34 @@ exports.getUserById = async (req, res) => {
     }
 
     let examType = [];
+    let exams = [];
 
     
     if (user.category && user.category._id) {
-      const categoryData = await Schoolercategory.findById(
-        user.category._id._id || user.category._id
-      )
+      const categoryId =
+        user.category._id._id || user.category._id;
+
+      const categoryData = await Schoolercategory.findById(categoryId)
         .select("examType")
         .lean();
 
       examType = categoryData?.examType || [];
+
+      
+      const userGroups = await UserExamGroup.find({
+        members: userId,
+      }).select("_id");
+
+      const groupIds = userGroups.map(g => g._id);
+
+      // 🔹 get exams
+      exams = await SchoolerExam.find({
+        examType: { $in: examType.map(et => et._id) },
+        assignedGroup: { $in: groupIds },
+        publish: true
+      })
+        .select("examName ScheduleDate ScheduleTime")
+        .lean();
     }
 
     return res.status(200).json({
@@ -2002,7 +2023,13 @@ exports.getUserById = async (req, res) => {
         status: user.status,
         schoolershipstatus: user.schoolershipstatus,
         category: user.category,
-        examType: examType
+        examType: examType,
+        exams: exams.map(exam => ({
+          examId: exam._id,
+          examName: exam.examName,
+          ScheduleDate: exam.ScheduleDate,
+          ScheduleTime: exam.ScheduleTime
+        }))
       },
     });
   } catch (error) {
