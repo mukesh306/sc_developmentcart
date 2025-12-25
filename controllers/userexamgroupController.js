@@ -327,6 +327,7 @@ exports.deleteGroup = async (req, res) => {
   }
 };
 
+
 exports.getGroupMembers = async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -470,9 +471,6 @@ exports.getGroupMembers = async (req, res) => {
     });
   }
 };
-
-
-
 
 
 
