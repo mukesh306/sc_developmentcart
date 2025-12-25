@@ -2079,9 +2079,7 @@ exports.getUserById = async (req, res) => {
     }
 
     const user = await User.findById(userId)
-      .select(
-        "firstName status schoolershipstatus category userDetails"
-      )
+      .select("firstName status schoolershipstatus category userDetails")
       .populate("category._id", "name")
       .lean();
 
@@ -2092,6 +2090,17 @@ exports.getUserById = async (req, res) => {
       });
     }
 
+    
+    const cleanedUserDetails = (user.userDetails || []).map(ud => ({
+      _id: ud._id,
+      category: {
+        _id: ud.category?._id || null,
+        name: ud.category?.name || "NA",
+       
+      },
+      examTypes: ud.examTypes || [],
+    }));
+
     return res.status(200).json({
       success: true,
       message: "User details fetched successfully",
@@ -2099,15 +2108,11 @@ exports.getUserById = async (req, res) => {
         firstName: user.firstName,
         status: user.status,
         schoolershipstatus: user.schoolershipstatus,
-
-        // 🔹 category fallback NA
         category: {
           _id: user?.category?._id?._id || null,
           name: user?.category?._id?.name || "NA",
         },
-
-        // 🔹 userDetails exactly as stored in DB
-        userDetails: user.userDetails || [],
+        userDetails: cleanedUserDetails,
       },
     });
   } catch (error) {
@@ -2118,3 +2123,4 @@ exports.getUserById = async (req, res) => {
     });
   }
 };
+
