@@ -80,22 +80,31 @@ platformDetails:{
     default: 'no'
   },
 
-   userDetails: [
-    {
-      category: {
-        _id: { type: mongoose.Schema.Types.ObjectId, ref: 'Schoolercategory' },
+  userDetails: [
+  {
+    category: {
+      _id: { type: mongoose.Schema.Types.ObjectId, ref: "Schoolercategory" },
+      name: String,
+      examType: Array
+    },
+    examTypes: [
+      {
+        _id: String,
         name: String
-      },
-      examTypes: [
-        {
-          _id: String,
-          name: String
-        }
-      ],
-      status: { type: String, default: "NA" }, 
-            result: { type: String, default: "NA" }
+      }
+    ],
+    status: {
+      type: String,
+      enum: ["Eligible", "NA"],
+      default: "NA"
+    },
+    result: {
+      type: String,
+      default: "NA"
     }
-  ],
+  }
+],
+
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
   allocatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'OrganizationSign' },
 
