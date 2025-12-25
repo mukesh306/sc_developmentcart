@@ -59,6 +59,7 @@ const User = require("../models/User");
 //   }
 // };
 
+
 exports.createSchoolercategory = async (req, res) => {
   try {
     const { name, price, groupSize, examSize } = req.body;
@@ -216,14 +217,10 @@ exports.updateSchoolercategory = async (req, res) => {
     if (price) category.price = price;
     if (groupSize) category.groupSize = groupSize;
     
-
-   
     if (examSize && examSize !== category.examSize) {
-
-      
+  
       category.examSize = examSize;
 
-      // Regenerate examType
       let examType = [];
       for (let i = 1; i <= examSize; i++) {
         examType.push({
