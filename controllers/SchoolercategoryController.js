@@ -72,20 +72,6 @@ exports.getAllSchoolercategories = async (req, res) => {
 };
 
 
-// exports.getSchoolercategoryById = async (req, res) => {
-//   try {
-//     const category = await Schoolercategory.findById(req.params.id)
-//       .populate("createdBy", "firstName lastName email");
-
-//     if (!category) {
-//       return res.status(404).json({ message: "Category not found." });
-//     }
-
-//     res.status(200).json(category);
-//   } catch (error) {
-//     res.status(500).json({ message: "Error fetching category.", error });
-//   }
-// };
 
 
 exports.getSchoolercategoryById = async (req, res) => {
@@ -127,28 +113,6 @@ exports.getSchoolercategoryById = async (req, res) => {
 };
 
 
-
-// exports.updateSchoolercategory = async (req, res) => {
-//   try {
-//     const { name ,price,groupSize , finalist,examSize } = req.body;
-//     const category = await Schoolercategory.findByIdAndUpdate(
-//       req.params.id,
-//       { name ,price,groupSize , finalist,examSize },
-//       { new: true }
-//     );
-
-//     if (!category) {
-//       return res.status(404).json({ message: "Category not found." });
-//     }
-
-//     res.status(200).json({
-//       message: "Category updated successfully.",
-//       category,
-//     });
-//   } catch (error) {
-//     res.status(500).json({ message: "Error updating category.", error });
-//   }
-// };
 
 
 

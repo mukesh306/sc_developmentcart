@@ -90,20 +90,21 @@ platformDetails:{
     examTypes: [
       {
         _id: String,
-        name: String
+        name: String,
+        status: {
+          type: String,
+          enum: ["Eligible", "NA"],
+          default: "NA"
+        },
+        result: {
+          type: String,
+          default: "NA"
+        }
       }
-    ],
-    status: {
-      type: String,
-      enum: ["Eligible", "NA"],
-      default: "NA"
-    },
-    result: {
-      type: String,
-      default: "NA"
-    }
+    ]
   }
 ],
+
 
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
   allocatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'OrganizationSign' },

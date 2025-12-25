@@ -131,7 +131,7 @@ exports.signup = async (req, res) => {
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(password)) {
       return res.status(400).json({
-        message: 'Password must contain uppercase, lowercase and number.'
+        message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.'
       });
     }
 
@@ -146,27 +146,27 @@ exports.signup = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-   
+    // Fetch all categories
     const allCategories = await Schoolercategory.find()
       .select("_id name examType")
       .sort({ createdAt: 1 })
       .lean();
 
-   
+    // Prepare userDetails with examTypes containing status & result
     let userDetails = [];
-    allCategories.forEach((cat, index) => {
+    allCategories.forEach((cat, catIndex) => {
       userDetails.push({
         category: {
           _id: cat._id,
           name: cat.name,
           examType: cat.examType || []
         },
-        examTypes: (cat.examType || []).map(et => ({
+        examTypes: (cat.examType || []).map((et, etIndex) => ({
           _id: et.id,
-          name: et.name
-        })),
-        status: index === 0 ? "Eligible" : "NA",
-        result: "NA"
+          name: et.name,
+          status: catIndex === 0 && etIndex === 0 ? "Eligible" : "NA",
+          result: "NA"
+        }))
       });
     });
 
@@ -177,7 +177,6 @@ exports.signup = async (req, res) => {
       mobileNumber,
       email,
       password: hashedPassword,
-
       userDetails
     });
 
