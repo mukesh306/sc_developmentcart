@@ -208,44 +208,123 @@ exports.publishExam = async (req, res) => {
 };
 
 
+// exports.assignGroupToExam = async (req, res) => {
+//   try {
+//     const { examId, examType, groupId } = req.body;
+
+//     if (!examId || !examType || !groupId) {
+//       return res.status(400).json({
+//         message: "examId, examType and groupId are required.",
+//       });
+//     }
+//     const exam = await Schoolerexam.findOne({
+//       _id: examId,
+//       examType: examType
+//     });
+
+//     if (!exam) {
+//       return res.status(404).json({
+//         message: "Exam not found or examType mismatch.",
+//       });
+//     }
+
+//     if (exam.assignedGroup.includes(groupId)) {
+//       return res.status(400).json({
+//         message: "This group is already assigned to this exam.",
+//       });
+//     }
+
+//     exam.assignedGroup.push(groupId);
+//     await exam.save();
+
+//     res.status(200).json({
+//       message: "Group assigned successfully.",
+//       exam,
+//     });
+//   } catch (error) {
+//     console.error("Error assigning group:", error);
+//     res.status(500).json({ message: "Internal server error", error });
+//   }
+// };
+
 exports.assignGroupToExam = async (req, res) => {
   try {
     const { examId, examType, groupId } = req.body;
 
     if (!examId || !examType || !groupId) {
       return res.status(400).json({
-        message: "examId, examType and groupId are required.",
+        message: "examId, examType and groupId are required",
       });
     }
-    const exam = await Schoolerexam.findOne({
-      _id: examId,
-      examType: examType
-    });
 
+    
+    const exam = await Schoolerexam.findById(examId);
     if (!exam) {
-      return res.status(404).json({
-        message: "Exam not found or examType mismatch.",
-      });
+      return res.status(404).json({ message: "Exam not found" });
     }
 
-    if (exam.assignedGroup.includes(groupId)) {
-      return res.status(400).json({
-        message: "This group is already assigned to this exam.",
-      });
+    
+    if (!exam.assignedGroup.includes(groupId)) {
+      exam.assignedGroup.push(groupId);
+      await exam.save();
     }
 
-    exam.assignedGroup.push(groupId);
-    await exam.save();
+   
+    const group = await UserExamGroup.findById(groupId)
+      .populate("members", "_id");
+
+    if (!group || !group.members.length) {
+      return res.status(404).json({ message: "No users found in group" });
+    }
+
+    
+    for (const member of group.members) {
+      const user = await User.findById(member._id);
+      if (!user) continue;
+
+     
+      const userCategory = user.userDetails.find(
+        ud =>
+          ud.category &&
+          ud.category._id &&
+          ud.category._id.toString() === exam.categoryId.toString()
+      );
+
+      if (!userCategory) continue; 
+
+      
+      const examTypeObj = userCategory.examTypes.find(
+        et => et.name === examType
+      );
+
+      if (!examTypeObj) continue;
+
+      
+      if (!examTypeObj._id) {
+        examTypeObj._id = exam._id;
+        await user.save();
+      }
+    }
 
     res.status(200).json({
-      message: "Group assigned successfully.",
-      exam,
+      success: true,
+      message: "Exam ID successfully saved in userDetails",
+      examId,
+      groupId
     });
+
   } catch (error) {
-    console.error("Error assigning group:", error);
-    res.status(500).json({ message: "Internal server error", error });
+    console.error("Assign exam error:", error);
+    res.status(500).json({
+      success: false,
+      message: "Internal server error",
+      error: error.message
+    });
   }
 };
+
+
+
 
 exports.getExamByGroupAndExamType = async (req, res) => {
   try {
