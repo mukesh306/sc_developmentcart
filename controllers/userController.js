@@ -1956,9 +1956,8 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
   }
 };
 
-
 exports.getUserById = async (req, res) => {
- try {
+  try {
     const { userId } = req.params;
 
     
@@ -1967,7 +1966,9 @@ exports.getUserById = async (req, res) => {
         success: false,
         message: "Valid userId is required",
       });
-    }  
+    }
+
+   
     const user = await User.findById(userId)
       .select("firstName status category schoolershipstatus")
       .populate("category._id", "name")
@@ -1980,13 +1981,32 @@ exports.getUserById = async (req, res) => {
       });
     }
 
+    let examType = [];
+
+    
+    if (user.category && user.category._id) {
+      const categoryData = await Schoolercategory.findById(
+        user.category._id._id || user.category._id
+      )
+        .select("examType")
+        .lean();
+
+      examType = categoryData?.examType || [];
+    }
+
     return res.status(200).json({
       success: true,
       message: "User details fetched successfully",
-      data: user,
+      data: {
+        firstName: user.firstName,
+        status: user.status,
+        schoolershipstatus: user.schoolershipstatus,
+        category: user.category,
+        examType: examType
+      },
     });
   } catch (error) {
-    console.error("getUserBasicDetailsById error:", error);
+    console.error("getUserById error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
