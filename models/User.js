@@ -80,16 +80,49 @@ platformDetails:{
     default: 'no'
   },
 
-  userDetails: [
+//   userDetails: [
+//   {
+//     category: {
+//       _id: { type: mongoose.Schema.Types.ObjectId, ref: "Schoolercategory" },
+//       name: String,
+//       examType: Array
+//     },
+//     examTypes: [
+     
+//       {
+//         _id: String,
+//         name: String,
+//         status: {
+//           type: String,
+//           enum: ["Eligible", "NA"],
+//           default: "NA"
+//         },
+//         result: {
+//           type: String,
+//           default: "NA"
+//         }
+//       }
+//     ]
+//   }
+// ],
+
+userDetails: [
   {
     category: {
-      _id: { type: mongoose.Schema.Types.ObjectId, ref: "Schoolercategory" },
+      _id: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Schoolercategory"
+      },
       name: String,
       examType: Array
     },
+
     examTypes: [
       {
-        _id: String,
+        _id: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "Schoolerexam"
+        },
         name: String,
         status: {
           type: String,
@@ -103,7 +136,7 @@ platformDetails:{
       }
     ]
   }
-],
+]
 
 
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
