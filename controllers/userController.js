@@ -1958,23 +1958,18 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
 
 
 exports.getUserById = async (req, res) => {
-  try {
+ try {
     const { userId } = req.params;
 
-   
+    
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
         message: "Valid userId is required",
       });
-    }
-
-    
+    }  
     const user = await User.findById(userId)
-      .populate("countryId", "name")
-      .populate("stateId", "name")
-      .populate("cityId", "name")
-      .populate("className", "name")
+      .select("firstName status category schoolershipstatus")
       .populate("category._id", "name")
       .lean();
 
@@ -1991,7 +1986,7 @@ exports.getUserById = async (req, res) => {
       data: user,
     });
   } catch (error) {
-    console.error("Get User By Id Error:", error);
+    console.error("getUserBasicDetailsById error:", error);
     return res.status(500).json({
       success: false,
       message: "Internal server error",
