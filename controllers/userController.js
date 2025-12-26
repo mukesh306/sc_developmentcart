@@ -2187,6 +2187,7 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
 //   }
 // };
 
+
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2265,8 +2266,17 @@ exports.getUserById = async (req, res) => {
         // first exam
         if (index === 0) {
           et.status = "Eligible";
+          // अगर first exam AttemptStatus null है तो allowNext false
+          if (!statusData.AttemptStatus || !statusData.result) {
+            allowNext = false;
+          }
         } else {
-          et.status = allowNext ? "Eligible" : "Not Eligible";
+          // अगर previous exam null है तो next exam null रहे
+          if (!allowNext) {
+            et.status = null;
+          } else {
+            et.status = "Eligible";
+          }
         }
 
         // 🔥 Decide next eligibility based on current exam
@@ -2329,5 +2339,6 @@ exports.getUserById = async (req, res) => {
     });
   }
 };
+
 
 
