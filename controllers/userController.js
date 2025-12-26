@@ -2067,6 +2067,7 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2126,10 +2127,11 @@ exports.getUserById = async (req, res) => {
         name: et.name,
         status: et.status,
         result: et.result,
+        AttemptStatus: et.AttemptStatus ,
         exam: et.exam
           ? {
-              _id: et.eaxm,
-              examName: examsMap[et.eaxm.toString()] || "NA",
+              _id: et.exam,
+              examName: examsMap[et.exam.toString()] || "NA",
             }
           : null,
       })),
