@@ -146,13 +146,13 @@ exports.signup = async (req, res) => {
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Fetch all categories
+   
     const allCategories = await Schoolercategory.find()
       .select("_id name examType")
       .sort({ createdAt: 1 })
       .lean();
 
-    // Prepare userDetails with examTypes containing status & result
+    
     let userDetails = [];
     allCategories.forEach((cat, catIndex) => {
       userDetails.push({

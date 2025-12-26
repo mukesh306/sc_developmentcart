@@ -259,7 +259,7 @@ exports.assignGroupToExam = async (req, res) => {
       });
     }
 
-    // 2️⃣ Get Exam
+    // 2️⃣ Check exam exists
     const exam = await Schoolerexam.findById(examId);
     if (!exam) {
       return res.status(404).json({
@@ -268,13 +268,13 @@ exports.assignGroupToExam = async (req, res) => {
       });
     }
 
-    // 3️⃣ Assign group to exam
+    // 3️⃣ Assign group to exam (if not already assigned)
     if (!exam.assignedGroup.includes(groupId)) {
       exam.assignedGroup.push(groupId);
       await exam.save();
     }
 
-    // 4️⃣ Get group with users
+    // 4️⃣ Fetch group members
     const group = await UserExamGroup.findById(groupId).populate(
       "members",
       "_id"
@@ -287,34 +287,38 @@ exports.assignGroupToExam = async (req, res) => {
       });
     }
 
-    // 5️⃣ Loop users
+    // 5️⃣ Loop through users
     for (const member of group.members) {
       const user = await User.findById(member._id);
+
       if (!user || !user.userDetails || user.userDetails.length === 0) {
         continue;
       }
 
       let userUpdated = false;
 
-      // 6️⃣ Loop userDetails (categories)
+      // 6️⃣ Loop through userDetails (categories)
       for (const userCategory of user.userDetails) {
         if (!userCategory.examTypes || userCategory.examTypes.length === 0) {
           continue;
         }
 
-        // 7️⃣ Match SAME examType name
+        // 7️⃣ Find SAME examType by name
         const examTypeObj = userCategory.examTypes.find(
           (et) => et.name === examType
         );
 
         if (!examTypeObj) continue;
 
-        // 8️⃣ FORCE save examId (overwrite if needed)
+        // 8️⃣ SAVE examId inside eaxm (IMPORTANT FIX)
         if (
-          !examTypeObj._id ||
-          examTypeObj._id.toString() !== exam._id.toString()
+          !examTypeObj.eaxm ||
+          !examTypeObj.eaxm._id ||
+          examTypeObj.eaxm._id.toString() !== exam._id.toString()
         ) {
-          examTypeObj._id = exam._id;
+          examTypeObj.eaxm = {
+            _id: exam._id,
+          };
           userUpdated = true;
         }
       }
@@ -325,14 +329,15 @@ exports.assignGroupToExam = async (req, res) => {
       }
     }
 
-    // 🔟 Response
+    // 🔟 Final response
     return res.status(200).json({
       success: true,
-      message: "Exam allocated and examId saved successfully in userDetails",
+      message:
+        "Exam allocated successfully and examId saved in userDetails.examTypes.eaxm",
       examId,
+      examType,
       groupId,
     });
-
   } catch (error) {
     console.error("AssignGroupToExam Error:", error);
     return res.status(500).json({
