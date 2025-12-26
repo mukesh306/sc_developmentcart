@@ -2079,6 +2079,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
+    // 🔹 Fetch user for basic info and userDetails structure
     const user = await User.findById(userId)
       .select("firstName status schoolershipstatus category userDetails")
       .populate("category._id", "name")
@@ -2091,55 +2092,61 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    
+    // 🔹 Collect all examIds from userDetails
     const examIds = [];
     (user.userDetails || []).forEach((ud) => {
       (ud.examTypes || []).forEach((et) => {
-        if (et.exam) {
-          examIds.push(et.exam.toString());
-        }
+        if (et._id) examIds.push(et._id.toString());
       });
     });
 
-    
-    let examsMap = {};
+    // 🔹 Fetch ExamUserStatus for this user
+    let examStatusMap = {};
     if (examIds.length > 0) {
-      const exams = await Schoolerexam.find({
-        _id: { $in: examIds },
-      })
-        .select("_id examName")
-        .lean();
+      const examStatuses = await ExamUserStatus.find({
+        userId,
+        examId: { $in: examIds },
+      }).lean();
 
-      exams.forEach((ex) => {
-        examsMap[ex._id.toString()] = ex.examName;
+      examStatuses.forEach((es) => {
+        examStatusMap[es.examId.toString()] = {
+          AttemptStatus: es.attemptStatus || "NA",
+          result: es.result || "NA",
+        };
       });
     }
 
-   
-    const cleanedUserDetails = (user.userDetails || []).map((ud) => ({
-      _id: ud._id,
-      category: {
-        _id: ud.category?._id || null,
-        name: ud.category?.name || "NA",
-      },
-      examTypes: (ud.examTypes || []).map((et) => ({
-        _id: et._id,
-        name: et.name,
-        status: et.status,
-        result: et.result,
-        AttemptStatus: et.AttemptStatus ,
-        exam: et.exam
-          ? {
-              _id: et.exam,
-              examName: examsMap[et.exam.toString()] || "NA",
-            }
-          : null,
-      })),
-    }));
+    // 🔹 Map userDetails with ExamUserStatus only
+    const updatedUserDetails = (user.userDetails || []).map((ud) => {
+      const updatedExamTypes = (ud.examTypes || []).map((et) => {
+        const statusData = examStatusMap[et._id.toString()] || {
+          AttemptStatus: "NA",
+          result: "NA",
+        };
+
+        return {
+          _id: et._id,
+          name: et.name,
+          status: et.status,
+          result: statusData.result,
+          AttemptStatus: statusData.AttemptStatus,
+          exam: null, // optional, since you said only userexam data
+        };
+      });
+
+      return {
+        _id: ud._id,
+        category: {
+          _id: ud.category?._id || null,
+          name: ud.category?.name || "NA",
+        },
+        examTypes: updatedExamTypes,
+      };
+    });
 
     return res.status(200).json({
       success: true,
-      message: "User details fetched successfully",
+      message: "User details fetched successfully from ExamUserStatus",
       data: {
         firstName: user.firstName,
         status: user.status,
@@ -2148,7 +2155,7 @@ exports.getUserById = async (req, res) => {
           _id: user?.category?._id?._id || null,
           name: user?.category?._id?.name || "NA",
         },
-        userDetails: cleanedUserDetails,
+        userDetails: updatedUserDetails,
       },
     });
   } catch (error) {
@@ -2156,7 +2163,7 @@ exports.getUserById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message, 
+      error: error.message,
     });
   }
 };
