@@ -2228,8 +2228,8 @@ exports.getUserById = async (req, res) => {
 
       examStatuses.forEach((es) => {
         examStatusMap[es.examId.toString()] = {
-          AttemptStatus: es.attemptStatus || "NOT ATTEMPTED",
-          result: es.result || "NA",
+          AttemptStatus: es.attemptStatus || null,
+          result: es.result || null,
         };
       });
     }
@@ -2246,16 +2246,16 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔥 CORE LOGIC (DB UPDATE)
+    // 🔥 CORE LOGIC (DB UPDATE + Eligibility)
     user.userDetails.forEach((ud) => {
       let allowNext = true; // first exam default eligible
 
       ud.examTypes.forEach((et, index) => {
-        if (!et.exam) return; // 🔹 exam ID ना हो तो skip
+        if (!et.exam) return; // exam ID नहीं है तो skip
 
         const statusData = examStatusMap[et.exam.toString()] || {
-          AttemptStatus: "NOT ATTEMPTED",
-          result: "NA",
+          AttemptStatus: null,
+          result: null,
         };
 
         // save AttemptStatus & result
@@ -2269,10 +2269,12 @@ exports.getUserById = async (req, res) => {
           et.status = allowNext ? "Eligible" : "Not Eligible";
         }
 
-        // 🔥 Decide next eligibility
+        // 🔥 Decide next eligibility based on current exam
         if (
           statusData.AttemptStatus !== "Attempted" ||
-          !["PASS", "PASSED"].includes(statusData.result?.toUpperCase())
+          !["PASS", "PASSED"].includes(
+            (statusData.result || "").toUpperCase()
+          )
         ) {
           allowNext = false;
         }
@@ -2327,4 +2329,5 @@ exports.getUserById = async (req, res) => {
     });
   }
 };
+
 
