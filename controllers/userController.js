@@ -2067,7 +2067,6 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2092,11 +2091,11 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Collect all examIds from userDetails
+    // 🔹 Collect all exam ObjectIds from userDetails.examTypes.exam
     const examIds = [];
     (user.userDetails || []).forEach((ud) => {
       (ud.examTypes || []).forEach((et) => {
-        if (et._id) examIds.push(et._id.toString());
+        if (et.exam) examIds.push(et.exam.toString());
       });
     });
 
@@ -2116,10 +2115,22 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Map userDetails with ExamUserStatus only
+    // 🔹 Fetch exam names from Schoolerexam collection
+    let examNameMap = {};
+    if (examIds.length > 0) {
+      const exams = await Schoolerexam.find({ _id: { $in: examIds } })
+        .select("_id examName")
+        .lean();
+
+      exams.forEach((ex) => {
+        examNameMap[ex._id.toString()] = ex.examName;
+      });
+    }
+
+    // 🔹 Map userDetails with ExamUserStatus and examName
     const updatedUserDetails = (user.userDetails || []).map((ud) => {
       const updatedExamTypes = (ud.examTypes || []).map((et) => {
-        const statusData = examStatusMap[et._id.toString()] || {
+        const statusData = examStatusMap[et.exam?.toString()] || {
           AttemptStatus: "NA",
           result: "NA",
         };
@@ -2130,7 +2141,12 @@ exports.getUserById = async (req, res) => {
           status: et.status,
           result: statusData.result,
           AttemptStatus: statusData.AttemptStatus,
-          exam: null, // optional, since you said only userexam data
+          exam: et.exam
+            ? {
+                _id: et.exam,
+                examName: examNameMap[et.exam.toString()] || "NA",
+              }
+            : null,
         };
       });
 
@@ -2167,5 +2183,6 @@ exports.getUserById = async (req, res) => {
     });
   }
 };
+
 
 
