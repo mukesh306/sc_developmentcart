@@ -2187,7 +2187,6 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2263,30 +2262,36 @@ exports.getUserById = async (req, res) => {
         et.AttemptStatus = statusData.AttemptStatus;
         et.result = statusData.result;
 
-        // first exam
+        // first exam always Eligible
         if (index === 0) {
           et.status = "Eligible";
-          // अगर first exam AttemptStatus null है तो allowNext false
+          // first exam अगर AttemptStatus null या result null/NA → next exam Not Eligible
           if (!statusData.AttemptStatus || !statusData.result) {
+            allowNext = false;
+          } else if (
+            statusData.AttemptStatus === "Attempted" &&
+            ["FAIL", "FAILED"].includes(statusData.result?.toUpperCase())
+          ) {
             allowNext = false;
           }
         } else {
-          // अगर previous exam null है तो next exam null रहे
-          if (!allowNext) {
-            et.status = null;
-          } else {
+          // next exams
+          if (allowNext) {
             et.status = "Eligible";
+          } else {
+            et.status = "Not Eligible";
           }
         }
 
         // 🔥 Decide next eligibility based on current exam
         if (
-          statusData.AttemptStatus !== "Attempted" ||
-          !["PASS", "PASSED"].includes(
-            (statusData.result || "").toUpperCase()
-          )
+          !statusData.AttemptStatus || // Not Attempted / null
+          statusData.AttemptStatus !== "Attempted" || // not Attempted
+          !["PASS", "PASSED"].includes(statusData.result?.toUpperCase()) // failed or null
         ) {
           allowNext = false;
+        } else {
+          allowNext = true; // Attempted + Passed → next eligible
         }
       });
     });
@@ -2339,6 +2344,7 @@ exports.getUserById = async (req, res) => {
     });
   }
 };
+
 
 
 
