@@ -603,7 +603,7 @@ exports.sendResetOTP = async (req, res) => {
      service: 'gmail',
      auth: {
        user: 'noreply@shikshacart.com', 
-       pass: 'xyrx ryad ondf jaun' 
+       pass: 'xyrx ryad ondf jaum' 
      }
    });
 
@@ -684,7 +684,7 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
      service: 'gmail',
      auth: {
        user: 'noreply@shikshacart.com', 
-       pass: 'xyrx ryad ondf jaun' 
+       pass: 'xyrx ryad ondf jaum' 
      }
    });
 
@@ -719,7 +719,7 @@ exports.SendEmailverifyOTP = async (req, res) => {
      service: 'gmail',
      auth: {
        user: 'noreply@shikshacart.com', 
-       pass: 'xyrx ryad ondf jaun' 
+       pass: 'xyrx ryad ondf jaum' 
      }
    });
 
