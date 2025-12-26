@@ -246,6 +246,7 @@ exports.publishExam = async (req, res) => {
 //     res.status(500).json({ message: "Internal server error", error });
 //   }
 // };
+
 exports.assignGroupToExam = async (req, res) => {
   try {
     const { examId, examType, groupId } = req.body;
@@ -257,7 +258,7 @@ exports.assignGroupToExam = async (req, res) => {
       });
     }
 
-    // 1️⃣ Check exam
+  
     const exam = await Schoolerexam.findById(examId);
     if (!exam) {
       return res.status(404).json({
@@ -266,13 +267,13 @@ exports.assignGroupToExam = async (req, res) => {
       });
     }
 
-    // 2️⃣ Assign group to exam
+    
     if (!exam.assignedGroup.includes(groupId)) {
       exam.assignedGroup.push(groupId);
       await exam.save();
     }
 
-    // 3️⃣ Get group users
+    
     const group = await UserExamGroup.findById(groupId).populate(
       "members",
       "_id"
@@ -285,25 +286,25 @@ exports.assignGroupToExam = async (req, res) => {
       });
     }
 
-    // 4️⃣ Loop users
+    
     for (const member of group.members) {
       const user = await User.findById(member._id);
       if (!user || !user.userDetails) continue;
 
       let userUpdated = false;
 
-      // 5️⃣ Loop categories
+   
       for (const userCategory of user.userDetails) {
         if (!userCategory.examTypes) continue;
 
-        // ✅ MATCH BY examType _id (MAIN FIX)
+      
         const examTypeObj = userCategory.examTypes.find(
           (et) => et._id.toString() === examType.toString()
         );
 
         if (!examTypeObj) continue;
 
-        // 6️⃣ Assign examId inside eaxm
+        
         if (
           !examTypeObj.eaxm ||
           !examTypeObj.eaxm._id ||
@@ -314,7 +315,7 @@ exports.assignGroupToExam = async (req, res) => {
         }
       }
 
-      // 7️⃣ Save user
+     
       if (userUpdated) {
         await user.save();
       }
