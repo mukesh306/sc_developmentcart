@@ -2187,6 +2187,7 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
 //   }
 // };
 
+
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2228,7 +2229,7 @@ exports.getUserById = async (req, res) => {
 
       examStatuses.forEach((es) => {
         examStatusMap[es.examId.toString()] = {
-          AttemptStatus: es.attemptStatus || null,
+          AttemptStatus: es.attemptStatus || "Not Attempted",
           result: es.result || null,
         };
       });
@@ -2254,7 +2255,7 @@ exports.getUserById = async (req, res) => {
         if (!et.exam) return; // exam ID नहीं है तो skip
 
         const statusData = examStatusMap[et.exam.toString()] || {
-          AttemptStatus: null,
+          AttemptStatus: "Not Attempted",
           result: null,
         };
 
@@ -2262,36 +2263,31 @@ exports.getUserById = async (req, res) => {
         et.AttemptStatus = statusData.AttemptStatus;
         et.result = statusData.result;
 
-        // first exam always Eligible
         if (index === 0) {
+          // first exam always eligible
           et.status = "Eligible";
-          // first exam अगर AttemptStatus null या result null/NA → next exam Not Eligible
-          if (!statusData.AttemptStatus || !statusData.result) {
-            allowNext = false;
-          } else if (
-            statusData.AttemptStatus === "Attempted" &&
-            ["FAIL", "FAILED"].includes(statusData.result?.toUpperCase())
+          // अगर first exam failed या not attempted → next exam not eligible
+          if (
+            statusData.AttemptStatus !== "Attempted" ||
+            !["PASS", "PASSED"].includes(
+              (statusData.result || "").toUpperCase()
+            )
           ) {
             allowNext = false;
           }
         } else {
           // next exams
-          if (allowNext) {
-            et.status = "Eligible";
-          } else {
-            et.status = "Not Eligible";
-          }
-        }
+          et.status = allowNext ? "Eligible" : "Not Eligible";
 
-        // 🔥 Decide next eligibility based on current exam
-        if (
-          !statusData.AttemptStatus || // Not Attempted / null
-          statusData.AttemptStatus !== "Attempted" || // not Attempted
-          !["PASS", "PASSED"].includes(statusData.result?.toUpperCase()) // failed or null
-        ) {
-          allowNext = false;
-        } else {
-          allowNext = true; // Attempted + Passed → next eligible
+          // अगर current exam failed या not attempted → next will not be eligible
+          if (
+            statusData.AttemptStatus !== "Attempted" ||
+            !["PASS", "PASSED"].includes(
+              (statusData.result || "").toUpperCase()
+            )
+          ) {
+            allowNext = false;
+          }
         }
       });
     });
@@ -2344,6 +2340,7 @@ exports.getUserById = async (req, res) => {
     });
   }
 };
+
 
 
 
