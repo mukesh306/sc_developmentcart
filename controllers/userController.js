@@ -2090,7 +2090,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Collect examIds
+    
     const examIds = [];
     user.userDetails.forEach((ud) => {
       ud.examTypes.forEach((et) => {
@@ -2098,7 +2098,7 @@ exports.getUserById = async (req, res) => {
       });
     });
 
-    // 🔹 Exam status map
+   
     const examStatusMap = {};
     if (examIds.length) {
       const examStatuses = await ExamUserStatus.find({
@@ -2114,7 +2114,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Exam name map
+  
     const examNameMap = {};
     if (examIds.length) {
       const exams = await Schoolerexam.find({ _id: { $in: examIds } })
@@ -2126,7 +2126,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 APPLY FINAL LOGIC
+   
     user.userDetails.forEach((ud) => {
       let allowNext = true;
       let nextStatusNA = false;
@@ -2146,7 +2146,7 @@ exports.getUserById = async (req, res) => {
         et.result = result;
 
         if (index === 0) {
-          // First exam
+         
           if (attemptStatus === "Attempted" && ["PASS", "PASSED"].includes(result?.toUpperCase())) {
             et.status = "Eligible";
             allowNext = true;
@@ -2165,14 +2165,14 @@ exports.getUserById = async (req, res) => {
             nextStatusNA = false;
           }
         } else {
-          // Next exams
+         
           if (nextStatusNA) {
             et.status = "NA";
           } else {
             et.status = allowNext ? "Eligible" : "Not Eligible";
           }
 
-          // Update allowNext / nextStatusNA for following exams
+          
           if (attemptStatus === "Attempted" && !["PASS", "PASSED"].includes(result?.toUpperCase())) {
             allowNext = false;
             nextStatusNA = false;
@@ -2189,7 +2189,7 @@ exports.getUserById = async (req, res) => {
 
     await user.save();
 
-    // 🔹 Prepare response
+    
     const responseUserDetails = user.userDetails.map((ud) => ({
       _id: ud._id,
       category: {
