@@ -2187,7 +2187,6 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2199,7 +2198,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Fetch user (NOT lean because we will save)
+    // 🔹 Fetch user (NO lean – DB update required)
     const user = await User.findById(userId)
       .select("firstName status schoolershipstatus category userDetails")
       .populate("category._id", "name");
@@ -2211,7 +2210,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Collect examIds from userDetails
+    // 🔹 Collect examIds
     const examIds = [];
     user.userDetails.forEach((ud) => {
       ud.examTypes.forEach((et) => {
@@ -2219,25 +2218,25 @@ exports.getUserById = async (req, res) => {
       });
     });
 
-    // 🔹 Fetch ExamUserStatus
+    // 🔹 ExamUserStatus map
     const examStatusMap = {};
-    if (examIds.length > 0) {
-      const examStatuses = await ExamUserStatus.find({
+    if (examIds.length) {
+      const statuses = await ExamUserStatus.find({
         userId,
         examId: { $in: examIds },
       }).lean();
 
-      examStatuses.forEach((es) => {
+      statuses.forEach((es) => {
         examStatusMap[es.examId.toString()] = {
-          AttemptStatus: es.attemptStatus || "NA",
+          AttemptStatus: es.attemptStatus || "NOT ATTEMPTED",
           result: es.result || "NA",
         };
       });
     }
 
-    // 🔹 Fetch exam names
+    // 🔹 Exam name map
     const examNameMap = {};
-    if (examIds.length > 0) {
+    if (examIds.length) {
       const exams = await Schoolerexam.find({ _id: { $in: examIds } })
         .select("_id examName")
         .lean();
@@ -2247,41 +2246,45 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 UPDATE userDetails (DB + response)
+    // 🔥 MAIN LOGIC (DB + RESPONSE)
     user.userDetails.forEach((ud) => {
-      let eligibleNext = true; // first exam default eligible
-
       ud.examTypes.forEach((et, index) => {
         const statusData = examStatusMap[et.exam?.toString()] || {
-          AttemptStatus: "NA",
+          AttemptStatus: "NOT ATTEMPTED",
           result: "NA",
         };
 
-        // save AttemptStatus & result
+        // save status
         et.AttemptStatus = statusData.AttemptStatus;
         et.result = statusData.result;
 
-        // 🔥 ELIGIBILITY LOGIC
+        // 🔹 Exam-1 always Eligible
         if (index === 0) {
           et.status = "Eligible";
-        } else {
-          et.status = eligibleNext ? "Eligible" : "Not Eligible";
+          return;
         }
 
-        // decide next eligibility
-        if (
-          statusData.AttemptStatus !== "Attempted" ||
-          statusData.result !== "PASS"
-        ) {
-          eligibleNext = false;
+        // 🔹 ONLY Exam-2 depends on Exam-1
+        if (index === 1) {
+          const exam1 = ud.examTypes[0];
+
+          if (
+            exam1.AttemptStatus === "Attempted" &&
+            exam1.result === "PASS"
+          ) {
+            et.status = "Eligible";
+          } else {
+            et.status = "Not Eligible";
+          }
         }
+        // 🔹 Exam-3+ untouched
       });
     });
 
-    // 🔹 Save updated user
+    // 🔹 Save DB
     await user.save();
 
-    // 🔹 RESPONSE FORMAT
+    // 🔹 Response mapping
     const responseUserDetails = user.userDetails.map((ud) => ({
       _id: ud._id,
       category: {
@@ -2292,8 +2295,8 @@ exports.getUserById = async (req, res) => {
         _id: et._id,
         name: et.name,
         status: et.status,
-        result: et.result,
         AttemptStatus: et.AttemptStatus,
+        result: et.result,
         exam: et.exam
           ? {
               _id: et.exam,
@@ -2305,7 +2308,7 @@ exports.getUserById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "User details fetched and eligibility updated successfully",
+      message: "User details fetched & eligibility updated",
       data: {
         firstName: user.firstName,
         status: user.status,
@@ -2326,3 +2329,4 @@ exports.getUserById = async (req, res) => {
     });
   }
 };
+
