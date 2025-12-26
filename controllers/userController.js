@@ -2187,7 +2187,6 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
 //   }
 // };
 
-
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2199,7 +2198,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Fetch user (NOT lean, because DB update needed)
+    // 🔹 Fetch user (NOT lean because we will save)
     const user = await User.findById(userId)
       .select("firstName status schoolershipstatus category userDetails")
       .populate("category._id", "name");
@@ -2211,7 +2210,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Collect examIds
+    // 🔹 Collect all exam ObjectIds from userDetails.examTypes.exam
     const examIds = [];
     user.userDetails.forEach((ud) => {
       ud.examTypes.forEach((et) => {
@@ -2219,7 +2218,7 @@ exports.getUserById = async (req, res) => {
       });
     });
 
-    // 🔹 Fetch ExamUserStatus
+    // 🔹 Fetch ExamUserStatus for this user
     const examStatusMap = {};
     if (examIds.length > 0) {
       const examStatuses = await ExamUserStatus.find({
@@ -2235,7 +2234,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Fetch exam names
+    // 🔹 Fetch exam names from Schoolerexam collection
     const examNameMap = {};
     if (examIds.length > 0) {
       const exams = await Schoolerexam.find({ _id: { $in: examIds } })
@@ -2249,10 +2248,12 @@ exports.getUserById = async (req, res) => {
 
     // 🔥 CORE LOGIC (DB UPDATE)
     user.userDetails.forEach((ud) => {
-      let allowNext = true;
+      let allowNext = true; // first exam default eligible
 
       ud.examTypes.forEach((et, index) => {
-        const statusData = examStatusMap[et.exam?.toString()] || {
+        if (!et.exam) return; // 🔹 exam ID ना हो तो skip
+
+        const statusData = examStatusMap[et.exam.toString()] || {
           AttemptStatus: "NOT ATTEMPTED",
           result: "NA",
         };
@@ -2271,19 +2272,17 @@ exports.getUserById = async (req, res) => {
         // 🔥 Decide next eligibility
         if (
           statusData.AttemptStatus !== "Attempted" ||
-          !["PASS", "PASSED"].includes(
-            statusData.result?.toUpperCase()
-          )
+          !["PASS", "PASSED"].includes(statusData.result?.toUpperCase())
         ) {
           allowNext = false;
         }
       });
     });
 
-    // 🔹 Save DB update
+    // 🔹 Save updated user in DB
     await user.save();
 
-    // 🔹 RESPONSE
+    // 🔹 RESPONSE FORMAT
     const responseUserDetails = user.userDetails.map((ud) => ({
       _id: ud._id,
       category: {
@@ -2307,7 +2306,7 @@ exports.getUserById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "User details updated and fetched successfully",
+      message: "User details fetched and updated successfully",
       data: {
         firstName: user.firstName,
         status: user.status,
