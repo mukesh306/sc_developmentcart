@@ -246,12 +246,10 @@ exports.publishExam = async (req, res) => {
 //     res.status(500).json({ message: "Internal server error", error });
 //   }
 // };
-
 exports.assignGroupToExam = async (req, res) => {
   try {
     const { examId, examType, groupId } = req.body;
 
-    // 1️⃣ Validation
     if (!examId || !examType || !groupId) {
       return res.status(400).json({
         success: false,
@@ -259,7 +257,7 @@ exports.assignGroupToExam = async (req, res) => {
       });
     }
 
-    // 2️⃣ Check exam exists
+    // 1️⃣ Check exam
     const exam = await Schoolerexam.findById(examId);
     if (!exam) {
       return res.status(404).json({
@@ -268,13 +266,13 @@ exports.assignGroupToExam = async (req, res) => {
       });
     }
 
-    // 3️⃣ Assign group to exam (if not already assigned)
+    // 2️⃣ Assign group to exam
     if (!exam.assignedGroup.includes(groupId)) {
       exam.assignedGroup.push(groupId);
       await exam.save();
     }
 
-    // 4️⃣ Fetch group members
+    // 3️⃣ Get group users
     const group = await UserExamGroup.findById(groupId).populate(
       "members",
       "_id"
@@ -287,53 +285,45 @@ exports.assignGroupToExam = async (req, res) => {
       });
     }
 
-    // 5️⃣ Loop through users
+    // 4️⃣ Loop users
     for (const member of group.members) {
       const user = await User.findById(member._id);
-
-      if (!user || !user.userDetails || user.userDetails.length === 0) {
-        continue;
-      }
+      if (!user || !user.userDetails) continue;
 
       let userUpdated = false;
 
-      // 6️⃣ Loop through userDetails (categories)
+      // 5️⃣ Loop categories
       for (const userCategory of user.userDetails) {
-        if (!userCategory.examTypes || userCategory.examTypes.length === 0) {
-          continue;
-        }
+        if (!userCategory.examTypes) continue;
 
-        // 7️⃣ Find SAME examType by name
+        // ✅ MATCH BY examType _id (MAIN FIX)
         const examTypeObj = userCategory.examTypes.find(
-          (et) => et.name === examType
+          (et) => et._id.toString() === examType.toString()
         );
 
         if (!examTypeObj) continue;
 
-        // 8️⃣ SAVE examId inside eaxm (IMPORTANT FIX)
+        // 6️⃣ Assign examId inside eaxm
         if (
           !examTypeObj.eaxm ||
           !examTypeObj.eaxm._id ||
           examTypeObj.eaxm._id.toString() !== exam._id.toString()
         ) {
-          examTypeObj.eaxm = {
-            _id: exam._id,
-          };
+          examTypeObj.eaxm = { _id: exam._id };
           userUpdated = true;
         }
       }
 
-      // 9️⃣ Save user only if updated
+      // 7️⃣ Save user
       if (userUpdated) {
         await user.save();
       }
     }
 
-    // 🔟 Final response
     return res.status(200).json({
       success: true,
       message:
-        "Exam allocated successfully and examId saved in userDetails.examTypes.eaxm",
+        "Exam assigned successfully and saved in userDetails.examTypes.eaxm",
       examId,
       examType,
       groupId,
