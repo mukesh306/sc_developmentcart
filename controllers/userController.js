@@ -603,7 +603,7 @@ exports.sendResetOTP = async (req, res) => {
      service: 'gmail',
      auth: {
        user: 'noreply@shikshacart.com', 
-       pass: 'xyrx ryad ondf jaum' 
+       pass: 'xyrx ryad ondf jaun' 
      }
    });
 
@@ -684,7 +684,7 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
      service: 'gmail',
      auth: {
        user: 'noreply@shikshacart.com', 
-       pass: 'xyrx ryad ondf jaum' 
+       pass: 'xyrx ryad ondf jaun' 
      }
    });
 
@@ -719,7 +719,7 @@ exports.SendEmailverifyOTP = async (req, res) => {
      service: 'gmail',
      auth: {
        user: 'noreply@shikshacart.com', 
-       pass: 'xyrx ryad ondf jaum' 
+       pass: 'xyrx ryad ondf jaun' 
      }
    });
 
@@ -2067,6 +2067,9 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
+
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2089,7 +2092,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Collect examIds
+   
     const examIds = [];
     user.userDetails.forEach((ud) => {
       ud.examTypes.forEach((et) => {
@@ -2097,7 +2100,7 @@ exports.getUserById = async (req, res) => {
       });
     });
 
-    // 🔹 Exam status map
+    
     const examStatusMap = {};
     if (examIds.length) {
       const examStatuses = await ExamUserStatus.find({
@@ -2113,7 +2116,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Exam name map
+   
     const examNameMap = {};
     if (examIds.length) {
       const exams = await Schoolerexam.find({ _id: { $in: examIds } })
@@ -2125,11 +2128,10 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 APPLY FINAL LOGIC (first exam untouched)
+   
     user.userDetails.forEach((ud) => {
       let allowNext = true;
       let nextStatusNA = false;
-
       ud.examTypes.forEach((et, index) => {
         if (!et.exam) return;
 
@@ -2145,7 +2147,7 @@ exports.getUserById = async (req, res) => {
         et.result = result;
 
         if (index === 0) {
-          // 🔹 First exam: do not change status
+       
           if (attemptStatus === "Attempted" && ["PASS", "PASSED"].includes(result?.toUpperCase())) {
             allowNext = true;
             nextStatusNA = false;
@@ -2160,14 +2162,14 @@ exports.getUserById = async (req, res) => {
             nextStatusNA = false;
           }
         } else {
-          // 🔹 Next exams: decide status based on previous exam
+         
           if (nextStatusNA) {
             et.status = "NA";
           } else {
             et.status = allowNext ? "Eligible" : "Not Eligible";
           }
 
-          // Update allowNext / nextStatusNA for following exams
+          
           if (attemptStatus === "Attempted" && !["PASS", "PASSED"].includes(result?.toUpperCase())) {
             allowNext = false;
             nextStatusNA = false;
@@ -2184,7 +2186,7 @@ exports.getUserById = async (req, res) => {
 
     await user.save();
 
-    // 🔹 Prepare response
+   
     const responseUserDetails = user.userDetails.map((ud) => ({
       _id: ud._id,
       category: {
