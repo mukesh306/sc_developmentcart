@@ -162,7 +162,7 @@ exports.signup = async (req, res) => {
           examType: cat.examType || []
         },
         examTypes: (cat.examType || []).map((et, etIndex) => ({
-          _id: et.id,
+           _id: et._id, 
           name: et.name,
           status: catIndex === 0 && etIndex === 0 ? "Eligible" : "NA",
           result: "NA"
