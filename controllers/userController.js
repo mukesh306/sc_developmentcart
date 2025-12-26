@@ -2067,6 +2067,7 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2125,9 +2126,10 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 APPLY FINAL LOGIC (FIXED)
+    // 🔹 APPLY FINAL LOGIC
     user.userDetails.forEach((ud) => {
       let allowNext = true;
+      let nextStatusNA = false;
 
       ud.examTypes.forEach((et, index) => {
         if (!et.exam) return;
@@ -2143,25 +2145,44 @@ exports.getUserById = async (req, res) => {
         et.AttemptStatus = attemptStatus;
         et.result = result;
 
-        // 🔹 Status assignment logic
-        if (attemptStatus === "Not Attempted" || attemptStatus === "NA") {
-          et.status = "Not Eligible";
-          allowNext = false;
-        } else if (attemptStatus === "Attempted") {
-          if (["PASS", "PASSED"].includes(result?.toUpperCase())) {
+        if (index === 0) {
+          // First exam
+          if (attemptStatus === "Attempted" && ["PASS", "PASSED"].includes(result?.toUpperCase())) {
             et.status = "Eligible";
-          } else {
+            allowNext = true;
+            nextStatusNA = false;
+          } else if (attemptStatus === "Attempted" && !["PASS", "PASSED"].includes(result?.toUpperCase())) {
             et.status = "Not Eligible";
             allowNext = false;
+            nextStatusNA = false;
+          } else if (attemptStatus === "NA") {
+            et.status = "NA";
+            allowNext = false;
+            nextStatusNA = true;
+          } else if (attemptStatus === "Not Attempted") {
+            et.status = "Not Eligible";
+            allowNext = false;
+            nextStatusNA = false;
           }
-        }
+        } else {
+          // Next exams
+          if (nextStatusNA) {
+            et.status = "NA";
+          } else {
+            et.status = allowNext ? "Eligible" : "Not Eligible";
+          }
 
-        // 🔹 Next exam eligibility
-        if (!allowNext && index < ud.examTypes.length - 1) {
-          for (let i = index + 1; i < ud.examTypes.length; i++) {
-            if (ud.examTypes[i].exam) ud.examTypes[i].status = "Not Eligible";
+          // Update allowNext / nextStatusNA for following exams
+          if (attemptStatus === "Attempted" && !["PASS", "PASSED"].includes(result?.toUpperCase())) {
+            allowNext = false;
+            nextStatusNA = false;
+          } else if (attemptStatus === "Not Attempted") {
+            allowNext = false;
+            nextStatusNA = false;
+          } else if (attemptStatus === "NA") {
+            allowNext = false;
+            nextStatusNA = true;
           }
-          return; // stop further iteration
         }
       });
     });
@@ -2213,7 +2234,6 @@ exports.getUserById = async (req, res) => {
     });
   }
 };
-
 
 
 
