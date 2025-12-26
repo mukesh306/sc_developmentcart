@@ -2067,7 +2067,6 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2126,7 +2125,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 APPLY FINAL LOGIC
+    // 🔹 APPLY FINAL LOGIC (FIXED)
     user.userDetails.forEach((ud) => {
       let allowNext = true;
 
@@ -2144,35 +2143,32 @@ exports.getUserById = async (req, res) => {
         et.AttemptStatus = attemptStatus;
         et.result = result;
 
-        // 🔹 STATUS ASSIGNMENT
-        if (index === 0) {
-          et.status = "Eligible";
-        } else {
-          if (!allowNext) {
-            et.status = "Not Eligible";
-          } else if (attemptStatus === "NA" && result === "NA") {
-            et.status = "NA";
-          } else {
+        // 🔹 Status assignment logic
+        if (attemptStatus === "Not Attempted" || attemptStatus === "NA") {
+          et.status = "Not Eligible";
+          allowNext = false;
+        } else if (attemptStatus === "Attempted") {
+          if (["PASS", "PASSED"].includes(result?.toUpperCase())) {
             et.status = "Eligible";
+          } else {
+            et.status = "Not Eligible";
+            allowNext = false;
           }
         }
 
-        // 🔹 DECIDE NEXT EXAM
-        if (attemptStatus === "Attempted") {
-          if (!["PASS", "PASSED"].includes(result.toUpperCase())) {
-            allowNext = false;
+        // 🔹 Next exam eligibility
+        if (!allowNext && index < ud.examTypes.length - 1) {
+          for (let i = index + 1; i < ud.examTypes.length; i++) {
+            if (ud.examTypes[i].exam) ud.examTypes[i].status = "Not Eligible";
           }
-        } else if (attemptStatus === "Not Attempted") {
-          // ❌ Explicitly block
-          allowNext = false;
+          return; // stop further iteration
         }
-        // attemptStatus === "NA" → no block
       });
     });
 
     await user.save();
 
-    // 🔹 RESPONSE
+    // 🔹 Prepare response
     const responseUserDetails = user.userDetails.map((ud) => ({
       _id: ud._id,
       category: {
