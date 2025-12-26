@@ -2188,7 +2188,6 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
 // };
 
 
-
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2200,7 +2199,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 User fetch (NOT lean, because DB update needed)
+    // 🔹 Fetch user (NOT lean because we will save)
     const user = await User.findById(userId)
       .select("firstName status schoolershipstatus category userDetails")
       .populate("category._id", "name");
@@ -2230,8 +2229,8 @@ exports.getUserById = async (req, res) => {
 
       examStatuses.forEach((es) => {
         examStatusMap[es.examId.toString()] = {
-          result: es.result || "NA",
           AttemptStatus: es.attemptStatus || "NA",
+          result: es.result || "NA",
         };
       });
     }
@@ -2248,40 +2247,41 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 APPLY RESULT + ELIGIBILITY LOGIC & UPDATE DB
+    // 🔹 UPDATE userDetails (DB + response)
     user.userDetails.forEach((ud) => {
-      let previousPassed = true;
+      let eligibleNext = true; // first exam default eligible
 
       ud.examTypes.forEach((et, index) => {
         const statusData = examStatusMap[et.exam?.toString()] || {
-          result: "NA",
           AttemptStatus: "NA",
+          result: "NA",
         };
 
-        // result & attempt from ExamUserStatus
-        et.result = statusData.result;
+        // save AttemptStatus & result
         et.AttemptStatus = statusData.AttemptStatus;
+        et.result = statusData.result;
 
-        // 🔥 Eligibility logic
+        // 🔥 ELIGIBILITY LOGIC
         if (index === 0) {
           et.status = "Eligible";
-          previousPassed = et.result === "Passed";
         } else {
-          if (previousPassed) {
-            et.status = "Eligible";
-            previousPassed = et.result === "Passed";
-          } else {
-            et.status = "Not Eligible";
-            previousPassed = false;
-          }
+          et.status = eligibleNext ? "Eligible" : "Not Eligible";
+        }
+
+        // decide next eligibility
+        if (
+          statusData.AttemptStatus !== "Attempted" ||
+          statusData.result !== "PASS"
+        ) {
+          eligibleNext = false;
         }
       });
     });
 
-    // 🔹 Save updated userDetails in DB
+    // 🔹 Save updated user
     await user.save();
 
-    // 🔹 Prepare response
+    // 🔹 RESPONSE FORMAT
     const responseUserDetails = user.userDetails.map((ud) => ({
       _id: ud._id,
       category: {
@@ -2305,7 +2305,7 @@ exports.getUserById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "User details fetched & updated successfully",
+      message: "User details fetched and eligibility updated successfully",
       data: {
         firstName: user.firstName,
         status: user.status,

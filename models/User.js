@@ -92,10 +92,10 @@ platformDetails:{
         _id: String,
         name: String,
         status: {
-          type: String,
-          enum: ["Eligible", "NA"],
-          default: "NA"
-        },
+  type: String,
+  enum: ["Eligible", "Not Eligible", "NA"],
+  default: "NA"
+},
         result: {
           type: String,
           default: "NA"
