@@ -116,10 +116,11 @@ exports.createSchoolercategory = async (req, res) => {
             examType: newCategory.examType
           },
           examTypes: newCategory.examType.map(et => ({
-            _id: et.id,
+            _id: et._id,
             name: et.name,
             status: "NA",
-            result: "NA"
+            result: "NA",
+            AttemptStatus:"NA"
           }))
         };
 

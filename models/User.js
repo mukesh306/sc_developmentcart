@@ -100,6 +100,10 @@ platformDetails:{
           type: String,
           default: "NA"
         },
+        AttemptStatus: {
+          type: String,
+          default: "NA"
+        },
        eaxm: {
   type: mongoose.Schema.Types.ObjectId,
   ref: "Schoolerexam",
