@@ -2187,6 +2187,7 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
 //   }
 // };
 
+
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2198,7 +2199,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Fetch user (NO lean – DB update required)
+    // 🔹 Fetch user (NOT lean, because DB update needed)
     const user = await User.findById(userId)
       .select("firstName status schoolershipstatus category userDetails")
       .populate("category._id", "name");
@@ -2218,15 +2219,15 @@ exports.getUserById = async (req, res) => {
       });
     });
 
-    // 🔹 ExamUserStatus map
+    // 🔹 Fetch ExamUserStatus
     const examStatusMap = {};
-    if (examIds.length) {
-      const statuses = await ExamUserStatus.find({
+    if (examIds.length > 0) {
+      const examStatuses = await ExamUserStatus.find({
         userId,
         examId: { $in: examIds },
       }).lean();
 
-      statuses.forEach((es) => {
+      examStatuses.forEach((es) => {
         examStatusMap[es.examId.toString()] = {
           AttemptStatus: es.attemptStatus || "NOT ATTEMPTED",
           result: es.result || "NA",
@@ -2234,9 +2235,9 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Exam name map
+    // 🔹 Fetch exam names
     const examNameMap = {};
-    if (examIds.length) {
+    if (examIds.length > 0) {
       const exams = await Schoolerexam.find({ _id: { $in: examIds } })
         .select("_id examName")
         .lean();
@@ -2246,45 +2247,43 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔥 MAIN LOGIC (DB + RESPONSE)
+    // 🔥 CORE LOGIC (DB UPDATE)
     user.userDetails.forEach((ud) => {
+      let allowNext = true;
+
       ud.examTypes.forEach((et, index) => {
         const statusData = examStatusMap[et.exam?.toString()] || {
           AttemptStatus: "NOT ATTEMPTED",
           result: "NA",
         };
 
-        // save status
+        // save AttemptStatus & result
         et.AttemptStatus = statusData.AttemptStatus;
         et.result = statusData.result;
 
-        // 🔹 Exam-1 always Eligible
+        // first exam
         if (index === 0) {
           et.status = "Eligible";
-          return;
+        } else {
+          et.status = allowNext ? "Eligible" : "Not Eligible";
         }
 
-        // 🔹 ONLY Exam-2 depends on Exam-1
-        if (index === 1) {
-          const exam1 = ud.examTypes[0];
-
-          if (
-            exam1.AttemptStatus === "Attempted" &&
-            exam1.result === "PASS"
-          ) {
-            et.status = "Eligible";
-          } else {
-            et.status = "Not Eligible";
-          }
+        // 🔥 Decide next eligibility
+        if (
+          statusData.AttemptStatus !== "Attempted" ||
+          !["PASS", "PASSED"].includes(
+            statusData.result?.toUpperCase()
+          )
+        ) {
+          allowNext = false;
         }
-        // 🔹 Exam-3+ untouched
       });
     });
 
-    // 🔹 Save DB
+    // 🔹 Save DB update
     await user.save();
 
-    // 🔹 Response mapping
+    // 🔹 RESPONSE
     const responseUserDetails = user.userDetails.map((ud) => ({
       _id: ud._id,
       category: {
@@ -2308,7 +2307,7 @@ exports.getUserById = async (req, res) => {
 
     return res.status(200).json({
       success: true,
-      message: "User details fetched & eligibility updated",
+      message: "User details updated and fetched successfully",
       data: {
         firstName: user.firstName,
         status: user.status,
