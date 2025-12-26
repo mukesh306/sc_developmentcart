@@ -2068,6 +2068,127 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
   }
 };
 
+
+// exports.getUserById = async (req, res) => {
+//   try {
+//     const { userId } = req.params;
+
+//     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Valid userId is required",
+//       });
+//     }
+
+//     const user = await User.findById(userId)
+//       .select("firstName status schoolershipstatus category userDetails")
+//       .populate("category._id", "name");
+
+//     if (!user) {
+//       return res.status(404).json({
+//         success: false,
+//         message: "User not found",
+//       });
+//     }
+
+//     // 🔹 Collect all exam ObjectIds from userDetails.examTypes.exam
+//     const examIds = [];
+//     (user.userDetails || []).forEach((ud) => {
+//       (ud.examTypes || []).forEach((et) => {
+//         if (et.exam) examIds.push(et.exam.toString());
+//       });
+//     });
+
+//     // 🔹 Fetch ExamUserStatus for this user
+//     let examStatusMap = {};
+//     if (examIds.length > 0) {
+//       const examStatuses = await ExamUserStatus.find({
+//         userId,
+//         examId: { $in: examIds },
+//       }).lean();
+
+//       examStatuses.forEach((es) => {
+//         examStatusMap[es.examId.toString()] = {
+//           AttemptStatus: es.attemptStatus || "NA",
+//           result: es.result || "NA",
+//         };
+//       });
+//     }
+
+//     // 🔹 Fetch exam names from Schoolerexam collection
+//     let examNameMap = {};
+//     if (examIds.length > 0) {
+//       const exams = await Schoolerexam.find({ _id: { $in: examIds } })
+//         .select("_id examName")
+//         .lean();
+
+//       exams.forEach((ex) => {
+//         examNameMap[ex._id.toString()] = ex.examName;
+//       });
+//     }
+
+//     // 🔹 Update userDetails in DB and prepare response
+//     const updatedUserDetails = user.userDetails.map((ud) => {
+//       ud.examTypes.forEach((et) => {
+//         const statusData = examStatusMap[et.exam?.toString()] || {
+//           AttemptStatus: "NA",
+//           result: "NA",
+//         };
+
+//         et.result = statusData.result;
+//         et.AttemptStatus = statusData.AttemptStatus;
+//       });
+//       return ud;
+//     });
+
+//     // 🔹 Save updated user in DB
+//     await user.save();
+
+//     // 🔹 Map for response with examName
+//     const responseUserDetails = updatedUserDetails.map((ud) => ({
+//       _id: ud._id,
+//       category: {
+//         _id: ud.category?._id || null,
+//         name: ud.category?.name || "NA",
+//       },
+//       examTypes: ud.examTypes.map((et) => ({
+//         _id: et._id,
+//         name: et.name,
+//         status: et.status,
+//         result: et.result,
+//         AttemptStatus: et.AttemptStatus,
+//         exam: et.exam
+//           ? { _id: et.exam, examName: examNameMap[et.exam.toString()] || "NA" }
+//           : null,
+//       })),
+//     }));
+
+//     return res.status(200).json({
+//       success: true,
+//       message: "User details fetched and updated successfully",
+//       data: {
+//         firstName: user.firstName,
+//         status: user.status,
+//         schoolershipstatus: user.schoolershipstatus,
+//         category: {
+//           _id: user?.category?._id?._id || null,
+//           name: user?.category?._id?.name || "NA",
+//         },
+//         userDetails: responseUserDetails,
+//       },
+//     });
+//   } catch (error) {
+//     console.error("getUserById error:", error);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
+
+
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2079,6 +2200,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
+    // 🔹 User fetch (NOT lean, because DB update needed)
     const user = await User.findById(userId)
       .select("firstName status schoolershipstatus category userDetails")
       .populate("category._id", "name");
@@ -2090,16 +2212,16 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Collect all exam ObjectIds from userDetails.examTypes.exam
+    // 🔹 Collect examIds from userDetails
     const examIds = [];
-    (user.userDetails || []).forEach((ud) => {
-      (ud.examTypes || []).forEach((et) => {
+    user.userDetails.forEach((ud) => {
+      ud.examTypes.forEach((et) => {
         if (et.exam) examIds.push(et.exam.toString());
       });
     });
 
-    // 🔹 Fetch ExamUserStatus for this user
-    let examStatusMap = {};
+    // 🔹 Fetch ExamUserStatus
+    const examStatusMap = {};
     if (examIds.length > 0) {
       const examStatuses = await ExamUserStatus.find({
         userId,
@@ -2108,14 +2230,14 @@ exports.getUserById = async (req, res) => {
 
       examStatuses.forEach((es) => {
         examStatusMap[es.examId.toString()] = {
-          AttemptStatus: es.attemptStatus || "NA",
           result: es.result || "NA",
+          AttemptStatus: es.attemptStatus || "NA",
         };
       });
     }
 
-    // 🔹 Fetch exam names from Schoolerexam collection
-    let examNameMap = {};
+    // 🔹 Fetch exam names
+    const examNameMap = {};
     if (examIds.length > 0) {
       const exams = await Schoolerexam.find({ _id: { $in: examIds } })
         .select("_id examName")
@@ -2126,25 +2248,41 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Update userDetails in DB and prepare response
-    const updatedUserDetails = user.userDetails.map((ud) => {
-      ud.examTypes.forEach((et) => {
+    // 🔹 APPLY RESULT + ELIGIBILITY LOGIC & UPDATE DB
+    user.userDetails.forEach((ud) => {
+      let previousPassed = true;
+
+      ud.examTypes.forEach((et, index) => {
         const statusData = examStatusMap[et.exam?.toString()] || {
-          AttemptStatus: "NA",
           result: "NA",
+          AttemptStatus: "NA",
         };
 
+        // result & attempt from ExamUserStatus
         et.result = statusData.result;
         et.AttemptStatus = statusData.AttemptStatus;
+
+        // 🔥 Eligibility logic
+        if (index === 0) {
+          et.status = "Eligible";
+          previousPassed = et.result === "Passed";
+        } else {
+          if (previousPassed) {
+            et.status = "Eligible";
+            previousPassed = et.result === "Passed";
+          } else {
+            et.status = "Not Eligible";
+            previousPassed = false;
+          }
+        }
       });
-      return ud;
     });
 
-    // 🔹 Save updated user in DB
+    // 🔹 Save updated userDetails in DB
     await user.save();
 
-    // 🔹 Map for response with examName
-    const responseUserDetails = updatedUserDetails.map((ud) => ({
+    // 🔹 Prepare response
+    const responseUserDetails = user.userDetails.map((ud) => ({
       _id: ud._id,
       category: {
         _id: ud.category?._id || null,
@@ -2157,14 +2295,17 @@ exports.getUserById = async (req, res) => {
         result: et.result,
         AttemptStatus: et.AttemptStatus,
         exam: et.exam
-          ? { _id: et.exam, examName: examNameMap[et.exam.toString()] || "NA" }
+          ? {
+              _id: et.exam,
+              examName: examNameMap[et.exam.toString()] || "NA",
+            }
           : null,
       })),
     }));
 
     return res.status(200).json({
       success: true,
-      message: "User details fetched and updated successfully",
+      message: "User details fetched & updated successfully",
       data: {
         firstName: user.firstName,
         status: user.status,
@@ -2185,6 +2326,3 @@ exports.getUserById = async (req, res) => {
     });
   }
 };
-
-
-
