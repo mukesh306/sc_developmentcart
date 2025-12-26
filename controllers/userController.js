@@ -2067,6 +2067,7 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
@@ -2078,11 +2079,9 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Fetch user for basic info and userDetails structure
     const user = await User.findById(userId)
       .select("firstName status schoolershipstatus category userDetails")
-      .populate("category._id", "name")
-      .lean();
+      .populate("category._id", "name");
 
     if (!user) {
       return res.status(404).json({
@@ -2127,42 +2126,45 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 🔹 Map userDetails with ExamUserStatus and examName
-    const updatedUserDetails = (user.userDetails || []).map((ud) => {
-      const updatedExamTypes = (ud.examTypes || []).map((et) => {
+    // 🔹 Update userDetails in DB and prepare response
+    const updatedUserDetails = user.userDetails.map((ud) => {
+      ud.examTypes.forEach((et) => {
         const statusData = examStatusMap[et.exam?.toString()] || {
           AttemptStatus: "NA",
           result: "NA",
         };
 
-        return {
-          _id: et._id,
-          name: et.name,
-          status: et.status,
-          result: statusData.result,
-          AttemptStatus: statusData.AttemptStatus,
-          exam: et.exam
-            ? {
-                _id: et.exam,
-                examName: examNameMap[et.exam.toString()] || "NA",
-              }
-            : null,
-        };
+        et.result = statusData.result;
+        et.AttemptStatus = statusData.AttemptStatus;
       });
-
-      return {
-        _id: ud._id,
-        category: {
-          _id: ud.category?._id || null,
-          name: ud.category?.name || "NA",
-        },
-        examTypes: updatedExamTypes,
-      };
+      return ud;
     });
+
+    // 🔹 Save updated user in DB
+    await user.save();
+
+    // 🔹 Map for response with examName
+    const responseUserDetails = updatedUserDetails.map((ud) => ({
+      _id: ud._id,
+      category: {
+        _id: ud.category?._id || null,
+        name: ud.category?.name || "NA",
+      },
+      examTypes: ud.examTypes.map((et) => ({
+        _id: et._id,
+        name: et.name,
+        status: et.status,
+        result: et.result,
+        AttemptStatus: et.AttemptStatus,
+        exam: et.exam
+          ? { _id: et.exam, examName: examNameMap[et.exam.toString()] || "NA" }
+          : null,
+      })),
+    }));
 
     return res.status(200).json({
       success: true,
-      message: "User details fetched successfully from ExamUserStatus",
+      message: "User details fetched and updated successfully",
       data: {
         firstName: user.firstName,
         status: user.status,
@@ -2171,7 +2173,7 @@ exports.getUserById = async (req, res) => {
           _id: user?.category?._id?._id || null,
           name: user?.category?._id?.name || "NA",
         },
-        userDetails: updatedUserDetails,
+        userDetails: responseUserDetails,
       },
     });
   } catch (error) {
