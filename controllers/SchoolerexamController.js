@@ -246,6 +246,7 @@ exports.publishExam = async (req, res) => {
 //     res.status(500).json({ message: "Internal server error", error });
 //   }
 // };
+
 exports.assignGroupToExam = async (req, res) => {
   try {
     const { examId, examType, groupId } = req.body;
@@ -261,7 +262,7 @@ exports.assignGroupToExam = async (req, res) => {
       return res.status(404).json({ message: "Exam not found" });
     }
 
-    
+    // ✅ Assign group to exam
     if (!exam.assignedGroup.includes(groupId)) {
       exam.assignedGroup.push(groupId);
       await exam.save();
@@ -274,45 +275,41 @@ exports.assignGroupToExam = async (req, res) => {
       return res.status(404).json({ message: "No users found in group" });
     }
 
-    
-    if (!exam.categoryId) {
-      return res.status(400).json({
-        message: "Exam categoryId is missing. Cannot map exam to user category."
-      });
-    }
-
+    // 🔁 Loop users
     for (const member of group.members) {
       const user = await User.findById(member._id);
-      if (!user) continue;
+      if (!user || !user.userDetails?.length) continue;
 
-      const userCategory = user.userDetails.find(
-        ud =>
-          ud.category &&
-          ud.category._id &&
-          exam.categoryId &&
-          ud.category._id.toString() === exam.categoryId.toString()
-      );
+      let updated = false;
 
-      if (!userCategory) continue;
+      // 🔁 Loop user categories
+      for (const userCategory of user.userDetails) {
+        if (!userCategory.examTypes?.length) continue;
 
-      const examTypeObj = userCategory.examTypes.find(
-        et => et.name === examType
-      );
+        // 🔍 Match same examType
+        const examTypeObj = userCategory.examTypes.find(
+          et => et.name === examType
+        );
 
-      if (!examTypeObj) continue;
+        if (!examTypeObj) continue;
 
-   
-      if (!examTypeObj._id) {
-        examTypeObj._id = exam._id;
+        // ✅ Save examId ONLY once
+        if (!examTypeObj._id) {
+          examTypeObj._id = exam._id;
+          updated = true;
+        }
+      }
+
+      if (updated) {
         await user.save();
       }
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       success: true,
-      message: "Exam ID saved successfully in userDetails",
+      message: "Exam successfully allocated and saved in userDetails",
       examId,
-      groupId
+      groupId,
     });
 
   } catch (error) {
@@ -320,7 +317,7 @@ exports.assignGroupToExam = async (req, res) => {
     res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message
+      error: error.message,
     });
   }
 };
