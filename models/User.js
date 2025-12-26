@@ -104,7 +104,7 @@ platformDetails:{
           type: String,
           default: "NA"
         },
-       eaxm: {
+       exam: {
   type: mongoose.Schema.Types.ObjectId,
   ref: "Schoolerexam",
   default: null

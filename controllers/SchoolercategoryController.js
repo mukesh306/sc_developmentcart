@@ -125,7 +125,7 @@ exports.createSchoolercategory = async (req, res) => {
         };
 
         user.userDetails.push(userDetail);
-        await user.save(); // save Mongoose document
+        await user.save(); 
       }
     }
 

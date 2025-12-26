@@ -306,11 +306,11 @@ exports.assignGroupToExam = async (req, res) => {
 
         
         if (
-          !examTypeObj.eaxm ||
-          !examTypeObj.eaxm._id ||
-          examTypeObj.eaxm._id.toString() !== exam._id.toString()
+          !examTypeObj.exam ||
+          !examTypeObj.exam._id ||
+          examTypeObj.exam._id.toString() !== exam._id.toString()
         ) {
-          examTypeObj.eaxm = { _id: exam._id };
+          examTypeObj.exam = { _id: exam._id };
           userUpdated = true;
         }
       }
@@ -324,7 +324,7 @@ exports.assignGroupToExam = async (req, res) => {
     return res.status(200).json({
       success: true,
       message:
-        "Exam assigned successfully and saved in userDetails.examTypes.eaxm",
+        "Exam assigned successfully and saved in userDetails.examTypes.exam",
       examId,
       examType,
       groupId,
@@ -338,9 +338,6 @@ exports.assignGroupToExam = async (req, res) => {
     });
   }
 };
-
-
-
 
 
 

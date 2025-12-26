@@ -2090,17 +2090,17 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 1️⃣ Collect examIds (eaxm is ObjectId)
+    
     const examIds = [];
     (user.userDetails || []).forEach((ud) => {
       (ud.examTypes || []).forEach((et) => {
-        if (et.eaxm) {
-          examIds.push(et.eaxm.toString());
+        if (et.exam) {
+          examIds.push(et.exam.toString());
         }
       });
     });
 
-    // 2️⃣ Fetch exams
+    
     let examsMap = {};
     if (examIds.length > 0) {
       const exams = await Schoolerexam.find({
@@ -2114,7 +2114,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 3️⃣ Build response
+   
     const cleanedUserDetails = (user.userDetails || []).map((ud) => ({
       _id: ud._id,
       category: {
@@ -2126,7 +2126,7 @@ exports.getUserById = async (req, res) => {
         name: et.name,
         status: et.status,
         result: et.result,
-        eaxm: et.eaxm
+        exam: et.exam
           ? {
               _id: et.eaxm,
               examName: examsMap[et.eaxm.toString()] || "NA",
@@ -2154,7 +2154,7 @@ exports.getUserById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
-      error: error.message, // 👈 debug ke liye
+      error: error.message, 
     });
   }
 };
