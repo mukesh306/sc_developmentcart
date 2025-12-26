@@ -165,7 +165,10 @@ exports.signup = async (req, res) => {
            _id: et._id, 
           name: et.name,
           status: catIndex === 0 && etIndex === 0 ? "Eligible" : "NA",
-          result: "NA"
+          result: "NA",
+          eaxm: {
+    _id: null   
+  }
         }))
       });
     });

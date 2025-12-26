@@ -100,9 +100,11 @@ platformDetails:{
           type: String,
           default: "NA"
         },
-        eaxm: {
-         _id: { type: mongoose.Schema.Types.ObjectId, ref: "Schoolerexam" },        
-        }
+       eaxm: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Schoolerexam",
+  default: null
+}
       }
     ]
   }
