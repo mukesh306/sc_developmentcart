@@ -2066,12 +2066,10 @@ exports.getAvailableSchoolershipStatus = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 exports.getUserById = async (req, res) => {
   try {
     const { userId } = req.params;
 
-    // 1️⃣ Validate userId
     if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
       return res.status(400).json({
         success: false,
@@ -2079,7 +2077,6 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 2️⃣ Fetch user
     const user = await User.findById(userId)
       .select("firstName status schoolershipstatus category userDetails")
       .populate("category._id", "name")
@@ -2092,17 +2089,17 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 3️⃣ Collect all examIds from userDetails.examTypes.eaxm
+    // 1️⃣ Collect examIds (eaxm is ObjectId)
     const examIds = [];
     (user.userDetails || []).forEach((ud) => {
       (ud.examTypes || []).forEach((et) => {
-        if (et.eaxm && et.eaxm._id) {
-          examIds.push(et.eaxm._id.toString());
+        if (et.eaxm) {
+          examIds.push(et.eaxm.toString());
         }
       });
     });
 
-    // 4️⃣ Fetch exams (using examName)
+    // 2️⃣ Fetch exams
     let examsMap = {};
     if (examIds.length > 0) {
       const exams = await Schoolerexam.find({
@@ -2116,7 +2113,7 @@ exports.getUserById = async (req, res) => {
       });
     }
 
-    // 5️⃣ Prepare cleaned userDetails with examName
+    // 3️⃣ Build response
     const cleanedUserDetails = (user.userDetails || []).map((ud) => ({
       _id: ud._id,
       category: {
@@ -2128,16 +2125,15 @@ exports.getUserById = async (req, res) => {
         name: et.name,
         status: et.status,
         result: et.result,
-        eaxm: et.eaxm && et.eaxm._id
+        eaxm: et.eaxm
           ? {
-              _id: et.eaxm._id,
-              examName: examsMap[et.eaxm._id.toString()] || "NA",
+              _id: et.eaxm,
+              examName: examsMap[et.eaxm.toString()] || "NA",
             }
           : null,
       })),
     }));
 
-    // 6️⃣ Final response
     return res.status(200).json({
       success: true,
       message: "User details fetched successfully",
@@ -2157,7 +2153,9 @@ exports.getUserById = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Internal server error",
+      error: error.message, // 👈 debug ke liye
     });
   }
 };
+
 
