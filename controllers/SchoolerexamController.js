@@ -251,76 +251,98 @@ exports.assignGroupToExam = async (req, res) => {
   try {
     const { examId, examType, groupId } = req.body;
 
+    // 1️⃣ Validation
     if (!examId || !examType || !groupId) {
       return res.status(400).json({
+        success: false,
         message: "examId, examType and groupId are required",
       });
     }
 
+    // 2️⃣ Get Exam
     const exam = await Schoolerexam.findById(examId);
     if (!exam) {
-      return res.status(404).json({ message: "Exam not found" });
+      return res.status(404).json({
+        success: false,
+        message: "Exam not found",
+      });
     }
 
-    // ✅ Assign group to exam
+    // 3️⃣ Assign group to exam
     if (!exam.assignedGroup.includes(groupId)) {
       exam.assignedGroup.push(groupId);
       await exam.save();
     }
 
-    const group = await UserExamGroup.findById(groupId)
-      .populate("members", "_id");
+    // 4️⃣ Get group with users
+    const group = await UserExamGroup.findById(groupId).populate(
+      "members",
+      "_id"
+    );
 
-    if (!group || !group.members.length) {
-      return res.status(404).json({ message: "No users found in group" });
+    if (!group || !group.members || group.members.length === 0) {
+      return res.status(404).json({
+        success: false,
+        message: "No users found in group",
+      });
     }
 
-    // 🔁 Loop users
+    // 5️⃣ Loop users
     for (const member of group.members) {
       const user = await User.findById(member._id);
-      if (!user || !user.userDetails?.length) continue;
+      if (!user || !user.userDetails || user.userDetails.length === 0) {
+        continue;
+      }
 
-      let updated = false;
+      let userUpdated = false;
 
-      // 🔁 Loop user categories
+      // 6️⃣ Loop userDetails (categories)
       for (const userCategory of user.userDetails) {
-        if (!userCategory.examTypes?.length) continue;
+        if (!userCategory.examTypes || userCategory.examTypes.length === 0) {
+          continue;
+        }
 
-        // 🔍 Match same examType
+        // 7️⃣ Match SAME examType name
         const examTypeObj = userCategory.examTypes.find(
-          et => et.name === examType
+          (et) => et.name === examType
         );
 
         if (!examTypeObj) continue;
 
-        // ✅ Save examId ONLY once
-        if (!examTypeObj._id) {
+        // 8️⃣ FORCE save examId (overwrite if needed)
+        if (
+          !examTypeObj._id ||
+          examTypeObj._id.toString() !== exam._id.toString()
+        ) {
           examTypeObj._id = exam._id;
-          updated = true;
+          userUpdated = true;
         }
       }
 
-      if (updated) {
+      // 9️⃣ Save user only if updated
+      if (userUpdated) {
         await user.save();
       }
     }
 
+    // 🔟 Response
     return res.status(200).json({
       success: true,
-      message: "Exam successfully allocated and saved in userDetails",
+      message: "Exam allocated and examId saved successfully in userDetails",
       examId,
       groupId,
     });
 
   } catch (error) {
-    console.error("Assign exam error:", error);
-    res.status(500).json({
+    console.error("AssignGroupToExam Error:", error);
+    return res.status(500).json({
       success: false,
       message: "Internal server error",
       error: error.message,
     });
   }
 };
+
 
 
 
