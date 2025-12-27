@@ -887,11 +887,10 @@ exports.getUserCitiesByState = async (req, res) => {
       query.className = className;
     }
 
-    // ✅ Step 1: Get grouped users
     const groupedUsers = await UserExamGroup.find({}, "members");
     const allGroupedUserIds = groupedUsers.flatMap(g => g.members.map(id => id.toString()));
 
-    // ✅ Step 2: Current group (if editing)
+    
     let currentGroupMemberIds = [];
     if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
       const currentGroup = await UserExamGroup.findById(groupId).select("members");
@@ -900,16 +899,16 @@ exports.getUserCitiesByState = async (req, res) => {
       }
     }
 
-    // ✅ Step 3: Exclude grouped users
+    
     const excludeIds = allGroupedUserIds.filter(id => !currentGroupMemberIds.includes(id));
     if (excludeIds.length > 0) {
       query._id = { $nin: excludeIds };
     }
 
-    // ✅ Step 4: Fetch users (only city)
+   
     const users = await User.find(query).select("cityId").populate("cityId", "name");
 
-    // ✅ Step 5: Unique cities
+
     const uniqueCitiesMap = new Map();
     for (let u of users) {
       if (u.cityId && !uniqueCitiesMap.has(u.cityId._id.toString())) {
