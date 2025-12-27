@@ -1538,10 +1538,21 @@ exports.getCategoriesFromUsers = async (req, res) => {
 };
 
 
+
 // exports.userforAdmin = async (req, res) => {
 //   try {
 //     const adminId = req.user._id;
-//     let { className, stateId, cityId, categoryId, schoolershipstatus, status, page = 1, limit = 10, fields } = req.query;
+//     let {
+//       className,
+//       stateId,
+//       cityId,
+//       categoryId,
+//       schoolershipstatus,
+//       status,
+//       page = 1,
+//       limit = 10,
+//       fields
+//     } = req.query;
 
 //     page = parseInt(page);
 //     limit = parseInt(limit);
@@ -1637,10 +1648,10 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //       }
 
 //       let category = { _id: null, name: "NA" };
-//       let schoolershipstatus = "NA";
+//       let computedSchoolershipstatus = "NA";
 
 //       if (user.status === "yes") {
-//         schoolershipstatus = "Participant";
+//         computedSchoolershipstatus = "Participant";
 
 //         category =
 //           userGroupCategoryMap[user._id] ||
@@ -1651,23 +1662,35 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //           const key = `${user._id}_${category._id}`;
 
 //           if (failedMap[key]) {
-//             schoolershipstatus = "Eliminated";
+//             computedSchoolershipstatus = "Eliminated";
 //           }
 
 //           const notAttempted = examStatuses.find(
-//             es => es.userId.toString() === user._id.toString() &&
-//                   es.category?._id.toString() === category._id.toString() &&
-//                   es.attemptStatus === "Not Attempted"
+//             es =>
+//               es.userId.toString() === user._id.toString() &&
+//               es.category?._id.toString() === category._id.toString() &&
+//               es.attemptStatus === "Not Attempted"
 //           );
+
 //           if (notAttempted) {
-//             schoolershipstatus = "Eliminated";
+//             computedSchoolershipstatus = "Eliminated";
 //           }
 
 //           if (finalistMap[key]) {
-//             schoolershipstatus = "Finalist";
+//             computedSchoolershipstatus = "Finalist";
 //           }
 //         }
 //       }
+  
+//       await User.updateOne(
+//         { _id: user._id },
+//         {
+//           $set: {
+//             schoolershipstatus: computedSchoolershipstatus,
+//             category
+//           }
+//         }
+//       );
 
 //       finalUsers.push({
 //         ...user._doc,
@@ -1678,13 +1701,13 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //           user.schoolName || user.collegeName || user.instituteName || "",
 //         institutionType: user.studentType || "",
 //         category,
-//         schoolershipstatus
+//         schoolershipstatus: computedSchoolershipstatus
 //       });
 //     }
 
 //     if (categoryId) {
 //       const categoriesArray = categoryId.split(",");
-//       finalUsers = finalUsers.filter(u => 
+//       finalUsers = finalUsers.filter(u =>
 //         u.category?._id && categoriesArray.includes(u.category._id.toString())
 //       );
 //     }
@@ -1698,8 +1721,8 @@ exports.getCategoriesFromUsers = async (req, res) => {
 
 //     if (status) {
 //       const statusArray = status.split(",").map(s => s.trim().toLowerCase());
-//       finalUsers = finalUsers.filter(u =>
-//         u.status && statusArray.includes(u.status.toLowerCase())
+//       finalUsers = finalUsers.filter(
+//         u => u.status && statusArray.includes(u.status.toLowerCase())
 //       );
 //     }
 
@@ -1717,7 +1740,6 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //     const totalUsers = finalUsers.length;
 //     const paginated = finalUsers.slice(skip, skip + limit);
 
-//     // ✅ Added from/to logic
 //     const from = totalUsers === 0 ? 0 : skip + 1;
 //     const to = Math.min(skip + paginated.length, totalUsers);
 
@@ -1737,10 +1759,6 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
-
-
-
-
 
 
 exports.userforAdmin = async (req, res) => {
@@ -1885,13 +1903,24 @@ exports.userforAdmin = async (req, res) => {
           }
         }
       }
-  
+
+
+      if (user.userDetails && user.userDetails.length > 0) {
+        user.userDetails.forEach((ud) => {
+          if (ud.category._id?.toString() === category._id?.toString() && ud.examTypes?.length > 0) {
+            ud.examTypes[0].status = "Eligible"; 
+          }
+        });
+      }
+      
+
       await User.updateOne(
         { _id: user._id },
         {
           $set: {
             schoolershipstatus: computedSchoolershipstatus,
-            category
+            category,
+            userDetails: user.userDetails
           }
         }
       );
@@ -1963,7 +1992,6 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 exports.getAvailableSchoolershipStatus = async (req, res) => {
