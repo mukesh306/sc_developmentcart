@@ -50,6 +50,9 @@ router.get("/user-categories", userController.getCategoriesFromUsers);
 router.get("/schoolershipstatus-filter",auth, userController.getAvailableSchoolershipStatus);
 router.get("/user/:userId", userController.getUserById);
 
+router.delete(
+  "/user/examtypereset/:userId",userController.deleteUserExamData);
+
 
   
 router.get('/verify-token', (req, res) => {

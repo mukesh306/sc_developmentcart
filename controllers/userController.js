@@ -2262,3 +2262,46 @@ exports.getUserById = async (req, res) => {
 
 
 
+exports.deleteUserExamData = async (req, res) => {
+  try {
+    const { userId } = req.params;
+
+    if (!userId || !mongoose.Types.ObjectId.isValid(userId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid userId is required",
+      });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
+
+    
+    user.userDetails.forEach((detail) => {
+      detail.examTypes.forEach((exam) => {
+        exam.result = "NA";
+        exam.AttemptStatus = "NA";
+        exam.exam = null;
+        exam.status = "NA"; 
+      });
+    });
+
+    await user.save();
+
+    return res.status(200).json({
+      success: true,
+      message: "User exam result, AttemptStatus and exam reset successfully",
+    });
+  } catch (error) {
+    console.error(error);
+    return res.status(500).json({
+      success: false,
+      message: "Internal server error",
+    });
+  }
+};
