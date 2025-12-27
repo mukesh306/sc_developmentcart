@@ -33,6 +33,7 @@ router.post('/schooler/update-prize-status',auth, SchoolerexamController.updateP
 
 
 router.get('/schooler/SchoolerShipPrizes',auth, SchoolerexamController.schoolerShipPrizes);
+router.get('/schooler/examByGroup',auth, SchoolerexamController.getExamsByAssignedGroup);
 
 router.post(
   "/schooler/addQuestions/:examId",

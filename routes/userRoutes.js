@@ -47,6 +47,11 @@ router.post(
   router.get("/user-states", userController.getStatesFromUsers);
 router.get("/user-cities", userController.getCitiesFromUsers);
 router.get("/user-categories", userController.getCategoriesFromUsers);
+router.get("/schoolershipstatus-filter",auth, userController.getAvailableSchoolershipStatus);
+router.get("/user/:userId", userController.getUserById);
+
+router.delete(
+  "/user/examtypereset/:userId",userController.deleteUserExamData);
 
 
   

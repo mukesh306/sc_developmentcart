@@ -18,6 +18,17 @@ const userSchema = new mongoose.Schema({
   studentType: { type: String, enum: ['school', 'college', 'institute'] }, 
   instituteName: { type: String },
   className: { type: mongoose.Schema.Types.ObjectId, ref: 'Adminschool' },
+  
+schoolershipstatus: {
+  type: String,
+  enum: ["Participant", "Eliminated", "Finalist", "NA"],
+  default: "NA"
+},
+category: {
+  _id: { type: mongoose.Schema.Types.ObjectId, ref: "Schoolercategory" },
+  name: String
+},
+
   session: { type: String },
    startDate: {
     type: String, 
@@ -31,6 +42,8 @@ const userSchema = new mongoose.Schema({
 platformDetails:{
  type: String,
 },
+
+
   aadharCard: { type: String },
   marksheet: { type: String },
   resetPasswordOTP: { type: String },
@@ -66,6 +79,74 @@ platformDetails:{
     enum: ['no', 'yes'],
     default: 'no'
   },
+
+  userDetails: [
+  {
+    category: {
+      _id: { type: mongoose.Schema.Types.ObjectId, ref: "Schoolercategory" },
+      name: String,
+      examType: Array
+    },
+    examTypes: [     
+      {
+        _id: String,
+        name: String,
+        status: {
+  type: String,
+  enum: ["Eligible", "Not Eligible", "NA"],
+  default: "NA"
+},
+        result: {
+          type: String,
+          default: "NA"
+        },
+        AttemptStatus: {
+          type: String,
+          default: "NA"
+        },
+       exam: {
+  type: mongoose.Schema.Types.ObjectId,
+  ref: "Schoolerexam",
+  default: null
+}
+      }
+    ]
+  }
+],
+
+// userDetails: [
+//   {
+//     category: {
+//       _id: {
+//         type: mongoose.Schema.Types.ObjectId,
+//         ref: "Schoolercategory"
+//       },
+//       name: String,
+//       examType: Array
+//     },
+
+//     examTypes: [
+//       {
+//         _id: {
+//           type: mongoose.Schema.Types.ObjectId,
+//           ref: "Schoolerexam"
+//         },
+//         name: String,
+//         status: {
+//           type: String,
+//           enum: ["Eligible", "NA"],
+//           default: "NA"
+//         },
+//         result: {
+//           type: String,
+//           default: "NA"
+//         }
+//       }
+//     ]
+//   }
+// ],
+
+
   updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'Admin1' },
   allocatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'OrganizationSign' },
 

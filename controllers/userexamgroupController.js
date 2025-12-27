@@ -328,126 +328,144 @@ exports.deleteGroup = async (req, res) => {
 };
 
 
-
-
-// exports.getGroupMembers = async (req, res) => {
-//   try {
-//     const { groupId } = req.params;
-
-//     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
-//       return res.status(400).json({ message: "Valid groupId is required." });
-//     }
-
-    
-//     const group = await UserExamGroup.findById(groupId)
-//       .populate("members", "firstName email _id");
-
-//     if (!group) {
-//       return res.status(404).json({ message: "Group not found." });
-//     }
-
-//     const membersWithExamData = [];
-
-//     for (const member of group.members) {
-      
-//       const results = await ExamResult.find({ userId: member._id })
-//         .select("examId percentage result createdAt");
-
-     
-//       const examPercentage = results.map(r => ({
-//         examId: r.examId,
-//         percentage: r.percentage,
-//         result: r.result,
-//         createdAt: r.createdAt
-//       }));
-
-//       membersWithExamData.push({
-//         _id: member._id,
-//         firstName: member.firstName,
-//         email: member.email,
-//         examPercentage 
-//       });
-//     }
-
-//     return res.status(200).json({
-//       message: "Group members fetched successfully.",
-//       groupId: group._id,
-//       members: membersWithExamData,
-//     });
-
-//   } catch (error) {
-//     console.error("Error fetching group members:", error);
-//     res.status(500).json({
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
-
-
 exports.getGroupMembers = async (req, res) => {
   try {
     const { groupId } = req.params;
+    const { examId } = req.query;
 
     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
       return res.status(400).json({ message: "Valid groupId is required." });
     }
 
-    const group = await UserExamGroup.findById(groupId)
-      .populate("members", "firstName email _id");
+    if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
+      return res.status(400).json({ message: "Valid examId is required." });
+    }
+
+    const currentExam = await Schoolerexam.findOne({
+      _id: examId,
+      assignedGroup: groupId,
+    }).select("_id createdAt");
+
+    if (!currentExam) {
+      return res.status(200).json({
+        message: "No data found for this group and exam.",
+        groupId,
+        examId,
+        members: [],
+      });
+    }
+
+   
+    const previousExams = await Schoolerexam.find({
+      assignedGroup: groupId,
+      createdAt: { $lt: currentExam.createdAt },
+    }).select("_id");
+
+    const previousExamIds = previousExams.map(e => e._id);
+    const eliminatedUserSet = new Set();
+
+    if (previousExamIds.length > 0) {
+      const eliminatedUsers = await ExamUserStatus.find({
+        examId: { $in: previousExamIds },
+        $or: [{ result: "failed" }, { attemptStatus: "Not Attempted" }],
+      })
+        .select("userId")
+        .lean();
+
+      eliminatedUsers.forEach(e =>
+        eliminatedUserSet.add(e.userId.toString())
+      );
+
+      const nullResultUsers = await ExamResult.find({
+        examId: { $in: previousExamIds },
+        percentage: null,
+        Completiontime: null,
+        rank: null,
+      })
+        .select("userId")
+        .lean();
+
+      nullResultUsers.forEach(u =>
+        eliminatedUserSet.add(u.userId.toString())
+      );
+    }
+
+    
+    const group = await UserExamGroup.findById(groupId).populate(
+      "members",
+      "firstName middleName lastName status email category schoolershipstatus _id"
+    );
 
     if (!group) {
       return res.status(404).json({ message: "Group not found." });
     }
 
+    const memberIds = group.members.map(m => m._id);
+
+    
+    const examStatuses = await ExamUserStatus.find({
+      userId: { $in: memberIds },
+      examId,
+    })
+      .select("userId result rank attemptStatus")
+      .lean();
+
+    const examStatusMap = {};
+    examStatuses.forEach(es => {
+      examStatusMap[es.userId.toString()] = es;
+    });
+
+   
+    const examResults = await ExamResult.find({
+      userId: { $in: memberIds },
+      examId,
+    })
+      .select("userId percentage Completiontime")
+      .lean();
+
+    const examResultMap = {};
+    examResults.forEach(er => {
+      examResultMap[er.userId.toString()] = er;
+    });
+
+   
     const membersWithExamData = [];
 
     for (const member of group.members) {
+      
+      if (eliminatedUserSet.has(member._id.toString())) continue;
 
-      // Fetch exam results
-      const results = await ExamResult.find({ userId: member._id })
-        .select("examId percentage Completiontime createdAt")
-        .lean();
-
-      const examPercentage = [];
-
-      for (const r of results) {
-        
-        // 👇 Fetch rank from ExamUserStatus
-        const status = await ExamUserStatus.findOne({
-          userId: member._id,
-          examId: r.examId
-        })
-        .select("rank totalParticipants")
-        .lean();
-
-        examPercentage.push({
-          examId: r.examId,
-          percentage: r.percentage,
-          completionTime: r.Completiontime ?? null,
-          createdAt: r.createdAt,
-          rank: status?.rank ?? null,
-          totalParticipants: status?.totalParticipants ?? null,
-        });
-      }
+      const es = examStatusMap[member._id.toString()];
+      const er = examResultMap[member._id.toString()];
 
       membersWithExamData.push({
         _id: member._id,
         firstName: member.firstName,
+        middleName: member.middleName,
+        lastName: member.lastName,
         email: member.email,
-        examPercentage
+        status: member.status,
+        category: member.category,
+
+      
+        schoolershipstatus: member.schoolershipstatus ?? "NA",
+
+        percentage: er?.percentage ?? null,
+        completionTime: er?.Completiontime ?? null,
+        rank: es?.rank ?? null,
+        attemptStatus: es?.attemptStatus ?? null,
       });
     }
 
     return res.status(200).json({
       message: "Group members fetched successfully.",
-      groupId: group._id,
+      groupId,
+      examId,
       members: membersWithExamData,
     });
-
   } catch (error) {
-    console.error("Error fetching group members:", error);
-    res.status(500).json({
+    console.error("getGroupMembers Error:", error);
+    return res.status(500).json({
       message: "Internal server error",
       error: error.message,
     });
@@ -455,203 +473,181 @@ exports.getGroupMembers = async (req, res) => {
 };
 
 
-// exports.getAllActiveUsers = async (req, res) => {
+
+// exports.getGroupMembers = async (req, res) => {
 //   try {
-//     const { className, groupId, stateId, cityId, category } = req.query;
+//     const { groupId } = req.params;
+//     const { examId } = req.query;
 
-//     // 🔹 Dynamic allowed category (instead of static ID)
-//     const allowedCategory = await Category.findOne().sort({ createdAt: 1 }).select("_id");
-//     const allowedCategoryId = allowedCategory?._id?.toString();
+//     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
+//       return res.status(400).json({ message: "Valid groupId is required." });
+//     }
 
-//     // ✅ Case 1: Top users logic
-//     if (category && category !== allowedCategoryId) {
-//       let topUserFilter = { categoryId: category };
+//     if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
+//       return res.status(400).json({ message: "Valid examId is required." });
+//     }
 
-//       if (className && mongoose.Types.ObjectId.isValid(className)) {
-//         topUserFilter.className = className;
-//       }
+//     const currentExam = await Schoolerexam.findOne({
+//       _id: examId,
+//       assignedGroup: groupId,
+//     }).select("_id createdAt");
 
-//       const topUsers = await CategoryTopUser.find(topUserFilter)
-//         .populate({
-//           path: "userId",
-//           populate: [
-//             { path: "countryId", select: "name" },
-//             { path: "stateId", select: "name" },
-//             { path: "cityId", select: "name" },
-//             {
-//               path: "updatedBy",
-//               select: "email session startDate endDate endTime name role",
-//             },
-//           ],
-//         })
-//         .populate("examId", "examName");
-
-//       const baseUrl = `${req.protocol}://${req.get("host")}`.replace(
-//         "http://",
-//         "https://"
-//       );
-
-//       let formattedUsers = [];
-
-//       for (let record of topUsers) {
-//         const user = record.userId;
-//         if (!user) continue;
-
-//         let classId = user.className;
-//         let classDetails = null;
-
-//         if (mongoose.Types.ObjectId.isValid(classId)) {
-//           classDetails =
-//             (await School.findById(classId)) ||
-//             (await College.findById(classId));
-//         }
-
-//         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//           user.aadharCard = `${baseUrl}/uploads/${path.basename(
-//             user.aadharCard
-//           )}`;
-//         }
-
-//         if (user.marksheet && fs.existsSync(user.marksheet)) {
-//           user.marksheet = `${baseUrl}/uploads/${path.basename(
-//             user.marksheet
-//           )}`;
-//         }
-
-//         const formattedUser = {
-//           ...user._doc,
-//           percentage: record.percentage,
-//           rank: record.rank,
-//           exam: record.examId?.examName || "",
-//           country: user.countryId?.name || "",
-//           state: user.stateId?.name || "",
-//           city: user.cityId?.name || "",
-//           institutionName:
-//             user.schoolName || user.collegeName || user.instituteName || "",
-//           institutionType: user.studentType || "",
-//           updatedBy: user.updatedBy || null,
-//         };
-
-//         if (classDetails && classDetails.price != null) {
-//           formattedUser.classOrYear = classDetails.name;
-//         }
-
-//         formattedUsers.push(formattedUser);
-//       }
-
+//     if (!currentExam) {
 //       return res.status(200).json({
-//         message: "Top users fetched successfully for this category.",
-//         users: formattedUsers,
+//         message: "No data found for this group and exam.",
+//         groupId,
+//         examId,
+//         members: [],
 //       });
 //     }
 
-//     // ✅ Case 2: Normal logic (unchanged)
-//     let query = { status: "yes" };
+  
+//     const previousExams = await Schoolerexam.find({
+//       assignedGroup: groupId,
+//       createdAt: { $lt: currentExam.createdAt },
+//     }).select("_id");
 
-//     if (className && mongoose.Types.ObjectId.isValid(className)) {
-//       query.className = className;
+//     const previousExamIds = previousExams.map(e => e._id);
+//     const eliminatedUserSet = new Set();
+
+//     if (previousExamIds.length > 0) {
+      
+//       const eliminatedUsers = await ExamUserStatus.find({
+//         examId: { $in: previousExamIds },
+//         $or: [{ result: "failed" }, { attemptStatus: "Not Attempted" }],
+//       }).select("userId").lean();
+
+//       eliminatedUsers.forEach(e =>
+//         eliminatedUserSet.add(e.userId.toString())
+//       );
 //     }
 
-//     if (stateId && mongoose.Types.ObjectId.isValid(stateId)) {
-//       query.stateId = stateId;
-//     }
-
-//     if (cityId && mongoose.Types.ObjectId.isValid(cityId)) {
-//       query.cityId = cityId;
-//     }
-
-//     // Step 1: Collect all grouped users
-//     const groupedUsers = await UserExamGroup.find({}, "members");
-//     const allGroupedUserIds = groupedUsers.flatMap((g) =>
-//       g.members.map((id) => id.toString())
+   
+//     const group = await UserExamGroup.findById(groupId).populate(
+//       "members",
+//       "firstName middleName lastName status email category schoolershipstatus _id"
 //     );
 
-//     // Step 2: Current group members
-//     let currentGroupMemberIds = [];
-//     if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
-//       const currentGroup = await UserExamGroup.findById(groupId).select(
-//         "members"
-//       );
-//       if (currentGroup) {
-//         currentGroupMemberIds = currentGroup.members.map((id) =>
-//           id.toString()
+//     if (!group) {
+//       return res.status(404).json({ message: "Group not found." });
+//     }
+
+//     const memberIds = group.members.map(m => m._id);
+
+ 
+//     const examStatuses = await ExamUserStatus.find({
+//       userId: { $in: memberIds },
+//       examId,
+//     })
+//       .select("userId result rank attemptStatus")
+//       .lean();
+
+//     const examStatusMap = {};
+//     examStatuses.forEach(es => {
+//       examStatusMap[es.userId.toString()] = es;
+//     });
+
+//     const rankDeclared = examStatuses.some(es => es.rank !== null);
+
+    
+//     const finalistUsers = await CategoryTopUser.find({
+//       userId: { $in: memberIds },
+//     }).select("userId").lean();
+
+//     const finalistMap = {};
+//     finalistUsers.forEach(f => {
+//       finalistMap[f.userId.toString()] = true;
+//     });
+
+//     const membersWithExamData = [];
+
+//     for (const member of group.members) {
+      
+//       if (eliminatedUserSet.has(member._id.toString())) continue;
+
+//       const es = examStatusMap[member._id.toString()];
+//       let computedSchoolershipstatus = "NA";
+
+//       const examResult = await ExamResult.findOne({
+//         userId: member._id,
+//         examId,
+//       }).select("percentage Completiontime").lean();
+
+      
+//       const hasAttempted =
+//         examResult?.percentage !== null &&
+//         examResult?.Completiontime !== null;
+
+//       if (member.status === "yes") {
+//         computedSchoolershipstatus = "Participant";
+
+       
+//         if (es?.result === "failed") {
+//           computedSchoolershipstatus = "Eliminated";
+//         }
+
+       
+//         if (!hasAttempted && es?.attemptStatus === "Not Attempted") {
+//           computedSchoolershipstatus = "Eliminated";
+//         }
+
+        
+//         if (
+//           !hasAttempted &&
+//           computedSchoolershipstatus === "Participant" &&
+//           rankDeclared &&
+//           es?.rank == null
+//         ) {
+//           computedSchoolershipstatus = "Eliminated";
+//         }
+
+       
+//         if (finalistMap[member._id.toString()]) {
+//           computedSchoolershipstatus = "Finalist";
+//         }
+//       }
+
+     
+//       if (member.schoolershipstatus !== computedSchoolershipstatus) {
+//         await User.updateOne(
+//           { _id: member._id },
+//           {
+//             $set: {
+//               schoolershipstatus: computedSchoolershipstatus,
+//               category: member.category ?? null,
+//             },
+//           }
 //         );
 //       }
-//     }
 
-//     // Step 3: Exclude grouped users except current group
-//     const excludeIds = allGroupedUserIds.filter(
-//       (id) => !currentGroupMemberIds.includes(id)
-//     );
-//     if (excludeIds.length > 0) {
-//       query._id = { $nin: excludeIds };
-//     }
-
-//     // Step 4: Fetch users
-//     let users = await User.find(query)
-//       .populate("countryId", "name")
-//       .populate("stateId", "name")
-//       .populate("cityId", "name")
-//       .populate({
-//         path: "updatedBy",
-//         select: "email session startDate endDate endTime name role",
+//       membersWithExamData.push({
+//         _id: member._id,
+//         firstName: member.firstName,
+//         middleName: member.middleName,
+//         lastName: member.lastName,
+//         email: member.email,
+//         status: member.status,
+//         category: member.category,
+//         schoolershipstatus: computedSchoolershipstatus,
+//         percentage: examResult?.percentage ?? null,
+//         completionTime: examResult?.Completiontime ?? null,
+//         rank: es?.rank ?? null,              
+//         attemptStatus: es?.attemptStatus ?? null, 
 //       });
-
-//     const baseUrl = `${req.protocol}://${req.get("host")}`.replace(
-//       "http://",
-//       "https://"
-//     );
-
-//     let finalList = [];
-
-//     for (let user of users) {
-//       let classId = user.className;
-//       let classDetails = null;
-
-//       if (mongoose.Types.ObjectId.isValid(classId)) {
-//         classDetails =
-//           (await School.findById(classId)) ||
-//           (await College.findById(classId));
-//       }
-
-//       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//         user.aadharCard = `${baseUrl}/uploads/${path.basename(
-//           user.aadharCard
-//         )}`;
-//       }
-
-//       if (user.marksheet && fs.existsSync(user.marksheet)) {
-//         user.marksheet = `${baseUrl}/uploads/${path.basename(
-//           user.marksheet
-//         )}`;
-//       }
-
-//       const formattedUser = {
-//         ...user._doc,
-//         country: user.countryId?.name || "",
-//         state: user.stateId?.name || "",
-//         city: user.cityId?.name || "",
-//         institutionName:
-//           user.schoolName || user.collegeName || user.instituteName || "",
-//         institutionType: user.studentType || "",
-//         updatedBy: user.updatedBy || null,
-//       };
-
-//       if (classDetails && classDetails.price != null) {
-//         formattedUser.classOrYear = classDetails.name;
-//       }
-
-//       finalList.push(formattedUser);
 //     }
 
 //     return res.status(200).json({
-//       message:
-//         "Active users fetched successfully (filtered by state, city, and excluding other groups).",
-//       users: finalList,
+//       message: "Group members fetched successfully.",
+//       groupId,
+//       examId,
+//       members: membersWithExamData,
 //     });
 //   } catch (error) {
-//     console.error("Get Users Error:", error);
-//     return res.status(500).json({ message: error.message });
+//     console.error("getGroupMembers Error:", error);
+//     return res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message,
+//     });
 //   }
 // };
 

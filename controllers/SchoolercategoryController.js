@@ -4,6 +4,60 @@ const Schoolergroup = require("../models/Schoolergroup");
 const Schoolerexam = require("../models/Schoolerexam");
 const ExamResult = require("../models/examResult");
 const CategoryTopUser = require("../models/CategoryTopUser");
+const User = require("../models/User");
+
+
+// exports.createSchoolercategory = async (req, res) => {
+//   try {
+//     const { name, price, groupSize, examSize } = req.body;
+//     const createdBy = req.user?._id;
+
+//     if (!name || !price || !groupSize || !examSize) {
+//       return res.status(400).json({
+//         message: "All fields (name, price, groupSize, examSize) are required."
+//       });
+//     }
+
+//     if (isNaN(examSize) || examSize <= 0) {
+//       return res.status(400).json({
+//         message: "examSize must be a valid number."
+//       });
+//     }
+
+    
+//     let examType = [];
+//     for (let i = 1; i <= examSize; i++) {
+//       examType.push({
+//         name: `Exam ${i}`,
+//         id: new mongoose.Types.ObjectId().toString(),
+//         count: i,
+//         groupSize: i === 1 ? groupSize : 0
+//       });
+//     }
+
+//     const newCategory = new Schoolercategory({
+//       name,
+//       price,
+//       groupSize,
+//       examSize,
+//       examType,
+//       createdBy,
+//     });
+
+//     await newCategory.save();
+
+//     res.status(201).json({
+//       message: "Category created successfully.",
+//       category: newCategory,
+//     });
+
+//   } catch (error) {
+//     res.status(500).json({
+//       message: "Error creating category.",
+//       error: error.message
+//     });
+//   }
+// };
 
 
 exports.createSchoolercategory = async (req, res) => {
@@ -23,8 +77,8 @@ exports.createSchoolercategory = async (req, res) => {
       });
     }
 
-    
-    let examType = [];
+    // 🔹 Create examType array
+    const examType = [];
     for (let i = 1; i <= examSize; i++) {
       examType.push({
         name: `Exam ${i}`,
@@ -34,29 +88,61 @@ exports.createSchoolercategory = async (req, res) => {
       });
     }
 
+    // 🔹 Save new category
     const newCategory = new Schoolercategory({
       name,
       price,
       groupSize,
       examSize,
       examType,
-      createdBy,
+      createdBy
     });
 
     await newCategory.save();
 
+    // 🔹 Update all users who don't have this category
+    const users = await User.find(); // don't use .lean()
+
+    for (const user of users) {
+      const hasCategory = user.userDetails.some(ud =>
+        ud.category._id.toString() === newCategory._id.toString()
+      );
+
+      if (!hasCategory) {
+        const userDetail = {
+          category: {
+            _id: newCategory._id,
+            name: newCategory.name,
+            examType: newCategory.examType
+          },
+          examTypes: newCategory.examType.map(et => ({
+            _id: et._id,
+            name: et.name,
+            status: "NA",
+            result: "NA",
+            AttemptStatus:"NA"
+          }))
+        };
+
+        user.userDetails.push(userDetail);
+        await user.save(); 
+      }
+    }
+
     res.status(201).json({
-      message: "Category created successfully.",
+      message: "Category created successfully and users updated.",
       category: newCategory,
     });
 
   } catch (error) {
+    console.error("createSchoolercategory Error:", error);
     res.status(500).json({
       message: "Error creating category.",
       error: error.message
     });
   }
 };
+
 
 
 exports.getAllSchoolercategories = async (req, res) => {
@@ -72,20 +158,6 @@ exports.getAllSchoolercategories = async (req, res) => {
 };
 
 
-// exports.getSchoolercategoryById = async (req, res) => {
-//   try {
-//     const category = await Schoolercategory.findById(req.params.id)
-//       .populate("createdBy", "firstName lastName email");
-
-//     if (!category) {
-//       return res.status(404).json({ message: "Category not found." });
-//     }
-
-//     res.status(200).json(category);
-//   } catch (error) {
-//     res.status(500).json({ message: "Error fetching category.", error });
-//   }
-// };
 
 
 exports.getSchoolercategoryById = async (req, res) => {
@@ -128,28 +200,6 @@ exports.getSchoolercategoryById = async (req, res) => {
 
 
 
-// exports.updateSchoolercategory = async (req, res) => {
-//   try {
-//     const { name ,price,groupSize , finalist,examSize } = req.body;
-//     const category = await Schoolercategory.findByIdAndUpdate(
-//       req.params.id,
-//       { name ,price,groupSize , finalist,examSize },
-//       { new: true }
-//     );
-
-//     if (!category) {
-//       return res.status(404).json({ message: "Category not found." });
-//     }
-
-//     res.status(200).json({
-//       message: "Category updated successfully.",
-//       category,
-//     });
-//   } catch (error) {
-//     res.status(500).json({ message: "Error updating category.", error });
-//   }
-// };
-
 
 
 
@@ -168,14 +218,10 @@ exports.updateSchoolercategory = async (req, res) => {
     if (price) category.price = price;
     if (groupSize) category.groupSize = groupSize;
     
-
-   
     if (examSize && examSize !== category.examSize) {
-
-      
+  
       category.examSize = examSize;
 
-      // Regenerate examType
       let examType = [];
       for (let i = 1; i <= examSize; i++) {
         examType.push({
