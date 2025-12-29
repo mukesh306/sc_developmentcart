@@ -249,10 +249,9 @@ exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
 
+    
     const user = await User.findById(userId);
-    if (!user) {
-      return res.status(400).json({ message: "User not found" });
-    }
+    if (!user) return res.status(400).json({ message: "User not found" });
 
     const userEndDate = user.endDate;
     const userClassId = user.className;
@@ -261,7 +260,7 @@ exports.scoreCard = async (req, res) => {
       return res.status(400).json({ message: "Please complete your profile." });
     }
 
-   
+    
     const rawScores = await TopicScore.aggregate([
       {
         $match: {
@@ -273,23 +272,20 @@ exports.scoreCard = async (req, res) => {
       { $sort: { scoreDate: 1, createdAt: 1 } },
       {
         $group: {
-          _id: {
-            date: {
-              $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
-            }
-          },
+          _id: { date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } } },
           doc: { $first: "$$ROOT" }
         }
       },
       { $replaceRoot: { newRoot: "$doc" } }
     ]);
 
+  
     const populatedScores = await TopicScore.populate(rawScores, [
       { path: "topicId", select: "topic" },
       { path: "learningId", select: "name" }
     ]);
 
-   
+    
     const scoreMap = new Map();
     const todayStr = moment().format("YYYY-MM-DD");
     let minDate = null;
@@ -311,12 +307,9 @@ exports.scoreCard = async (req, res) => {
 
     if (!minDate) minDate = moment().startOf("day");
 
+   
     const fullResult = [];
-    for (
-      let m = moment(minDate);
-      m.diff(maxDate, "days") <= 0;
-      m.add(1, "days")
-    ) {
+    for (let m = moment(minDate); m.diff(maxDate, "days") <= 0; m.add(1, "days")) {
       const dateStr = m.format("YYYY-MM-DD");
       fullResult.push(
         scoreMap.get(dateStr) || {
@@ -327,13 +320,14 @@ exports.scoreCard = async (req, res) => {
       );
     }
 
+    
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
-   
+    
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -341,14 +335,9 @@ exports.scoreCard = async (req, res) => {
         const lname = entry.learningId.name || "Unknown";
 
         if (!learningScores[lid]) {
-          learningScores[lid] = {
-            learningId: lid,
-            name: lname,
-            totalScore: 0
-          };
+          learningScores[lid] = { learningId: lid, name: lname, totalScore: 0 };
         }
 
-       
         learningScores[lid].totalScore += entry.score;
       }
     }
@@ -356,29 +345,46 @@ exports.scoreCard = async (req, res) => {
     const learningWiseAverage = Object.values(learningScores).map(item => ({
       learningId: item.learningId,
       name: item.name,
-      averageScore: item.totalScore   
+      averageScore: item.totalScore
     }));
 
    
     for (const item of learningWiseAverage) {
       const idx = user.learning.findIndex(
-        l =>
-          l.learningId.toString() === item.learningId &&
-          l.session === user.session
+        l => l.learningId.toString() === item.learningId && l.session === user.session
       );
-
       if (idx !== -1) {
-        
         user.learning[idx].totalScore = item.averageScore;
         user.learning[idx].updatedAt = new Date();
       } else {
-       
         user.learning.push({
           learningId: item.learningId,
           session: user.session,
           totalScore: item.averageScore,
           updatedAt: new Date()
         });
+      }
+    }
+
+    
+    for (const entry of fullResult) {
+      if (entry.score !== null && entry.learningId?._id) {
+        const exists = user.learningDailyHistory.some(
+          h =>
+            h.learningId.toString() === entry.learningId._id.toString() &&
+            h.date === entry.date &&
+            h.session === user.session
+        );
+        if (!exists) {
+          user.learningDailyHistory.push({
+            learningId: entry.learningId._id,
+            name: entry.learningId.name,
+            date: entry.date,
+            score: entry.score,
+            session: user.session,
+            createdAt: new Date()
+          });
+        }
       }
     }
 
@@ -389,7 +395,6 @@ exports.scoreCard = async (req, res) => {
       scores: sortedFinal,
       learningWiseAverage
     });
-
   } catch (error) {
     console.error("scoreCard error:", error);
     return res.status(500).json({ message: error.message });

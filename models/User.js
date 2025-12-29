@@ -90,7 +90,16 @@ learning: [
     }
   }
 ],
-
+learningDailyHistory: [
+      {
+        learningId: { type: mongoose.Schema.Types.ObjectId, ref: "Learnings" },
+        name: String,
+        date: String,   
+        score: Number,
+        session: String,
+        createdAt: { type: Date, default: Date.now }
+      }
+    ],
  level: {
   type: Number,
   default: 1
