@@ -1673,8 +1673,6 @@ exports.PracticescoreCard = async (req, res) => {
 };
 
 
-
-
 exports.StrictScore = async (req, res) => {
   try {
     const userId = req.user._id;

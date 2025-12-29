@@ -150,6 +150,35 @@ learningDailyHistory: [
       }
     }
   ],
+
+  strikeHistory: [
+    {
+      session: { type: String, required: true },
+      date: { type: String, required: true },
+      data: [
+        {
+          type: { type: String, enum: ["practice", "topic"] },
+          score: Number,
+          learningId: {
+            _id: mongoose.Schema.Types.ObjectId,
+            name: String
+          },
+          strickStatus: Boolean
+        }
+      ],
+      dailyExperience: Number
+    }
+  ],
+
+  strikeSessionSummary: [
+    {
+      session: { type: String, required: true },
+      totalDailyExperience: { type: Number, default: 0 },
+      updatedAt: { type: Date, default: Date.now }
+    }
+  ],
+
+
  level: {
   type: Number,
   default: 1
