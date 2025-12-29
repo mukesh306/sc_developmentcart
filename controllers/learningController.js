@@ -319,15 +319,13 @@ exports.scoreCard = async (req, res) => {
         }
       );
     }
-
-    
+ 
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
-    
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -365,8 +363,6 @@ exports.scoreCard = async (req, res) => {
         });
       }
     }
-
-    
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
         const exists = user.learningDailyHistory.some(

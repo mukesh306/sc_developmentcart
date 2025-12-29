@@ -100,6 +100,56 @@ learningDailyHistory: [
         createdAt: { type: Date, default: Date.now }
       }
     ],
+    
+     practice: [
+    {
+      learningId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Learnings",
+        required: true
+      },
+      session: {
+        type: String,
+        required: true
+      },
+      totalScore: {
+        type: Number,
+        default: 0
+      },
+      updatedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }
+  ],
+  practiceDailyHistory: [
+    {
+      learningId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Learnings",
+        required: true
+      },
+      name: {
+        type: String
+      },
+      date: {
+        type: String,
+        required: true
+      },
+      score: {
+        type: Number,
+        required: true
+      },
+      session: {
+        type: String,
+        required: true
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now
+      }
+    }
+  ],
  level: {
   type: Number,
   default: 1
