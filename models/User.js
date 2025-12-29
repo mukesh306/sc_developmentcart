@@ -150,11 +150,10 @@ learningDailyHistory: [
       }
     }
   ],
-
-  strikeHistory: [
+strikeHistory: [
     {
-      session: { type: String, required: true },
-      date: { type: String, required: true },
+      session: String,
+      date: String,
       data: [
         {
           type: { type: String, enum: ["practice", "topic"] },
@@ -170,10 +169,9 @@ learningDailyHistory: [
     }
   ],
 
-  
   strikeSessionSummary: [
     {
-      session: { type: String, required: true },
+      session: String,
       totalDailyExperience: { type: Number, default: 0 },
       updatedAt: { type: Date, default: Date.now }
     }
