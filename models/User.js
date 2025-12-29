@@ -69,7 +69,27 @@ platformDetails:{
   }
 ],
 
-
+practice: [
+  {
+    learningId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Learnings",   
+      required: true
+    },
+    session: {
+      type: String,
+      required: true
+    },
+    totalScore: {
+      type: Number,
+      default: 0
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }
+],
  level: {
   type: Number,
   default: 1
