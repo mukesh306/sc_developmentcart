@@ -99,6 +99,7 @@ const moment = require('moment-timezone');
 //   }
 // };
 
+
 exports.signup = async (req, res) => {
   try {
     const {
@@ -932,7 +933,7 @@ exports.updateProfile = async (req, res) => {
       updatedFields.marksheet = req.files.marksheet[0].path;
     }
 
-    // === Fetch class updatedBy and admin session ===
+    
     let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(className)) {
       classDetails = await School.findById(className) || await College.findById(className);
@@ -940,17 +941,17 @@ exports.updateProfile = async (req, res) => {
       if (classDetails?.updatedBy) {
         let shouldClone = false;
 
-        // 1️⃣ पहली बार updatedBy set हो रहा है
+      
         if (!existingUser.updatedBy) {
           shouldClone = true;
         }
 
-        // 2️⃣ className बदला गया
+       
         if (existingUser.className?.toString() !== className?.toString()) {
           shouldClone = true;
         }
 
-        // 3️⃣ className same है लेकिन updatedBy बदला है
+       
         if (
           existingUser.className?.toString() === className?.toString() &&
           existingUser.updatedBy?.toString() !== classDetails.updatedBy.toString()
@@ -958,7 +959,7 @@ exports.updateProfile = async (req, res) => {
           shouldClone = true;
         }
 
-        // ✅ अगर condition match होती है तो clone बनाओ
+        
         if (shouldClone) {
           const userData = existingUser.toObject();
           const currentUserId = userData._id;
@@ -994,8 +995,7 @@ exports.updateProfile = async (req, res) => {
         }
       }
     }
-
-    // === Update user ===
+ 
     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
       .populate('countryId')
       .populate('stateId')
@@ -1341,7 +1341,7 @@ exports.getActiveSessionUsers = async (req, res) => {
 
 exports.getUserHistories = async (req, res) => {
   try {
-    const { originalUserId } = req.query; // optional filter
+    const { originalUserId } = req.query; 
 
     let filter = {};
     if (originalUserId && mongoose.Types.ObjectId.isValid(originalUserId)) {

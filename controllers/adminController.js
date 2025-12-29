@@ -13,11 +13,10 @@ exports.registerAdmin = async (req, res) => {
 
     const { email, password, session, startDate, endDate, endTime } = req.body;
 
-    // Keep startDate and endDate as-is (e.g., '07-08-2025')
-    // Format endTime into 24-hour format like '10:55'
+    
     const formattedEndTime = moment(endTime, 'HH:mm').format('HH:mm');
 
-    // Check for existing admin with same session or overlapping date ranges
+    
     const existing = await Admin1.findOne({
       email,
       $or: [
@@ -43,9 +42,9 @@ exports.registerAdmin = async (req, res) => {
       email,
       password: hashedPassword,
       session,
-      startDate, // Keep as string: '07-08-2025'
-      endDate,   // Keep as string: '07-08-2025'
-      endTime: formattedEndTime, // '10:55'
+      startDate, 
+      endDate,  
+      endTime: formattedEndTime, 
       createdBy: req.user._id,
     });
 
@@ -53,7 +52,7 @@ exports.registerAdmin = async (req, res) => {
 
     res.status(201).json({
       message: 'Admin created successfully.',
-      admin: newAdmin,
+      // admin: newAdmin,
     });
   } catch (error) {
     console.error('Register error:', error);
