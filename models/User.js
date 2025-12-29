@@ -69,7 +69,7 @@ platformDetails:{
   }
 ],
 
-practice: [
+learning: [
   {
     learningId: {
       type: mongoose.Schema.Types.ObjectId,
@@ -90,6 +90,7 @@ practice: [
     }
   }
 ],
+
  level: {
   type: Number,
   default: 1

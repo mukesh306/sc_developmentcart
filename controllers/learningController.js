@@ -101,14 +101,164 @@ exports.updateLearning = async (req, res) => {
 
 
 
+// exports.scoreCard = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const user = await User.findById(userId).lean();
+//     const userEndDate = user?.endDate;
+//     const userClassId = user?.className;
+//     if (!userEndDate || !userClassId) {
+//       return res.status(400).json({ message: 'Please complete your profile.' });
+//     }
+
+   
+//     const rawScores = await TopicScore.aggregate([
+//       {
+//         $match: {
+//           userId: new mongoose.Types.ObjectId(userId),
+//           endDate: userEndDate, 
+//           classId: userClassId.toString()
+//         }
+//       },
+//       { $sort: { scoreDate: 1, createdAt: 1 } },
+//       {
+//         $group: {
+//           _id: {
+//             date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
+//           },
+//           doc: { $first: "$$ROOT" }
+//         }
+//       },
+//       { $replaceRoot: { newRoot: "$doc" } }
+//     ]);
+
+//     const populatedScores = await TopicScore.populate(rawScores, [
+//       { path: 'topicId', select: 'topic' },
+//       { path: 'learningId', select: 'name' }
+//     ]);
+
+//     const scoreMap = new Map();
+//     let minDate = null;
+//     let maxDate = moment().startOf('day');
+//     const todayStr = moment().format('YYYY-MM-DD');
+
+//     for (const score of populatedScores) {
+//       const scoreDate = moment(score.scoreDate).startOf('day');
+//       const dateStr = scoreDate.format('YYYY-MM-DD');
+
+//       scoreMap.set(dateStr, {
+//         ...score.toObject?.() || score,
+//         date: dateStr,
+//         isToday: dateStr === todayStr
+//       });
+
+//       if (!minDate || scoreDate.isBefore(minDate)) minDate = scoreDate;
+//       if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
+//     }
+
+//     if (!minDate) minDate = moment().startOf('day');
+
+//     const fullResult = [];
+//     for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
+//       const dateStr = m.format('YYYY-MM-DD');
+//       if (scoreMap.has(dateStr)) {
+//         fullResult.push(scoreMap.get(dateStr));
+//       } else {
+//         fullResult.push({
+//           date: dateStr,
+//           score: null,
+//           isToday: dateStr === todayStr
+//         });
+//       }
+//     }
+
+//     const sortedFinal = fullResult.sort((a, b) => {
+//       if (a.date === todayStr) return -1;
+//       if (b.date === todayStr) return 1;
+//       return new Date(a.date) - new Date(b.date);
+//     });
+
+//     const learningScores = {};
+//     for (const entry of fullResult) {
+//       if (entry.score !== null && entry.learningId?._id) {
+//         const lid = entry.learningId._id.toString();
+//         const lname = entry.learningId.name || "Unknown";
+//         if (!learningScores[lid]) {
+//           learningScores[lid] = { learningId: lid, name: lname, scores: [] };
+//         }
+//         learningScores[lid].scores.push(entry.score);
+//       }
+//     }
+
+//     const learningWiseAverage = Object.values(learningScores).map(item => {
+//       const total = item.scores.reduce((sum, s) => sum + s, 0);
+//       const average = parseFloat((total / item.scores.length).toFixed(2));
+//       return {
+//         learningId: item.learningId,
+//         name: item.name,
+//         averageScore: average
+//       };
+//     });
+
+   
+//     try {
+//       const assignedList = await Assigned.find({
+//         endDate: userEndDate,
+//         classId: userClassId
+//       });
+
+//       for (let assign of assignedList) {
+//         const update = {};
+
+//         const mapAvg = (learningField, avgField) => {
+//           const learningId = assign[learningField]?.toString();
+//           if (learningId) {
+//             const found = learningWiseAverage.find(l => l.learningId === learningId);
+//             if (found) {
+//               update[avgField] = found.averageScore;
+//             }
+//           }
+//         };
+
+//         mapAvg('learning', 'learningAverage');
+//         mapAvg('learning2', 'learning2Average');
+//         mapAvg('learning3', 'learning3Average');
+//         mapAvg('learning4', 'learning4Average');
+
+//         if (Object.keys(update).length > 0) {
+//           await Assigned.updateOne({ _id: assign._id }, { $set: update });
+//         }
+//       }
+//     } catch (err) {
+//       console.error('Error updating Assigned averages:', err.message);
+//     }
+
+  
+//     res.status(200).json({
+//       scores: sortedFinal,
+//       learningWiseAverage
+//     });
+
+//   } catch (error) {
+//     console.error('Error in scoreCard:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
-    const user = await User.findById(userId).lean();
-    const userEndDate = user?.endDate;
-    const userClassId = user?.className;
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    const userEndDate = user.endDate;
+    const userClassId = user.className;
+
     if (!userEndDate || !userClassId) {
-      return res.status(400).json({ message: 'Please complete your profile.' });
+      return res.status(400).json({ message: "Please complete your profile." });
     }
 
    
@@ -116,7 +266,7 @@ exports.scoreCard = async (req, res) => {
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
-          endDate: userEndDate, 
+          endDate: userEndDate,
           classId: userClassId.toString()
         }
       },
@@ -124,7 +274,9 @@ exports.scoreCard = async (req, res) => {
       {
         $group: {
           _id: {
-            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
+            date: {
+              $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+            }
           },
           doc: { $first: "$$ROOT" }
         }
@@ -133,21 +285,22 @@ exports.scoreCard = async (req, res) => {
     ]);
 
     const populatedScores = await TopicScore.populate(rawScores, [
-      { path: 'topicId', select: 'topic' },
-      { path: 'learningId', select: 'name' }
+      { path: "topicId", select: "topic" },
+      { path: "learningId", select: "name" }
     ]);
 
+   
     const scoreMap = new Map();
+    const todayStr = moment().format("YYYY-MM-DD");
     let minDate = null;
-    let maxDate = moment().startOf('day');
-    const todayStr = moment().format('YYYY-MM-DD');
+    let maxDate = moment().startOf("day");
 
     for (const score of populatedScores) {
-      const scoreDate = moment(score.scoreDate).startOf('day');
-      const dateStr = scoreDate.format('YYYY-MM-DD');
+      const scoreDate = moment(score.scoreDate).startOf("day");
+      const dateStr = scoreDate.format("YYYY-MM-DD");
 
       scoreMap.set(dateStr, {
-        ...score.toObject?.() || score,
+        ...score,
         date: dateStr,
         isToday: dateStr === todayStr
       });
@@ -156,20 +309,22 @@ exports.scoreCard = async (req, res) => {
       if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
     }
 
-    if (!minDate) minDate = moment().startOf('day');
+    if (!minDate) minDate = moment().startOf("day");
 
     const fullResult = [];
-    for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
-      const dateStr = m.format('YYYY-MM-DD');
-      if (scoreMap.has(dateStr)) {
-        fullResult.push(scoreMap.get(dateStr));
-      } else {
-        fullResult.push({
+    for (
+      let m = moment(minDate);
+      m.diff(maxDate, "days") <= 0;
+      m.add(1, "days")
+    ) {
+      const dateStr = m.format("YYYY-MM-DD");
+      fullResult.push(
+        scoreMap.get(dateStr) || {
           date: dateStr,
           score: null,
           isToday: dateStr === todayStr
-        });
-      }
+        }
+      );
     }
 
     const sortedFinal = fullResult.sort((a, b) => {
@@ -178,166 +333,68 @@ exports.scoreCard = async (req, res) => {
       return new Date(a.date) - new Date(b.date);
     });
 
+   
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
         const lid = entry.learningId._id.toString();
         const lname = entry.learningId.name || "Unknown";
+
         if (!learningScores[lid]) {
-          learningScores[lid] = { learningId: lid, name: lname, scores: [] };
+          learningScores[lid] = {
+            learningId: lid,
+            name: lname,
+            totalScore: 0
+          };
         }
-        learningScores[lid].scores.push(entry.score);
+
+       
+        learningScores[lid].totalScore += entry.score;
       }
     }
 
-    const learningWiseAverage = Object.values(learningScores).map(item => {
-      const total = item.scores.reduce((sum, s) => sum + s, 0);
-      const average = parseFloat((total / item.scores.length).toFixed(2));
-      return {
-        learningId: item.learningId,
-        name: item.name,
-        averageScore: average
-      };
-    });
+    const learningWiseAverage = Object.values(learningScores).map(item => ({
+      learningId: item.learningId,
+      name: item.name,
+      averageScore: item.totalScore   
+    }));
 
    
-    try {
-      const assignedList = await Assigned.find({
-        endDate: userEndDate,
-        classId: userClassId
-      });
+    for (const item of learningWiseAverage) {
+      const idx = user.learning.findIndex(
+        l =>
+          l.learningId.toString() === item.learningId &&
+          l.session === user.session
+      );
 
-      for (let assign of assignedList) {
-        const update = {};
-
-        const mapAvg = (learningField, avgField) => {
-          const learningId = assign[learningField]?.toString();
-          if (learningId) {
-            const found = learningWiseAverage.find(l => l.learningId === learningId);
-            if (found) {
-              update[avgField] = found.averageScore;
-            }
-          }
-        };
-
-        mapAvg('learning', 'learningAverage');
-        mapAvg('learning2', 'learning2Average');
-        mapAvg('learning3', 'learning3Average');
-        mapAvg('learning4', 'learning4Average');
-
-        if (Object.keys(update).length > 0) {
-          await Assigned.updateOne({ _id: assign._id }, { $set: update });
-        }
+      if (idx !== -1) {
+        
+        user.learning[idx].totalScore = item.averageScore;
+        user.learning[idx].updatedAt = new Date();
+      } else {
+       
+        user.learning.push({
+          learningId: item.learningId,
+          session: user.session,
+          totalScore: item.averageScore,
+          updatedAt: new Date()
+        });
       }
-    } catch (err) {
-      console.error('Error updating Assigned averages:', err.message);
     }
 
-  
-    res.status(200).json({
+    await user.save();
+
+   
+    return res.status(200).json({
       scores: sortedFinal,
       learningWiseAverage
     });
 
   } catch (error) {
-    console.error('Error in scoreCard:', error);
-    res.status(500).json({ message: error.message });
+    console.error("scoreCard error:", error);
+    return res.status(500).json({ message: error.message });
   }
 };
-
-
-// exports.scoreCard = async (req, res) => {
-//   try {
-//     const userId = req.user._id; 
-//     const user = await User.findById(userId);
-//     if (!user || !user.session) {
-//       return res.status(400).json({ message: "User session not found" });
-//     }
-
-//     const userSession = user.session;
-//     const userEndDate = user.endDate;
-//     const userClassId = user.className;
-//     if (!userEndDate || !userClassId) {
-//       return res.status(400).json({ message: "Please complete your profile." });
-//     }
-
-//     const rawScores = await TopicScore.find({
-//       userId,
-//       session: userSession,
-//       endDate: userEndDate,
-//       classId: userClassId.toString()
-//     })
-//       .populate("topicId", "topic")
-//       .populate("learningId", "name")
-//       .sort({ scoreDate: 1 })
-//       .lean();
-
-    
-//     const todayStr = moment().format("YYYY-MM-DD");
-//     const scores = rawScores.map(sc => ({
-//       ...sc,
-//       date: moment(sc.scoreDate).format("YYYY-MM-DD"),
-//       isToday: moment(sc.scoreDate).format("YYYY-MM-DD") === todayStr
-//     }));
-
-   
-//     const learningWiseTotalMap = {};
-
-//     for (const sc of rawScores) {
-//       if (!sc.learningId?._id) continue;
-
-//       const lid = sc.learningId._id.toString();
-
-//       if (!learningWiseTotalMap[lid]) {
-//         learningWiseTotalMap[lid] = {
-//           learningId: sc.learningId._id,
-//           name: sc.learningId.name,
-//           totalScore: 0
-//         };
-//       }
-
-//       learningWiseTotalMap[lid].totalScore += sc.score;
-//     }
-
-//     const learningWiseTotal = Object.values(learningWiseTotalMap);
-
-    
-//     for (const item of learningWiseTotal) {
-//       const index = user.practice.findIndex(
-//         p =>
-//           p.learningId.toString() === item.learningId.toString() &&
-//           p.session === userSession
-//       );
-
-//       if (index !== -1) {
-       
-//         user.practice[index].totalScore = item.totalScore;
-//         user.practice[index].updatedAt = new Date();
-//       } else {
- 
-//         user.practice.push({
-//           learningId: item.learningId,
-//           session: userSession,
-//           totalScore: item.totalScore,
-//           updatedAt: new Date()
-//         });
-//       }
-//     }
-
-//     await user.save();
-
-//     return res.status(200).json({
-//       success: true,
-//       scores,
-//       learningWiseTotal,
-//       practice: user.practice
-//     });
-
-//   } catch (error) {
-//     console.error("scoreCard error:", error);
-//     return res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 
