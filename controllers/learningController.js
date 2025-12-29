@@ -1037,7 +1037,6 @@ exports.Strikecalculation = async (req, res) => {
 //   return Math.floor(points / experiencePoint) + 1;
 // };
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1072,6 +1071,7 @@ exports.StrikePath = async (req, res) => {
       .sort({ updatedAt: 1 })
       .lean();
 
+   
     const scoreMap = new Map();
 
     scores.forEach(score => {
@@ -1103,7 +1103,11 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
-    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
+   
+    const markingSetting = await MarkingSetting.findOne({})
+      .sort({ updatedAt: -1 })
+      .lean();
+
     const baseDailyExp = markingSetting?.dailyExperience || 0;
     const deductions = markingSetting?.deductions || 0;
     const weeklyBonus = markingSetting?.weeklyBonus || 0;
@@ -1111,7 +1115,7 @@ exports.StrikePath = async (req, res) => {
     const experiencePoint = markingSetting?.experiencePoint || 1000;
 
     const datesList = Array.from(scoreMap.keys()).sort();
-    if (datesList.length === 0) {
+    if (!datesList.length) {
       return res.status(200).json({
         bonuspoint: 0,
         levelBonusPoint: 0,
@@ -1121,18 +1125,15 @@ exports.StrikePath = async (req, res) => {
       });
     }
 
+    
     const startDate = moment(datesList[0]);
     const endDateMoment = moment(datesList[datesList.length - 1]);
     const result = [];
 
-    const existingBonusDates = user?.bonusDates || [];
-    const existingDeductedDates = user?.deductedDates || [];
-    const existingWeeklyBonusDates = user?.weeklyBonusDates || [];
-    const existingMonthlyBonusDates = user?.monthlyBonusDates || [];
-
-    let bonusToAdd = 0, deductionToSubtract = 0;
-    let weeklyBonusToAdd = 0, monthlyBonusToAdd = 0;
-    let datesToAddBonus = [], datesToDeduct = [], weeklyBonusDatesToAdd = [], monthlyBonusDatesToAdd = [];
+    let bonusToAdd = 0;
+    let deductionToSubtract = 0;
+    let bonusDates = [];
+    let deductedDates = [];
 
     for (let m = moment(startDate); m.diff(endDateMoment, 'days') <= 0; m.add(1, 'days')) {
       const currentDate = m.format('YYYY-MM-DD');
@@ -1140,6 +1141,7 @@ exports.StrikePath = async (req, res) => {
 
       if (scoreMap.has(currentDate)) {
         item.data = scoreMap.get(currentDate);
+
         const hasPractice = item.data.some(d => d.type === 'practice');
         const hasTopic = item.data.some(d => d.type === 'topic');
 
@@ -1147,92 +1149,78 @@ exports.StrikePath = async (req, res) => {
           const p = item.data.find(d => d.type === 'practice').score;
           const t = item.data.find(d => d.type === 'topic').score;
           const avgScore = (p + t) / 2;
-          const calculatedDailyExp = Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
-          item.dailyExperience = calculatedDailyExp;
+          const dailyExp = Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
 
-          if (!existingBonusDates.includes(currentDate)) {
-            bonusToAdd += calculatedDailyExp;
-            datesToAddBonus.push(currentDate);
-          }
+          item.dailyExperience = dailyExp;
+          bonusToAdd += dailyExp;
+          bonusDates.push(currentDate);
         }
       } else {
         item.deduction = deductions;
-        if (!existingDeductedDates.includes(currentDate)) {
-          deductionToSubtract += deductions;
-          datesToDeduct.push(currentDate);
-        }
+        deductionToSubtract += deductions;
+        deductedDates.push(currentDate);
       }
 
       result.push(item);
     }
 
-    for (let i = 6; i < result.length; i++) {
-      const streak = result.slice(i - 6, i + 1).every(r =>
-        r.data.some(d => d.type === 'practice') &&
-        r.data.some(d => d.type === 'topic')
-      );
-      if (streak && !existingWeeklyBonusDates.includes(result[i].date)) {
-        result[i].weeklyBonus = weeklyBonus;
-        weeklyBonusToAdd += weeklyBonus;
-        weeklyBonusDatesToAdd.push(result[i].date);
-      }
+   
+    if (bonusToAdd || deductionToSubtract) {
+      await User.findByIdAndUpdate(userId, {
+        $inc: {
+          bonuspoint: bonusToAdd - deductionToSubtract
+        },
+        $push: {
+          bonusDates: { $each: bonusDates },
+          deductedDates: { $each: deductedDates }
+        }
+      });
     }
-
-    for (let i = 29; i < result.length; i++) {
-      const streak = result.slice(i - 29, i + 1).every(r =>
-        r.data.some(d => d.type === 'practice') &&
-        r.data.some(d => d.type === 'topic')
-      );
-      if (streak && !existingMonthlyBonusDates.includes(result[i].date)) {
-        result[i].monthlyBonus = monthlyBonus;
-        monthlyBonusToAdd += monthlyBonus;
-        monthlyBonusDatesToAdd.push(result[i].date);
-      }
-    }
-
-    const updateData = {};
-    if (bonusToAdd > 0) {
-      updateData.$inc = { bonuspoint: bonusToAdd };
-      updateData.$push = { bonusDates: { $each: datesToAddBonus } };
-    }
-    if (deductionToSubtract > 0) {
-      updateData.$inc = updateData.$inc || {};
-      updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) - deductionToSubtract;
-      updateData.$push = updateData.$push || {};
-      updateData.$push.deductedDates = { $each: datesToDeduct };
-    }
-    if (Object.keys(updateData).length) {
-      await User.findByIdAndUpdate(userId, updateData);
-    }
-
-    const updatedUser = await User.findById(userId).lean();
-    const newLevel = await getLevelFromPoints(updatedUser.bonuspoint);
 
    
+    const strikeHistoryDocs = result
+      .filter(r => r.data.length)
+      .map(r => ({
+        session,
+        date: r.date,
+        data: r.data,
+        dailyExperience: r.dailyExperience || 0
+      }));
 
-    const totalDailyExperience = result.reduce(
-      (a, b) => a + (b.dailyExperience || 0), 0
-    );
-
-    const sessionExists = updatedUser?.strikeSessionHistory?.some(
-      s => s.session === session
-    );
-
-    if (!sessionExists) {
+    if (strikeHistoryDocs.length) {
       await User.findByIdAndUpdate(userId, {
         $push: {
-          strikeSessionHistory: {
+          strikeHistory: { $each: strikeHistoryDocs }
+        }
+      });
+    }
+
+    
+    const totalDailyExperience = result.reduce(
+      (a, b) => a + (b.dailyExperience || 0),
+      0
+    );
+
+    const summaryExists = await User.findOne({
+      _id: userId,
+      "strikeSessionSummary.session": session
+    });
+
+    if (!summaryExists) {
+      await User.findByIdAndUpdate(userId, {
+        $push: {
+          strikeSessionSummary: {
             session,
-            classId,
-            endDate,
-            dates: result,
-            totalDailyExperience
+            totalDailyExperience,
+            updatedAt: new Date()
           }
         }
       });
     }
 
    
+    const updatedUser = await User.findById(userId).lean();
+    const newLevel = await getLevelFromPoints(updatedUser.bonuspoint);
 
     const levelBonusPoint = result.reduce(
       (a, b) =>
@@ -1258,12 +1246,14 @@ exports.StrikePath = async (req, res) => {
   }
 };
 
+
 const getLevelFromPoints = async (points) => {
   const setting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
   const experiencePoint = setting?.experiencePoint || 1000;
   if (points < experiencePoint) return 1;
   return Math.floor(points / experiencePoint) + 1;
 };
+
 
 
 

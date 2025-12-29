@@ -150,6 +150,7 @@ learningDailyHistory: [
       }
     }
   ],
+  
 strikeHistory: [
     {
       session: String,
