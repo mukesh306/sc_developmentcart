@@ -170,6 +170,7 @@ learningDailyHistory: [
     }
   ],
 
+  
   strikeSessionSummary: [
     {
       session: { type: String, required: true },
