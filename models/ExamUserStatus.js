@@ -25,6 +25,8 @@ prizeStatus: {
   type: Boolean,
   
 },
+    ScheduleDate: String, 
+    ScheduleTime: String, 
     totalQuestions: Number,
     correct: Number,
     finalScore: Number,
