@@ -209,7 +209,7 @@ exports.verifyOtp = async (req, res) => {
     res.json({
       message: 'OTP verified successfully',
       token,
-      role: user.role || 'admin' // default fallback if role is missing
+      role: user.role || 'admin' 
     });
   } catch (err) {
     console.error('OTP Verification Error:', err.message);

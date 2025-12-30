@@ -498,7 +498,7 @@ exports.updateGroupInExam = async (req, res) => {
 
 
 
-// ✅ Delete exam
+
 exports.deleteExam = async (req, res) => {
   try {
     const deletedExam = await Schoolerexam.findByIdAndDelete(req.params.id);
@@ -512,7 +512,7 @@ exports.deleteExam = async (req, res) => {
 };
 
 
-// ✅ Add new questions to an existing exam
+
 exports.addQuestionsToExam = async (req, res) => {
   try {
     const { examId } = req.params;
@@ -608,23 +608,22 @@ exports.addQuestionsToExam = async (req, res) => {
 //         .tz("Asia/Kolkata")
 //         .format("YYYY-MM-DD");
 
-//       if (
-//         existingStatus?.statusManage &&
-//         moment(examDay).isBefore(today)
-//       ) {
-//         examObj.statusManage = existingStatus.statusManage;
-//         examObj.result = existingStatus.result ?? null;
-//         examObj.rank = existingStatus.rank ?? null;
-//         examObj.correct = existingStatus.correct ?? null;
-//         examObj.finalScore = existingStatus.finalScore ?? null;
-//         examObj.percentage = existingStatus.percentage ?? null;
-//         examObj.totalParticipants =
-//           existingStatus.totalParticipants ?? null;
-//         examObj.attemptStatus = existingStatus.attemptStatus ?? null;
-
-//         updatedExams.push(examObj);
+     
+//       if (existingStatus && moment(examDay).isBefore(today)) {
+//         updatedExams.push({
+//           ...examObj,
+//           statusManage: existingStatus.statusManage ?? null,
+//           result: existingStatus.result ?? null,
+//           rank: existingStatus.rank ?? null,
+//           correct: existingStatus.correct ?? null,
+//           finalScore: existingStatus.finalScore ?? null,
+//           percentage: existingStatus.percentage ?? null,
+//           totalParticipants: existingStatus.totalParticipants ?? null,
+//           attemptStatus: existingStatus.attemptStatus ?? null,
+//         });
 //         continue;
 //       }
+      
 
 //       const classData =
 //         (await School.findById(exam.className)
@@ -685,12 +684,8 @@ exports.addQuestionsToExam = async (req, res) => {
 //           second: moment(exam.ScheduleTime, "HH:mm:ss").second(),
 //         });
 
-//       const ongoingStart = scheduleDateTime
-//         .clone()
-//         .add(bufferTime, "minutes");
-//       const ongoingEnd = ongoingStart
-//         .clone()
-//         .add(exam.ExamTime, "minutes");
+//       const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
+//       const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
 //       const now = moment().tz("Asia/Kolkata");
 
 //       let statusManage =
@@ -698,10 +693,7 @@ exports.addQuestionsToExam = async (req, res) => {
 
 //       if (exam.publish === true) {
 //         if (now.isBefore(ongoingStart)) statusManage = "Scheduled";
-//         else if (
-//           now.isSameOrAfter(ongoingStart) &&
-//           now.isBefore(ongoingEnd)
-//         )
+//         else if (now.isSameOrAfter(ongoingStart) && now.isBefore(ongoingEnd))
 //           statusManage = "Ongoing";
 //         else if (now.isSameOrAfter(ongoingEnd))
 //           statusManage = "Completed";
@@ -711,7 +703,6 @@ exports.addQuestionsToExam = async (req, res) => {
 
 //       examObj.statusManage = statusManage;
 
-//       /* ===================== Ongoing ===================== */
 //       if (statusManage === "Ongoing") {
 //         const ongoingResult = await ExamResult.findOne({
 //           userId,
@@ -722,7 +713,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //           ? "Attempted"
 //           : "Not Attempted";
 
-//         // ✅ NEW: DB update for Ongoing
 //         await ExamUserStatus.findOneAndUpdate(
 //           { userId, examId: exam._id },
 //           {
@@ -737,7 +727,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //         );
 //       }
 
-//       /* ===================== Completed ===================== */
 //       if (statusManage === "Completed") {
 //         const userResult = await ExamResult.findOne({
 //           userId,
@@ -751,10 +740,7 @@ exports.addQuestionsToExam = async (req, res) => {
 
 //         if (userResult && examObj.totalQuestions > 0) {
 //           examObj.percentage = parseFloat(
-//             (
-//               (userResult.finalScore / examObj.totalQuestions) *
-//               100
-//             ).toFixed(2)
+//             ((userResult.finalScore / examObj.totalQuestions) * 100).toFixed(2)
 //           );
 //         } else {
 //           examObj.percentage = null;
@@ -812,7 +798,21 @@ exports.addQuestionsToExam = async (req, res) => {
 //       updatedExams.push(examObj);
 //     }
 
-//     return res.status(200).json(updatedExams);
+    
+//     const finalResponse = updatedExams.map((exam) => {
+//       if (exam.statusManage === "Not Eligible") {
+//         return {
+//           _id: exam._id,
+//           statusManage: exam.statusManage,
+//           result: exam.result ?? null,
+//           rank: exam.rank ?? null,
+//           attemptStatus: exam.attemptStatus ?? null,
+//         };
+//       }
+//       return exam;
+//     });
+
+//     return res.status(200).json(finalResponse);
 //   } catch (error) {
 //     console.error("Error fetching exams:", error);
 //     return res.status(500).json({
@@ -821,10 +821,6 @@ exports.addQuestionsToExam = async (req, res) => {
 //     });
 //   }
 // };
-
-
-
-
 
 exports.UsersExams = async (req, res) => {
   try {
@@ -892,18 +888,10 @@ exports.UsersExams = async (req, res) => {
       if (existingStatus && moment(examDay).isBefore(today)) {
         updatedExams.push({
           ...examObj,
-          statusManage: existingStatus.statusManage ?? null,
-          result: existingStatus.result ?? null,
-          rank: existingStatus.rank ?? null,
-          correct: existingStatus.correct ?? null,
-          finalScore: existingStatus.finalScore ?? null,
-          percentage: existingStatus.percentage ?? null,
-          totalParticipants: existingStatus.totalParticipants ?? null,
-          attemptStatus: existingStatus.attemptStatus ?? null,
+          ...existingStatus, 
         });
         continue;
       }
-      
 
       const classData =
         (await School.findById(exam.className)
@@ -1078,7 +1066,6 @@ exports.UsersExams = async (req, res) => {
       updatedExams.push(examObj);
     }
 
-    
     const finalResponse = updatedExams.map((exam) => {
       if (exam.statusManage === "Not Eligible") {
         return {
@@ -1101,6 +1088,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
