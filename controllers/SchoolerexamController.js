@@ -880,15 +880,17 @@ exports.UsersExams = async (req, res) => {
       }).lean();
 
       const today = moment().tz("Asia/Kolkata").format("YYYY-MM-DD");
-      const examDay = moment(exam.examDate)
+
+      // ✅ FIX: correct past date detection
+      const examDay = moment(exam.ScheduleDate, "DD-MM-YYYY")
         .tz("Asia/Kolkata")
         .format("YYYY-MM-DD");
 
-     
+      /* ✅ Past exam → DB me jo save hai wahi response me */
       if (existingStatus && moment(examDay).isBefore(today)) {
         updatedExams.push({
           ...examObj,
-          ...existingStatus, 
+          ...existingStatus,
         });
         continue;
       }
@@ -944,13 +946,10 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      const scheduleDateTime = moment(exam.examDate)
-        .tz("Asia/Kolkata")
-        .set({
-          hour: moment(exam.ScheduleTime, "HH:mm:ss").hour(),
-          minute: moment(exam.ScheduleTime, "HH:mm:ss").minute(),
-          second: moment(exam.ScheduleTime, "HH:mm:ss").second(),
-        });
+      const scheduleDateTime = moment(
+        `${exam.ScheduleDate} ${exam.ScheduleTime}`,
+        "DD-MM-YYYY HH:mm:ss"
+      ).tz("Asia/Kolkata");
 
       const ongoingStart = scheduleDateTime.clone().add(bufferTime, "minutes");
       const ongoingEnd = ongoingStart.clone().add(exam.ExamTime, "minutes");
