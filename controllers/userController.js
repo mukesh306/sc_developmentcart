@@ -99,6 +99,7 @@ const moment = require('moment-timezone');
 //   }
 // };
 
+
 exports.signup = async (req, res) => {
   try {
     const {
@@ -321,11 +322,11 @@ exports.completeProfile = async (req, res) => {
 
 
 
-
 // exports.getUserProfile = async (req, res) => {
 //   try {
 //     const userId = req.user.id;
 
+//     // 1) लाओ user (populate कुछ फील्ड्स के साथ)
 //     let user = await User.findById(userId)
 //       .populate('countryId', 'name')
 //       .populate('stateId', 'name')
@@ -339,6 +340,7 @@ exports.completeProfile = async (req, res) => {
 //       return res.status(404).json({ message: 'User not found.' });
 //     }
 
+//     // 2) className से classDetails ढूंढो (School या College)
 //     let classId = user.className;
 //     let classDetails = null;
 
@@ -348,9 +350,9 @@ exports.completeProfile = async (req, res) => {
 //         (await College.findById(classId));
 //     }
 
+//     // 3) file URLs (aadharCard / marksheet) को public URL बनाना (अगर local path है तो)
 //     // const baseUrl = `${req.protocol}://${req.get('host')}`;
-//       const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
-
+// const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
 //     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
 //       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
 //     }
@@ -358,39 +360,26 @@ exports.completeProfile = async (req, res) => {
 //       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
 //     }
 
+//     // 4) अगर classDetails invalid हो तो className हटाओ
 //     if (!classDetails || classDetails.price == null) {
 //       classId = null;
 //       await User.findByIdAndUpdate(userId, { className: null });
 //       user.className = null;
 //     } else {
+//       // 5) अगर institution.updatedBy बदल गया है तो सिर्फ updatedBy अपडेट करो (clone logic हटाया गया है)
 //       const institutionUpdatedBy = classDetails.updatedBy || null;
 
 //       if (institutionUpdatedBy) {
 //         const existingUser = await User.findById(userId).select('updatedBy');
 
-//         // ✅ Pehli baar skip, dusri baar change hone par clone
-//         if (
-//           existingUser.updatedBy && 
-//           existingUser.updatedBy.toString() !== institutionUpdatedBy?.toString()
-//         ) {
-//           const userData = user.toObject();
-//           const originalId = userData._id;
-//           delete userData._id;
-
-//           await UserHistory.create({
-//             ...userData,
-//             _id: new mongoose.Types.ObjectId(),
-//             originalUserId: originalId,
-//             clonedAt: new Date()
-//           });
-
+//         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
 //           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
 //           user.updatedBy = institutionUpdatedBy;
 //         }
 //       }
 //     }
 
-//     // Sync session-related fields from updatedBy to user
+//     // 6) Sync session-related fields from updatedBy (if populated object) to user
 //     if (user.updatedBy && typeof user.updatedBy === 'object') {
 //       const updates = {};
 
@@ -414,9 +403,9 @@ exports.completeProfile = async (req, res) => {
 //       }
 //     }
 
-//     // Check if session expired
+//     // 7) Check session expiry (using moment-timezone)
 //     if (user.updatedBy?.endDate) {
-//       const rawEndDate = user.updatedBy.endDate.trim();
+//       const rawEndDate = String(user.updatedBy.endDate).trim();
 //       const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
 //       const currentDate = moment.tz('Asia/Kolkata');
 
@@ -430,7 +419,7 @@ exports.completeProfile = async (req, res) => {
 //       }
 //     }
 
-//     // Final formatted response
+//     // 8) Final formatted response
 //     const formattedUser = {
 //       ...user._doc,
 //       status: user.status,
@@ -447,13 +436,14 @@ exports.completeProfile = async (req, res) => {
 //       formattedUser.classOrYear = classDetails.name;
 //     }
 
-//     res.status(200).json({
+//     return res.status(200).json({
 //       message: 'User profile fetched successfully.',
 //       user: formattedUser
 //     });
+
 //   } catch (error) {
 //     console.error('Get User Profile Error:', error);
-//     res.status(500).json({ message: error.message });
+//     return res.status(500).json({ message: error.message });
 //   }
 // };
 
@@ -462,7 +452,7 @@ exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // 1) लाओ user (populate कुछ फील्ड्स के साथ)
+   
     let user = await User.findById(userId)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
@@ -476,7 +466,7 @@ exports.getUserProfile = async (req, res) => {
       return res.status(404).json({ message: 'User not found.' });
     }
 
-    // 2) className से classDetails ढूंढो (School या College)
+    
     let classId = user.className;
     let classDetails = null;
 
@@ -486,9 +476,9 @@ exports.getUserProfile = async (req, res) => {
         (await College.findById(classId));
     }
 
-    // 3) file URLs (aadharCard / marksheet) को public URL बनाना (अगर local path है तो)
-    // const baseUrl = `${req.protocol}://${req.get('host')}`;
-const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+    
+    const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
+
     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
     }
@@ -496,18 +486,16 @@ const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https
       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }
 
-    // 4) अगर classDetails invalid हो तो className हटाओ
+    
     if (!classDetails || classDetails.price == null) {
       classId = null;
       await User.findByIdAndUpdate(userId, { className: null });
       user.className = null;
     } else {
-      // 5) अगर institution.updatedBy बदल गया है तो सिर्फ updatedBy अपडेट करो (clone logic हटाया गया है)
+     
       const institutionUpdatedBy = classDetails.updatedBy || null;
-
       if (institutionUpdatedBy) {
         const existingUser = await User.findById(userId).select('updatedBy');
-
         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
           user.updatedBy = institutionUpdatedBy;
@@ -515,39 +503,32 @@ const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https
       }
     }
 
-    // 6) Sync session-related fields from updatedBy (if populated object) to user
+    
     if (user.updatedBy && typeof user.updatedBy === 'object') {
       const updates = {};
-
       if (user.updatedBy.session && user.session !== user.updatedBy.session) {
         updates.session = user.updatedBy.session;
         user.session = user.updatedBy.session;
       }
-
       if (user.updatedBy.startDate && user.startDate !== user.updatedBy.startDate) {
         updates.startDate = user.updatedBy.startDate;
         user.startDate = user.updatedBy.startDate;
       }
-
       if (user.updatedBy.endDate && user.endDate !== user.updatedBy.endDate) {
         updates.endDate = user.updatedBy.endDate;
         user.endDate = user.updatedBy.endDate;
       }
-
       if (Object.keys(updates).length > 0) {
         await User.findByIdAndUpdate(userId, updates);
       }
     }
 
-    // 7) Check session expiry (using moment-timezone)
+    
     if (user.updatedBy?.endDate) {
       const rawEndDate = String(user.updatedBy.endDate).trim();
       const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
       const currentDate = moment.tz('Asia/Kolkata');
-
-      if (!endDate.isValid()) {
-        console.warn("⚠️ Invalid endDate. Format must be DD-MM-YYYY");
-      } else if (currentDate.isSameOrAfter(endDate)) {
+      if (endDate.isValid() && currentDate.isSameOrAfter(endDate)) {
         if (user.status !== 'no') {
           await User.findByIdAndUpdate(userId, { status: 'no' });
           user.status = 'no';
@@ -555,25 +536,34 @@ const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https
       }
     }
 
-    // 8) Final formatted response
+   
     const formattedUser = {
-      ...user._doc,
+      _id: user._id,
+      VerifyEmail: user.VerifyEmail,
+      firstName: user.firstName,
+      middleName: user.middleName,
+      lastName: user.lastName,
+      mobileNumber: user.mobileNumber,
+      email: user.email,
+      aadharCard: user.aadharCard || "",
+      marksheet: user.marksheet || "",
+      pincode: user.pincode || "",
       status: user.status,
-      className: classId,
-      country: user.countryId?.name || '',
-      state: user.stateId?.name || '',
-      city: user.cityId?.name || '',
-      institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-      institutionType: user.studentType || '',
-      updatedBy: user.updatedBy || null
+      level: user.level,
+      session: user.session || "",
+      countryId: user.countryId || null,
+      stateId: user.stateId || null,
+      cityId: user.cityId || null,
+      className: classId || null,
+      studentType: user.studentType || "",
+      instituteName:
+        user.schoolName || user.collegeName || user.instituteName || "",
+      classOrYear:
+        classDetails && classDetails.price != null ? classDetails.name : ""
     };
 
-    if (classDetails && classDetails.price != null) {
-      formattedUser.classOrYear = classDetails.name;
-    }
-
     return res.status(200).json({
-      message: 'User profile fetched successfully.',
+      message: "User profile fetched successfully.",
       user: formattedUser
     });
 
@@ -582,8 +572,6 @@ const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https
     return res.status(500).json({ message: error.message });
   }
 };
-
-
 exports.sendResetOTP = async (req, res) => {
   try {
     const { email } = req.body;
@@ -945,7 +933,7 @@ exports.updateProfile = async (req, res) => {
       updatedFields.marksheet = req.files.marksheet[0].path;
     }
 
-    // === Fetch class updatedBy and admin session ===
+    
     let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(className)) {
       classDetails = await School.findById(className) || await College.findById(className);
@@ -953,17 +941,17 @@ exports.updateProfile = async (req, res) => {
       if (classDetails?.updatedBy) {
         let shouldClone = false;
 
-        // 1️⃣ पहली बार updatedBy set हो रहा है
+      
         if (!existingUser.updatedBy) {
           shouldClone = true;
         }
 
-        // 2️⃣ className बदला गया
+       
         if (existingUser.className?.toString() !== className?.toString()) {
           shouldClone = true;
         }
 
-        // 3️⃣ className same है लेकिन updatedBy बदला है
+       
         if (
           existingUser.className?.toString() === className?.toString() &&
           existingUser.updatedBy?.toString() !== classDetails.updatedBy.toString()
@@ -971,7 +959,7 @@ exports.updateProfile = async (req, res) => {
           shouldClone = true;
         }
 
-        // ✅ अगर condition match होती है तो clone बनाओ
+        
         if (shouldClone) {
           const userData = existingUser.toObject();
           const currentUserId = userData._id;
@@ -1007,8 +995,7 @@ exports.updateProfile = async (req, res) => {
         }
       }
     }
-
-    // === Update user ===
+ 
     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
       .populate('countryId')
       .populate('stateId')
@@ -1354,7 +1341,7 @@ exports.getActiveSessionUsers = async (req, res) => {
 
 exports.getUserHistories = async (req, res) => {
   try {
-    const { originalUserId } = req.query; // optional filter
+    const { originalUserId } = req.query; 
 
     let filter = {};
     if (originalUserId && mongoose.Types.ObjectId.isValid(originalUserId)) {

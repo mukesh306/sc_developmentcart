@@ -69,6 +69,115 @@ platformDetails:{
   }
 ],
 
+learning: [
+  {
+    learningId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Learnings",   
+      required: true
+    },
+    session: {
+      type: String,
+      required: true
+    },
+    totalScore: {
+      type: Number,
+      default: 0
+    },
+    updatedAt: {
+      type: Date,
+      default: Date.now
+    }
+  }
+],
+learningDailyHistory: [
+      {
+        learningId: { type: mongoose.Schema.Types.ObjectId, ref: "Learnings" },
+        name: String,
+        date: String,   
+        score: Number,
+        session: String,
+        createdAt: { type: Date, default: Date.now }
+      }
+    ],
+    
+     practice: [
+    {
+      learningId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Learnings",
+        required: true
+      },
+      session: {
+        type: String,
+        required: true
+      },
+      totalScore: {
+        type: Number,
+        default: 0
+      },
+      updatedAt: {
+        type: Date,
+        default: Date.now
+      }
+    }
+  ],
+  practiceDailyHistory: [
+    {
+      learningId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Learnings",
+        required: true
+      },
+      name: {
+        type: String
+      },
+      date: {
+        type: String,
+        required: true
+      },
+      score: {
+        type: Number,
+        required: true
+      },
+      session: {
+        type: String,
+        required: true
+      },
+      createdAt: {
+        type: Date,
+        default: Date.now
+      }
+    }
+  ],
+  
+strikeHistory: [
+    {
+      session: String,
+      date: String,
+      data: [
+        {
+          type: { type: String, enum: ["practice", "topic"] },
+          score: Number,
+          learningId: {
+            _id: mongoose.Schema.Types.ObjectId,
+            name: String
+          },
+          strickStatus: Boolean
+        }
+      ],
+      dailyExperience: Number
+    }
+  ],
+
+  strikeSessionSummary: [
+    {
+      session: String,
+      totalDailyExperience: { type: Number, default: 0 },
+      updatedAt: { type: Date, default: Date.now }
+    }
+  ],
+
 
  level: {
   type: Number,

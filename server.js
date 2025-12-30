@@ -29,7 +29,7 @@ const SchoolercategoryRoutes = require('./routes/SchoolercategoryRoutes');
 const SchoolerexamRoutes = require('./routes/SchoolerexamRoutes');
 const userexamGroupRoutes = require('./routes/userexamGroupRoutes');
 const organizationSignRoutes = require('./routes/organizationSignRoutes');
-const classSeatRoutes = require('./routes/classSeatRoutes');
+const classSeatRoutes = require("./routes/classSeatRoutes");
 
 const app = express();
 const PORT = process.env.PORT || 5000;
