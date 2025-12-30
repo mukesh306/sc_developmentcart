@@ -40,7 +40,6 @@ prizeStatus: {
     attend: Boolean,
     visible: Boolean,
     isEligible: Boolean,
-
     ScheduleDate: String,
     ScheduleTime: String,
   },

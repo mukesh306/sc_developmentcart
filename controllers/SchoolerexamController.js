@@ -1694,18 +1694,29 @@ exports.topusers = async (req, res) => {
 //       return res.status(400).json({ message: "examId required." });
 //     }
 
-    
 //     const exam = await Schoolerexam.findById(examId).populate("category", "name");
 //     if (!exam) {
 //       return res.status(404).json({ message: "Exam not found." });
 //     }
-
-//     let userGroup = await UserExamGroup.findOne({
-//       members: loggedInUserId,
-//       category: exam.category?._id, 
+  
+//     const examStatus = await ExamUserStatus.findOne({
+//       examId,
+//       userId: loggedInUserId,
 //     }).lean();
 
- 
+//     if (!examStatus || examStatus.rank === null || examStatus.result === null) {
+//       return res.status(200).json({
+//         message: "Leaderboard will be available after exam result is published.",
+//         users: [],
+//       });
+//     }
+
+    
+//     let userGroup = await UserExamGroup.findOne({
+//       members: loggedInUserId,
+//       category: exam.category?._id,
+//     }).lean();
+
 //     if (!userGroup) {
 //       userGroup = await UserExamGroup.findOne({
 //         members: loggedInUserId,
@@ -1721,7 +1732,7 @@ exports.topusers = async (req, res) => {
 //       });
 //     }
 
-  
+   
 //     const allResults = await ExamResult.find({
 //       examId,
 //       userId: { $in: userGroup.members },
@@ -1736,13 +1747,14 @@ exports.topusers = async (req, res) => {
 //       });
 //     }
 
+    
 //     const rankedResults = allResults.map((result, index) => ({
 //       ...result._doc,
 //       rank: index + 1,
 //       Completiontime: result.Completiontime || null,
 //     }));
 
-  
+   
 //     if (loggedInUserId) {
 //       const idx = rankedResults.findIndex(
 //         (r) =>
@@ -1755,8 +1767,7 @@ exports.topusers = async (req, res) => {
 //         rankedResults.unshift(loggedUser);
 //       }
 //     }
-
-   
+ 
 //     return res.status(200).json({
 //       message: "Group leaderboard fetched successfully.",
 //       className: userGroup.className,
@@ -1771,8 +1782,6 @@ exports.topusers = async (req, res) => {
 //     });
 //   }
 // };
-
-
 
 exports.Leaderboard = async (req, res) => {
   try {
@@ -1793,14 +1802,14 @@ exports.Leaderboard = async (req, res) => {
       userId: loggedInUserId,
     }).lean();
 
-    if (!examStatus || examStatus.rank === null || examStatus.result === null) {
+
+    if (!examStatus || typeof examStatus.rank !== "number" || examStatus.result === null) {
       return res.status(200).json({
         message: "Leaderboard will be available after exam result is published.",
         users: [],
       });
     }
 
-    
     let userGroup = await UserExamGroup.findOne({
       members: loggedInUserId,
       category: exam.category?._id,
@@ -1821,7 +1830,6 @@ exports.Leaderboard = async (req, res) => {
       });
     }
 
-   
     const allResults = await ExamResult.find({
       examId,
       userId: { $in: userGroup.members },
@@ -1836,14 +1844,12 @@ exports.Leaderboard = async (req, res) => {
       });
     }
 
-    
     const rankedResults = allResults.map((result, index) => ({
       ...result._doc,
       rank: index + 1,
       Completiontime: result.Completiontime || null,
     }));
 
-   
     if (loggedInUserId) {
       const idx = rankedResults.findIndex(
         (r) =>
@@ -1871,7 +1877,6 @@ exports.Leaderboard = async (req, res) => {
     });
   }
 };
-
 
 
 exports.getAllExamGroups = async (req, res) => {
