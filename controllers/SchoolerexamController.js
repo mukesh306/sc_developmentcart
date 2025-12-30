@@ -1802,13 +1802,7 @@ exports.Leaderboard = async (req, res) => {
       userId: loggedInUserId,
     }).lean();
 
-
-    if (!examStatus || typeof examStatus.rank !== "number" || examStatus.result === null) {
-      return res.status(200).json({
-        message: "Leaderboard will be available after exam result is published.",
-        users: [],
-      });
-    }
+    let showRank = examStatus && typeof examStatus.rank === "number";
 
     let userGroup = await UserExamGroup.findOne({
       members: loggedInUserId,
@@ -1844,9 +1838,10 @@ exports.Leaderboard = async (req, res) => {
       });
     }
 
+    // Map results, include rank only if available
     const rankedResults = allResults.map((result, index) => ({
       ...result._doc,
-      rank: index + 1,
+      rank: showRank ? index + 1 : undefined,
       Completiontime: result.Completiontime || null,
     }));
 
@@ -1862,9 +1857,11 @@ exports.Leaderboard = async (req, res) => {
         rankedResults.unshift(loggedUser);
       }
     }
- 
+
     return res.status(200).json({
-      message: "Group leaderboard fetched successfully.",
+      message: showRank
+        ? "Group leaderboard fetched successfully."
+        : "Leaderboard will be available after exam result is published.",
       className: userGroup.className,
       category: userGroup.category,
       users: rankedResults,
@@ -1877,6 +1874,7 @@ exports.Leaderboard = async (req, res) => {
     });
   }
 };
+
 
 
 exports.getAllExamGroups = async (req, res) => {
