@@ -1085,8 +1085,8 @@ exports.UsersExams = async (req, res) => {
     }
 
     const finalResponse = updatedExams.map((exam) => {
-       const { topicQuestions, createdBy, ...cleanExam } = exam;
-      if (cleanExam.statusManage === "Not Eligible") {
+      
+      if (exam.statusManage === "Not Eligible") {
      
         return {
           _id: exam._id,
@@ -1098,7 +1098,7 @@ exports.UsersExams = async (req, res) => {
           ScheduleTime: exam.ScheduleTime ?? null,
         };
       }
-      return cleanExam;
+      return exam;
     });
 
     return res.status(200).json(finalResponse);
