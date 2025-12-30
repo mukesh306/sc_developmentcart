@@ -1085,8 +1085,9 @@ exports.UsersExams = async (req, res) => {
     }
 
     const finalResponse = updatedExams.map((exam) => {
-      if (exam.statusManage === "Not Eligible") {
-      const { topicQuestions, createdBy, ...cleanExam } = exam;
+       const { topicQuestions, createdBy, ...cleanExam } = exam;
+      if (cleanExam.statusManage === "Not Eligible") {
+     
         return {
           _id: exam._id,
           statusManage: exam.statusManage,
