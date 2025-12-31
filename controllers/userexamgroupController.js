@@ -472,6 +472,7 @@ exports.deleteGroup = async (req, res) => {
 //   }
 // };
 
+
 exports.getGroupMembers = async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -533,7 +534,6 @@ exports.getGroupMembers = async (req, res) => {
       );
     }
 
-    // ✅ populate userDetails also
     const group = await UserExamGroup.findById(groupId).populate(
       "members",
       "firstName middleName lastName status email category schoolershipstatus userDetails"
@@ -576,8 +576,6 @@ exports.getGroupMembers = async (req, res) => {
 
       const es = examStatusMap[member._id.toString()];
       const er = examResultMap[member._id.toString()];
-
-      // 🔥 ONLY STATUS FROM userDetails.examTypes
       let examStatusFromUser = null;
 
       if (Array.isArray(member.userDetails)) {
@@ -588,7 +586,7 @@ exports.getGroupMembers = async (req, res) => {
             );
 
             if (matchedExam) {
-              examStatusFromUser = matchedExam.status; // ✅ only DB status
+              examStatusFromUser = matchedExam.status; 
               break;
             }
           }
@@ -610,7 +608,6 @@ exports.getGroupMembers = async (req, res) => {
         rank: es?.rank ?? null,
         attemptStatus: es?.attemptStatus ?? null,
 
-        // ✅ FINAL REQUIRED FIELD
         examStatus: examStatusFromUser
       });
     }
