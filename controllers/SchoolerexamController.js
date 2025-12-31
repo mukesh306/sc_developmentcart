@@ -1079,7 +1079,6 @@ exports.UsersExams = async (req, res) => {
           { upsert: true }
         );
 
-        // 🔹 NEW ADDITION (AUTO NOT ATTEMPT – ONLY ONCE)
         const alreadyAuto = await ExamUserStatus.findOne({
           category: exam.category,
           statusManage: "Completed",
