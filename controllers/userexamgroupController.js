@@ -328,6 +328,150 @@ exports.deleteGroup = async (req, res) => {
 };
 
 
+// exports.getGroupMembers = async (req, res) => {
+//   try {
+//     const { groupId } = req.params;
+//     const { examId } = req.query;
+
+//     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
+//       return res.status(400).json({ message: "Valid groupId is required." });
+//     }
+
+//     if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
+//       return res.status(400).json({ message: "Valid examId is required." });
+//     }
+
+//     const currentExam = await Schoolerexam.findOne({
+//       _id: examId,
+//       assignedGroup: groupId,
+//     }).select("_id createdAt");
+
+//     if (!currentExam) {
+//       return res.status(200).json({
+//         message: "No data found for this group and exam.",
+//         groupId,
+//         examId,
+//         members: [],
+//       });
+//     }
+
+   
+//     const previousExams = await Schoolerexam.find({
+//       assignedGroup: groupId,
+//       createdAt: { $lt: currentExam.createdAt },
+//     }).select("_id");
+
+//     const previousExamIds = previousExams.map(e => e._id);
+//     const eliminatedUserSet = new Set();
+
+//     if (previousExamIds.length > 0) {
+//       const eliminatedUsers = await ExamUserStatus.find({
+//         examId: { $in: previousExamIds },
+//         $or: [{ result: "failed" }, { attemptStatus: "Not Attempted" }],
+//       })
+//         .select("userId")
+//         .lean();
+
+//       eliminatedUsers.forEach(e =>
+//         eliminatedUserSet.add(e.userId.toString())
+//       );
+
+//       const nullResultUsers = await ExamResult.find({
+//         examId: { $in: previousExamIds },
+//         percentage: null,
+//         Completiontime: null,
+//         rank: null,
+//       })
+//         .select("userId")
+//         .lean();
+
+//       nullResultUsers.forEach(u =>
+//         eliminatedUserSet.add(u.userId.toString())
+//       );
+//     }
+
+    
+//     const group = await UserExamGroup.findById(groupId).populate(
+//       "members",
+//       "firstName middleName lastName status email category schoolershipstatus _id"
+//     );
+
+//     if (!group) {
+//       return res.status(404).json({ message: "Group not found." });
+//     }
+
+//     const memberIds = group.members.map(m => m._id);
+
+    
+//     const examStatuses = await ExamUserStatus.find({
+//       userId: { $in: memberIds },
+//       examId,
+//     })
+//       .select("userId result rank attemptStatus")
+//       .lean();
+
+//     const examStatusMap = {};
+//     examStatuses.forEach(es => {
+//       examStatusMap[es.userId.toString()] = es;
+//     });
+
+   
+//     const examResults = await ExamResult.find({
+//       userId: { $in: memberIds },
+//       examId,
+//     })
+//       .select("userId percentage Completiontime")
+//       .lean();
+
+//     const examResultMap = {};
+//     examResults.forEach(er => {
+//       examResultMap[er.userId.toString()] = er;
+//     });
+
+   
+//     const membersWithExamData = [];
+
+//     for (const member of group.members) {
+      
+//       if (eliminatedUserSet.has(member._id.toString())) continue;
+
+//       const es = examStatusMap[member._id.toString()];
+//       const er = examResultMap[member._id.toString()];
+
+//       membersWithExamData.push({
+//         _id: member._id,
+//         firstName: member.firstName,
+//         middleName: member.middleName,
+//         lastName: member.lastName,
+//         email: member.email,
+//         status: member.status,
+//         category: member.category,
+
+      
+//         schoolershipstatus: member.schoolershipstatus ?? "NA",
+
+//         percentage: er?.percentage ?? null,
+//         completionTime: er?.Completiontime ?? null,
+//         rank: es?.rank ?? null,
+//         attemptStatus: es?.attemptStatus ?? null,
+//       });
+//     }
+
+//     return res.status(200).json({
+//       message: "Group members fetched successfully.",
+//       groupId,
+//       examId,
+//       members: membersWithExamData,
+//     });
+//   } catch (error) {
+//     console.error("getGroupMembers Error:", error);
+//     return res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message,
+//     });
+//   }
+// };
+
 exports.getGroupMembers = async (req, res) => {
   try {
     const { groupId } = req.params;
@@ -355,7 +499,6 @@ exports.getGroupMembers = async (req, res) => {
       });
     }
 
-   
     const previousExams = await Schoolerexam.find({
       assignedGroup: groupId,
       createdAt: { $lt: currentExam.createdAt },
@@ -390,10 +533,10 @@ exports.getGroupMembers = async (req, res) => {
       );
     }
 
-    
+    // ✅ populate userDetails also
     const group = await UserExamGroup.findById(groupId).populate(
       "members",
-      "firstName middleName lastName status email category schoolershipstatus _id"
+      "firstName middleName lastName status email category schoolershipstatus userDetails"
     );
 
     if (!group) {
@@ -402,7 +545,6 @@ exports.getGroupMembers = async (req, res) => {
 
     const memberIds = group.members.map(m => m._id);
 
-    
     const examStatuses = await ExamUserStatus.find({
       userId: { $in: memberIds },
       examId,
@@ -415,7 +557,6 @@ exports.getGroupMembers = async (req, res) => {
       examStatusMap[es.userId.toString()] = es;
     });
 
-   
     const examResults = await ExamResult.find({
       userId: { $in: memberIds },
       examId,
@@ -428,15 +569,31 @@ exports.getGroupMembers = async (req, res) => {
       examResultMap[er.userId.toString()] = er;
     });
 
-   
     const membersWithExamData = [];
 
     for (const member of group.members) {
-      
       if (eliminatedUserSet.has(member._id.toString())) continue;
 
       const es = examStatusMap[member._id.toString()];
       const er = examResultMap[member._id.toString()];
+
+      // 🔥 ONLY STATUS FROM userDetails.examTypes
+      let examStatusFromUser = null;
+
+      if (Array.isArray(member.userDetails)) {
+        for (const ud of member.userDetails) {
+          if (Array.isArray(ud.examTypes)) {
+            const matchedExam = ud.examTypes.find(
+              et => et.exam && et.exam._id.toString() === examId
+            );
+
+            if (matchedExam) {
+              examStatusFromUser = matchedExam.status; // ✅ only DB status
+              break;
+            }
+          }
+        }
+      }
 
       membersWithExamData.push({
         _id: member._id,
@@ -446,14 +603,15 @@ exports.getGroupMembers = async (req, res) => {
         email: member.email,
         status: member.status,
         category: member.category,
-
-      
         schoolershipstatus: member.schoolershipstatus ?? "NA",
 
         percentage: er?.percentage ?? null,
         completionTime: er?.Completiontime ?? null,
         rank: es?.rank ?? null,
         attemptStatus: es?.attemptStatus ?? null,
+
+        // ✅ FINAL REQUIRED FIELD
+        examStatus: examStatusFromUser
       });
     }
 
@@ -472,184 +630,6 @@ exports.getGroupMembers = async (req, res) => {
   }
 };
 
-
-
-// exports.getGroupMembers = async (req, res) => {
-//   try {
-//     const { groupId } = req.params;
-//     const { examId } = req.query;
-
-//     if (!groupId || !mongoose.Types.ObjectId.isValid(groupId)) {
-//       return res.status(400).json({ message: "Valid groupId is required." });
-//     }
-
-//     if (!examId || !mongoose.Types.ObjectId.isValid(examId)) {
-//       return res.status(400).json({ message: "Valid examId is required." });
-//     }
-
-//     const currentExam = await Schoolerexam.findOne({
-//       _id: examId,
-//       assignedGroup: groupId,
-//     }).select("_id createdAt");
-
-//     if (!currentExam) {
-//       return res.status(200).json({
-//         message: "No data found for this group and exam.",
-//         groupId,
-//         examId,
-//         members: [],
-//       });
-//     }
-
-  
-//     const previousExams = await Schoolerexam.find({
-//       assignedGroup: groupId,
-//       createdAt: { $lt: currentExam.createdAt },
-//     }).select("_id");
-
-//     const previousExamIds = previousExams.map(e => e._id);
-//     const eliminatedUserSet = new Set();
-
-//     if (previousExamIds.length > 0) {
-      
-//       const eliminatedUsers = await ExamUserStatus.find({
-//         examId: { $in: previousExamIds },
-//         $or: [{ result: "failed" }, { attemptStatus: "Not Attempted" }],
-//       }).select("userId").lean();
-
-//       eliminatedUsers.forEach(e =>
-//         eliminatedUserSet.add(e.userId.toString())
-//       );
-//     }
-
-   
-//     const group = await UserExamGroup.findById(groupId).populate(
-//       "members",
-//       "firstName middleName lastName status email category schoolershipstatus _id"
-//     );
-
-//     if (!group) {
-//       return res.status(404).json({ message: "Group not found." });
-//     }
-
-//     const memberIds = group.members.map(m => m._id);
-
- 
-//     const examStatuses = await ExamUserStatus.find({
-//       userId: { $in: memberIds },
-//       examId,
-//     })
-//       .select("userId result rank attemptStatus")
-//       .lean();
-
-//     const examStatusMap = {};
-//     examStatuses.forEach(es => {
-//       examStatusMap[es.userId.toString()] = es;
-//     });
-
-//     const rankDeclared = examStatuses.some(es => es.rank !== null);
-
-    
-//     const finalistUsers = await CategoryTopUser.find({
-//       userId: { $in: memberIds },
-//     }).select("userId").lean();
-
-//     const finalistMap = {};
-//     finalistUsers.forEach(f => {
-//       finalistMap[f.userId.toString()] = true;
-//     });
-
-//     const membersWithExamData = [];
-
-//     for (const member of group.members) {
-      
-//       if (eliminatedUserSet.has(member._id.toString())) continue;
-
-//       const es = examStatusMap[member._id.toString()];
-//       let computedSchoolershipstatus = "NA";
-
-//       const examResult = await ExamResult.findOne({
-//         userId: member._id,
-//         examId,
-//       }).select("percentage Completiontime").lean();
-
-      
-//       const hasAttempted =
-//         examResult?.percentage !== null &&
-//         examResult?.Completiontime !== null;
-
-//       if (member.status === "yes") {
-//         computedSchoolershipstatus = "Participant";
-
-       
-//         if (es?.result === "failed") {
-//           computedSchoolershipstatus = "Eliminated";
-//         }
-
-       
-//         if (!hasAttempted && es?.attemptStatus === "Not Attempted") {
-//           computedSchoolershipstatus = "Eliminated";
-//         }
-
-        
-//         if (
-//           !hasAttempted &&
-//           computedSchoolershipstatus === "Participant" &&
-//           rankDeclared &&
-//           es?.rank == null
-//         ) {
-//           computedSchoolershipstatus = "Eliminated";
-//         }
-
-       
-//         if (finalistMap[member._id.toString()]) {
-//           computedSchoolershipstatus = "Finalist";
-//         }
-//       }
-
-     
-//       if (member.schoolershipstatus !== computedSchoolershipstatus) {
-//         await User.updateOne(
-//           { _id: member._id },
-//           {
-//             $set: {
-//               schoolershipstatus: computedSchoolershipstatus,
-//               category: member.category ?? null,
-//             },
-//           }
-//         );
-//       }
-
-//       membersWithExamData.push({
-//         _id: member._id,
-//         firstName: member.firstName,
-//         middleName: member.middleName,
-//         lastName: member.lastName,
-//         email: member.email,
-//         status: member.status,
-//         category: member.category,
-//         schoolershipstatus: computedSchoolershipstatus,
-//         percentage: examResult?.percentage ?? null,
-//         completionTime: examResult?.Completiontime ?? null,
-//         rank: es?.rank ?? null,              
-//         attemptStatus: es?.attemptStatus ?? null, 
-//       });
-//     }
-
-//     return res.status(200).json({
-//       message: "Group members fetched successfully.",
-//       groupId,
-//       examId,
-//       members: membersWithExamData,
-//     });
-//   } catch (error) {
-//     console.error("getGroupMembers Error:", error);
-//     return res.status(500).json({
-//       message: "Internal server error",
-//       error: error.message,
-//     });
-//   }
-// };
 
 
 
