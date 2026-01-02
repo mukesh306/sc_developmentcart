@@ -260,7 +260,10 @@ strikeHistory: [
   allocatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'OrganizationSign' },
 
   resetPasswordExpires: { type: Date },
-  createdAt: { type: Date, default: Date.now }
+  createdAt: { type: Date, default: Date.now },
+  updatedAt: { type: Date, default: null }
+ 
+
 });
 
 module.exports = mongoose.model('User', userSchema);
