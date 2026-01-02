@@ -160,11 +160,7 @@ exports.getAssignedList = async (req, res) => {
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
-
-  
-    const user = await User.findById(userId)
-      .select('updatedAt endDate className')
-      .lean({ getters: true });
+    const user = await User.findById(userId).lean();
 
     if (!user?.endDate) {
       return res.status(200).json({
@@ -223,12 +219,12 @@ exports.getAssignedListUser = async (req, res) => {
       .populate('learning2')
       .populate('learning3')
       .populate('learning4')
-      .lean({ getters: true }); // ensure populated documents also respect getters
+      .lean();
 
     for (let item of assignedList) {
-      let classInfo = await School.findById(item.classId).lean({ getters: true });
+      let classInfo = await School.findById(item.classId).lean();
       if (!classInfo) {
-        classInfo = await College.findById(item.classId).lean({ getters: true });
+        classInfo = await College.findById(item.classId).lean();
       }
       item.classInfo = classInfo || null;
 
@@ -254,7 +250,6 @@ exports.getAssignedListUser = async (req, res) => {
       item.learning4Average = getAverage(item.learning4);
     }
 
-    // ✅ Final response
     res.status(200).json({
       enrolledDate: user.updatedAt
         ? moment(user.updatedAt).format('YYYY-MM-DD')
