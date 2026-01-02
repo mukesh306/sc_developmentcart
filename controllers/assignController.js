@@ -156,7 +156,6 @@ exports.getAssignedList = async (req, res) => {
 //   }
 // };
 
-
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -164,9 +163,13 @@ exports.getAssignedListUser = async (req, res) => {
 
     if (!user?.endDate) {
       return res.status(200).json({
-        enrolledDate: formatDate(user?.updatedAt),
-        currentDate: formatDate(new Date()),
-        updatedAt: formatDate(user?.updatedAt),
+        enrolledDate: user?.updatedAt
+          ? moment(user.updatedAt).format('YYYY-MM-DD')
+          : null,
+        currentDate: moment().format('YYYY-MM-DD'),
+        updatedAt: user?.updatedAt
+          ? moment(user.updatedAt).format('YYYY-MM-DD')
+          : null,
         data: []
       });
     }
@@ -227,7 +230,9 @@ exports.getAssignedListUser = async (req, res) => {
       const getAverage = (learningObj) => {
         if (learningObj && learningObj._id) {
           const lid = learningObj._id.toString();
-          return averageScoreMap[lid] ?? 0;
+          return Object.prototype.hasOwnProperty.call(averageScoreMap, lid)
+            ? averageScoreMap[lid]
+            : 0;
         }
         return 0;
       };
@@ -245,15 +250,22 @@ exports.getAssignedListUser = async (req, res) => {
     }
 
     res.status(200).json({
-      enrolledDate: formatDate(user.updatedAt),   
-      currentDate: formatDate(new Date()),        
-      updatedAt: formatDate(user.updatedAt),      
+      enrolledDate: user.updatedAt
+        ? moment(user.updatedAt).format('YYYY-MM-DD')
+        : null,
+      currentDate: moment().format('YYYY-MM-DD'),
+      updatedAt: user.updatedAt
+        ? moment(user.updatedAt).format('YYYY-MM-DD')
+        : null,
       data: assignedList
     });
 
   } catch (error) {
     console.error('Get Assigned Error:', error);
-    res.status(500).json({ message: 'Internal server error', error: error.message });
+    res.status(500).json({
+      message: 'Internal server error',
+      error: error.message
+    });
   }
 };
 
