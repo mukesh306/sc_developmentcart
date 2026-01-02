@@ -166,7 +166,7 @@ exports.getAllExams = async (req, res) => {
 
       examObj.totalQuestions = exam.topicQuestions?.length || 0;
 
-      let ExamStatus = exam.publish ? "Scheduled" : "To Be Schedule";
+      let ExamStatus = exam.publish ? "Scheduled" : "Parked";
 
       if (
         exam.publish &&
