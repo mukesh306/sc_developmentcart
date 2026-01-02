@@ -251,7 +251,7 @@ exports.getExamById = async (req, res) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // ✅ Find className from School or College
+   
     let classData =
       (await School.findById(exam.className).select("name className")) ||
       (await College.findById(exam.className).select("name className"));
@@ -295,7 +295,7 @@ exports.publishExam = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // Check if exam exists
+    
     const exam = await Schoolerexam.findById(id);
     if (!exam) {
       return res.status(404).json({ message: "Exam not found." });
