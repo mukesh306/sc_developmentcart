@@ -60,13 +60,86 @@ exports.createExam = async (req, res) => {
 
 
 
+// exports.getAllExams = async (req, res) => {
+//   try {
+//     const { category, className, examType } = req.query;
+
+   
+//     let exams = await Schoolerexam.find()
+//       .populate("category", "name")
+//       .populate("createdBy", "name email")
+//       .sort({ createdAt: 1 });
+
+//     if (!exams || exams.length === 0) {
+//       return res.status(200).json([]);
+//     }
+
+//     const updatedExams = [];
+
+//     for (const exam of exams) {
+//       let classData =
+//         (await School.findById(exam.className).select("_id name className")) ||
+//         (await College.findById(exam.className).select("_id name className"));
+
+//       const examObj = exam.toObject();
+
+//       if (classData) {
+//         examObj.className = {
+//           _id: classData._id,
+//           name: classData.className || classData.name,
+//         };
+//       } else {
+//         examObj.className = null;
+//       }
+
+//       examObj.totalQuestions = exam.topicQuestions
+//         ? exam.topicQuestions.length
+//         : 0;
+
+//       updatedExams.push(examObj);
+//     }
+
+  
+//     let filteredExams = updatedExams;
+//     if (category) {
+//       filteredExams = filteredExams.filter(
+//         (e) => e.category && e.category._id?.toString() === category
+//       );
+//     }
+
+//     if (className) {
+//       filteredExams = filteredExams.filter(
+//         (e) => e.className && e.className._id?.toString() === className
+//       );
+//     }
+
+//     if (examType) {
+//       filteredExams = filteredExams.filter(
+//         (e) => e.examType && e.examType.toString() === examType
+//       );
+//     }
+
+//     res.status(200).json(filteredExams);
+//   } catch (error) {
+//     console.error(" Error fetching exams:", error);
+//     res.status(500).json({ message: "Internal server error", error: error.message });
+//   }
+// };
+
 exports.getAllExams = async (req, res) => {
   try {
-    const { category, className, examType } = req.query;
+    const { category, className, examType } = req.query; 
+    const markingSetting = await MarkingSetting.findOne({})
+      .sort({ createdAt: -1 })
+      .select("bufferTime")
+      .lean();
 
-    // Removed examType populate 👇
+    const bufferTime = markingSetting?.bufferTime
+      ? parseInt(markingSetting.bufferTime)
+      : 0;
+
     let exams = await Schoolerexam.find()
-      .populate("category", "name")
+      .populate("category", "name examType")
       .populate("createdBy", "name email")
       .sort({ createdAt: 1 });
 
@@ -74,6 +147,7 @@ exports.getAllExams = async (req, res) => {
       return res.status(200).json([]);
     }
 
+    const now = moment().tz("Asia/Kolkata");
     const updatedExams = [];
 
     for (const exam of exams) {
@@ -83,56 +157,89 @@ exports.getAllExams = async (req, res) => {
 
       const examObj = exam.toObject();
 
-      if (classData) {
-        examObj.className = {
-          _id: classData._id,
-          name: classData.className || classData.name,
-        };
-      } else {
-        examObj.className = null;
+      examObj.className = classData
+        ? {
+            _id: classData._id,
+            name: classData.className || classData.name,
+          }
+        : null;
+
+      examObj.totalQuestions = exam.topicQuestions?.length || 0;
+
+      let ExamStatus = exam.publish ? "Scheduled" : "To Be Schedule";
+
+      if (
+        exam.publish &&
+        exam.ScheduleDate &&
+        exam.ScheduleTime &&
+        exam.ExamTime
+      ) {
+        const scheduleDateTime = moment(
+          exam.ScheduleDate,
+          "DD-MM-YYYY"
+        )
+          .tz("Asia/Kolkata")
+          .set({
+            hour: moment(exam.ScheduleTime, "HH:mm:ss").hour(),
+            minute: moment(exam.ScheduleTime, "HH:mm:ss").minute(),
+            second: moment(exam.ScheduleTime, "HH:mm:ss").second(),
+          });
+
+        const ongoingStart = scheduleDateTime
+          .clone()
+          .add(bufferTime, "minutes");
+
+        const ongoingEnd = ongoingStart
+          .clone()
+          .add(parseInt(exam.ExamTime), "minutes");
+
+        if (now.isBefore(ongoingStart)) {
+          ExamStatus = "Scheduled";
+        } else if (
+          now.isSameOrAfter(ongoingStart) &&
+          now.isBefore(ongoingEnd)
+        ) {
+          ExamStatus = "Ongoing";
+        } else if (now.isSameOrAfter(ongoingEnd)) {
+          ExamStatus = "Completed";
+        }
       }
 
-      examObj.totalQuestions = exam.topicQuestions
-        ? exam.topicQuestions.length
-        : 0;
+      examObj.ExamStatus = ExamStatus;
+      examObj.bufferTime = bufferTime;
 
       updatedExams.push(examObj);
     }
 
-    // ------------------------
-    // APPLY FILTERS (ID BASED)
-    // ------------------------
     let filteredExams = updatedExams;
 
-    // category filter
     if (category) {
       filteredExams = filteredExams.filter(
         (e) => e.category && e.category._id?.toString() === category
       );
     }
 
-    // class filter
     if (className) {
       filteredExams = filteredExams.filter(
         (e) => e.className && e.className._id?.toString() === className
       );
     }
 
-    // ⭐ examType filter (ID match, NO POPULATE)
     if (examType) {
       filteredExams = filteredExams.filter(
         (e) => e.examType && e.examType.toString() === examType
       );
     }
 
-    res.status(200).json(filteredExams);
+    return res.status(200).json(filteredExams);
   } catch (error) {
-    console.error("🔥 Error fetching exams:", error);
-    res.status(500).json({ message: "Internal server error", error: error.message });
+    console.error("Error fetching exams:", error);
+    return res.status(500).json({
+      message: "Internal server error",
+      error: error.message,
+    });
   }
 };
-
-
 
 exports.getExamById = async (req, res) => {
   try {
@@ -2542,93 +2649,6 @@ exports.getExamsByAssignedGroup = async (req, res) => {
   }
 };
 
-
-// exports.getExamsByAssignedGroup = async (req, res) => {
-//   try {
-//     const { groupId } = req.query;
-
-//     if (!groupId) {
-//       return res.status(400).json({
-//         message: "groupId is required",
-//       });
-//     }
-
-   
-//     const markingSetting = await MarkingSetting.findOne({})
-//       .sort({ createdAt: -1 })
-//       .select("bufferTime")
-//       .lean();
-
-//     const bufferTime = markingSetting?.bufferTime || 0;
-
-//     const exams = await Schoolerexam.find({
-//       assignedGroup: groupId,
-//     })
-//       .populate("category", "name examType")
-//       .select(
-//         "examName category examType ScheduleDate ScheduleTime ExamTime seat passout publish"
-//       )
-//       .lean();
-
-//     if (!exams.length) {
-//       return res.status(200).json({
-//         message: "No exams found for this group",
-//         total: 0,
-//         exams: [], 
-//       });
-//     }
-
-//     const formattedExams = exams.map((exam) => {
-//       let examTypeName = null;
-
-//       if (exam.category?.examType?.length && exam.examType) {
-//         const matchedType = exam.category.examType.find(
-//           (et) => et._id.toString() === exam.examType.toString()
-//         );
-
-//         examTypeName = matchedType?.name || null;
-//       }
-
-//       const ExamStatus = exam.publish ? "scheduled" : "to be scheduled";
-
-//       return {
-//         _id: exam._id,
-//         examName: exam.examName,
-
-//         category: {
-//           _id: exam.category._id,
-//           name: exam.category.name,
-//         },
-
-//         examTypeId: exam.examType,
-//         examTypeName,
-
-//         ScheduleDate: exam.ScheduleDate,
-//         ScheduleTime: exam.ScheduleTime,
-//         ExamTime: exam.ExamTime,
-
-//         passout: exam.passout,
-//         seat: exam.seat,
-//         publish: exam.publish,
-//         ExamStatus,
-
-//         bufferTime, 
-//       };
-//     });
-
-//     res.status(200).json({
-//       message: "Exams fetched successfully",
-//       total: formattedExams.length,
-//       exams: formattedExams, 
-//     });
-//   } catch (error) {
-//     console.error("Error fetching exams by group:", error);
-//     res.status(500).json({
-//       message: "Internal server error",
-//       error,
-//     });
-//   }
-// };
 
 
 
