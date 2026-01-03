@@ -994,8 +994,8 @@ exports.UsersExams = async (req, res) => {
         .tz("Asia/Kolkata")
         .format("YYYY-MM-DD");
 
-      // if (existingStatus && moment(examDay).isBefore(today)) {
-        if (existingStatus) {
+      if (existingStatus && moment(examDay).isBefore(today)) {
+        // if (existingStatus) {
 
         updatedExams.push({
           ...examObj,
