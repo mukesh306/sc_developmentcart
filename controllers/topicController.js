@@ -1635,13 +1635,13 @@ exports.PracticescoreCard = async (req, res) => {
       learningIds.add(lid);
 
       scoreMap.set(`${dateStr}_${lid}`, {
-        ...score.toObject(),
+        ...score,
         date: dateStr,
         isToday: dateStr === todayStr
       });
     }
 
-    // ------------------ FILL MISSING DATES ------------------
+    
     const fullResult = [];
 
     for (
@@ -1664,14 +1664,14 @@ exports.PracticescoreCard = async (req, res) => {
       }
     }
 
-    // ------------------ SORT (today first) ------------------
+   
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
-    // ------------------ AVERAGE SCORE ------------------
+    
     const practiceScores = {};
     for (const entry of sortedFinal) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -1690,7 +1690,7 @@ exports.PracticescoreCard = async (req, res) => {
       0
     );
 
-    // ------------------ RESPONSE ------------------
+    
     res.status(200).json({
       enrolledDate: enrolledDate.format('YYYY-MM-DD'),
       currentDate: currentDate.format('YYYY-MM-DD'),
