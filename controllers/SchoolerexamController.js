@@ -930,7 +930,6 @@ exports.addQuestionsToExam = async (req, res) => {
 // };
 
 
-
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -967,12 +966,16 @@ exports.UsersExams = async (req, res) => {
       ? parseInt(markingSetting.bufferTime)
       : 0;
 
+    // 🔴 IMPORTANT: jo users kabhi bhi Not Attempted ho chuke hain (ONE TIME ONLY)
+    const alreadyNotAttemptedUsers = (
+      await ExamUserStatus.find({ attemptStatus: "Not Attempted" })
+        .distinct("userId")
+    ).map((id) => id.toString());
+
     const updatedExams = [];
 
     for (const exam of exams) {
       const examObj = { ...exam };
-
-      const today = moment().tz("Asia/Kolkata").format("YYYY-MM-DD");
 
       const classData =
         (await School.findById(exam.className)
@@ -1114,28 +1117,22 @@ exports.UsersExams = async (req, res) => {
           { upsert: true }
         );
 
-        // ===== 🔴 GROUP USERS → NOT ATTEMPTED (FIRST TIME ONLY) =====
-        const attemptedUserIds = await ExamResult.find({
-          examId: exam._id,
-        }).distinct("userId");
+        // ===== 🔴 GROUP USERS → NOT ATTEMPTED (ONLY ONCE IN LIFETIME) =====
+        const attemptedUserIds = (
+          await ExamResult.find({ examId: exam._id }).distinct("userId")
+        ).map((id) => id.toString());
 
         const groupUserIds = assignedGroup.members.map((id) =>
           id.toString()
         );
 
         const notAttemptedUsers = groupUserIds.filter(
-          (uid) => !attemptedUserIds.map(String).includes(uid)
+          (uid) => !attemptedUserIds.includes(uid)
         );
 
         for (const uid of notAttemptedUsers) {
-          // ❗ Agar pehle hi kisi exam me Not Attempted ho chuka hai → skip
-          const alreadyMissed = await ExamUserStatus.findOne({
-            userId: uid,
-            category: exam.category,
-            attemptStatus: "Not Attempted",
-          }).lean();
-
-          if (alreadyMissed) continue;
+          // 🔒 FINAL RULE
+          if (alreadyNotAttemptedUsers.includes(uid)) continue;
 
           await ExamUserStatus.findOneAndUpdate(
             { userId: uid, examId: exam._id },
@@ -1157,6 +1154,9 @@ exports.UsersExams = async (req, res) => {
             },
             { upsert: true }
           );
+
+          // ❗ ensure lifetime rule (memory update)
+          alreadyNotAttemptedUsers.push(uid);
         }
       }
 
@@ -1172,6 +1172,7 @@ exports.UsersExams = async (req, res) => {
     });
   }
 };
+
 
 
 
