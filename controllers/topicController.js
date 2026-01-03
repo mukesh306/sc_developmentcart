@@ -1567,36 +1567,41 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 //   }
 // };
 
-
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
-    const { learningId, fromDate, toDate } = req.query;
-
-    const isFilterApplied = !!(learningId || fromDate || toDate);
+    const { learningId } = req.query;
 
     const user = await User.findById(userId);
     if (!user?.endDate || !user?.className) {
       return res.status(400).json({ message: 'Please complete your profile.' });
     }
 
-    const userEndDate = user.endDate;
-    const userClassId = user.className;
-    const todayStr = moment().format('YYYY-MM-DD');
+    const today = moment().startOf('day');
+    const todayStr = today.format('YYYY-MM-DD');
 
-    // ---------------- DATE RANGE (DEFAULT) ----------------
-    let minDate = moment(user.updatedAt).startOf('day');
-    let maxDate = moment().startOf('day');
+    // ✅ Last 7 days range
+    const fromDate = moment(today).subtract(6, 'days');
+    const toDate = moment(today);
 
-    // ---------------- AGGREGATION ----------------
+    // 🔍 Match condition
+    const match = {
+      userId: new mongoose.Types.ObjectId(userId),
+      endDate: user.endDate,
+      classId: user.className.toString(),
+      scoreDate: {
+        $gte: fromDate.toDate(),
+        $lte: toDate.toDate()
+      }
+    };
+
+    if (learningId) {
+      match.learningId = new mongoose.Types.ObjectId(learningId);
+    }
+
+    // ✅ Fetch one score per day
     const rawScores = await LearningScore.aggregate([
-      {
-        $match: {
-          userId: new mongoose.Types.ObjectId(userId),
-          endDate: userEndDate,
-          classId: userClassId.toString()
-        }
-      },
+      { $match: match },
       { $sort: { scoreDate: 1, createdAt: 1 } },
       {
         $group: {
@@ -1616,32 +1621,23 @@ exports.PracticescoreCard = async (req, res) => {
       select: 'name'
     });
 
-    // ---------------- SCORE MAP ----------------
+    // 🗺️ Map by date
     const scoreMap = new Map();
-
     for (const score of populatedScores) {
-      const scoreDate = moment(score.scoreDate).startOf('day');
-      const dateStr = scoreDate.format('YYYY-MM-DD');
-
+      const dateStr = moment(score.scoreDate).format('YYYY-MM-DD');
       scoreMap.set(dateStr, {
         ...score,
         date: dateStr,
         isToday: dateStr === todayStr
       });
-
-      if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
     }
 
-    // ---------------- FILL MISSING DATES ----------------
-    const fullResult = [];
+    // 📆 Generate all 7 days
+    const finalScores = [];
+    for (let d = moment(fromDate); d.diff(toDate, 'days') <= 0; d.add(1, 'days')) {
+      const dateStr = d.format('YYYY-MM-DD');
 
-    for (
-      let m = moment(minDate);
-      m.diff(maxDate, 'days') <= 0;
-      m.add(1, 'days')
-    ) {
-      const dateStr = m.format('YYYY-MM-DD');
-      fullResult.push(
+      finalScores.push(
         scoreMap.get(dateStr) || {
           date: dateStr,
           score: null,
@@ -1650,92 +1646,30 @@ exports.PracticescoreCard = async (req, res) => {
       );
     }
 
-    // ---------------- SORT ----------------
-    const sortedFinal = fullResult.sort((a, b) => {
-      if (a.date === todayStr) return -1;
-      if (b.date === todayStr) return 1;
+    // 🔼 Today always on top
+    finalScores.sort((a, b) => {
+      if (a.isToday && !b.isToday) return -1;
+      if (!a.isToday && b.isToday) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
-    // ---------------- APPLY FILTERS (OPTIONAL) ----------------
-    let finalScores = sortedFinal;
+    // 📊 Average score (only non-null)
+    const validScores = finalScores.filter(s => s.score !== null);
+    const avg =
+      validScores.reduce((sum, s) => sum + s.score, 0) /
+      (validScores.length || 1);
 
-    if (isFilterApplied) {
-      finalScores = sortedFinal.filter(item => {
-        // learningId filter
-        if (learningId) {
-          if (
-            item.learningId?._id?.toString() !== learningId &&
-            item.learningId?.toString() !== learningId
-          ) {
-            return false;
-          }
-        }
-
-        // date filter
-        if (fromDate && item.date < fromDate) return false;
-        if (toDate && item.date > toDate) return false;
-
-        return true;
-      });
-    }
-
-    // ---------------- BLANK DATES IF FILTER + NO DATA ----------------
-    if (isFilterApplied && finalScores.length === 0) {
-      const blankResults = [];
-
-      const filterMinDate = fromDate
-        ? moment(fromDate, 'YYYY-MM-DD')
-        : moment(minDate);
-
-      const filterMaxDate = toDate
-        ? moment(toDate, 'YYYY-MM-DD')
-        : moment(maxDate);
-
-      for (
-        let m = moment(filterMinDate);
-        m.diff(filterMaxDate, 'days') <= 0;
-        m.add(1, 'days')
-      ) {
-        const dateStr = m.format('YYYY-MM-DD');
-        blankResults.push({
-          date: dateStr,
-          score: null,
-          isToday: dateStr === todayStr
-        });
-      }
-
-      finalScores = blankResults;
-    }
-
-    // ---------------- AVERAGE SCORE ----------------
-    let averageScore = 0;
-    if (!isFilterApplied || finalScores.some(i => i.score !== null)) {
-      const practiceScores = {};
-      for (const entry of fullResult) {
-        if (entry.score !== null && entry.learningId?._id) {
-          const lid = entry.learningId._id.toString();
-          if (!practiceScores[lid]) practiceScores[lid] = 0;
-          practiceScores[lid] += entry.score;
-        }
-      }
-      averageScore = Object.values(practiceScores).reduce(
-        (acc, v) => acc + v,
-        0
-      );
-    }
-
-    // ---------------- RESPONSE ----------------
-    res.status(200).json({
+    return res.status(200).json({
       scores: finalScores,
-      averageScore: Number(averageScore.toFixed(2))
+      averageScore: parseFloat(avg.toFixed(2))
     });
 
   } catch (error) {
-    console.error('Error in PracticescoreCard:', error);
+    console.error('PracticescoreCard error:', error);
     res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
