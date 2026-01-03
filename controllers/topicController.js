@@ -1573,6 +1573,8 @@ exports.PracticescoreCard = async (req, res) => {
     const userId = req.user._id;
     const { learningId, fromDate, toDate } = req.query;
 
+    const isFilterApplied = !!(learningId || fromDate || toDate);
+
     const user = await User.findById(userId);
     if (!user?.endDate || !user?.className) {
       return res.status(400).json({ message: 'Please complete your profile.' });
@@ -1582,25 +1584,17 @@ exports.PracticescoreCard = async (req, res) => {
     const userClassId = user.className;
     const todayStr = moment().format('YYYY-MM-DD');
 
-    // ✅ Date range (Postman > default fallback)
-    const enrolledDate = fromDate
-      ? moment(fromDate, 'YYYY-MM-DD')
-      : moment(user.enrolledDate).startOf('day');
+    // ---------------- DATE RANGE (DEFAULT) ----------------
+    let minDate = moment(user.updatedAt).startOf('day');
+    let maxDate = moment().startOf('day');
 
-    const currentDate = toDate
-      ? moment(toDate, 'YYYY-MM-DD')
-      : moment().startOf('day');
-
-    // ------------------ AGGREGATION ------------------
+    // ---------------- AGGREGATION ----------------
     const rawScores = await LearningScore.aggregate([
       {
         $match: {
           userId: new mongoose.Types.ObjectId(userId),
           endDate: userEndDate,
-          classId: userClassId.toString(),
-          ...(learningId && {
-            learningId: new mongoose.Types.ObjectId(learningId)
-          })
+          classId: userClassId.toString()
         }
       },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -1609,8 +1603,7 @@ exports.PracticescoreCard = async (req, res) => {
           _id: {
             date: {
               $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
-            },
-            learningId: "$learningId"
+            }
           },
           doc: { $first: "$$ROOT" }
         }
@@ -1623,78 +1616,118 @@ exports.PracticescoreCard = async (req, res) => {
       select: 'name'
     });
 
-    // ------------------ SCORE MAP ------------------
+    // ---------------- SCORE MAP ----------------
     const scoreMap = new Map();
-    const learningIds = new Set();
 
     for (const score of populatedScores) {
-      const dateStr = moment(score.scoreDate).format('YYYY-MM-DD');
-      const lid = score.learningId?._id?.toString();
-      if (!lid) continue;
+      const scoreDate = moment(score.scoreDate).startOf('day');
+      const dateStr = scoreDate.format('YYYY-MM-DD');
 
-      learningIds.add(lid);
-
-      scoreMap.set(`${dateStr}_${lid}`, {
+      scoreMap.set(dateStr, {
         ...score,
         date: dateStr,
         isToday: dateStr === todayStr
       });
+
+      if (scoreDate.isAfter(maxDate)) maxDate = scoreDate;
     }
 
-    
+    // ---------------- FILL MISSING DATES ----------------
     const fullResult = [];
 
     for (
-      let m = moment(enrolledDate);
-      m.diff(currentDate, 'days') <= 0;
+      let m = moment(minDate);
+      m.diff(maxDate, 'days') <= 0;
       m.add(1, 'days')
     ) {
       const dateStr = m.format('YYYY-MM-DD');
-
-      for (const lid of learningIds) {
-        const key = `${dateStr}_${lid}`;
-        fullResult.push(
-          scoreMap.get(key) || {
-            learningId: lid,
-            date: dateStr,
-            score: null,
-            isToday: dateStr === todayStr
-          }
-        );
-      }
+      fullResult.push(
+        scoreMap.get(dateStr) || {
+          date: dateStr,
+          score: null,
+          isToday: dateStr === todayStr
+        }
+      );
     }
 
-   
+    // ---------------- SORT ----------------
     const sortedFinal = fullResult.sort((a, b) => {
       if (a.date === todayStr) return -1;
       if (b.date === todayStr) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
-    
-    const practiceScores = {};
-    for (const entry of sortedFinal) {
-      if (entry.score !== null && entry.learningId?._id) {
-        const lid = entry.learningId._id.toString();
-        const lname = entry.learningId.name || "Unknown";
+    // ---------------- APPLY FILTERS (OPTIONAL) ----------------
+    let finalScores = sortedFinal;
 
-        if (!practiceScores[lid]) {
-          practiceScores[lid] = { totalScore: 0, name: lname };
+    if (isFilterApplied) {
+      finalScores = sortedFinal.filter(item => {
+        // learningId filter
+        if (learningId) {
+          if (
+            item.learningId?._id?.toString() !== learningId &&
+            item.learningId?.toString() !== learningId
+          ) {
+            return false;
+          }
         }
-        practiceScores[lid].totalScore += entry.score;
-      }
+
+        // date filter
+        if (fromDate && item.date < fromDate) return false;
+        if (toDate && item.date > toDate) return false;
+
+        return true;
+      });
     }
 
-    const averageScore = Object.values(practiceScores).reduce(
-      (sum, i) => sum + i.totalScore,
-      0
-    );
+    // ---------------- BLANK DATES IF FILTER + NO DATA ----------------
+    if (isFilterApplied && finalScores.length === 0) {
+      const blankResults = [];
 
-    
+      const filterMinDate = fromDate
+        ? moment(fromDate, 'YYYY-MM-DD')
+        : moment(minDate);
+
+      const filterMaxDate = toDate
+        ? moment(toDate, 'YYYY-MM-DD')
+        : moment(maxDate);
+
+      for (
+        let m = moment(filterMinDate);
+        m.diff(filterMaxDate, 'days') <= 0;
+        m.add(1, 'days')
+      ) {
+        const dateStr = m.format('YYYY-MM-DD');
+        blankResults.push({
+          date: dateStr,
+          score: null,
+          isToday: dateStr === todayStr
+        });
+      }
+
+      finalScores = blankResults;
+    }
+
+    // ---------------- AVERAGE SCORE ----------------
+    let averageScore = 0;
+    if (!isFilterApplied || finalScores.some(i => i.score !== null)) {
+      const practiceScores = {};
+      for (const entry of fullResult) {
+        if (entry.score !== null && entry.learningId?._id) {
+          const lid = entry.learningId._id.toString();
+          if (!practiceScores[lid]) practiceScores[lid] = 0;
+          practiceScores[lid] += entry.score;
+        }
+      }
+      averageScore = Object.values(practiceScores).reduce(
+        (acc, v) => acc + v,
+        0
+      );
+    }
+
+    // ---------------- RESPONSE ----------------
     res.status(200).json({
-      enrolledDate: enrolledDate.format('YYYY-MM-DD'),
-      currentDate: currentDate.format('YYYY-MM-DD'),
-      scores: sortedFinal,
+      scores: finalScores,
       averageScore: Number(averageScore.toFixed(2))
     });
 
