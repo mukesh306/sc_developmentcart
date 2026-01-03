@@ -929,6 +929,7 @@ exports.addQuestionsToExam = async (req, res) => {
 //   }
 // };
 
+
 exports.UsersExams = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -963,7 +964,7 @@ exports.UsersExams = async (req, res) => {
     const markingSetting = await MarkingSetting.findOne().lean();
     const bufferTime = parseInt(markingSetting?.bufferTime || 0);
 
-    /* 🔴 STEP-1: user ka FIRST blocked exam (fail / not attempted) */
+  
     const blockedStatuses = await ExamUserStatus.find({
       userId,
       statusManage: "Completed",
@@ -979,7 +980,7 @@ exports.UsersExams = async (req, res) => {
           new Date(a.examId.createdAt) - new Date(b.examId.createdAt)
       )[0];
 
-    /* 🔴 STEP-2: lifetime NOT ATTEMPTED users (group logic ke liye) */
+   
     const lifetimeNotAttemptedUsers = (
       await ExamUserStatus.find({ attemptStatus: "Not Attempted" }).distinct(
         "userId"
@@ -991,7 +992,7 @@ exports.UsersExams = async (req, res) => {
     for (const exam of exams) {
       const examObj = { ...exam };
 
-      /* 🔴 NOT ELIGIBLE CHECK */
+      
       if (
         firstBlockedExam &&
         firstBlockedExam.examId &&
@@ -1023,7 +1024,7 @@ exports.UsersExams = async (req, res) => {
         continue;
       }
 
-      /* 🔹 CLASS INFO */
+     
       const classData =
         (await School.findById(exam.className)
           .select("_id className name")
@@ -1038,7 +1039,7 @@ exports.UsersExams = async (req, res) => {
 
       examObj.totalQuestions = exam.topicQuestions?.length || 0;
 
-      /* 🔹 TIME CALCULATION */
+    
       const scheduleDateTime = moment(exam.examDate)
         .tz("Asia/Kolkata")
         .set({
@@ -1059,7 +1060,7 @@ exports.UsersExams = async (req, res) => {
 
       examObj.statusManage = statusManage;
 
-      /* 🔹 ONGOING */
+      
       if (statusManage === "Ongoing") {
         const attempted = await ExamResult.exists({
           userId,
@@ -1083,7 +1084,7 @@ exports.UsersExams = async (req, res) => {
         );
       }
 
-      /* 🔹 COMPLETED */
+     
       if (statusManage === "Completed") {
         const userResult = await ExamResult.findOne({
           userId,
@@ -1147,7 +1148,7 @@ exports.UsersExams = async (req, res) => {
           { upsert: true }
         );
 
-        /* 🔴 GROUP → NOT ATTEMPTED (LIFETIME ONLY) */
+      
         const attemptedIds = allResults.map((r) => r.userId.toString());
 
         for (const uid of assignedGroup.members.map(String)) {
