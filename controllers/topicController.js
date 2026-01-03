@@ -1567,6 +1567,7 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 //   }
 // };
 
+
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1580,14 +1581,14 @@ exports.PracticescoreCard = async (req, res) => {
     const today = moment().startOf('day');
     const todayStr = today.format('YYYY-MM-DD');
 
-    // ✅ Date range
+  
     let startDate = moment(user.updatedAt).startOf('day');
     let endDate = moment(today);
 
     if (fromDate) startDate = moment(fromDate).startOf('day');
     if (toDate) endDate = moment(toDate).startOf('day');
 
-    // 🔍 Match condition
+  
     const match = {
       userId: new mongoose.Types.ObjectId(userId),
       endDate: user.endDate,
