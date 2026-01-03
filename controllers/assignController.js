@@ -168,9 +168,9 @@ exports.getAssignedListUser = async (req, res) => {
           ? moment(user.updatedAt).format('YYYY-MM-DD')
           : null,
         currentDate: moment().format('YYYY-MM-DD'),
-        // updatedAt: user?.updatedAt
-        //   ? moment(user.updatedAt).format('YYYY-MM-DD')
-        //   : null,
+        updatedAt: user?.updatedAt
+          ? moment(user.updatedAt).format('YYYY-MM-DD')
+          : null,
         data: []
       });
     }
