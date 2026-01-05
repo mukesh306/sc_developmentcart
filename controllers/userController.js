@@ -1090,6 +1090,115 @@ exports.UserSessionDetails = async (req, res) => {
   }
 };
 
+exports.getActiveSessionUsers = async (req, res) => {
+  try {
+    const baseUrl = `${req.protocol}://${req.get('host')}`;
+    const today = moment().tz('Asia/Kolkata').startOf('day');
+
+    const users = await User.find({
+      startDate: { $exists: true, $ne: '' },
+      endDate: { $exists: true, $ne: '' }
+    })
+      .populate('cityId', 'name')
+      .populate('stateId', 'name')
+      .populate('countryId', 'name')
+      .lean();
+
+    const finalUsers = [];
+
+    for (const user of users) {
+
+      if (!user.updatedBy || !mongoose.Types.ObjectId.isValid(user.updatedBy)) {
+        continue;
+      }
+
+      
+      const admin = await Admin1.findById(user.updatedBy)
+        .select('startDate endDate status')
+        .lean();
+
+      if (!admin || !admin.startDate || !admin.endDate) continue;
+
+      const adminStart = moment(admin.startDate, 'DD-MM-YYYY', true);
+      const adminEnd   = moment(admin.endDate, 'DD-MM-YYYY', true);
+
+      if (!adminStart.isValid() || !adminEnd.isValid()) continue;
+
+      const userStart = moment(user.startDate, 'DD-MM-YYYY', true);
+      const userEnd   = moment(user.endDate, 'DD-MM-YYYY', true);
+
+     
+      if (
+        !userStart.isSame(adminStart, 'day') ||
+        !userEnd.isSame(adminEnd, 'day')
+      ) {
+        await User.updateOne(
+          { _id: user._id },
+          {
+            $set: {
+              startDate: admin.startDate,
+              endDate: admin.endDate,
+              status: 'yes'
+            }
+          }
+        );
+
+        user.startDate = admin.startDate;
+        user.endDate = admin.endDate;
+        user.status = 'yes';
+      }
+
+      if (today.isAfter(adminEnd)) {
+
+        if (user.status !== 'no') {
+          await User.updateOne(
+            { _id: user._id },
+            { $set: { status: 'no' } }
+          );
+          user.status = 'no';
+        }
+
+        if (admin.status === true) {
+          await Admin1.updateOne(
+            { _id: admin._id },
+            { $set: { status: false } }
+          );
+        }
+      }
+
+      
+      const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
+      fileFields.forEach(field => {
+        if (user[field]) {
+          const match = user[field].match(/uploads\/(.+)$/);
+          if (match && match[1]) {
+            user[field] = `${baseUrl}/uploads/${match[1]}`;
+          }
+        }
+      });
+
+      // 5️⃣ FINAL RESPONSE OBJECT
+      finalUsers.push({
+        ...user,
+        country: user.countryId?.name || '',
+        state: user.stateId?.name || '',
+        city: user.cityId?.name || '',
+        adminStatus: admin.status,
+        platformDetails: user._id
+      });
+    }
+
+    return res.status(200).json({
+      message: 'Users synced with admin dates and status verified.',
+      count: finalUsers.length,
+      users: finalUsers
+    });
+
+  } catch (error) {
+    console.error('Error:', error);
+    return res.status(500).json({ message: error.message });
+  }
+};
 
 
 
@@ -1110,7 +1219,7 @@ exports.UserSessionDetails = async (req, res) => {
 
 //     const baseUrl = `${req.protocol}://${req.get('host')}`;
 
-//     // Fetch users from a collection with source tag
+    
 //     async function getUsersFromCollection(Model, source) {
 //       const users = await Model.find({
 //         startDate: { $exists: true, $ne: '' },
@@ -1128,23 +1237,23 @@ exports.UserSessionDetails = async (req, res) => {
 //           if (!userStart.isValid() || !userEnd.isValid()) return false;
 //           return userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
 //         })
-//         .map(user => ({ ...user, _source: source }));  // Mark source
+//         .map(user => ({ ...user, _source: source }));  
 //     }
 
-//     // Get users from both collections with source marks
+
 //     const [usersFromUser, usersFromUserHistory] = await Promise.all([
 //       getUsersFromCollection(User, 'User'),
 //       getUsersFromCollection(UserHistory, 'UserHistory')
 //     ]);
 
-//     // Combine and remove duplicates by _id (original _id from collection)
+    
 //     const combinedMap = new Map();
 //     [...usersFromUser, ...usersFromUserHistory].forEach(user => {
 //       combinedMap.set(user._id.toString(), user);
 //     });
 //     const combinedUsers = Array.from(combinedMap.values());
 
-//     // Enrich users with class info, fix file URLs, replace _id if from UserHistory, and filter fields if requested
+    
 //     const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
 //       let classData = null;
 //       let classId = user.className;
@@ -1174,10 +1283,19 @@ exports.UserSessionDetails = async (req, res) => {
 //         }
 //       });
 
-//       // Replace _id with originalUserId only if user is from UserHistory
+     
 //       let idToUse = user._id.toString();
 //       if (user._source === 'UserHistory' && user.originalUserId) {
 //         idToUse = user.originalUserId.toString();
+//       }
+
+     
+//       const currentIST = moment().tz("Asia/Kolkata").startOf('day');
+//       const userEndDate = moment(user.endDate, 'DD-MM-YYYY', true).startOf('day');
+
+//       if (currentIST.isAfter(userEndDate) && user.status !== 'no') {
+//         await User.updateOne({ _id: user._id }, { $set: { status: 'no' } });
+//         user.status = 'no'; 
 //       }
 
 //       const formatted = {
@@ -1216,140 +1334,6 @@ exports.UserSessionDetails = async (req, res) => {
 //     res.status(500).json({ message: error.message });
 //   }
 // };
-
-
-exports.getActiveSessionUsers = async (req, res) => {
-  try {
-    const { startDate, endDate, fields } = req.query;
-
-    if (!startDate || !endDate) {
-      return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
-    }
-
-    const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
-    const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
-
-    if (!start.isValid() || !end.isValid()) {
-      return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
-    }
-
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-    
-    async function getUsersFromCollection(Model, source) {
-      const users = await Model.find({
-        startDate: { $exists: true, $ne: '' },
-        endDate: { $exists: true, $ne: '' }
-      })
-        .populate('cityId', 'name')
-        .populate('stateId', 'name')
-        .populate('countryId', 'name')
-        .lean();
-
-      return users
-        .filter(user => {
-          const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
-          const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
-          if (!userStart.isValid() || !userEnd.isValid()) return false;
-          return userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
-        })
-        .map(user => ({ ...user, _source: source }));  // Mark source
-    }
-
-    // Get users from both collections with source marks
-    const [usersFromUser, usersFromUserHistory] = await Promise.all([
-      getUsersFromCollection(User, 'User'),
-      getUsersFromCollection(UserHistory, 'UserHistory')
-    ]);
-
-    // Combine and remove duplicates by _id (original _id from collection)
-    const combinedMap = new Map();
-    [...usersFromUser, ...usersFromUserHistory].forEach(user => {
-      combinedMap.set(user._id.toString(), user);
-    });
-    const combinedUsers = Array.from(combinedMap.values());
-
-    // Enrich users with class info, fix file URLs, replace _id if from UserHistory, and filter fields if requested
-    const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
-      let classData = null;
-      let classId = user.className;
-
-      if (mongoose.Types.ObjectId.isValid(classId)) {
-        const school = await School.findById(classId);
-        const college = school ? null : await College.findById(classId);
-        const institution = school || college;
-
-        if (institution && institution.price != null) {
-          classData = {
-            id: classId,
-            name: institution.name
-          };
-        } else {
-          classId = null;
-        }
-      }
-
-      const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
-      fileFields.forEach(field => {
-        if (user[field]) {
-          const match = user[field].match(/uploads\/(.+)$/);
-          if (match && match[1]) {
-            user[field] = `${baseUrl}/uploads/${match[1]}`;
-          }
-        }
-      });
-
-      // Replace _id with originalUserId only if user is from UserHistory
-      let idToUse = user._id.toString();
-      if (user._source === 'UserHistory' && user.originalUserId) {
-        idToUse = user.originalUserId.toString();
-      }
-
-      // ✅ Compare IST date with endDate, update status in DB if expired
-      const currentIST = moment().tz("Asia/Kolkata").startOf('day');
-      const userEndDate = moment(user.endDate, 'DD-MM-YYYY', true).startOf('day');
-
-      if (currentIST.isAfter(userEndDate) && user.status !== 'no') {
-        await User.updateOne({ _id: user._id }, { $set: { status: 'no' } });
-        user.status = 'no'; // reflect in API response
-      }
-
-      const formatted = {
-        ...user,
-        _id: idToUse,
-        className: classData ? classData.id : null,
-        classOrYear: classData ? classData.name : null,
-        country: user.countryId?.name || '',
-        state: user.stateId?.name || '',
-        city: user.cityId?.name || '',
-        platformDetails: idToUse
-      };
-
-      if (fields) {
-        const requestedFields = fields.split(',');
-        const limited = {};
-        requestedFields.forEach(f => {
-          if (formatted.hasOwnProperty(f)) {
-            limited[f] = formatted[f];
-          }
-        });
-        return limited;
-      }
-
-      return formatted;
-    }));
-
-    res.status(200).json({
-      message: 'Filtered users fully inside session range from User and UserHistory.',
-      count: enrichedUsers.length,
-      users: enrichedUsers
-    });
-
-  } catch (error) {
-    console.error('Error filtering users by session range:', error);
-    res.status(500).json({ message: error.message });
-  }
-};
 
 
 exports.getUserHistories = async (req, res) => {
