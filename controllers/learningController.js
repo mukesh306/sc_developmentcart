@@ -270,7 +270,7 @@ exports.scoreCard = async (req, res) => {
     const userId = req.user._id;
     const { learningId, fromDate, toDate, page = 1 } = req.query;
 
-    const limit = 2; // fixed for now
+    const limit = 1; 
     const currentPage = Math.max(parseInt(page), 1);
     const skip = (currentPage - 1) * limit;
 
