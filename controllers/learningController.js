@@ -355,7 +355,7 @@ exports.scoreCard = async (req, res) => {
 
     
     // const otherScores = sortedFinal.filter(item => item.date !== todayStr);
-    const otherScores = sortedFinal;
+    const otherScores = sortedFinal; 
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
