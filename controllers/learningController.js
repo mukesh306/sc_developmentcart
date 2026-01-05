@@ -336,26 +336,27 @@ exports.scoreCard = async (req, res) => {
     }
 
     const sortedFinal = fullResult.sort((a, b) => {
-      if (a.isToday && !b.isToday) return -1;
-      if (!a.isToday && b.isToday) return 1;
       return new Date(a.date) - new Date(b.date);
     });
 
-    // 🔹 TODAY SCORE (bahar, limited fields)
-    const todayRaw = sortedFinal.find(item => item.isToday === true) || null;
+   
+    const todayRaw = sortedFinal.find(item => item.date === todayStr) || {
+      date: todayStr,
+      score: null,
+      isToday: true
+    };
 
-    const todayScore = todayRaw
-      ? {
-          learningId: todayRaw.learningId || null,
-          score: todayRaw.score,
-          date: todayRaw.date,
-          isToday: true
-        }
-      : null;
+    const todayScore = {
+      learningId: todayRaw.learningId || null,
+      score: todayRaw.score,
+      date: todayRaw.date,
+      isToday: true
+    };
 
-    // 🔹 BAQI SCORES
-    const otherScores = sortedFinal.filter(item => item.isToday !== true);
+    
+    const otherScores = sortedFinal.filter(item => item.date !== todayStr);
 
+    
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -378,13 +379,11 @@ exports.scoreCard = async (req, res) => {
       averageScore: item.totalScore
     }));
 
+    
     for (const item of learningWiseAverage) {
       const idx = user.learning.findIndex(
-        l =>
-          l.learningId.toString() === item.learningId &&
-          l.session === user.session
+        l => l.learningId.toString() === item.learningId && l.session === user.session
       );
-
       if (idx !== -1) {
         user.learning[idx].totalScore = item.averageScore;
         user.learning[idx].updatedAt = new Date();
@@ -398,6 +397,7 @@ exports.scoreCard = async (req, res) => {
       }
     }
 
+    
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
         const exists = user.learningDailyHistory.some(
@@ -406,7 +406,6 @@ exports.scoreCard = async (req, res) => {
             h.date === entry.date &&
             h.session === user.session
         );
-
         if (!exists) {
           user.learningDailyHistory.push({
             learningId: entry.learningId._id,
@@ -423,8 +422,8 @@ exports.scoreCard = async (req, res) => {
     await user.save();
 
     return res.status(200).json({
-      today: todayScore,     
-      scores: otherScores,   
+      today: todayScore,      
+      scores: otherScores,    
       learningWiseAverage
     });
 
@@ -433,6 +432,7 @@ exports.scoreCard = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
