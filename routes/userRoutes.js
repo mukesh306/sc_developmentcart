@@ -37,7 +37,7 @@ router.post(
   return res.status(200).json({ response: true });
 });
 
-// EmailverifytOTP
+
   router.post('/sendEmailverify', userController.SendEmailverifyOTP);
   router.post('/emailverifyotp', userController.EmailVerifyOtp);
   router.get('/UserSessionDetails',auth, userController.UserSessionDetails);
