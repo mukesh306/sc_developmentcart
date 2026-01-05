@@ -354,7 +354,8 @@ exports.scoreCard = async (req, res) => {
     };
 
     
-    const otherScores = sortedFinal.filter(item => item.date !== todayStr);
+    // const otherScores = sortedFinal.filter(item => item.date !== todayStr);
+    const otherScores = sortedFinal;
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -1204,7 +1205,7 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
-    // Weekly bonus
+  
     for (let i = 6; i < result.length; i++) {
       const streak = result.slice(i - 6, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -1222,7 +1223,7 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Monthly bonus
+   
     for (let i = 29; i < result.length; i++) {
       const streak = result.slice(i - 29, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -1240,7 +1241,7 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // ===== EXISTING UPDATE LOGIC (UNCHANGED) =====
+  
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -1269,7 +1270,7 @@ exports.StrikePath = async (req, res) => {
       await User.findByIdAndUpdate(userId, updateData);
     }
 
-    // 🔒 ONLY ADDITION: bonuspoint negative na ho
+    
     await User.findByIdAndUpdate(
       userId,
       [{ $set: { bonuspoint: { $cond: [{ $lt: ["$bonuspoint", 0] }, 0, "$bonuspoint"] } } }]
