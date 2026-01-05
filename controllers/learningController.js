@@ -264,6 +264,7 @@ exports.updateLearning = async (req, res) => {
 //   }
 // };
 
+
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -339,7 +340,6 @@ exports.scoreCard = async (req, res) => {
       return new Date(a.date) - new Date(b.date);
     });
 
-   
     const todayRaw = sortedFinal.find(item => item.date === todayStr) || {
       date: todayStr,
       score: null,
@@ -355,8 +355,6 @@ exports.scoreCard = async (req, res) => {
 
     
     const otherScores = sortedFinal.filter(item => item.date !== todayStr);
-
-    
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -432,8 +430,6 @@ exports.scoreCard = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
 
 
 exports.Practicestrike = async (req, res) => {
