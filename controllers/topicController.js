@@ -1532,6 +1532,7 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 //   }
 // };
 
+
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1558,8 +1559,6 @@ exports.PracticescoreCard = async (req, res) => {
     };
 
     if (learningId) match.learningId = new mongoose.Types.ObjectId(learningId);
-
-  
     const rawScores = await LearningScore.aggregate([
       { $match: match },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -1606,7 +1605,7 @@ exports.PracticescoreCard = async (req, res) => {
     const todayRaw = finalScores.find(item => item.date === todayStr);
     const todayScore = {
       learningId: todayRaw?.learningId || null,
-      score: todayRaw?.score || null,
+     score: todayRaw?.score ?? null,
       date: todayStr,
       isToday: true
     };
@@ -1614,7 +1613,6 @@ exports.PracticescoreCard = async (req, res) => {
    
     const otherScores = finalScores.filter(item => item.date !== todayStr);
 
-   
     const validScores = finalScores.filter(s => s.score !== null);
     const avg =
       validScores.reduce((sum, s) => sum + s.score, 0) /
