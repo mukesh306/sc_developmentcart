@@ -1092,6 +1092,23 @@ exports.UserSessionDetails = async (req, res) => {
 
 exports.getActiveSessionUsers = async (req, res) => {
   try {
+    const { startDate, endDate, fields } = req.query;
+
+    if (!startDate || !endDate) {
+      return res.status(400).json({
+        message: 'Both startDate and endDate are required in DD-MM-YYYY format.'
+      });
+    }
+
+    const filterStart = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
+    const filterEnd   = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
+
+    if (!filterStart.isValid() || !filterEnd.isValid()) {
+      return res.status(400).json({
+        message: 'Invalid date format. Use DD-MM-YYYY.'
+      });
+    }
+
     const baseUrl = `${req.protocol}://${req.get('host')}`;
     const today = moment().tz('Asia/Kolkata').startOf('day');
 
@@ -1112,22 +1129,30 @@ exports.getActiveSessionUsers = async (req, res) => {
         continue;
       }
 
-      
+      /** 1️⃣ ADMIN FETCH */
       const admin = await Admin1.findById(user.updatedBy)
         .select('startDate endDate status')
         .lean();
 
       if (!admin || !admin.startDate || !admin.endDate) continue;
 
-      const adminStart = moment(admin.startDate, 'DD-MM-YYYY', true);
-      const adminEnd   = moment(admin.endDate, 'DD-MM-YYYY', true);
+      const adminStart = moment(admin.startDate, 'DD-MM-YYYY', true).startOf('day');
+      const adminEnd   = moment(admin.endDate, 'DD-MM-YYYY', true).endOf('day');
 
       if (!adminStart.isValid() || !adminEnd.isValid()) continue;
+
+      /** 2️⃣ FILTER (ADMIN DATE RANGE) */
+      if (
+        adminStart.isBefore(filterStart) ||
+        adminEnd.isAfter(filterEnd)
+      ) {
+        continue;
+      }
 
       const userStart = moment(user.startDate, 'DD-MM-YYYY', true);
       const userEnd   = moment(user.endDate, 'DD-MM-YYYY', true);
 
-     
+      /** 3️⃣ ADMIN → USER DATE SYNC */
       if (
         !userStart.isSame(adminStart, 'day') ||
         !userEnd.isSame(adminEnd, 'day')
@@ -1148,6 +1173,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         user.status = 'yes';
       }
 
+      /** 4️⃣ STATUS EXPIRE CHECK (ADMIN DATE ONLY) */
       if (today.isAfter(adminEnd)) {
 
         if (user.status !== 'no') {
@@ -1166,7 +1192,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         }
       }
 
-      
+      /** 5️⃣ FILE URL FORMAT */
       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
       fileFields.forEach(field => {
         if (user[field]) {
@@ -1177,19 +1203,33 @@ exports.getActiveSessionUsers = async (req, res) => {
         }
       });
 
-      // 5️⃣ FINAL RESPONSE OBJECT
-      finalUsers.push({
+      /** 6️⃣ RESPONSE OBJECT */
+      const formattedUser = {
         ...user,
         country: user.countryId?.name || '',
         state: user.stateId?.name || '',
         city: user.cityId?.name || '',
         adminStatus: admin.status,
         platformDetails: user._id
-      });
+      };
+
+      /** 7️⃣ FIELDS FILTER */
+      if (fields) {
+        const requestedFields = fields.split(',');
+        const limited = {};
+        requestedFields.forEach(f => {
+          if (formattedUser.hasOwnProperty(f)) {
+            limited[f] = formattedUser[f];
+          }
+        });
+        finalUsers.push(limited);
+      } else {
+        finalUsers.push(formattedUser);
+      }
     }
 
     return res.status(200).json({
-      message: 'Users synced with admin dates and status verified.',
+      message: 'Filtered users synced with admin dates and status verified.',
       count: finalUsers.length,
       users: finalUsers
     });
