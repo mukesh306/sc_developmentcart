@@ -1611,8 +1611,8 @@ exports.PracticescoreCard = async (req, res) => {
     };
 
    
-    const otherScores = finalScores.filter(item => item.date !== todayStr);
-
+    // const otherScores = finalScores.filter(item => item.date !== todayStr);
+const otherScores = sortedFinal;
     const validScores = finalScores.filter(s => s.score !== null);
     const avg =
       validScores.reduce((sum, s) => sum + s.score, 0) /
