@@ -1522,12 +1522,14 @@ exports.getAllQuizzesByLearningId = async (req, res) => {
 //   }
 // };
 
+
+
 exports.PracticescoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
     const { learningId, fromDate, toDate, page = 1 } = req.query;
 
-    const limit = 1; // fixed
+    const limit = 2; 
     const currentPage = Math.max(parseInt(page), 1);
     const skip = (currentPage - 1) * limit;
 
@@ -1539,9 +1541,7 @@ exports.PracticescoreCard = async (req, res) => {
     const today = moment().startOf('day');
     const todayStr = today.format('YYYY-MM-DD');
 
-    /* =====================================================
-       🔹 TODAY SCORE (NO learningId / NO date filter)
-       ===================================================== */
+   
     const todayAnyLearning = await LearningScore.findOne({
       userId: userId,
       endDate: user.endDate,
@@ -1552,7 +1552,7 @@ exports.PracticescoreCard = async (req, res) => {
       }
     })
       .populate('learningId', 'name')
-      .sort({ createdAt: 1 }) // first entry of today
+      .sort({ createdAt: 1 }) 
       .lean();
 
     const todayScore = {
@@ -1562,9 +1562,7 @@ exports.PracticescoreCard = async (req, res) => {
       isToday: true
     };
 
-    /* =====================================================
-       🔹 DATE RANGE (FOR SCORES LIST)
-       ===================================================== */
+   
     let startDate = fromDate
       ? moment(fromDate).startOf('day')
       : moment(user.updatedAt).startOf('day');
@@ -1573,9 +1571,7 @@ exports.PracticescoreCard = async (req, res) => {
       ? moment(toDate).startOf('day')
       : moment(today);
 
-    /* =====================================================
-       🔹 MATCH (FILTERED — ONLY FOR SCORES)
-       ===================================================== */
+    
     const match = {
       userId: new mongoose.Types.ObjectId(userId),
       endDate: user.endDate,
@@ -1590,9 +1586,7 @@ exports.PracticescoreCard = async (req, res) => {
       match.learningId = new mongoose.Types.ObjectId(learningId);
     }
 
-    /* =====================================================
-       🔹 AGGREGATION
-       ===================================================== */
+   
     const rawScores = await LearningScore.aggregate([
       { $match: match },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -1614,9 +1608,7 @@ exports.PracticescoreCard = async (req, res) => {
       select: 'name'
     });
 
-    /* =====================================================
-       🔹 DATE → SCORE MAP
-       ===================================================== */
+   
     const scoreMap = new Map();
     for (const score of populatedScores) {
       const dateStr = moment(score.scoreDate).format('YYYY-MM-DD');
@@ -1627,9 +1619,7 @@ exports.PracticescoreCard = async (req, res) => {
       });
     }
 
-    /* =====================================================
-       🔹 FILL ALL DATES
-       ===================================================== */
+   
     const finalScores = [];
     for (
       let d = moment(startDate);
@@ -1647,27 +1637,21 @@ exports.PracticescoreCard = async (req, res) => {
       );
     }
 
-    /* =====================================================
-       🔹 PAGINATION
-       ===================================================== */
+    
     const totalRecords = finalScores.length;
     const paginatedScores = finalScores.slice(skip, skip + limit);
     const totalPages = Math.ceil(totalRecords / limit);
 
-    /* =====================================================
-       🔹 AVERAGE SCORE
-       ===================================================== */
+    
     const validScores = finalScores.filter(s => s.score !== null);
     const avg =
       validScores.reduce((sum, s) => sum + s.score, 0) /
       (validScores.length || 1);
 
-    /* =====================================================
-       🔹 RESPONSE
-       ===================================================== */
+    
     return res.status(200).json({
-      today: todayScore,          // ✅ common for all learningId
-      scores: paginatedScores,    // ✅ filtered + paginated
+      today: todayScore,          
+      scores: paginatedScores,    
       pagination: {
         page: currentPage,
         limit,
