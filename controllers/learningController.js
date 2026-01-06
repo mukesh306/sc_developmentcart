@@ -318,7 +318,7 @@ exports.scoreCard = async (req, res) => {
     const today = moment().startOf("day");
     const todayStr = today.format("YYYY-MM-DD");
 
-    /* ---------- Today Score ---------- */
+   
     const todayAnyLearning = await TopicScore.findOne({
       userId: userId,
       endDate: user.endDate,
@@ -339,7 +339,7 @@ exports.scoreCard = async (req, res) => {
       isToday: true
     };
 
-    /* ---------- Date Range ---------- */
+ 
     let startDate = fromDate
       ? moment(fromDate).startOf("day")
       : moment(user.updatedAt).startOf("day");
@@ -347,8 +347,6 @@ exports.scoreCard = async (req, res) => {
     let endDate = toDate
       ? moment(toDate).startOf("day")
       : today;
-
-    /* ---------- Match ---------- */
     const match = {
       userId: new mongoose.Types.ObjectId(userId),
       endDate: user.endDate,
@@ -359,7 +357,6 @@ exports.scoreCard = async (req, res) => {
       match.learningId = new mongoose.Types.ObjectId(learningId);
     }
 
-    /* ---------- Aggregation ---------- */
     const rawScores = await TopicScore.aggregate([
       { $match: match },
       { $sort: { scoreDate: 1, createdAt: 1 } },
@@ -381,7 +378,7 @@ exports.scoreCard = async (req, res) => {
       { path: "learningId", select: "name" }
     ]);
 
-    /* ---------- Score Map ---------- */
+
     const scoreMap = new Map();
     for (const score of populatedScores) {
       const dateStr = moment(score.scoreDate).format("YYYY-MM-DD");
@@ -392,7 +389,7 @@ exports.scoreCard = async (req, res) => {
       });
     }
 
-    /* ---------- Full Date Result ---------- */
+  
     const fullResult = [];
     for (
       let d = moment(startDate);
@@ -413,20 +410,19 @@ exports.scoreCard = async (req, res) => {
       (a, b) => new Date(a.date) - new Date(b.date)
     );
 
-    /* ---------- Pagination ---------- */
+   
     const totalRecords = sortedFinal.length;
     const totalPages = Math.ceil(totalRecords / limit);
 
     const paginatedScores = sortedFinal.slice(skip, skip + limit);
 
-    /* 🔥 DAY ADDITION (MAIN CHANGE) 🔥 */
+  
     const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
       ...item,
-      day: skip + index + 1   // 04 -> 1, 05 -> 2, 06 -> 3 (global count)
-      // day: index + 1       // agar har page me 1,2 chahiye
+      day: skip + index + 1  
+     
     }));
 
-    /* ---------- Learning Wise Total ---------- */
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -449,7 +445,6 @@ exports.scoreCard = async (req, res) => {
       averageScore: item.totalScore
     }));
 
-    /* ---------- Save User Data ---------- */
     for (const item of learningWiseAverage) {
       const idx = user.learning.findIndex(
         l =>
