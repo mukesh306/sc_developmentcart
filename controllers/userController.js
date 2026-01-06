@@ -451,8 +451,6 @@ exports.completeProfile = async (req, res) => {
 exports.getUserProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-
-   
     let user = await User.findById(userId)
       .populate('countryId', 'name')
       .populate('stateId', 'name')
@@ -469,7 +467,6 @@ exports.getUserProfile = async (req, res) => {
     
     let classId = user.className;
     let classDetails = null;
-
     if (mongoose.Types.ObjectId.isValid(classId)) {
       classDetails =
         (await School.findById(classId)) ||
@@ -786,6 +783,157 @@ exports.updateUser = async (req, res) => {
 
 
 
+// exports.updateProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     const existingUser = await User.findById(userId);
+//     if (!existingUser) {
+//       return res.status(404).json({ message: 'User not found' });
+//     }
+
+//     if (existingUser.status === 'yes') {
+//       return res.status(403).json({ message: 'You are not eligible to update.' });
+//     }
+
+//     let {
+//       countryId,
+//       stateId,
+//       cityId,
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//       className
+//     } = req.body;
+
+//     if (pincode && !/^\d+$/.test(pincode)) {
+//       return res.status(400).json({ message: 'Invalid Pincode' });
+//     }
+
+//     const updatedFields = {
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName
+//     };
+
+//     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
+//     if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
+//     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
+//     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
+
+//     if (req.files?.aadharCard?.[0]) {
+//       updatedFields.aadharCard = req.files.aadharCard[0].path;
+//     }
+
+//     if (req.files?.marksheet?.[0]) {
+//       updatedFields.marksheet = req.files.marksheet[0].path;
+//     }
+
+    
+//     let classDetails = null;
+//     if (mongoose.Types.ObjectId.isValid(className)) {
+//       classDetails = await School.findById(className) || await College.findById(className);
+
+//       if (classDetails?.updatedBy) {
+//         let shouldClone = false;
+
+      
+//         if (!existingUser.updatedBy) {
+//           shouldClone = true;
+//         }
+
+       
+//         if (existingUser.className?.toString() !== className?.toString()) {
+//           shouldClone = true;
+//         }
+
+       
+//         if (
+//           existingUser.className?.toString() === className?.toString() &&
+//           existingUser.updatedBy?.toString() !== classDetails.updatedBy.toString()
+//         ) {
+//           shouldClone = true;
+//         }
+
+        
+//         if (shouldClone) {
+//           const userData = existingUser.toObject();
+//           const currentUserId = userData._id;
+//           delete userData._id;
+
+//           if (userData.countryId && typeof userData.countryId === 'object') {
+//             userData.countryId = userData.countryId._id || userData.countryId;
+//           }
+//           if (userData.stateId && typeof userData.stateId === 'object') {
+//             userData.stateId = userData.stateId._id || userData.stateId;
+//           }
+//           if (userData.cityId && typeof userData.cityId === 'object') {
+//             userData.cityId = userData.cityId._id || userData.cityId;
+//           }
+//           if (userData.updatedBy && typeof userData.updatedBy === 'object') {
+//             userData.updatedBy = userData.updatedBy._id || userData.updatedBy;
+//           }
+//           delete userData.__v;
+
+//           await UserHistory.create({
+//             ...userData,
+//             _id: currentUserId,
+//             originalUserId: new mongoose.Types.ObjectId(),
+//             clonedAt: new Date()
+//           });
+//         }
+
+//         updatedFields.updatedBy = classDetails.updatedBy;
+
+//         const admin = await Admin1.findById(classDetails.updatedBy);
+//         if (admin?.session) {
+//           updatedFields.session = admin.session;
+//         }
+//       }
+//     }
+ 
+//     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
+//       .populate('countryId')
+//       .populate('stateId')
+//       .populate('cityId')
+//       .populate('updatedBy', 'email session startDate endDate');
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//     }
+//     if (user.marksheet && fs.existsSync(user.marksheet)) {
+//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//     }
+
+//     const formattedUser = {
+//       ...user._doc,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: schoolName || collegeName || instituteName || '',
+//       institutionType: studentType || '',
+//       classOrYear: classDetails?.name || '',
+//       session: user.session || '',
+//       updatedBy: user.updatedBy || null
+//     };
+
+//     return res.status(200).json({
+//       message: 'Profile updated. Redirecting to home page.',
+//       user: formattedUser
+//     });
+
+//   } catch (error) {
+//     console.error('Update Profile Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -836,25 +984,23 @@ exports.updateProfile = async (req, res) => {
       updatedFields.marksheet = req.files.marksheet[0].path;
     }
 
-    
     let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(className)) {
-      classDetails = await School.findById(className) || await College.findById(className);
+      classDetails =
+        (await School.findById(className)) ||
+        (await College.findById(className));
 
       if (classDetails?.updatedBy) {
         let shouldClone = false;
 
-      
         if (!existingUser.updatedBy) {
           shouldClone = true;
         }
 
-       
         if (existingUser.className?.toString() !== className?.toString()) {
           shouldClone = true;
         }
 
-       
         if (
           existingUser.className?.toString() === className?.toString() &&
           existingUser.updatedBy?.toString() !== classDetails.updatedBy.toString()
@@ -862,33 +1008,35 @@ exports.updateProfile = async (req, res) => {
           shouldClone = true;
         }
 
-        
+        // ===================== FIXED USER HISTORY LOGIC =====================
         if (shouldClone) {
-          const userData = existingUser.toObject();
-          const currentUserId = userData._id;
-          delete userData._id;
-
-          if (userData.countryId && typeof userData.countryId === 'object') {
-            userData.countryId = userData.countryId._id || userData.countryId;
-          }
-          if (userData.stateId && typeof userData.stateId === 'object') {
-            userData.stateId = userData.stateId._id || userData.stateId;
-          }
-          if (userData.cityId && typeof userData.cityId === 'object') {
-            userData.cityId = userData.cityId._id || userData.cityId;
-          }
-          if (userData.updatedBy && typeof userData.updatedBy === 'object') {
-            userData.updatedBy = userData.updatedBy._id || userData.updatedBy;
-          }
-          delete userData.__v;
-
-          await UserHistory.create({
-            ...userData,
-            _id: currentUserId,
-            originalUserId: new mongoose.Types.ObjectId(),
-            clonedAt: new Date()
+          const alreadyExists = await UserHistory.findOne({
+            originalUserId: existingUser._id,
+            className: className,
+            updatedBy: classDetails.updatedBy
           });
+
+          // ❌ Same class already saved → do nothing
+          if (!alreadyExists) {
+            const userData = existingUser.toObject();
+
+            delete userData._id;
+            delete userData.__v;
+
+            if (userData.countryId?._id) userData.countryId = userData.countryId._id;
+            if (userData.stateId?._id) userData.stateId = userData.stateId._id;
+            if (userData.cityId?._id) userData.cityId = userData.cityId._id;
+            if (userData.updatedBy?._id) userData.updatedBy = userData.updatedBy._id;
+            if (userData.className?._id) userData.className = userData.className._id;
+
+            await UserHistory.create({
+              ...userData,
+              originalUserId: existingUser._id,
+              clonedAt: new Date()
+            });
+          }
         }
+        // ===================== FIX END =====================
 
         updatedFields.updatedBy = classDetails.updatedBy;
 
@@ -898,7 +1046,7 @@ exports.updateProfile = async (req, res) => {
         }
       }
     }
- 
+
     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
       .populate('countryId')
       .populate('stateId')
@@ -906,6 +1054,7 @@ exports.updateProfile = async (req, res) => {
       .populate('updatedBy', 'email session startDate endDate');
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
+
     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
     }
@@ -932,7 +1081,7 @@ exports.updateProfile = async (req, res) => {
 
   } catch (error) {
     console.error('Update Profile Error:', error);
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
