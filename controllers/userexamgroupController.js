@@ -630,15 +630,181 @@ exports.getGroupMembers = async (req, res) => {
 
 
 
+// exports.getAllActiveUsers = async (req, res) => {
+//   try {
+//     const { className, groupId, stateId, cityId, category } = req.query;
+//     const allowedCategoryId = "694234ab07da0be15f1f32f1";
+
+   
+//     if (category && category !== allowedCategoryId) {
+     
+//       let topUserFilter = { categoryId: category };
+//       if (className && mongoose.Types.ObjectId.isValid(className)) {
+//         topUserFilter.className = className;
+//       }
+
+//       const topUsers = await CategoryTopUser.find(topUserFilter)
+//         .populate({
+//           path: "userId",
+//           populate: [
+//             { path: "countryId", select: "name" },
+//             { path: "stateId", select: "name" },
+//             { path: "cityId", select: "name" },
+//             {
+//               path: "updatedBy",
+//               select: "email session startDate endDate endTime name role",
+//             },
+//           ],
+//         })
+//         .populate("examId", "examName");
+
+//       const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
+//       let formattedUsers = [];
+
+//       for (let record of topUsers) {
+//         const user = record.userId;
+//         if (!user) continue;
+
+//         let classId = user.className;
+//         let classDetails = null;
+
+//         if (mongoose.Types.ObjectId.isValid(classId)) {
+//           classDetails = (await School.findById(classId)) || (await College.findById(classId));
+//         }
+
+//         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//         }
+//         if (user.marksheet && fs.existsSync(user.marksheet)) {
+//           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//         }
+
+//         const formattedUser = {
+//           ...user._doc,
+//           percentage: record.percentage,
+//           rank: record.rank,
+//           exam: record.examId?.examName || "",
+//           country: user.countryId?.name || "",
+//           state: user.stateId?.name || "",
+//           city: user.cityId?.name || "",
+//           institutionName: user.schoolName || user.collegeName || user.instituteName || "",
+//           institutionType: user.studentType || "",
+//           updatedBy: user.updatedBy || null,
+//         };
+
+//         if (classDetails && classDetails.price != null) {
+//           formattedUser.classOrYear = classDetails.name;
+//         }
+
+//         formattedUsers.push(formattedUser);
+//       }
+
+//       return res.status(200).json({
+//         message: "Top users fetched successfully for this category.",
+//         users: formattedUsers,
+//       });
+//     }
+
+//     // ✅ Case 2: Normal logic (existing)
+//     let query = { status: "yes" };
+
+//     if (className && mongoose.Types.ObjectId.isValid(className)) {
+//       query.className = className;
+//     }
+
+//     if (stateId && mongoose.Types.ObjectId.isValid(stateId)) {
+//       query.stateId = stateId;
+//     }
+
+//     if (cityId && mongoose.Types.ObjectId.isValid(cityId)) {
+//       query.cityId = cityId;
+//     }
+
+//     // Step 1: Collect all grouped users
+//     const groupedUsers = await UserExamGroup.find({}, "members");
+//     const allGroupedUserIds = groupedUsers.flatMap((g) => g.members.map((id) => id.toString()));
+
+//     // Step 2: Current group members
+//     let currentGroupMemberIds = [];
+//     if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
+//       const currentGroup = await UserExamGroup.findById(groupId).select("members");
+//       if (currentGroup) {
+//         currentGroupMemberIds = currentGroup.members.map((id) => id.toString());
+//       }
+//     }
+
+//     // Step 3: Exclude grouped users except current group
+//     const excludeIds = allGroupedUserIds.filter((id) => !currentGroupMemberIds.includes(id));
+//     if (excludeIds.length > 0) {
+//       query._id = { $nin: excludeIds };
+//     }
+
+//     // Step 4: Fetch users
+//     let users = await User.find(query)
+//       .populate("countryId", "name")
+//       .populate("stateId", "name")
+//       .populate("cityId", "name")
+//       .populate({
+//         path: "updatedBy",
+//         select: "email session startDate endDate endTime name role",
+//       });
+
+//     const baseUrl = `${req.protocol}://${req.get("host")}`.replace("http://", "https://");
+//     let finalList = [];
+
+//     for (let user of users) {
+//       let classId = user.className;
+//       let classDetails = null;
+
+//       if (mongoose.Types.ObjectId.isValid(classId)) {
+//         classDetails = (await School.findById(classId)) || (await College.findById(classId));
+//       }
+
+//       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//         user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//       }
+//       if (user.marksheet && fs.existsSync(user.marksheet)) {
+//         user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//       }
+
+//       const formattedUser = {
+//         ...user._doc,
+//         country: user.countryId?.name || "",
+//         state: user.stateId?.name || "",
+//         city: user.cityId?.name || "",
+//         institutionName: user.schoolName || user.collegeName || user.instituteName || "",
+//         institutionType: user.studentType || "",
+//         updatedBy: user.updatedBy || null,
+//       };
+
+//       if (classDetails && classDetails.price != null) {
+//         formattedUser.classOrYear = classDetails.name;
+//       }
+
+//       finalList.push(formattedUser);
+//     }
+
+//     return res.status(200).json({
+//       message: "Active users fetched successfully (filtered by state, city, and excluding other groups).",
+//       users: finalList,
+//     });
+//   } catch (error) {
+//     console.error("Get Users Error:", error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.getAllActiveUsers = async (req, res) => {
   try {
     const { className, groupId, stateId, cityId, category } = req.query;
-    const allowedCategoryId = "694234ab07da0be15f1f32f1";
+    const firstCategory = await Category.findOne({}, { _id: 1 }).sort({ createdAt: 1 });
+    const allowedCategoryId = firstCategory?._id?.toString();
 
-   
-    if (category && category !== allowedCategoryId) {
-     
+
+    if (category && allowedCategoryId && category !== allowedCategoryId) {
+
       let topUserFilter = { categoryId: category };
+
       if (className && mongoose.Types.ObjectId.isValid(className)) {
         topUserFilter.className = className;
       }
@@ -665,11 +831,11 @@ exports.getAllActiveUsers = async (req, res) => {
         const user = record.userId;
         if (!user) continue;
 
-        let classId = user.className;
         let classDetails = null;
-
-        if (mongoose.Types.ObjectId.isValid(classId)) {
-          classDetails = (await School.findById(classId)) || (await College.findById(classId));
+        if (mongoose.Types.ObjectId.isValid(user.className)) {
+          classDetails =
+            (await School.findById(user.className)) ||
+            (await College.findById(user.className));
         }
 
         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
@@ -687,7 +853,8 @@ exports.getAllActiveUsers = async (req, res) => {
           country: user.countryId?.name || "",
           state: user.stateId?.name || "",
           city: user.cityId?.name || "",
-          institutionName: user.schoolName || user.collegeName || user.instituteName || "",
+          institutionName:
+            user.schoolName || user.collegeName || user.instituteName || "",
           institutionType: user.studentType || "",
           updatedBy: user.updatedBy || null,
         };
@@ -705,7 +872,7 @@ exports.getAllActiveUsers = async (req, res) => {
       });
     }
 
-    // ✅ Case 2: Normal logic (existing)
+  
     let query = { status: "yes" };
 
     if (className && mongoose.Types.ObjectId.isValid(className)) {
@@ -720,27 +887,32 @@ exports.getAllActiveUsers = async (req, res) => {
       query.cityId = cityId;
     }
 
-    // Step 1: Collect all grouped users
+ 
     const groupedUsers = await UserExamGroup.find({}, "members");
-    const allGroupedUserIds = groupedUsers.flatMap((g) => g.members.map((id) => id.toString()));
+    const allGroupedUserIds = groupedUsers.flatMap(g =>
+      g.members.map(id => id.toString())
+    );
 
-    // Step 2: Current group members
+    
     let currentGroupMemberIds = [];
     if (groupId && mongoose.Types.ObjectId.isValid(groupId)) {
       const currentGroup = await UserExamGroup.findById(groupId).select("members");
       if (currentGroup) {
-        currentGroupMemberIds = currentGroup.members.map((id) => id.toString());
+        currentGroupMemberIds = currentGroup.members.map(id => id.toString());
       }
     }
 
-    // Step 3: Exclude grouped users except current group
-    const excludeIds = allGroupedUserIds.filter((id) => !currentGroupMemberIds.includes(id));
+    
+    const excludeIds = allGroupedUserIds.filter(
+      id => !currentGroupMemberIds.includes(id)
+    );
+
     if (excludeIds.length > 0) {
       query._id = { $nin: excludeIds };
     }
 
-    // Step 4: Fetch users
-    let users = await User.find(query)
+    
+    const users = await User.find(query)
       .populate("countryId", "name")
       .populate("stateId", "name")
       .populate("cityId", "name")
@@ -753,11 +925,12 @@ exports.getAllActiveUsers = async (req, res) => {
     let finalList = [];
 
     for (let user of users) {
-      let classId = user.className;
       let classDetails = null;
 
-      if (mongoose.Types.ObjectId.isValid(classId)) {
-        classDetails = (await School.findById(classId)) || (await College.findById(classId));
+      if (mongoose.Types.ObjectId.isValid(user.className)) {
+        classDetails =
+          (await School.findById(user.className)) ||
+          (await College.findById(user.className));
       }
 
       if (user.aadharCard && fs.existsSync(user.aadharCard)) {
@@ -772,7 +945,8 @@ exports.getAllActiveUsers = async (req, res) => {
         country: user.countryId?.name || "",
         state: user.stateId?.name || "",
         city: user.cityId?.name || "",
-        institutionName: user.schoolName || user.collegeName || user.instituteName || "",
+        institutionName:
+          user.schoolName || user.collegeName || user.instituteName || "",
         institutionType: user.studentType || "",
         updatedBy: user.updatedBy || null,
       };
@@ -785,15 +959,16 @@ exports.getAllActiveUsers = async (req, res) => {
     }
 
     return res.status(200).json({
-      message: "Active users fetched successfully (filtered by state, city, and excluding other groups).",
+      message:
+        "Active users fetched successfully (filtered by state, city, and excluding other groups).",
       users: finalList,
     });
+
   } catch (error) {
     console.error("Get Users Error:", error);
     return res.status(500).json({ message: error.message });
   }
 };
-
 
 
 exports.getUserStates = async (req, res) => {
