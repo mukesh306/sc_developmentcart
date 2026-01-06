@@ -1700,7 +1700,7 @@ exports.PracticescoreCard = async (req, res) => {
       validScores.reduce((sum, s) => sum + s.score, 0) /
       (validScores.length || 1);
 
-    /* ---------- Response ---------- */
+    
     return res.status(200).json({
       today: todayScore,
       scores: paginatedScoresWithDay,
