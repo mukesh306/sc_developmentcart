@@ -1008,7 +1008,7 @@ exports.updateProfile = async (req, res) => {
           shouldClone = true;
         }
 
-        // ===================== FIXED USER HISTORY LOGIC =====================
+       
         if (shouldClone) {
           const alreadyExists = await UserHistory.findOne({
             originalUserId: existingUser._id,
@@ -1016,7 +1016,7 @@ exports.updateProfile = async (req, res) => {
             updatedBy: classDetails.updatedBy
           });
 
-          // ❌ Same class already saved → do nothing
+         
           if (!alreadyExists) {
             const userData = existingUser.toObject();
 
@@ -1036,7 +1036,7 @@ exports.updateProfile = async (req, res) => {
             });
           }
         }
-        // ===================== FIX END =====================
+     
 
         updatedFields.updatedBy = classDetails.updatedBy;
 
