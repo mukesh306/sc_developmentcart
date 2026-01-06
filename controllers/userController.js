@@ -269,20 +269,20 @@ exports.completeProfile = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
 
-    if (req.files?.aadharCard?.[0]) {
-      updatedFields.aadharCard = req.files.aadharCard[0].path;
-    }
+    // if (req.files?.aadharCard?.[0]) {
+    //   updatedFields.aadharCard = req.files.aadharCard[0].path;
+    // }
     if (req.files?.marksheet?.[0]) {
       updatedFields.marksheet = req.files.marksheet[0].path;
     }
 
-    // Update user
+   
     let user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
       .populate('countryId')
       .populate('stateId')
       .populate('cityId');
 
-    // Fetch class details
+    
     let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(className)) {
       classDetails =
@@ -292,9 +292,9 @@ exports.completeProfile = async (req, res) => {
     }
 
     const baseUrl = `${req.protocol}://${req.get('host')}`;
-    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-    }
+    // if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+    //   user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+    // }
     if (user.marksheet && fs.existsSync(user.marksheet)) {
       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }
@@ -476,9 +476,9 @@ exports.getUserProfile = async (req, res) => {
     
     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
 
-    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-    }
+    // if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+    //   user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+    // }
     if (user.marksheet && fs.existsSync(user.marksheet)) {
       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }

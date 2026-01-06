@@ -24,7 +24,7 @@ const userHistorySchema = new mongoose.Schema({
   endDate: { type: String },
   endTime: { type: String },
   platformDetails: { type: String },
-  aadharCard: { type: String },
+  // aadharCard: { type: String },
   marksheet: { type: String },
   resetPasswordOTP: { type: String },
   bonuspoint: { type: Number, default: 0 },

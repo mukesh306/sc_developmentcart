@@ -44,7 +44,7 @@ platformDetails:{
 },
 
 
-  aadharCard: { type: String },
+  // aadharCard: { type: String },
   marksheet: { type: String },
   resetPasswordOTP: { type: String },
   bonuspoint: { type: Number ,default: 0 },
