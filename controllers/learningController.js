@@ -301,6 +301,7 @@ exports.updateLearning = async (req, res) => {
 //   }
 // };
 
+
 exports.scoreCard = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -317,8 +318,7 @@ exports.scoreCard = async (req, res) => {
 
     const today = moment().startOf("day");
     const todayStr = today.format("YYYY-MM-DD");
-
-   
+ 
     const todayAnyLearning = await TopicScore.findOne({
       userId: userId,
       endDate: user.endDate,
