@@ -2628,51 +2628,63 @@ exports.deleteUserExamData = async (req, res) => {
   }
 };
 
-
 exports.getClassTimeline = async (req, res) => {
   try {
     const userId = req.user.id;
 
     // 🔹 USER
     const user = await User.findById(userId)
-      .populate('className', 'name')
       .populate('updatedBy', 'session startDate endDate');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
 
-    
+    // 🔹 USER HISTORY
     const history = await UserHistory.find({
       originalUserId: user._id
     })
-      .populate('className', 'name')
       .populate('updatedBy', 'session startDate endDate')
       .sort({ clonedAt: -1 });
 
-    const currentEntry = {
-      classOrYear: user.className?.name || '',
-      startDate: user.updatedBy?.startDate || '',
-      endDate: user.updatedBy?.endDate || '',
-      session: user.session || ''
-    };
+    const timeline = [];
 
-    
-    const historyEntries = history.map(h => ({
-      classOrYear: h.className?.name || '',
-      startDate: h.updatedBy?.startDate || '',
-      endDate: h.updatedBy?.endDate || '',
-      session: h.updatedBy?.session || ''
-    }));
+    // 🔹 CURRENT USER CLASS
+    if (mongoose.Types.ObjectId.isValid(user.className)) {
+      const classDetails =
+        (await School.findById(user.className)) ||
+        (await College.findById(user.className));
 
- 
-    const classTimeline = [
-      currentEntry,
-      ...historyEntries
-    ];
+      timeline.push({
+        classOrYear: classDetails?.name || '',
+        startDate: user.startDate || user.updatedBy?.startDate || '',
+        endDate: user.endDate || user.updatedBy?.endDate || '',
+        session: user.session || user.updatedBy?.session || ''
+      });
+    }
+
+    // 🔹 HISTORY CLASSES
+    for (const h of history) {
+      let className = '';
+
+      if (mongoose.Types.ObjectId.isValid(h.className)) {
+        const classDetails =
+          (await School.findById(h.className)) ||
+          (await College.findById(h.className));
+
+        className = classDetails?.name || '';
+      }
+
+      timeline.push({
+        classOrYear: className,
+        startDate: h.startDate || h.updatedBy?.startDate || '',
+        endDate: h.endDate || h.updatedBy?.endDate || '',
+        session: h.session || h.updatedBy?.session || ''
+      });
+    }
 
     return res.status(200).json({
-      classTimeline
+      classTimeline: timeline
     });
 
   } catch (error) {
@@ -2680,3 +2692,4 @@ exports.getClassTimeline = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
