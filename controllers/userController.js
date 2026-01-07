@@ -937,7 +937,7 @@ exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    // 🔹 User check
+    
     const existingUser = await User.findById(userId);
     if (!existingUser) {
       return res.status(404).json({ message: 'User not found' });
