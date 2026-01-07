@@ -419,11 +419,24 @@ exports.scoreCard = async (req, res) => {
     const paginatedScores = sortedFinal.slice(skip, skip + limit);
 
   
-    const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
-      ...item,
-      day: skip + index + 1  
+    // const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
+    //   ...item,
+    //   day: skip + index + 1  
      
-    }));
+    // }));
+
+const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
+  learningId: item.learningId || null,
+  score: item.score ?? null,
+  marksObtained: item.marksObtained ?? null,
+  totalMarks: item.totalMarks ?? null,
+  date: item.date,
+  isToday: item.isToday,
+  day: skip + index + 1
+}));
+
+
+
 
     const learningScores = {};
     for (const entry of fullResult) {
