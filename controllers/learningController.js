@@ -1146,6 +1146,8 @@ exports.Strikecalculation = async (req, res) => {
 //   return Math.floor(points / experiencePoint) + 1;
 // };
 
+
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1261,7 +1263,7 @@ exports.StrikePath = async (req, res) => {
         const hasTopic = item.data.some(d => d.type === 'topic');
 
         if (hasPractice || hasTopic) {
-          hasStartedLearning = true; // ✅ learning started
+          hasStartedLearning = true; 
         }
 
         if (hasPractice && hasTopic && baseDailyExp > 0) {
@@ -1279,7 +1281,7 @@ exports.StrikePath = async (req, res) => {
           }
         }
       }
-      // ❌ Deduction ONLY after learning has started
+     
       else if (hasStartedLearning) {
         item.deduction = deductions;
         if (!existingDeductedDates.includes(currentDate)) {
@@ -1291,7 +1293,7 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
-    // Weekly bonus
+    
     for (let i = 6; i < result.length; i++) {
       const streak = result.slice(i - 6, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -1309,7 +1311,7 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Monthly bonus
+  
     for (let i = 29; i < result.length; i++) {
       const streak = result.slice(i - 29, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
@@ -1327,7 +1329,7 @@ exports.StrikePath = async (req, res) => {
       }
     }
 
-    // Prepare updateData (unchanged)
+   
     const updateData = {};
     if (bonusToAdd > 0) {
       updateData.$inc = { bonuspoint: bonusToAdd };
@@ -1356,7 +1358,7 @@ exports.StrikePath = async (req, res) => {
       await User.findByIdAndUpdate(userId, updateData);
     }
 
-    // 🔒 bonuspoint never negative
+  
     await User.findByIdAndUpdate(
       userId,
       [{ $set: { bonuspoint: { $cond: [{ $lt: ["$bonuspoint", 0] }, 0, "$bonuspoint"] } } }]
@@ -1371,7 +1373,7 @@ exports.StrikePath = async (req, res) => {
     await User.findByIdAndUpdate(userId, { level: newLevel });
     await User.findByIdAndUpdate(userId, { $pull: { userLevelData: { level: newLevel } } });
 
-    // 🔒 levelBonusPoint never negative
+    
     const levelBonusPoint = Math.max(
       0,
       result.reduce((acc, item) =>
@@ -1418,12 +1420,24 @@ exports.StrikePath = async (req, res) => {
       matched = [latest, ...rest];
     }
 
+    const cleanedDates = matched.map(day => ({
+  date: day.date,
+  dailyExperience: day.dailyExperience,
+  weeklyBonus: day.weeklyBonus,
+  monthlyBonus: day.monthlyBonus,
+  deduction: day.deduction,
+  data: day.data.map(d => ({
+    type: d.type,
+    score: d.score
+  }))
+}));
+
     return res.status(200).json({
       bonuspoint: Math.round(updatedUser.bonuspoint || 0),
       levelBonusPoint: Math.round(levelBonusPoint),
       experiencePoint,
       level: newLevel,
-      dates: matched
+      dates: cleanedDates
     });
 
   } catch (error) {
