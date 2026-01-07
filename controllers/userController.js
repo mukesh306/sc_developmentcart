@@ -932,11 +932,11 @@ exports.updateUser = async (req, res) => {
 //   }
 // };
 
-
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
+    // 🔹 User check
     const existingUser = await User.findById(userId);
     if (!existingUser) {
       return res.status(404).json({ message: 'User not found' });
@@ -962,6 +962,7 @@ exports.updateProfile = async (req, res) => {
       return res.status(400).json({ message: 'Invalid Pincode' });
     }
 
+   
     const updatedFields = {
       pincode,
       studentType,
@@ -984,60 +985,74 @@ exports.updateProfile = async (req, res) => {
     }
 
     let classDetails = null;
+
+   
     if (mongoose.Types.ObjectId.isValid(className)) {
       classDetails =
         (await School.findById(className)) ||
         (await College.findById(className));
 
       if (classDetails?.updatedBy) {
+
         let shouldClone = false;
 
-        if (!existingUser.updatedBy) {
-          shouldClone = true;
-        }
-
+        
         if (existingUser.className?.toString() !== className?.toString()) {
           shouldClone = true;
         }
 
+       
         if (
           existingUser.className?.toString() === className?.toString() &&
-          existingUser.updatedBy?.toString() !== classDetails.updatedBy.toString()
+          (
+            existingUser.session !== classDetails.session ||
+            existingUser.startDate !== classDetails.startDate ||
+            existingUser.endDate !== classDetails.endDate
+          )
         ) {
           shouldClone = true;
         }
 
-       
+      
         if (shouldClone) {
-          const alreadyExists = await UserHistory.findOne({
-            originalUserId: existingUser._id,
-            className: className,
-            updatedBy: classDetails.updatedBy
+
+          const hasLearning = await LearningScore.exists({
+            userId: existingUser._id,
+            classId: existingUser.className,
+            session: existingUser.session,
+            startDate: existingUser.startDate,
+            endDate: existingUser.endDate
           });
 
-         
-          if (!alreadyExists) {
-            const userData = existingUser.toObject();
+          if (hasLearning) {
 
-            delete userData._id;
-            delete userData.__v;
-
-            if (userData.countryId?._id) userData.countryId = userData.countryId._id;
-            if (userData.stateId?._id) userData.stateId = userData.stateId._id;
-            if (userData.cityId?._id) userData.cityId = userData.cityId._id;
-            if (userData.updatedBy?._id) userData.updatedBy = userData.updatedBy._id;
-            if (userData.className?._id) userData.className = userData.className._id;
-
-            await UserHistory.create({
-              ...userData,
+            const alreadyExists = await UserHistory.findOne({
               originalUserId: existingUser._id,
-              clonedAt: new Date()
+              className: existingUser.className,
+              session: existingUser.session,
+              startDate: existingUser.startDate,
+              endDate: existingUser.endDate
             });
+
+            if (!alreadyExists) {
+              const userData = existingUser.toObject();
+              delete userData._id;
+              delete userData.__v;
+
+              await UserHistory.create({
+                ...userData,
+                originalUserId: existingUser._id,
+                clonedAt: new Date()
+              });
+            }
           }
         }
-     
 
+        
         updatedFields.updatedBy = classDetails.updatedBy;
+        updatedFields.session = classDetails.session;
+        updatedFields.startDate = classDetails.startDate;
+        updatedFields.endDate = classDetails.endDate;
 
         const admin = await Admin1.findById(classDetails.updatedBy);
         if (admin?.session) {
@@ -1046,17 +1061,24 @@ exports.updateProfile = async (req, res) => {
       }
     }
 
-    const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
-      .populate('countryId')
-      .populate('stateId')
-      .populate('cityId')
+   
+    const user = await User.findByIdAndUpdate(
+      userId,
+      updatedFields,
+      { new: true }
+    )
+      .populate('countryId', 'name')
+      .populate('stateId', 'name')
+      .populate('cityId', 'name')
       .populate('updatedBy', 'email session startDate endDate');
 
+   
     const baseUrl = `${req.protocol}://${req.get('host')}`;
 
     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
     }
+
     if (user.marksheet && fs.existsSync(user.marksheet)) {
       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }
@@ -1074,7 +1096,7 @@ exports.updateProfile = async (req, res) => {
     };
 
     return res.status(200).json({
-      message: 'Profile updated. Redirecting to home page.',
+      message: 'Profile updated successfully.',
       user: formattedUser
     });
 
@@ -1083,6 +1105,159 @@ exports.updateProfile = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// exports.updateProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     const existingUser = await User.findById(userId);
+//     if (!existingUser) {
+//       return res.status(404).json({ message: 'User not found' });
+//     }
+
+//     if (existingUser.status === 'yes') {
+//       return res.status(403).json({ message: 'You are not eligible to update.' });
+//     }
+
+//     let {
+//       countryId,
+//       stateId,
+//       cityId,
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//       className
+//     } = req.body;
+
+//     if (pincode && !/^\d+$/.test(pincode)) {
+//       return res.status(400).json({ message: 'Invalid Pincode' });
+//     }
+
+//     const updatedFields = {
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName
+//     };
+
+//     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
+//     if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
+//     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
+//     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
+
+//     if (req.files?.aadharCard?.[0]) {
+//       updatedFields.aadharCard = req.files.aadharCard[0].path;
+//     }
+
+//     if (req.files?.marksheet?.[0]) {
+//       updatedFields.marksheet = req.files.marksheet[0].path;
+//     }
+
+//     let classDetails = null;
+//     if (mongoose.Types.ObjectId.isValid(className)) {
+//       classDetails =
+//         (await School.findById(className)) ||
+//         (await College.findById(className));
+
+//       if (classDetails?.updatedBy) {
+//         let shouldClone = false;
+
+//         if (!existingUser.updatedBy) {
+//           shouldClone = true;
+//         }
+
+//         if (existingUser.className?.toString() !== className?.toString()) {
+//           shouldClone = true;
+//         }
+
+//         if (
+//           existingUser.className?.toString() === className?.toString() &&
+//           existingUser.updatedBy?.toString() !== classDetails.updatedBy.toString()
+//         ) {
+//           shouldClone = true;
+//         }
+
+       
+//         if (shouldClone) {
+//           const alreadyExists = await UserHistory.findOne({
+//             originalUserId: existingUser._id,
+//             className: className,
+//             updatedBy: classDetails.updatedBy
+//           });
+
+         
+//           if (!alreadyExists) {
+//             const userData = existingUser.toObject();
+
+//             delete userData._id;
+//             delete userData.__v;
+
+//             if (userData.countryId?._id) userData.countryId = userData.countryId._id;
+//             if (userData.stateId?._id) userData.stateId = userData.stateId._id;
+//             if (userData.cityId?._id) userData.cityId = userData.cityId._id;
+//             if (userData.updatedBy?._id) userData.updatedBy = userData.updatedBy._id;
+//             if (userData.className?._id) userData.className = userData.className._id;
+
+//             await UserHistory.create({
+//               ...userData,
+//               originalUserId: existingUser._id,
+//               clonedAt: new Date()
+//             });
+//           }
+//         }
+     
+
+//         updatedFields.updatedBy = classDetails.updatedBy;
+
+//         const admin = await Admin1.findById(classDetails.updatedBy);
+//         if (admin?.session) {
+//           updatedFields.session = admin.session;
+//         }
+//       }
+//     }
+
+//     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
+//       .populate('countryId')
+//       .populate('stateId')
+//       .populate('cityId')
+//       .populate('updatedBy', 'email session startDate endDate');
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+
+//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//     }
+//     if (user.marksheet && fs.existsSync(user.marksheet)) {
+//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//     }
+
+//     const formattedUser = {
+//       ...user._doc,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: schoolName || collegeName || instituteName || '',
+//       institutionType: studentType || '',
+//       classOrYear: classDetails?.name || '',
+//       session: user.session || '',
+//       updatedBy: user.updatedBy || null
+//     };
+
+//     return res.status(200).json({
+//       message: 'Profile updated. Redirecting to home page.',
+//       user: formattedUser
+//     });
+
+//   } catch (error) {
+//     console.error('Update Profile Error:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.updateProfileStatus = async (req, res) => {
