@@ -335,6 +335,8 @@ exports.scoreCard = async (req, res) => {
     const todayScore = {
       learningId: todayAnyLearning?.learningId || null,
       score: todayAnyLearning?.score ?? null,
+      marksObtained: todayAnyLearning?.marksObtained ?? null,
+      totalMarks: todayAnyLearning?.totalMarks ?? null,
       date: todayStr,
       isToday: true
     };
