@@ -17,6 +17,7 @@ const userexamGroup = require("../models/userExamGroup");
 const Schoolercategory = require("../models/schoolershipcategory");
 const Schoolerexam = require("../models/Schoolerexam");
 const UserExamGroup = require("../models/userExamGroup");
+const LearningScore = require('../models/learningScore');
 const fs = require('fs');
 const path = require('path');
 // const moment = require('moment');
