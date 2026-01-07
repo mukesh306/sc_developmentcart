@@ -53,6 +53,11 @@ router.get("/user/:userId", userController.getUserById);
 router.delete(
   "/user/examtypereset/:userId",userController.deleteUserExamData);
 
+router.get(
+  '/class-timeline',
+  auth,
+  userController.getClassTimeline
+);
 
   
 router.get('/verify-token', (req, res) => {

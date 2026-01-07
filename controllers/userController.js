@@ -500,7 +500,6 @@ exports.getUserProfile = async (req, res) => {
       }
     }
 
-    
     if (user.updatedBy && typeof user.updatedBy === 'object') {
       const updates = {};
       if (user.updatedBy.session && user.session !== user.updatedBy.session) {
@@ -562,7 +561,7 @@ exports.getUserProfile = async (req, res) => {
       classOrYear:
         classDetails && classDetails.price != null ? classDetails.name : "",
         startDate: user.startDate || "",      
-  endDate: user.endDate || ""  
+     endDate: user.endDate || ""  
     };
 
     return res.status(200).json({
@@ -590,7 +589,7 @@ exports.sendResetOTP = async (req, res) => {
     user.resetPasswordExpires = expiry;
     await user.save();
 
-   
+
    const transporter = nodemailer.createTransport({
      service: 'gmail',
      auth: {
@@ -2626,5 +2625,58 @@ exports.deleteUserExamData = async (req, res) => {
       success: false,
       message: "Internal server error",
     });
+  }
+};
+
+
+exports.getClassTimeline = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    // 🔹 USER
+    const user = await User.findById(userId)
+      .populate('className', 'name')
+      .populate('updatedBy', 'session startDate endDate');
+
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+
+    
+    const history = await UserHistory.find({
+      originalUserId: user._id
+    })
+      .populate('className', 'name')
+      .populate('updatedBy', 'session startDate endDate')
+      .sort({ clonedAt: -1 });
+
+    const currentEntry = {
+      classOrYear: user.className?.name || '',
+      startDate: user.updatedBy?.startDate || '',
+      endDate: user.updatedBy?.endDate || '',
+      session: user.session || ''
+    };
+
+    
+    const historyEntries = history.map(h => ({
+      classOrYear: h.className?.name || '',
+      startDate: h.updatedBy?.startDate || '',
+      endDate: h.updatedBy?.endDate || '',
+      session: h.updatedBy?.session || ''
+    }));
+
+ 
+    const classTimeline = [
+      currentEntry,
+      ...historyEntries
+    ];
+
+    return res.status(200).json({
+      classTimeline
+    });
+
+  } catch (error) {
+    console.error('Get Class Timeline Error:', error);
+    return res.status(500).json({ message: error.message });
   }
 };
