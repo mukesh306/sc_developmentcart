@@ -1586,7 +1586,6 @@ exports.PracticescoreCard = async (req, res) => {
     const today = moment().startOf('day');
     const todayStr = today.format('YYYY-MM-DD');
 
-   
     const todayAnyLearning = await LearningScore.findOne({
       userId: userId,
       endDate: user.endDate,
@@ -1608,8 +1607,7 @@ exports.PracticescoreCard = async (req, res) => {
       date: todayStr,
       isToday: true
     };
-
-  
+ 
     let startDate = fromDate
       ? moment(fromDate).startOf('day')
       : moment(user.updatedAt).startOf('day');
@@ -1691,11 +1689,21 @@ exports.PracticescoreCard = async (req, res) => {
     const paginatedScores = finalScores.slice(skip, skip + limit);
 
   
+    // const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
+    //   ...item,
+    //   day: skip + index + 1   
+    //   // day: index + 1       
+    // }));
+
     const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
-      ...item,
-      day: skip + index + 1   
-      // day: index + 1       
-    }));
+  learningId: item.learningId || null,
+  score: item.score ?? null,
+  marksObtained: item.marksObtained ?? null,
+  totalMarks: item.totalMarks ?? null,
+  date: item.date,
+  isToday: item.isToday,
+  day: skip + index + 1
+}));
 
  
     const validScores = finalScores.filter(s => s.score !== null);
