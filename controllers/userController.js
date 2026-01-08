@@ -567,7 +567,7 @@ exports.getUserProfile = async (req, res) => {
         startDate: user.startDate || "",      
      endDate: user.endDate || ""  
     };
-
+console.log("formattedUser",formattedUser)
     return res.status(200).json({
       message: "User profile fetched successfully.",
       user: formattedUser
