@@ -439,8 +439,6 @@ exports.getAssignedListUserpractice = async (req, res) => {
 
     const userEndDate = user.endDate;
     const userClassId = user.className.toString();
-
- 
     const dailyFirstScores = await LearningScore.aggregate([
       {
         $match: {
