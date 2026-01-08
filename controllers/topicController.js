@@ -1586,8 +1586,9 @@ exports.PracticescoreCard = async (req, res) => {
     const today = moment().startOf('day');
     const todayStr = today.format('YYYY-MM-DD');
 
+   
     const todayAnyLearning = await LearningScore.findOne({
-      userId: userId,
+      userId,
       endDate: user.endDate,
       classId: user.className.toString(),
       scoreDate: {
@@ -1596,28 +1597,29 @@ exports.PracticescoreCard = async (req, res) => {
       }
     })
       .populate('learningId', 'name')
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: 1 }) 
       .lean();
 
     const todayScore = {
       learningId: todayAnyLearning?.learningId || null,
       score: todayAnyLearning?.score ?? null,
-       marksObtained: todayAnyLearning?.marksObtained ?? null,
+      marksObtained: todayAnyLearning?.marksObtained ?? null,
       totalMarks: todayAnyLearning?.totalMarks ?? null,
       date: todayStr,
       isToday: true
     };
- 
-    let startDate = fromDate
+
+   
+    const startDate = fromDate
       ? moment(fromDate).startOf('day')
       : moment(user.updatedAt).startOf('day');
 
-    let endDate = toDate
+    const endDate = toDate
       ? moment(toDate).startOf('day')
       : moment(today);
 
-   
-    const match = {
+    
+    const baseMatch = {
       userId: new mongoose.Types.ObjectId(userId),
       endDate: user.endDate,
       classId: user.className.toString(),
@@ -1627,25 +1629,36 @@ exports.PracticescoreCard = async (req, res) => {
       }
     };
 
-    if (learningId) {
-      match.learningId = new mongoose.Types.ObjectId(learningId);
-    }
-
-  
     const rawScores = await LearningScore.aggregate([
-      { $match: match },
+      { $match: baseMatch },
+
+      
       { $sort: { scoreDate: 1, createdAt: 1 } },
+
+      
       {
         $group: {
           _id: {
             date: {
-              $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+              $dateToString: { format: '%Y-%m-%d', date: '$scoreDate' }
             }
           },
-          doc: { $first: "$$ROOT" }
+          doc: { $first: '$$ROOT' }
         }
       },
-      { $replaceRoot: { newRoot: "$doc" } }
+
+      { $replaceRoot: { newRoot: '$doc' } },
+
+      
+      ...(learningId
+        ? [
+            {
+              $match: {
+                learningId: new mongoose.Types.ObjectId(learningId)
+              }
+            }
+          ]
+        : [])
     ]);
 
     const populatedScores = await LearningScore.populate(rawScores, {
@@ -1664,7 +1677,7 @@ exports.PracticescoreCard = async (req, res) => {
       });
     }
 
-   
+    
     const finalScores = [];
     for (
       let d = moment(startDate);
@@ -1682,30 +1695,23 @@ exports.PracticescoreCard = async (req, res) => {
       );
     }
 
-
+   
     const totalRecords = finalScores.length;
     const totalPages = Math.ceil(totalRecords / limit);
 
     const paginatedScores = finalScores.slice(skip, skip + limit);
 
-  
-    // const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
-    //   ...item,
-    //   day: skip + index + 1   
-    //   // day: index + 1       
-    // }));
-
     const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
-  learningId: item.learningId || null,
-  score: item.score ?? null,
-  marksObtained: item.marksObtained ?? null,
-  totalMarks: item.totalMarks ?? null,
-  date: item.date,
-  isToday: item.isToday,
-  day: skip + index + 1
-}));
+      learningId: item.learningId || null,
+      score: item.score ?? null,
+      marksObtained: item.marksObtained ?? null,
+      totalMarks: item.totalMarks ?? null,
+      date: item.date,
+      isToday: item.isToday,
+      day: skip + index + 1
+    }));
 
- 
+  
     const validScores = finalScores.filter(s => s.score !== null);
     const avg =
       validScores.reduce((sum, s) => sum + s.score, 0) /
@@ -1723,12 +1729,174 @@ exports.PracticescoreCard = async (req, res) => {
       },
       averageScore: parseFloat(avg.toFixed(2))
     });
-
   } catch (error) {
     console.error('PracticescoreCard Error:', error);
     return res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// exports.PracticescoreCard = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { learningId, fromDate, toDate, page = 1 } = req.query;
+
+//     const limit = 2;
+//     const currentPage = Math.max(parseInt(page), 1);
+//     const skip = (currentPage - 1) * limit;
+
+//     const user = await User.findById(userId);
+//     if (!user?.endDate || !user?.className) {
+//       return res.status(400).json({ message: 'Please complete your profile.' });
+//     }
+
+//     const today = moment().startOf('day');
+//     const todayStr = today.format('YYYY-MM-DD');
+
+//     const todayAnyLearning = await LearningScore.findOne({
+//       userId: userId,
+//       endDate: user.endDate,
+//       classId: user.className.toString(),
+//       scoreDate: {
+//         $gte: today.toDate(),
+//         $lte: moment(today).endOf('day').toDate()
+//       }
+//     })
+//       .populate('learningId', 'name')
+//       .sort({ createdAt: 1 })
+//       .lean();
+
+//     const todayScore = {
+//       learningId: todayAnyLearning?.learningId || null,
+//       score: todayAnyLearning?.score ?? null,
+//        marksObtained: todayAnyLearning?.marksObtained ?? null,
+//       totalMarks: todayAnyLearning?.totalMarks ?? null,
+//       date: todayStr,
+//       isToday: true
+//     };
+ 
+//     let startDate = fromDate
+//       ? moment(fromDate).startOf('day')
+//       : moment(user.updatedAt).startOf('day');
+
+//     let endDate = toDate
+//       ? moment(toDate).startOf('day')
+//       : moment(today);
+
+   
+//     const match = {
+//       userId: new mongoose.Types.ObjectId(userId),
+//       endDate: user.endDate,
+//       classId: user.className.toString(),
+//       scoreDate: {
+//         $gte: startDate.toDate(),
+//         $lte: endDate.toDate()
+//       }
+//     };
+
+//     if (learningId) {
+//       match.learningId = new mongoose.Types.ObjectId(learningId);
+//     }
+
+  
+//     const rawScores = await LearningScore.aggregate([
+//       { $match: match },
+//       { $sort: { scoreDate: 1, createdAt: 1 } },
+//       {
+//         $group: {
+//           _id: {
+//             date: {
+//               $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+//             }
+//           },
+//           doc: { $first: "$$ROOT" }
+//         }
+//       },
+//       { $replaceRoot: { newRoot: "$doc" } }
+//     ]);
+
+//     const populatedScores = await LearningScore.populate(rawScores, {
+//       path: 'learningId',
+//       select: 'name'
+//     });
+
+    
+//     const scoreMap = new Map();
+//     for (const score of populatedScores) {
+//       const dateStr = moment(score.scoreDate).format('YYYY-MM-DD');
+//       scoreMap.set(dateStr, {
+//         ...score,
+//         date: dateStr,
+//         isToday: dateStr === todayStr
+//       });
+//     }
+
+   
+//     const finalScores = [];
+//     for (
+//       let d = moment(startDate);
+//       d.diff(endDate, 'days') <= 0;
+//       d.add(1, 'days')
+//     ) {
+//       const dateStr = d.format('YYYY-MM-DD');
+//       finalScores.push(
+//         scoreMap.get(dateStr) || {
+//           date: dateStr,
+//           score: null,
+//           isToday: dateStr === todayStr,
+//           learningId: null
+//         }
+//       );
+//     }
+
+
+//     const totalRecords = finalScores.length;
+//     const totalPages = Math.ceil(totalRecords / limit);
+
+//     const paginatedScores = finalScores.slice(skip, skip + limit);
+
+  
+//     // const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
+//     //   ...item,
+//     //   day: skip + index + 1   
+//     //   // day: index + 1       
+//     // }));
+
+//     const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
+//   learningId: item.learningId || null,
+//   score: item.score ?? null,
+//   marksObtained: item.marksObtained ?? null,
+//   totalMarks: item.totalMarks ?? null,
+//   date: item.date,
+//   isToday: item.isToday,
+//   day: skip + index + 1
+// }));
+
+ 
+//     const validScores = finalScores.filter(s => s.score !== null);
+//     const avg =
+//       validScores.reduce((sum, s) => sum + s.score, 0) /
+//       (validScores.length || 1);
+
+    
+//     return res.status(200).json({
+//       today: todayScore,
+//       scores: paginatedScoresWithDay,
+//       pagination: {
+//         page: currentPage,
+//         limit,
+//         totalRecords,
+//         totalPages
+//       },
+//       averageScore: parseFloat(avg.toFixed(2))
+//     });
+
+//   } catch (error) {
+//     console.error('PracticescoreCard Error:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.StrictScore = async (req, res) => {

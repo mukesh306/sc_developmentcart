@@ -324,7 +324,7 @@ exports.scoreCard = async (req, res) => {
     const today = moment().startOf("day");
     const todayStr = today.format("YYYY-MM-DD");
 
-    /* -------------------- TODAY SCORE -------------------- */
+
     const todayAnyLearning = await TopicScore.findOne({
       userId: userId,
       endDate: user.endDate,
@@ -335,7 +335,7 @@ exports.scoreCard = async (req, res) => {
       }
     })
       .populate("learningId", "name")
-      .sort({ createdAt: 1 }) // ✅ first learning of today
+      .sort({ createdAt: 1 }) 
       .lean();
 
     const todayScore = {
@@ -347,7 +347,7 @@ exports.scoreCard = async (req, res) => {
       isToday: true
     };
 
-    /* -------------------- DATE RANGE -------------------- */
+    
     const startDate = fromDate
       ? moment(fromDate).startOf("day")
       : moment(user.updatedAt).startOf("day");
@@ -356,7 +356,7 @@ exports.scoreCard = async (req, res) => {
       ? moment(toDate).startOf("day")
       : today;
 
-    /* -------------------- AGGREGATION -------------------- */
+   
     const baseMatch = {
       userId: new mongoose.Types.ObjectId(userId),
       endDate: user.endDate,
@@ -366,10 +366,10 @@ exports.scoreCard = async (req, res) => {
     const rawScores = await TopicScore.aggregate([
       { $match: baseMatch },
 
-      // ✅ sort so earliest learning of the day comes first
+      
       { $sort: { scoreDate: 1, createdAt: 1 } },
 
-      // ✅ pick ONLY first learning per day
+    
       {
         $group: {
           _id: {
@@ -383,7 +383,7 @@ exports.scoreCard = async (req, res) => {
 
       { $replaceRoot: { newRoot: "$doc" } },
 
-      // ✅ apply learningId filter AFTER day-first logic
+      
       ...(learningId
         ? [
             {
@@ -400,7 +400,7 @@ exports.scoreCard = async (req, res) => {
       { path: "learningId", select: "name" }
     ]);
 
-    /* -------------------- MAP BY DATE -------------------- */
+   
     const scoreMap = new Map();
     for (const score of populatedScores) {
       const dateStr = moment(score.scoreDate).format("YYYY-MM-DD");
@@ -411,7 +411,7 @@ exports.scoreCard = async (req, res) => {
       });
     }
 
-    /* -------------------- FULL DATE RANGE -------------------- */
+   
     const fullResult = [];
     for (
       let d = moment(startDate);
@@ -432,7 +432,7 @@ exports.scoreCard = async (req, res) => {
       (a, b) => new Date(a.date) - new Date(b.date)
     );
 
-    /* -------------------- PAGINATION -------------------- */
+   
     const totalRecords = sortedFinal.length;
     const totalPages = Math.ceil(totalRecords / limit);
 
@@ -448,7 +448,7 @@ exports.scoreCard = async (req, res) => {
       day: skip + index + 1
     }));
 
-    /* -------------------- LEARNING WISE TOTAL -------------------- */
+   
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
@@ -472,7 +472,7 @@ exports.scoreCard = async (req, res) => {
       averageScore: item.totalScore
     }));
 
-    /* -------------------- SAVE USER DATA -------------------- */
+   
     for (const item of learningWiseAverage) {
       const idx = user.learning.findIndex(
         l =>
@@ -517,7 +517,7 @@ exports.scoreCard = async (req, res) => {
 
     await user.save();
 
-    /* -------------------- RESPONSE -------------------- */
+    
     return res.status(200).json({
       today: todayScore,
       scores: paginatedScoresWithDay,
