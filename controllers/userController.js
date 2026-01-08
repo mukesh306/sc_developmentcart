@@ -484,7 +484,10 @@ exports.getUserProfile = async (req, res) => {
       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }
 
-    
+    console.log("baseUrl",baseUrl)
+    console.log("protocol",req.protocol)
+    console.log("req.get",req.get('host'))
+
     if (!classDetails || classDetails.price == null) {
       classId = null;
       await User.findByIdAndUpdate(userId, { className: null });
