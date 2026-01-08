@@ -61,6 +61,139 @@ exports.getAssignedList = async (req, res) => {
   }
 };
 
+// exports.getAssignedListUser = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     const user = await User.findById(userId).lean();
+//     if (!user?.endDate) {
+//       return res.status(200).json({
+//         enrolledDate: user?.updatedAt
+//           ? moment(user.updatedAt).format("YYYY-MM-DD")
+//           : null,
+//         currentDate: moment().format("YYYY-MM-DD"),
+//         updatedAt: user?.updatedAt
+//           ? moment(user.updatedAt).format("YYYY-MM-DD")
+//           : null,
+//         data: []
+//       });
+//     }
+
+//     const userEndDate = user.endDate;
+//     const userClassId = user.className?.toString();
+
+   
+//     const dailyFirstScores = await TopicScore.aggregate([
+//       {
+//         $match: {
+//           userId: new mongoose.Types.ObjectId(userId),
+//           endDate: userEndDate,
+//           classId: userClassId
+//         }
+//       },
+//       { $sort: { scoreDate: 1, createdAt: 1 } },
+//       {
+//         $group: {
+//           _id: {
+//             date: {
+//               $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+//             }
+//           },
+//           doc: { $first: "$$ROOT" }
+//         }
+//       },
+//       { $replaceRoot: { newRoot: "$doc" } }
+//     ]);
+
+   
+//     const grouped = {};
+//     for (const s of dailyFirstScores) {
+//       if (!s.learningId) continue;
+
+//       const lid = s.learningId.toString();
+
+//       if (!grouped[lid]) {
+//         grouped[lid] = {
+//           totalMarks: 0,
+//           marksObtained: 0
+//         };
+//       }
+
+//       grouped[lid].totalMarks += Number(s.totalMarks || 0);
+//       grouped[lid].marksObtained += Number(s.marksObtained || 0);
+//     }
+
+   
+//     const averageScoreMap = {};
+//     for (const lid in grouped) {
+//       const { totalMarks, marksObtained } = grouped[lid];
+
+//       averageScoreMap[lid] =
+//         totalMarks > 0
+//           ? Number(((marksObtained / totalMarks) * 100).toFixed(2))
+//           : 0;
+//     }
+
+    
+//     const assignedQuery = user.className ? { classId: user.className } : {};
+//     const assignedList = await Assigned.find(assignedQuery)
+//       .populate("learning")
+//       .populate("learning2")
+//       .populate("learning3")
+//       .populate("learning4")
+//       .lean();
+
+    
+//     for (const item of assignedList) {
+//       let classInfo = await School.findById(item.classId).lean();
+//       if (!classInfo) {
+//         classInfo = await College.findById(item.classId).lean();
+//       }
+//       item.classInfo = classInfo || null;
+
+//       const getAverage = (learningObj) => {
+//         if (learningObj && learningObj._id) {
+//           const lid = learningObj._id.toString();
+//           return Object.prototype.hasOwnProperty.call(averageScoreMap, lid)
+//             ? averageScoreMap[lid]
+//             : 0;
+//         }
+//         return 0;
+//       };
+
+//       ["learning", "learning2", "learning3", "learning4"].forEach(field => {
+//         if (!item[field] || Object.keys(item[field]).length === 0) {
+//           item[field] = null;
+//         }
+//       });
+
+//       item.learningAverage = getAverage(item.learning);
+//       item.learning2Average = getAverage(item.learning2);
+//       item.learning3Average = getAverage(item.learning3);
+//       item.learning4Average = getAverage(item.learning4);
+//     }
+
+    
+//     return res.status(200).json({
+//       enrolledDate: user.updatedAt
+//         ? moment(user.updatedAt).format("YYYY-MM-DD")
+//         : null,
+//       currentDate: moment().format("YYYY-MM-DD"),
+//       updatedAt: user.updatedAt
+//         ? moment(user.updatedAt).format("YYYY-MM-DD")
+//         : null,
+//       data: assignedList
+//     });
+
+//   } catch (error) {
+//     console.error("Get Assigned Error:", error);
+//     return res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message
+//     });
+//   }
+// };
+
 exports.getAssignedListUser = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -123,7 +256,6 @@ exports.getAssignedListUser = async (req, res) => {
       grouped[lid].marksObtained += Number(s.marksObtained || 0);
     }
 
-   
     const averageScoreMap = {};
     for (const lid in grouped) {
       const { totalMarks, marksObtained } = grouped[lid];
@@ -134,21 +266,27 @@ exports.getAssignedListUser = async (req, res) => {
           : 0;
     }
 
-    
+  
     const assignedQuery = user.className ? { classId: user.className } : {};
     const assignedList = await Assigned.find(assignedQuery)
-      .populate("learning")
-      .populate("learning2")
-      .populate("learning3")
-      .populate("learning4")
+      .populate("learning", "_id name")
+      .populate("learning2", "_id name")
+      .populate("learning3", "_id name")
+      .populate("learning4", "_id name")
       .lean();
 
-    
+  
     for (const item of assignedList) {
-      let classInfo = await School.findById(item.classId).lean();
+      let classInfo = await School.findById(item.classId)
+        .select("_id name price")
+        .lean();
+
       if (!classInfo) {
-        classInfo = await College.findById(item.classId).lean();
+        classInfo = await College.findById(item.classId)
+          .select("_id name price")
+          .lean();
       }
+
       item.classInfo = classInfo || null;
 
       const getAverage = (learningObj) => {
@@ -173,7 +311,7 @@ exports.getAssignedListUser = async (req, res) => {
       item.learning4Average = getAverage(item.learning4);
     }
 
-    
+   
     return res.status(200).json({
       enrolledDate: user.updatedAt
         ? moment(user.updatedAt).format("YYYY-MM-DD")
