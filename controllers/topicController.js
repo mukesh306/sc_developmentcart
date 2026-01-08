@@ -1586,7 +1586,6 @@ exports.PracticescoreCard = async (req, res) => {
     const today = moment().startOf('day');
     const todayStr = today.format('YYYY-MM-DD');
 
-   
     const todayAnyLearning = await LearningScore.findOne({
       userId: userId,
       endDate: user.endDate,
@@ -1608,8 +1607,7 @@ exports.PracticescoreCard = async (req, res) => {
       date: todayStr,
       isToday: true
     };
-
-  
+ 
     let startDate = fromDate
       ? moment(fromDate).startOf('day')
       : moment(user.updatedAt).startOf('day');
