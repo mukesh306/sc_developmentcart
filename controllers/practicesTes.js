@@ -290,23 +290,33 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 };
 
 
+
 // exports.getAssignedListUserpractice = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
 //     const user = await User.findById(userId).lean();
-//     if (!user || !user.className || !user.endDate) {
-//       return res.status(400).json({ message: 'Please complete your profile.' });
+
+//     if (!user?.endDate || !user?.className) {
+//       return res.status(200).json({
+//         enrolledDate: user?.updatedAt
+//           ? moment(user.updatedAt).format('YYYY-MM-DD')
+//           : null,
+//         currentDate: moment().format('YYYY-MM-DD'),
+//         updatedAt: user?.updatedAt
+//           ? moment(user.updatedAt).format('YYYY-MM-DD')
+//           : null,
+//         data: []
+//       });
 //     }
 
 //     const userEndDate = user.endDate;
 //     const userClassId = user.className.toString();
 
-//     // STEP 1: Get only first score of each day (for all learningIds together)
 //     const dailyFirstScores = await LearningScore.aggregate([
 //       {
 //         $match: {
 //           userId: new mongoose.Types.ObjectId(userId),
-//           endDate: userEndDate, // ⬅️ Replaced session
+//           endDate: userEndDate,
 //           classId: userClassId
 //         }
 //       },
@@ -316,29 +326,41 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 //           _id: {
 //             date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
 //           },
-//           doc: { $first: "$$ROOT" } // only one entry per day
+//           doc: { $first: "$$ROOT" }
 //         }
 //       },
-//       { $replaceRoot: { newRoot: "$doc" } },
+//       { $replaceRoot: { newRoot: "$doc" } }
 //     ]);
 
-//     // STEP 2: Group those by learningId and calculate average
 //     const grouped = {};
-//     for (let s of dailyFirstScores) {
+//     for (const s of dailyFirstScores) {
 //       if (!s.learningId) continue;
+
 //       const lid = s.learningId.toString();
-//       if (!grouped[lid]) grouped[lid] = [];
-//       grouped[lid].push(s.score);
+
+//       if (!grouped[lid]) {
+//         grouped[lid] = {
+//           totalMarks: 0,
+//           marksObtained: 0
+//         };
+//       }
+
+//       grouped[lid].totalMarks += Number(s.totalMarks || 0);
+//       grouped[lid].marksObtained += Number(s.marksObtained || 0);
 //     }
 
+  
 //     const averageScoreMap = {};
 //     for (const lid in grouped) {
-//       const arr = grouped[lid];
-//       const avg = arr.reduce((a, b) => a + b, 0) / arr.length;
-//       averageScoreMap[lid] = parseFloat(avg.toFixed(2));
+//       const { totalMarks, marksObtained } = grouped[lid];
+
+//       averageScoreMap[lid] =
+//         totalMarks > 0
+//           ? Number(((marksObtained / totalMarks) * 100).toFixed(2))
+//           : 0;
 //     }
 
-//     // STEP 3: Get assigned list and attach calculated averages
+   
 //     const assignedList = await Assigned.find({ classId: user.className })
 //       .populate('learning')
 //       .populate('learning2')
@@ -346,7 +368,8 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 //       .populate('learning4')
 //       .lean();
 
-//     for (let item of assignedList) {
+    
+//     for (const item of assignedList) {
 //       let classInfo = await School.findById(item.classId).lean();
 //       if (!classInfo) {
 //         classInfo = await College.findById(item.classId).lean();
@@ -375,15 +398,26 @@ exports.calculateQuizScoreByLearning = async (req, res) => {
 //       item.learning4Average = getAverage(item.learning4);
 //     }
 
-//     // Final response
-//     res.status(200).json({ data: assignedList });
+   
+//     return res.status(200).json({
+//       enrolledDate: user.updatedAt
+//         ? moment(user.updatedAt).format('YYYY-MM-DD')
+//         : null,
+//       currentDate: moment().format('YYYY-MM-DD'),
+//       updatedAt: user.updatedAt
+//         ? moment(user.updatedAt).format('YYYY-MM-DD')
+//         : null,
+//       data: assignedList
+//     });
 
 //   } catch (error) {
 //     console.error('Get Assigned Practice Error:', error);
-//     res.status(500).json({ message: 'Internal server error', error: error.message });
+//     return res.status(500).json({
+//       message: 'Internal server error',
+//       error: error.message
+//     });
 //   }
 // };
-
 
 exports.getAssignedListUserpractice = async (req, res) => {
   try {
@@ -406,6 +440,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
     const userEndDate = user.endDate;
     const userClassId = user.className.toString();
 
+ 
     const dailyFirstScores = await LearningScore.aggregate([
       {
         $match: {
@@ -418,7 +453,9 @@ exports.getAssignedListUserpractice = async (req, res) => {
       {
         $group: {
           _id: {
-            date: { $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" } }
+            date: {
+              $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+            }
           },
           doc: { $first: "$$ROOT" }
         }
@@ -426,6 +463,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
       { $replaceRoot: { newRoot: "$doc" } }
     ]);
 
+  
     const grouped = {};
     for (const s of dailyFirstScores) {
       if (!s.learningId) continue;
@@ -454,20 +492,26 @@ exports.getAssignedListUserpractice = async (req, res) => {
           : 0;
     }
 
-   
+    
     const assignedList = await Assigned.find({ classId: user.className })
-      .populate('learning')
-      .populate('learning2')
-      .populate('learning3')
-      .populate('learning4')
+      .populate('learning', '_id name')
+      .populate('learning2', '_id name')
+      .populate('learning3', '_id name')
+      .populate('learning4', '_id name')
       .lean();
 
-    
+   
     for (const item of assignedList) {
-      let classInfo = await School.findById(item.classId).lean();
+      let classInfo = await School.findById(item.classId)
+        .select('_id name price')
+        .lean();
+
       if (!classInfo) {
-        classInfo = await College.findById(item.classId).lean();
+        classInfo = await College.findById(item.classId)
+          .select('_id name price')
+          .lean();
       }
+
       item.classInfo = classInfo || null;
 
       const getAverage = (learningObj) => {
@@ -492,7 +536,7 @@ exports.getAssignedListUserpractice = async (req, res) => {
       item.learning4Average = getAverage(item.learning4);
     }
 
-   
+    
     return res.status(200).json({
       enrolledDate: user.updatedAt
         ? moment(user.updatedAt).format('YYYY-MM-DD')
@@ -512,7 +556,6 @@ exports.getAssignedListUserpractice = async (req, res) => {
     });
   }
 };
-
 
 
 // exports.getAssignedListUserpractice = async (req, res) => {

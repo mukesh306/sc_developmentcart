@@ -1586,7 +1586,6 @@ exports.PracticescoreCard = async (req, res) => {
     const today = moment().startOf('day');
     const todayStr = today.format('YYYY-MM-DD');
 
-   
     const todayAnyLearning = await LearningScore.findOne({
       userId,
       endDate: user.endDate,
