@@ -2720,35 +2720,28 @@ exports.markAsRead = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    // 1. Update all unread notifications
-    const result = await Notification.updateMany(
+  
+    await Notification.updateMany(
       { userId, isRead: false },
       { $set: { isRead: true } }
     );
 
-    // 2. Fetch updated notifications
-    const notifications = await Notification.find({ userId })
+    
+    const updatedNotifications = await Notification.find({ userId })
       .sort({ createdAt: -1 });
 
-    // 3. Emit updated list to same user (REALTIME)
-    if (global.sendNotificationToUser) {
-      const socketId = global.io?.sockets?.adapter?.rooms?.get(userId.toString());
-      
-      // simpler & safe way
-      global.io.to(
-        [...global.io.sockets.sockets.values()]
-          .find(s => s.user && s.user._id.toString() === userId.toString())?.id
-      ).emit("myNotifications", notifications);
+   
+    if (global.sendToUser) {
+      global.sendToUser(userId, "myNotifications", updatedNotifications);
     }
 
-    res.json({
-      success: true,
-      updatedCount: result.modifiedCount
-    });
+   
+    res.json({ success: true });
 
   } catch (err) {
-    console.error("markAllAsRead ERROR:", err);
+    console.error("markAsRead ERROR:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
 
