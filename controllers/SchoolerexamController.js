@@ -2696,22 +2696,41 @@ exports.getMyNotifications = async (req, res) => {
 };
 
 
+// exports.markAsRead = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+//     const userId = req.user._id;
+
+//     const notif = await Notification.findOneAndUpdate(
+//       { _id: id, userId },
+//       { isRead: true },
+//       { new: true }
+//     );
+
+//     if (!notif) return res.status(404).json({ message: "Notification not found" });
+
+//     res.json({ success: true});
+//   } catch (err) {
+//     console.error("markAsRead ERROR:", err);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// };
+
 exports.markAsRead = async (req, res) => {
   try {
-    const { id } = req.params;
     const userId = req.user._id;
 
-    const notif = await Notification.findOneAndUpdate(
-      { _id: id, userId },
-      { isRead: true },
-      { new: true }
+    const result = await Notification.updateMany(
+      { userId, isRead: false },   
+      { $set: { isRead: true } }
     );
 
-    if (!notif) return res.status(404).json({ message: "Notification not found" });
-
-    res.json({ success: true});
+    res.json({
+      success: true,
+      updatedCount: result.modifiedCount
+    });
   } catch (err) {
-    console.error("markAsRead ERROR:", err);
+    console.error("markAllAsRead ERROR:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 };
