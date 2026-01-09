@@ -3,7 +3,6 @@
 <head>
   <meta charset="UTF-8">
   <title>Exam Notifications</title>
-  <!-- Socket.io client -->
   <script src="https://cdn.socket.io/4.7.1/socket.io.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; padding: 20px; }
@@ -12,21 +11,28 @@
     .title { font-weight: bold; }
     .message { margin-top: 5px; }
     .time { font-size: 12px; color: #666; margin-top: 3px; }
-    #connectBtn { margin-left: 10px; padding: 5px 10px; }
-    #token { width: 400px; }
   </style>
 </head>
 <body>
   <h1>Exam Notifications</h1>
-  
-  <label>Token (JWT):</label>
-  <input type="text" id="token" placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5NWU2NGI0MGVlYzVhYmZlNWE2NWM0NyIsImlhdCI6MTc2Nzk1NzY1MiwiZXhwIjoxNzY4MDQ0MDUyfQ.cefTusAQtgARMRKHm7eeWbynpiuDN2tQRpKNrka1iGE">
-  <button id="connectBtn">Connect</button>
-
   <div id="notifications"></div>
 
   <script>
-    let socket;
+    // Hardcoded token
+    const TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjY5NWU2NGI0MGVlYzVhYmZlNWE2NWM0NyIsImlhdCI6MTc2Nzk1NzY1MiwiZXhwIjoxNzY4MDQ0MDUyfQ.cefTusAQtgARMRKHm7eeWbynpiuDN2tQRpKNrka1iGE";
+
+    // Connect socket on page load
+    const socket = io("https://dev.backend.shikshacart.com", {
+      auth: { token: TOKEN }
+    });
+
+    socket.on("connect", () => {
+      console.log("✅ Socket connected:", socket.id);
+    });
+
+    socket.on("connect_error", (err) => {
+      console.error("❌ Connection error:", err.message);
+    });
 
     function addNotification(notif) {
       const container = document.getElementById('notifications');
@@ -40,36 +46,16 @@
       container.prepend(div);
     }
 
-    document.getElementById('connectBtn').addEventListener('click', () => {
-      const token = document.getElementById('token').value.trim();
-      if (!token) return alert("Please enter a valid token.");
+    // Existing notifications from DB
+    socket.on("myNotifications", (notifications) => {
+      console.log("📥 Existing notifications:", notifications);
+      notifications.forEach(addNotification);
+    });
 
-      // Connect socket
-      socket = io("https://dev.backend.shikshacart.com", {
-        auth: { token }
-      });
-
-      // Connected
-      socket.on("connect", () => {
-        console.log("✅ Socket connected:", socket.id);
-      });
-
-      socket.on("connect_error", (err) => {
-        console.error("❌ Connection error:", err.message);
-        alert("Socket connection error: " + err.message);
-      });
-
-      // Existing notifications on login
-      socket.on("myNotifications", (notifications) => {
-        console.log("📥 Existing notifications:", notifications);
-        notifications.forEach(addNotification);
-      });
-
-      // Live notifications
-      socket.on("newNotification", (notif) => {
-        console.log("🔥 New notification:", notif);
-        addNotification(notif);
-      });
+    // Live notifications
+    socket.on("newNotification", (notif) => {
+      console.log("🔥 New notification:", notif);
+      addNotification(notif);
     });
   </script>
 </body>
