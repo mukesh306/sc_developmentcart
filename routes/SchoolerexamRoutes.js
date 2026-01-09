@@ -11,6 +11,8 @@ router.get("/schooler/getExam/:id", SchoolerexamController.getExamById);
 router.put("/schooler/updateExam/:id", auth, SchoolerexamController.updateExam);
 
 router.put("/schooler/publishExam/:id", SchoolerexamController.publishExam);
+router.put("/schooler/Schudlednotification",auth, SchoolerexamController.getMyNotifications);
+router.put("/schooler/notifications/read/:id",auth, SchoolerexamController.markAsRead);
 
 router.delete("/schooler/deleteExam/:id", auth, SchoolerexamController.deleteExam);
 

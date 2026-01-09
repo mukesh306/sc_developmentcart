@@ -127,7 +127,7 @@ io.on('connection', (socket) => {
 
   socket.on('disconnect', () => {
     if (userId) onlineUsers.delete(userId);
-    console.log(`❌ User disconnected: ${socket.id}`);
+    console.log(` User disconnected: ${socket.id}`);
   });
 });
 
