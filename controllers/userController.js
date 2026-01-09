@@ -2037,6 +2037,8 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //     return res.status(500).json({ message: error.message });
 //   }
 // };
+
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;

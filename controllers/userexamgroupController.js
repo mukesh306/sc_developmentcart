@@ -12,6 +12,8 @@ const ExamResult = require("../models/examResult");
 const ExamUserStatus = require("../models/ExamUserStatus");
 const Category = require("../models/schoolershipcategory");
 
+const Notification = require("../models/notification");
+const Group = require("../models/userExamGroup");
 
 // exports.createGroup = async (req, res) => {
 //   try {
@@ -1080,5 +1082,48 @@ exports.getUserCitiesByState = async (req, res) => {
   } catch (error) {
     console.error("Get User Cities Error:", error);
     return res.status(500).json({ message: error.message });
+  }
+};
+
+
+
+
+exports.publishExam = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const exam = await Schoolerexam.findById(id)
+      .populate("category", "name")
+      .populate("groupId");
+
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found." });
+    }
+
+    exam.publish = true;
+    await exam.save();
+
+    const group = await Group.findById(exam.groupId).select("users");
+
+    if (group && group.users.length > 0) {
+      const notifications = group.users.map((userId) => ({
+        userId,
+        examId: exam._id,
+        type: "exam_scheduled",
+        title: "Exam Scheduled",
+        message: `Your ${exam.category.name} exam has been scheduled for ${exam.ScheduleDate}`,
+        scheduleDate: exam.ScheduleDate,
+        scheduleTime: exam.ScheduleTime
+      }));
+
+      await Notification.insertMany(notifications);
+    }
+
+    res.status(200).json({
+      message: "Exam published & notifications sent successfully."
+    });
+  } catch (error) {
+    console.error("Error publishing exam:", error);
+    res.status(500).json({ message: "Internal server error." });
   }
 };

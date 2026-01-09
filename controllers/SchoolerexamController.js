@@ -291,20 +291,16 @@ exports.updateExam = async (req, res) => {
   }
 };
 
+
 exports.publishExam = async (req, res) => {
   try {
-    const { id } = req.params;
-
-    
+    const { id } = req.params; 
     const exam = await Schoolerexam.findById(id);
     if (!exam) {
       return res.status(404).json({ message: "Exam not found." });
     }
-
-    // Update publish to true
     exam.publish = true;
     await exam.save();
-
     res.status(200).json({
       message: "Exam published successfully.",
     });
@@ -487,7 +483,7 @@ exports.getExamByGroupAndExamType = async (req, res) => {
       examObj.className = null;
     }
 
-    // ⭐ totalQuestions
+  
     examObj.totalQuestions = exam.topicQuestions
       ? exam.topicQuestions.length
       : 0;
@@ -555,10 +551,10 @@ exports.updateGroupInExam = async (req, res) => {
       });
     }
 
-    // 1️⃣ Find the exam where this group is currently assigned
+    
     const oldExam = await Schoolerexam.findOne({
       examType: examType,
-      assignedGroup: { $in: [groupId] }   // FIXED
+      assignedGroup: { $in: [groupId] }  
     });
 
     if (!oldExam) {
@@ -567,7 +563,7 @@ exports.updateGroupInExam = async (req, res) => {
       });
     }
 
-    // 2️⃣ Find the new exam to move this group
+    
     const newExam = await Schoolerexam.findOne({
       _id: examId,
       examType: examType
@@ -579,13 +575,13 @@ exports.updateGroupInExam = async (req, res) => {
       });
     }
 
-    // 3️⃣ Remove group from OLD exam
+    
     oldExam.assignedGroup = oldExam.assignedGroup.filter(
       (id) => id.toString() !== groupId.toString()
     );
     await oldExam.save();
 
-    // 4️⃣ Add group to NEW exam
+    
     if (!newExam.assignedGroup.includes(groupId)) {
       newExam.assignedGroup.push(groupId);
       await newExam.save();
