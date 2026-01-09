@@ -11,12 +11,12 @@ const NotificationSchema = new mongoose.Schema(
     examId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Schoolerexam",
-      default: null
+      required: true
     },
 
     type: {
       type: String,
-      enum: ["exam_scheduled", "exam_missed", "reminder"],
+      enum: ["scheduled", "missedExam", "reminder"],
       required: true
     },
 
@@ -30,22 +30,12 @@ const NotificationSchema = new mongoose.Schema(
       required: true
     },
 
+    scheduleDate: String,
+    scheduleTime: String,
+
     isRead: {
       type: Boolean,
       default: false
-    },
-
-    scheduleDate: {
-      type: String 
-    },
-
-    scheduleTime: {
-      type: String 
-    },
-
-    createdAt: {
-      type: Date,
-      default: Date.now
     }
   },
   { timestamps: true }
