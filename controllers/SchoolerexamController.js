@@ -2695,6 +2695,7 @@ exports.getMyNotifications = async (req, res) => {
   }
 };
 
+
 exports.markAsRead = async (req, res) => {
   try {
     const { id } = req.params;
@@ -2708,7 +2709,7 @@ exports.markAsRead = async (req, res) => {
 
     if (!notif) return res.status(404).json({ message: "Notification not found" });
 
-    res.json({ success: true, data: notif });
+    res.json({ success: true});
   } catch (err) {
     console.error("markAsRead ERROR:", err);
     res.status(500).json({ message: "Internal server error" });
