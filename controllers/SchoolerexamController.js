@@ -2568,7 +2568,6 @@ exports.getExamsByAssignedGroup = async (req, res) => {
 };
 
 
-
 exports.publishExam = async (req, res) => {
   try {
     const { id } = req.params;
@@ -2580,28 +2579,33 @@ exports.publishExam = async (req, res) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // ✅ publish exam
+    // 1️⃣ publish exam
     exam.publish = true;
     await exam.save();
 
-    // ✅ assigned groups array
+    // 2️⃣ check assigned groups
     if (!exam.assignedGroup || exam.assignedGroup.length === 0) {
       return res.status(200).json({
-        message: "Exam published, but no assigned groups found."
+        message: "Exam published, but no assigned groups."
       });
     }
 
-    // ✅ find all groups
+    // 3️⃣ fetch groups
     const groups = await UserExamGroup.find({
       _id: { $in: exam.assignedGroup }
     }).select("users");
 
     let notifications = [];
 
-    groups.forEach((group) => {
-      group.users.forEach((user) => {
+    // 4️⃣ extract users safely
+    for (const group of groups) {
+      if (!Array.isArray(group.users)) continue;
+
+      for (const userId of group.users) {
+        if (!userId) continue;
+
         notifications.push({
-          userId: user._id ? user._id : user,
+          userId, // ✅ direct User _id
           examId: exam._id,
           type: "scheduled",
           title: "Exam Scheduled",
@@ -2609,9 +2613,10 @@ exports.publishExam = async (req, res) => {
           scheduleDate: exam.ScheduleDate,
           scheduleTime: exam.ScheduleTime
         });
-      });
-    });
+      }
+    }
 
+    // 5️⃣ save notifications
     if (notifications.length > 0) {
       await Notification.insertMany(notifications);
     }
@@ -2621,7 +2626,7 @@ exports.publishExam = async (req, res) => {
     });
 
   } catch (error) {
-    console.error("❌ Notification Error:", error);
+    console.error(" Notification Error:", error);
     res.status(500).json({
       message: "Internal server error",
       error: error.message
