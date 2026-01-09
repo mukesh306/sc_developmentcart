@@ -2571,7 +2571,6 @@ exports.publishExam = async (req, res) => {
   try {
     const { id } = req.params;
 
-    // 1️⃣ exam fetch
     const exam = await Schoolerexam.findById(id)
       .populate("category", "name");
 
@@ -2579,34 +2578,32 @@ exports.publishExam = async (req, res) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // 2️⃣ publish exam
+    
     exam.publish = true;
     await exam.save();
 
-    // 3️⃣ assigned groups check
-    if (!exam.assignedGroup || exam.assignedGroup.length === 0) {
+    
+    if (!Array.isArray(exam.assignedGroup) || exam.assignedGroup.length === 0) {
       return res.status(200).json({
         message: "Exam published, but no assigned groups found."
       });
     }
 
-    // 4️⃣ fetch groups
+   
     const groups = await UserExamGroup.find({
       _id: { $in: exam.assignedGroup }
     }).lean();
 
     let notifications = [];
 
-    // 5️⃣ prepare notifications
     for (const group of groups) {
       if (!Array.isArray(group.users)) continue;
 
       for (const uid of group.users) {
-        // 🔥 ensure valid ObjectId
         if (!mongoose.Types.ObjectId.isValid(uid)) continue;
 
         notifications.push({
-          userId: new mongoose.Types.ObjectId(uid),
+          userId: new mongoose.Types.ObjectId(uid), 
           examId: exam._id,
           type: "scheduled",
           title: "Exam Scheduled",
@@ -2618,13 +2615,14 @@ exports.publishExam = async (req, res) => {
       }
     }
 
-    // 6️⃣ save notifications
+    console.log("NOTIFICATIONS TO SAVE 👉", notifications.length);
+
     if (notifications.length > 0) {
       await Notification.insertMany(notifications, { ordered: false });
     }
 
     return res.status(200).json({
-      message: "Exam published & notifications sent to assigned group users."
+      message: "Exam published & notifications saved for users."
     });
 
   } catch (error) {
@@ -2635,5 +2633,4 @@ exports.publishExam = async (req, res) => {
     });
   }
 };
-
 
