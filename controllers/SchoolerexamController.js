@@ -2567,29 +2567,89 @@ exports.getExamsByAssignedGroup = async (req, res) => {
   }
 };
 
+
+// exports.publishExam = async (req, res) => {
+//   try {
+//     const { id } = req.params;
+
+//     const exam = await Schoolerexam.findById(id)
+//       .populate("category", "name");
+
+//     if (!exam) {
+//       return res.status(404).json({ message: "Exam not found." });
+//     }
+
+    
+//     exam.publish = true;
+//     await exam.save();
+
+    
+//     if (!Array.isArray(exam.assignedGroup) || exam.assignedGroup.length === 0) {
+//       return res.status(200).json({
+//         message: "Exam published, but no assigned groups found."
+//       });
+//     }
+
+   
+//     const groups = await UserExamGroup.find({
+//       _id: { $in: exam.assignedGroup }
+//     }).lean();
+
+//     let notifications = [];
+
+//     for (const group of groups) {
+      
+//       if (!Array.isArray(group.members)) continue;
+
+//       for (const uid of group.members) {
+//         if (!mongoose.Types.ObjectId.isValid(uid)) continue;
+
+//         notifications.push({
+//           userId: uid,                 
+//           examId: exam._id,
+//           type: "scheduled",
+//           title: "Exam Scheduled",
+//           message: `Your ${exam.category.name} exam has been scheduled for ${exam.ScheduleDate}`,
+//           scheduleDate: exam.ScheduleDate,
+//           scheduleTime: exam.ScheduleTime,
+//           isRead: false
+//         });
+//       }
+//     }
+
+//     console.log(" NOTIFICATIONS TO SAVE:", notifications.length);
+
+//     if (notifications.length > 0) {
+//       await Notification.insertMany(notifications);
+//     }
+
+//     return res.status(200).json({
+//       message: "Exam published & notifications sent for group users."
+//     });
+
+//   } catch (error) {
+//     console.error(" publishExam ERROR:", error);
+//     return res.status(500).json({
+//       message: "Internal server error",
+//       error: error.message
+//     });
+//   }
+// };
+
 exports.publishExam = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const exam = await Schoolerexam.findById(id)
-      .populate("category", "name");
+    const exam = await Schoolerexam.findById(id).populate("category", "name");
+    if (!exam) return res.status(404).json({ message: "Exam not found" });
 
-    if (!exam) {
-      return res.status(404).json({ message: "Exam not found." });
-    }
-
-    
     exam.publish = true;
     await exam.save();
 
-    
     if (!Array.isArray(exam.assignedGroup) || exam.assignedGroup.length === 0) {
-      return res.status(200).json({
-        message: "Exam published, but no assigned groups found."
-      });
+      return res.json({ message: "Exam published, no groups assigned" });
     }
 
-   
     const groups = await UserExamGroup.find({
       _id: { $in: exam.assignedGroup }
     }).lean();
@@ -2597,41 +2657,37 @@ exports.publishExam = async (req, res) => {
     let notifications = [];
 
     for (const group of groups) {
-      
       if (!Array.isArray(group.members)) continue;
 
-      for (const uid of group.members) {
-        if (!mongoose.Types.ObjectId.isValid(uid)) continue;
-
+      for (const userId of group.members) {
         notifications.push({
-          userId: uid,                 
+          userId,
           examId: exam._id,
           type: "scheduled",
           title: "Exam Scheduled",
-          message: `Your ${exam.category.name} exam has been scheduled for ${exam.ScheduleDate}`,
+          message: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
           scheduleDate: exam.ScheduleDate,
           scheduleTime: exam.ScheduleTime,
-          isRead: false
         });
       }
     }
 
-    console.log(" NOTIFICATIONS TO SAVE:", notifications.length);
+    const savedNotifications = await Notification.insertMany(notifications);
 
-    if (notifications.length > 0) {
-      await Notification.insertMany(notifications);
+   
+    for (const notify of savedNotifications) {
+      if (global.sendNotificationToUser) {
+        global.sendNotificationToUser(notify.userId, notify);
+      }
     }
 
-    return res.status(200).json({
-      message: "Exam published & notifications sent for group users."
+    res.json({
+      message: "Exam published & notifications sent",
+      count: savedNotifications.length
     });
 
-  } catch (error) {
-    console.error(" publishExam ERROR:", error);
-    return res.status(500).json({
-      message: "Internal server error",
-      error: error.message
-    });
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal server error" });
   }
 };
-
