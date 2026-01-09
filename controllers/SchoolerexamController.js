@@ -2567,11 +2567,11 @@ exports.getExamsByAssignedGroup = async (req, res) => {
   }
 };
 
-
 exports.publishExam = async (req, res) => {
   try {
     const { id } = req.params;
 
+    // 1️⃣ exam fetch
     const exam = await Schoolerexam.findById(id)
       .populate("category", "name");
 
@@ -2579,55 +2579,57 @@ exports.publishExam = async (req, res) => {
       return res.status(404).json({ message: "Exam not found." });
     }
 
-    // 1️⃣ publish exam
+    // 2️⃣ publish exam
     exam.publish = true;
     await exam.save();
 
-    // 2️⃣ check assigned groups
+    // 3️⃣ assigned groups check
     if (!exam.assignedGroup || exam.assignedGroup.length === 0) {
       return res.status(200).json({
-        message: "Exam published, but no assigned groups."
+        message: "Exam published, but no assigned groups found."
       });
     }
 
-    // 3️⃣ fetch groups
+    // 4️⃣ fetch groups
     const groups = await UserExamGroup.find({
       _id: { $in: exam.assignedGroup }
-    }).select("users");
+    }).lean();
 
     let notifications = [];
 
-    // 4️⃣ extract users safely
+    // 5️⃣ prepare notifications
     for (const group of groups) {
       if (!Array.isArray(group.users)) continue;
 
-      for (const userId of group.users) {
-        if (!userId) continue;
+      for (const uid of group.users) {
+        // 🔥 ensure valid ObjectId
+        if (!mongoose.Types.ObjectId.isValid(uid)) continue;
 
         notifications.push({
-          userId, // ✅ direct User _id
+          userId: new mongoose.Types.ObjectId(uid),
           examId: exam._id,
           type: "scheduled",
           title: "Exam Scheduled",
           message: `Your ${exam.category.name} exam has been scheduled for ${exam.ScheduleDate}`,
           scheduleDate: exam.ScheduleDate,
-          scheduleTime: exam.ScheduleTime
+          scheduleTime: exam.ScheduleTime,
+          isRead: false
         });
       }
     }
 
-    // 5️⃣ save notifications
+    // 6️⃣ save notifications
     if (notifications.length > 0) {
-      await Notification.insertMany(notifications);
+      await Notification.insertMany(notifications, { ordered: false });
     }
 
-    res.status(200).json({
+    return res.status(200).json({
       message: "Exam published & notifications sent to assigned group users."
     });
 
   } catch (error) {
-    console.error(" Notification Error:", error);
-    res.status(500).json({
+    console.error(" publishExam ERROR:", error);
+    return res.status(500).json({
       message: "Internal server error",
       error: error.message
     });
