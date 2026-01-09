@@ -13,6 +13,7 @@ const jwt = require('jsonwebtoken');
 const User = require('./models/User');
 const Schoolerexam = require('./models/Schoolerexam');
 const Notification = require('./models/notification');
+
 const authRoutes = require('./routes/authRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const learningRoutes = require('./routes/learningRoutes');
@@ -37,6 +38,7 @@ connectDB();
 
 app.use(cors());
 app.use(express.json());
+ app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
 
 app.use('/api/auth', authRoutes);
@@ -90,7 +92,6 @@ io.on('connection', (socket) => {
     console.log(` User connected: ${userId}`);
   }
 
-  
   (async () => {
     try {
       if (!userId) return;
@@ -103,7 +104,7 @@ io.on('connection', (socket) => {
       console.error("Notification socket error:", err);
     }
   })();
-
+console.log("Notification",Notification)
   socket.on('getExamTime', async (examId) => {
     try {
       if (!mongoose.Types.ObjectId.isValid(examId)) return;
