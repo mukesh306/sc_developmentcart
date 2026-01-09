@@ -1,4 +1,3 @@
-
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
@@ -13,7 +12,7 @@ const jwt = require('jsonwebtoken');
 
 const User = require('./models/User');
 const Schoolerexam = require('./models/Schoolerexam');
-
+const Notification = require('./models/notification');
 const authRoutes = require('./routes/authRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const learningRoutes = require('./routes/learningRoutes');
@@ -57,8 +56,6 @@ app.use('/api/v1', userexamGroupRoutes);
 app.use('/api/v1', organizationSignRoutes);
 app.use('/api/v1', classSeatRoutes);
 
-
-
 const server = http.createServer(app);
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
@@ -66,9 +63,7 @@ const io = new Server(server, {
 
 global.io = io;
 
-
-const onlineUsers = new Map(); 
-
+const onlineUsers = new Map();
 
 io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
@@ -85,7 +80,6 @@ io.use(async (socket, next) => {
   }
 });
 
-
 const examStartTimes = {};
 
 io.on('connection', (socket) => {
@@ -95,6 +89,20 @@ io.on('connection', (socket) => {
     onlineUsers.set(userId, socket.id);
     console.log(` User connected: ${userId}`);
   }
+
+  
+  (async () => {
+    try {
+      if (!userId) return;
+
+      const notifications = await Notification.find({ userId })
+        .sort({ createdAt: -1 });
+
+      socket.emit("myNotifications", notifications);
+    } catch (err) {
+      console.error("Notification socket error:", err);
+    }
+  })();
 
   socket.on('getExamTime', async (examId) => {
     try {
@@ -131,7 +139,6 @@ io.on('connection', (socket) => {
   });
 });
 
-
 global.sendNotificationToUser = (userId, payload) => {
   const socketId = onlineUsers.get(userId.toString());
   if (socketId) {
@@ -142,6 +149,7 @@ global.sendNotificationToUser = (userId, payload) => {
 server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
 });
+
 
 
 
