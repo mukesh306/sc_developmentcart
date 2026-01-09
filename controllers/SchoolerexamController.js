@@ -2597,13 +2597,14 @@ exports.publishExam = async (req, res) => {
     let notifications = [];
 
     for (const group of groups) {
-      if (!Array.isArray(group.users)) continue;
+      
+      if (!Array.isArray(group.members)) continue;
 
-      for (const uid of group.users) {
+      for (const uid of group.members) {
         if (!mongoose.Types.ObjectId.isValid(uid)) continue;
 
         notifications.push({
-          userId: new mongoose.Types.ObjectId(uid), 
+          userId: uid,                 
           examId: exam._id,
           type: "scheduled",
           title: "Exam Scheduled",
@@ -2615,14 +2616,14 @@ exports.publishExam = async (req, res) => {
       }
     }
 
-    console.log("NOTIFICATIONS TO SAVE 👉", notifications.length);
+    console.log(" NOTIFICATIONS TO SAVE:", notifications.length);
 
     if (notifications.length > 0) {
-      await Notification.insertMany(notifications, { ordered: false });
+      await Notification.insertMany(notifications);
     }
 
     return res.status(200).json({
-      message: "Exam published & notifications saved for users."
+      message: "Exam published & notifications sent for group users."
     });
 
   } catch (error) {
