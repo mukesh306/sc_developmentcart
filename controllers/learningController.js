@@ -2026,20 +2026,17 @@ exports.genraliqAverage = async (req, res) => {
     let count = 0;
     let day = 1;
 
-    for (
-      let d = moment(startDate);
-      d.diff(endDay, 'days') <= 0;
-      d.add(1, 'days')
-    ) {
+    for (let d = moment(startDate); d.diff(endDay, 'days') <= 0; d.add(1, 'days')) {
       const date = d.format('YYYY-MM-DD');
       const record = dateWiseMap.get(date);
 
+     
       if (!record) {
         results.push({
           day: day++,
           date,
           data: [],
-          average: 0
+          average: null
         });
         continue;
       }
@@ -2049,6 +2046,7 @@ exports.genraliqAverage = async (req, res) => {
       const isValidPractice = practice?.learningId?._id?.toString() === learningIdFilter;
       const isValidTopic = topic?.learningId?._id?.toString() === learningIdFilter;
 
+    
       if (
         (practice && !isValidPractice && (!topic || !isValidTopic)) ||
         (topic && !isValidTopic && (!practice || !isValidPractice))
@@ -2057,7 +2055,7 @@ exports.genraliqAverage = async (req, res) => {
           day: day++,
           date,
           data: [],
-          average: 0
+          average: null
         });
         continue;
       }
@@ -2078,10 +2076,10 @@ exports.genraliqAverage = async (req, res) => {
       const avg =
         totalMarks > 0
           ? Number(((marksObtained / totalMarks) * 100).toFixed(2))
-          : 0;
+          : null;
 
-      total += avg;
-      count++;
+      total += avg ?? 0;
+      if (avg !== null) count++;
 
       results.push({
         day: day++,
@@ -2132,6 +2130,7 @@ exports.genraliqAverage = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
