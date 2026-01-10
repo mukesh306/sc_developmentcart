@@ -1967,6 +1967,11 @@ exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
     const learningIdFilter = req.query.learningId;
+    const { page = 1, limit = 2 } = req.query;
+
+    const currentPage = Math.max(parseInt(page), 1);
+    const pageLimit = Math.max(parseInt(limit), 1);
+    const skip = (currentPage - 1) * pageLimit;
 
     if (!learningIdFilter) {
       return res.status(400).json({ message: 'learningId is required.' });
@@ -2021,7 +2026,7 @@ exports.genraliqAverage = async (req, res) => {
     const startDate = moment(user.updatedAt).startOf('day');
     const endDay = moment().startOf('day');
 
-    const results = [];
+    const fullResults = [];
     let total = 0;
     let count = 0;
     let day = 1;
@@ -2030,9 +2035,8 @@ exports.genraliqAverage = async (req, res) => {
       const date = d.format('YYYY-MM-DD');
       const record = dateWiseMap.get(date);
 
-     
       if (!record) {
-        results.push({
+        fullResults.push({
           day: day++,
           date,
           data: [],
@@ -2046,12 +2050,11 @@ exports.genraliqAverage = async (req, res) => {
       const isValidPractice = practice?.learningId?._id?.toString() === learningIdFilter;
       const isValidTopic = topic?.learningId?._id?.toString() === learningIdFilter;
 
-    
       if (
         (practice && !isValidPractice && (!topic || !isValidTopic)) ||
         (topic && !isValidTopic && (!practice || !isValidPractice))
       ) {
-        results.push({
+        fullResults.push({
           day: day++,
           date,
           data: [],
@@ -2081,7 +2084,7 @@ exports.genraliqAverage = async (req, res) => {
       total += avg ?? 0;
       if (avg !== null) count++;
 
-      results.push({
+      fullResults.push({
         day: day++,
         date,
         data: [
@@ -2120,16 +2123,28 @@ exports.genraliqAverage = async (req, res) => {
       { upsert: true, new: true }
     );
 
+    // ✅ Pagination
+    const totalRecords = fullResults.length;
+    const totalPages = Math.ceil(totalRecords / pageLimit);
+    const paginatedResults = fullResults.slice(skip, skip + pageLimit);
+
     return res.status(200).json({
       count,
       overallAverage,
-      results
+      results: paginatedResults,
+      pagination: {
+        page: currentPage,
+        limit: pageLimit,
+        totalRecords,
+        totalPages
+      }
     });
   } catch (error) {
     console.error('Error in genraliqAverage:', error);
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
