@@ -1574,7 +1574,7 @@ exports.PracticescoreCard = async (req, res) => {
     const userId = req.user._id;
     const { learningId, fromDate, toDate, page = 1 } = req.query;
 
-    const limit = 2;
+    const limit = 10;
     const currentPage = Math.max(parseInt(page), 1);
     const skip = (currentPage - 1) * limit;
 
