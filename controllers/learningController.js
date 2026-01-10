@@ -1394,7 +1394,6 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1428,6 +1427,7 @@ exports.StrikePath = async (req, res) => {
       .sort({ updatedAt: 1 })
       .lean();
 
+    
     const scoreMap = new Map();
 
     scores.forEach(score => {
@@ -1459,6 +1459,7 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
+    
     const markingSetting = await MarkingSetting.findOne({})
       .sort({ updatedAt: -1 })
       .lean();
@@ -1478,13 +1479,15 @@ exports.StrikePath = async (req, res) => {
       });
     }
 
-    const startDate = moment(datesList[0]);
-    const endDateMoment = moment();
+    
+    const startDate = moment(datesList[0]).startOf('day');
+    const endDateMoment = moment().startOf('day'); 
 
     const result = [];
     let bonusToAdd = 0;
     let deductionToSubtract = 0;
 
+   
     for (
       let m = moment(startDate);
       m.diff(endDateMoment, 'days') <= 0;
@@ -1511,7 +1514,8 @@ exports.StrikePath = async (req, res) => {
           bonusToAdd += dailyExp;
         }
       } else {
-        if (currentDate !== moment().format('YYYY-MM-DD')) {
+      
+        if (currentDate !== endDateMoment.format('YYYY-MM-DD')) {
           item.deduction = deductions;
           deductionToSubtract += deductions;
         }
@@ -1520,7 +1524,7 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
-    /* --------- CLAMP BONUSPOINT (NO NEGATIVE) --------- */
+  
     const netChange = bonusToAdd - deductionToSubtract;
     const safeIncrement = Math.max(netChange, -user.bonuspoint);
 
@@ -1531,7 +1535,7 @@ exports.StrikePath = async (req, res) => {
     const updatedUser = await User.findById(userId).lean();
     const newLevel = await getLevelFromPoints(updatedUser.bonuspoint);
 
-    /* --------- LEVEL BONUS (NO NEGATIVE) --------- */
+   
     let levelBonusPoint = result.reduce(
       (a, b) =>
         a +
