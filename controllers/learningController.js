@@ -1819,6 +1819,7 @@ exports.getUserLevelData = async (req, res) => {
 
 
 
+
 // exports.genraliqAverage = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
@@ -1962,7 +1963,6 @@ exports.getUserLevelData = async (req, res) => {
 //   }
 // };
 
-
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -2018,12 +2018,32 @@ exports.genraliqAverage = async (req, res) => {
       }
     }
 
+    const startDate = moment(user.updatedAt).startOf('day');
+    const endDay = moment().startOf('day');
+
     const results = [];
     let total = 0;
     let count = 0;
-    let dayCounter = 1; // 🔥 day counter
+    let day = 1;
 
-    for (let [date, record] of dateWiseMap.entries()) {
+    for (
+      let d = moment(startDate);
+      d.diff(endDay, 'days') <= 0;
+      d.add(1, 'days')
+    ) {
+      const date = d.format('YYYY-MM-DD');
+      const record = dateWiseMap.get(date);
+
+      if (!record) {
+        results.push({
+          day: day++,
+          date,
+          data: [],
+          average: 0
+        });
+        continue;
+      }
+
       const { practice, topic } = record;
 
       const isValidPractice = practice?.learningId?._id?.toString() === learningIdFilter;
@@ -2033,6 +2053,12 @@ exports.genraliqAverage = async (req, res) => {
         (practice && !isValidPractice && (!topic || !isValidTopic)) ||
         (topic && !isValidTopic && (!practice || !isValidPractice))
       ) {
+        results.push({
+          day: day++,
+          date,
+          data: [],
+          average: 0
+        });
         continue;
       }
 
@@ -2058,7 +2084,7 @@ exports.genraliqAverage = async (req, res) => {
       count++;
 
       results.push({
-        day: dayCounter++,   // ✅ day added
+        day: day++,
         date,
         data: [
           {
@@ -2070,7 +2096,7 @@ exports.genraliqAverage = async (req, res) => {
             totalMarks: practice?.totalMarks ?? null,
             updatedAt: practice?.updatedAt ?? null,
             scoreDate: practice?.scoreDate ?? null,
-            learningId: practice?.learningId || { _id: learningIdFilter, name: '' }
+            learningId: practice?.learningId || null
           },
           {
             type: 'topic',
@@ -2080,14 +2106,12 @@ exports.genraliqAverage = async (req, res) => {
             marksObtained: topic?.marksObtained ?? null,
             totalMarks: topic?.totalMarks ?? null,
             updatedAt: topic?.updatedAt ?? null,
-            learningId: topic?.learningId || { _id: learningIdFilter, name: '' }
+            learningId: topic?.learningId || null
           }
         ],
         average: avg
       });
     }
-
-    results.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const overallAverage =
       count > 0 ? Number((total / count).toFixed(2)) : 0;
@@ -2108,6 +2132,7 @@ exports.genraliqAverage = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 
