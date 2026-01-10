@@ -2022,6 +2022,11 @@ exports.genraliqAverage = async (req, res) => {
     let total = 0;
     let count = 0;
 
+    const calcPercent = (marks, totalMarks) => {
+      if (!totalMarks || totalMarks <= 0) return null;
+      return Number(((marks / totalMarks) * 100).toFixed(2));
+    };
+
     for (let [date, record] of dateWiseMap.entries()) {
       const { practice, topic } = record;
 
@@ -2035,30 +2040,19 @@ exports.genraliqAverage = async (req, res) => {
         continue;
       }
 
-      const practiceObj = {
-        type: 'practice',
-        score: isValidPractice ? practice.score : null,
-        marksObtained: isValidPractice ? practice.marksObtained : null,
-        totalMarks: isValidPractice ? practice.totalMarks : null,
-        updatedAt: isValidPractice ? practice.updatedAt : null,
-        scoreDate: isValidPractice ? practice.scoreDate : null,
-        learningId: practice?.learningId || { _id: learningIdFilter, name: '' }
-      };
+      const practiceScore = isValidPractice
+        ? calcPercent(practice.marksObtained, practice.totalMarks)
+        : null;
 
-      const topicObj = {
-        type: 'topic',
-        score: isValidTopic ? topic.score : null,
-        marksObtained: isValidTopic ? topic.marksObtained : null,
-        totalMarks: isValidTopic ? topic.totalMarks : null,
-        updatedAt: isValidTopic ? topic.updatedAt : null,
-        learningId: topic?.learningId || { _id: learningIdFilter, name: '' }
-      };
+      const topicScore = isValidTopic
+        ? calcPercent(topic.marksObtained, topic.totalMarks)
+        : null;
 
       let avg = 0;
-      if (practiceObj.score !== null && topicObj.score !== null) {
-        avg = (practiceObj.score + topicObj.score) / 2;
-      } else if (practiceObj.score !== null || topicObj.score !== null) {
-        avg = practiceObj.score ?? topicObj.score;
+      if (practiceScore !== null && topicScore !== null) {
+        avg = (practiceScore + topicScore) / 2;
+      } else if (practiceScore !== null || topicScore !== null) {
+        avg = practiceScore ?? topicScore;
       }
 
       total += avg;
@@ -2066,15 +2060,33 @@ exports.genraliqAverage = async (req, res) => {
 
       results.push({
         date,
-        data: [practiceObj, topicObj],
-        average: Math.round(avg * 100) / 100
+        data: [
+          {
+            type: 'practice',
+            score: practiceScore,
+            marksObtained: practice?.marksObtained ?? null,
+            totalMarks: practice?.totalMarks ?? null,
+            updatedAt: practice?.updatedAt ?? null,
+            scoreDate: practice?.scoreDate ?? null,
+            learningId: practice?.learningId || { _id: learningIdFilter, name: '' }
+          },
+          {
+            type: 'topic',
+            score: topicScore,
+            marksObtained: topic?.marksObtained ?? null,
+            totalMarks: topic?.totalMarks ?? null,
+            updatedAt: topic?.updatedAt ?? null,
+            learningId: topic?.learningId || { _id: learningIdFilter, name: '' }
+          }
+        ],
+        average: Number(avg.toFixed(2))
       });
     }
 
     results.sort((a, b) => new Date(b.date) - new Date(a.date));
 
     const overallAverage =
-      count > 0 ? Math.round((total / count) * 100) / 100 : 0;
+      count > 0 ? Number((total / count).toFixed(2)) : 0;
 
     await GenralIQ.findOneAndUpdate(
       { userId, learningId: learningIdFilter, endDate, classId },
@@ -2092,6 +2104,9 @@ exports.genraliqAverage = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+
+
 
 
 
@@ -2229,7 +2244,6 @@ const calculateAndSaveGeneralIQ = async ({
 exports.getGenrelIq = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const user = await User.findById(userId).lean();
     if (!user || !user.className || !user.endDate) {
       return res
