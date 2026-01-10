@@ -1394,9 +1394,14 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
+
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
+    const page = Math.max(parseInt(req.query.page) || 1, 1);
+    const limit = 10;
+    const skip = (page - 1) * limit;
 
     const user = await User.findById(userId).lean();
     if (!user?.endDate || !user?.className) {
@@ -1405,7 +1410,6 @@ exports.StrikePath = async (req, res) => {
 
     const endDate = user.endDate;
     const classId = user.className.toString();
-    const session = endDate;
 
     const scores = await LearningScore.find({
       userId,
@@ -1427,7 +1431,6 @@ exports.StrikePath = async (req, res) => {
       .sort({ updatedAt: 1 })
       .lean();
 
-    
     const scoreMap = new Map();
 
     scores.forEach(score => {
@@ -1459,7 +1462,6 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
-    
     const markingSetting = await MarkingSetting.findOne({})
       .sort({ updatedAt: -1 })
       .lean();
@@ -1475,19 +1477,23 @@ exports.StrikePath = async (req, res) => {
         levelBonusPoint: 0,
         experiencePoint,
         level: 1,
-        dates: []
+        dates: [],
+        pagination: {
+          page,
+          limit,
+          total: 0,
+          totalPages: 0
+        }
       });
     }
 
-    
     const startDate = moment(datesList[0]).startOf('day');
-    const endDateMoment = moment().startOf('day'); 
+    const endDateMoment = moment().startOf('day');
 
-    const result = [];
+    const fullResult = [];
     let bonusToAdd = 0;
     let deductionToSubtract = 0;
 
-   
     for (
       let m = moment(startDate);
       m.diff(endDateMoment, 'days') <= 0;
@@ -1514,17 +1520,18 @@ exports.StrikePath = async (req, res) => {
           bonusToAdd += dailyExp;
         }
       } else {
-      
         if (currentDate !== endDateMoment.format('YYYY-MM-DD')) {
           item.deduction = deductions;
           deductionToSubtract += deductions;
         }
       }
 
-      result.push(item);
+      fullResult.push(item);
     }
 
-  
+    const totalRecords = fullResult.length;
+    const paginatedResult = fullResult.slice(skip, skip + limit);
+
     const netChange = bonusToAdd - deductionToSubtract;
     const safeIncrement = Math.max(netChange, -user.bonuspoint);
 
@@ -1535,8 +1542,7 @@ exports.StrikePath = async (req, res) => {
     const updatedUser = await User.findById(userId).lean();
     const newLevel = await getLevelFromPoints(updatedUser.bonuspoint);
 
-   
-    let levelBonusPoint = result.reduce(
+    let levelBonusPoint = fullResult.reduce(
       (a, b) =>
         a +
         (b.dailyExperience || 0) -
@@ -1550,7 +1556,13 @@ exports.StrikePath = async (req, res) => {
       levelBonusPoint,
       experiencePoint,
       level: newLevel,
-      dates: result
+      dates: paginatedResult,
+      pagination: {
+        page,
+        limit,
+        total: totalRecords,
+        totalPages: Math.ceil(totalRecords / limit)
+      }
     });
 
   } catch (error) {
@@ -1558,17 +1570,6 @@ exports.StrikePath = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-const getLevelFromPoints = async (points) => {
-  const setting = await MarkingSetting.findOne({})
-    .sort({ updatedAt: -1 })
-    .lean();
-
-  const experiencePoint = setting?.experiencePoint || 1000;
-  if (points < experiencePoint) return 1;
-  return Math.floor(points / experiencePoint) + 1;
-};
-
 
 
 
