@@ -1417,7 +1417,6 @@ exports.StrikePath = async (req, res) => {
     const endDate = user.endDate;
     const classId = user.className.toString();
 
-    /* ================= FETCH DATA ================= */
     const scores = await LearningScore.find({
       userId,
       endDate,
@@ -1438,7 +1437,7 @@ exports.StrikePath = async (req, res) => {
       .sort({ updatedAt: 1 })
       .lean();
 
-    /* ================= MAP DATE DATA ================= */
+     
     const scoreMap = new Map();
 
     scores.forEach(score => {
@@ -1489,7 +1488,7 @@ exports.StrikePath = async (req, res) => {
       });
     }
 
-    /* ================= BUILD RESULT ================= */
+    
     const startDate = moment(datesList[0]).startOf('day');
     const endDateMoment = moment().startOf('day');
 
@@ -1526,7 +1525,7 @@ exports.StrikePath = async (req, res) => {
       result.push(item);
     }
 
-    /* ================= LEVEL BONUS ================= */
+   
     let levelBonusPoint = result.reduce(
       (a, b) =>
         a +
@@ -1536,7 +1535,7 @@ exports.StrikePath = async (req, res) => {
     );
     levelBonusPoint = Math.max(0, levelBonusPoint);
 
-    /* ================= 🔥 DELTA BONUS LOGIC (ONLY FIX) ================= */
+  
     const currentLevel = await getLevelFromPoints(user.bonuspoint || 0);
 
     const oldLevelData = user.userLevelData?.find(
@@ -1552,7 +1551,7 @@ exports.StrikePath = async (req, res) => {
       });
     }
 
-    /* ================= UPSERT LEVEL DATA ================= */
+    
     await User.findByIdAndUpdate(userId, {
       $pull: { userLevelData: { level: currentLevel } }
     });
@@ -1567,7 +1566,7 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
-    /* ================= FINAL RESPONSE ================= */
+    
     const updatedUser = await User.findById(userId)
       .select('bonuspoint')
       .lean();
