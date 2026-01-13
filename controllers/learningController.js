@@ -1395,7 +1395,6 @@ exports.Strikecalculation = async (req, res) => {
 
 
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -1414,55 +1413,37 @@ exports.StrikePath = async (req, res) => {
       endDate,
       classId,
       strickStatus: true
-    })
-      .populate('learningId', 'name')
-      .sort({ scoreDate: 1 })
-      .lean();
+    }).sort({ scoreDate: 1 }).lean();
 
     const topicScores = await TopicScore.find({
       userId,
       endDate,
       classId,
       strickStatus: true
-    })
-      .populate('learningId', 'name')
-      .sort({ updatedAt: 1 })
-      .lean();
+    }).sort({ updatedAt: 1 }).lean();
 
     const scoreMap = new Map();
 
-    scores.forEach(score => {
-      const date = moment(score.scoreDate).format('YYYY-MM-DD');
-      if (!scoreMap.has(date)) scoreMap.set(date, []);
-      const exists = scoreMap.get(date).some(item => item.type === 'practice');
-      if (!exists) {
-        scoreMap.get(date).push({
-          type: 'practice',
-          score: score.score,
-          updatedAt: score.updatedAt,
-          scoreDate: score.scoreDate,
-          learningId: score.learningId,
-          strickStatus: score.strickStatus
-        });
+    scores.forEach(s => {
+      const d = moment(s.scoreDate).format('YYYY-MM-DD');
+      if (!scoreMap.has(d)) scoreMap.set(d, []);
+      if (!scoreMap.get(d).some(i => i.type === 'practice')) {
+        scoreMap.get(d).push({ type: 'practice', score: s.score });
       }
     });
 
-    topicScores.forEach(score => {
-      const date = moment(score.updatedAt).format('YYYY-MM-DD');
-      if (!scoreMap.has(date)) scoreMap.set(date, []);
-      const exists = scoreMap.get(date).some(item => item.type === 'topic');
-      if (!exists) {
-        scoreMap.get(date).push({
-          type: 'topic',
-          score: score.score,
-          updatedAt: score.updatedAt,
-          learningId: score.learningId,
-          strickStatus: score.strickStatus
-        });
+    topicScores.forEach(s => {
+      const d = moment(s.updatedAt).format('YYYY-MM-DD');
+      if (!scoreMap.has(d)) scoreMap.set(d, []);
+      if (!scoreMap.get(d).some(i => i.type === 'topic')) {
+        scoreMap.get(d).push({ type: 'topic', score: s.score });
       }
     });
 
-    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
+    const markingSetting = await MarkingSetting.findOne({})
+      .sort({ updatedAt: -1 })
+      .lean();
+
     const baseDailyExp = markingSetting?.dailyExperience || 0;
     const deductions = markingSetting?.deductions || 0;
     const weeklyBonus = markingSetting?.weeklyBonus || 0;
@@ -1470,16 +1451,9 @@ exports.StrikePath = async (req, res) => {
     const experiencePoint = markingSetting?.experiencePoint || 1000;
 
     const datesList = Array.from(scoreMap.keys()).sort();
-    const minDate = user.updatedAt
-      ? moment(user.updatedAt).startOf('day')
-      : (datesList.length ? moment(datesList[0]) : moment().startOf('day'));
-    const maxDate = datesList.length
-      ? moment(datesList[datesList.length - 1])
-      : moment().startOf('day');
-
-    if (datesList.length === 0) {
-      return res.status(200).json({
-        bonuspoint: 0,
+    if (!datesList.length) {
+      return res.json({
+        bonuspoint: user.bonuspoint || 0,
         levelBonusPoint: 0,
         experiencePoint,
         level: 1,
@@ -1488,203 +1462,112 @@ exports.StrikePath = async (req, res) => {
     }
 
     const result = [];
+    let hasStarted = false;
 
-    const existingBonusDates = user?.bonusDates || [];
-    const existingDeductedDates = user?.deductedDates || [];
-    const existingWeeklyBonusDates = user?.weeklyBonusDates || [];
-    const existingMonthlyBonusDates = user?.monthlyBonusDates || [];
+    for (
+      let m = moment(datesList[0]);
+      m.diff(moment(datesList[datesList.length - 1]), 'days') <= 0;
+      m.add(1, 'days')
+    ) {
+      const date = m.format('YYYY-MM-DD');
+      const data = scoreMap.get(date) || [];
+      const item = { date, data };
 
-    let bonusToAdd = 0, deductionToSubtract = 0;
-    let weeklyBonusToAdd = 0, monthlyBonusToAdd = 0;
-    let datesToAddBonus = [], datesToDeduct = [], weeklyBonusDatesToAdd = [], monthlyBonusDatesToAdd = [];
+      const hasPractice = data.some(d => d.type === 'practice');
+      const hasTopic = data.some(d => d.type === 'topic');
 
-    let hasStartedLearning = false; 
+      if (hasPractice || hasTopic) hasStarted = true;
 
-    for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
-      const currentDate = m.format('YYYY-MM-DD');
-      const item = { date: currentDate, data: [] };
-
-      if (scoreMap.has(currentDate)) {
-        item.data = scoreMap.get(currentDate);
-
-        const hasPractice = item.data.some(d => d.type === 'practice');
-        const hasTopic = item.data.some(d => d.type === 'topic');
-
-        if (hasPractice || hasTopic) {
-          hasStartedLearning = true; 
-        }
-
-        if (hasPractice && hasTopic && baseDailyExp > 0) {
-          const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
-          const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
-          const avgScore = (practiceScore + topicScore) / 2;
-          const calculatedDailyExp =
-            Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
-
-          item.dailyExperience = calculatedDailyExp;
-
-          if (!existingBonusDates.includes(currentDate)) {
-            bonusToAdd += calculatedDailyExp;
-            datesToAddBonus.push(currentDate);
-          }
-        }
-      }
-     
-      else if (hasStartedLearning) {
+      if (hasPractice && hasTopic) {
+        const p = data.find(d => d.type === 'practice')?.score || 0;
+        const t = data.find(d => d.type === 'topic')?.score || 0;
+        const avg = (p + t) / 2;
+        item.dailyExperience =
+          Math.round((baseDailyExp / 100) * avg * 100) / 100;
+      } else if (hasStarted) {
         item.deduction = deductions;
-        if (!existingDeductedDates.includes(currentDate)) {
-          deductionToSubtract += deductions;
-          datesToDeduct.push(currentDate);
-        }
       }
 
       result.push(item);
     }
 
-    
+
     for (let i = 6; i < result.length; i++) {
       const streak = result.slice(i - 6, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
         r.data.some(d => d.type === 'topic')
       );
-      const bonusDate = result[i].date;
-
-      if (streak && !existingWeeklyBonusDates.includes(bonusDate)) {
-        result[i].weeklyBonus = weeklyBonus;
-        weeklyBonusToAdd += weeklyBonus;
-        weeklyBonusDatesToAdd.push(bonusDate);
-      }
-      if (existingWeeklyBonusDates.includes(bonusDate)) {
-        result[i].weeklyBonus = weeklyBonus;
-      }
+      if (streak) result[i].weeklyBonus = weeklyBonus;
     }
 
-  
+   
     for (let i = 29; i < result.length; i++) {
       const streak = result.slice(i - 29, i + 1).every(r =>
         r.data.some(d => d.type === 'practice') &&
         r.data.some(d => d.type === 'topic')
       );
-      const bonusDate = result[i].date;
-
-      if (streak && !existingMonthlyBonusDates.includes(bonusDate)) {
-        result[i].monthlyBonus = monthlyBonus;
-        monthlyBonusToAdd += monthlyBonus;
-        monthlyBonusDatesToAdd.push(bonusDate);
-      }
-      if (existingMonthlyBonusDates.includes(bonusDate)) {
-        result[i].monthlyBonus = monthlyBonus;
-      }
+      if (streak) result[i].monthlyBonus = monthlyBonus;
     }
-
-   
-    const updateData = {};
-    if (bonusToAdd > 0) {
-      updateData.$inc = { bonuspoint: bonusToAdd };
-      updateData.$push = { bonusDates: { $each: datesToAddBonus } };
-    }
-    if (deductionToSubtract > 0) {
-      updateData.$inc = updateData.$inc || {};
-      updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) - deductionToSubtract;
-      updateData.$push = updateData.$push || {};
-      updateData.$push.deductedDates = { $each: datesToDeduct };
-    }
-    if (weeklyBonusToAdd > 0) {
-      updateData.$inc = updateData.$inc || {};
-      updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) + weeklyBonusToAdd;
-      updateData.$push = updateData.$push || {};
-      updateData.$push.weeklyBonusDates = { $each: weeklyBonusDatesToAdd };
-    }
-    if (monthlyBonusToAdd > 0) {
-      updateData.$inc = updateData.$inc || {};
-      updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) + monthlyBonusToAdd;
-      updateData.$push = updateData.$push || {};
-      updateData.$push.monthlyBonusDates = { $each: monthlyBonusDatesToAdd };
-    }
-
-    if (Object.keys(updateData).length > 0) {
-      await User.findByIdAndUpdate(userId, updateData);
-    }
-
-  
-    await User.findByIdAndUpdate(
-      userId,
-      [{ $set: { bonuspoint: { $cond: [{ $lt: ["$bonuspoint", 0] }, 0, "$bonuspoint"] } } }]
-    );
-
-    const updatedUser = await User.findById(userId)
-      .select('bonuspoint userLevelData endDate className')
-      .lean();
-
-    const newLevel = await getLevelFromPoints(updatedUser.bonuspoint);
-
-    await User.findByIdAndUpdate(userId, { level: newLevel });
-    await User.findByIdAndUpdate(userId, { $pull: { userLevelData: { level: newLevel } } });
 
     
     const levelBonusPoint = Math.max(
       0,
-      result.reduce((acc, item) =>
-        acc +
-        (item.dailyExperience || 0) +
-        (item.weeklyBonus || 0) +
-        (item.monthlyBonus || 0) -
-        (item.deduction || 0), 0
+      result.reduce(
+        (a, i) =>
+          a +
+          (i.dailyExperience || 0) +
+          (i.weeklyBonus || 0) +
+          (i.monthlyBonus || 0) -
+          (i.deduction || 0),
+        0
       )
     );
+
+    
+    const currentLevel = await getLevelFromPoints(user.bonuspoint || 0);
+    const oldLevelData = user.userLevelData?.find(l => l.level === currentLevel);
+    const oldLevelBonusPoint = oldLevelData?.levelBonusPoint || 0;
+
+    const deltaBonus = levelBonusPoint - oldLevelBonusPoint;
+
+    if (deltaBonus > 0) {
+      await User.findByIdAndUpdate(userId, {
+        $inc: { bonuspoint: deltaBonus }
+      });
+    }
+
+   
+    await User.findByIdAndUpdate(userId, {
+      $pull: { userLevelData: { level: currentLevel } }
+    });
 
     await User.findByIdAndUpdate(userId, {
       $push: {
         userLevelData: {
-          level: newLevel,
+          level: currentLevel,
           levelBonusPoint,
           data: result
         }
       }
     });
 
-    const existingExp = await Experienceleavel.findOne({ userId, endDate, classId });
-    if (existingExp) {
-      await Experienceleavel.findByIdAndUpdate(existingExp._id, {
-        $set: { levelBonusPoint, endDate, classId }
-      });
-    } else {
-      await Experienceleavel.create({
-        userId,
-        levelBonusPoint,
-        endDate,
-        classId
-      });
-    }
+    const finalBonus =
+      (user.bonuspoint || 0) + Math.max(deltaBonus, 0);
 
-    let matched =
-      requestedLevel && requestedLevel !== newLevel
-        ? updatedUser.userLevelData.find(l => l.level === requestedLevel)?.data || []
-        : result;
+    const cleanedDates = result.map(day => ({
+      date: day.date,
+      dailyExperience: day.dailyExperience,
+      weeklyBonus: day.weeklyBonus,
+      monthlyBonus: day.monthlyBonus,
+      deduction: day.deduction,
+      data: day.data
+    }));
 
-    if (matched.length > 1) {
-      const latest = matched[matched.length - 1];
-      const rest = matched.slice(0, -1).sort((a, b) => new Date(a.date) - new Date(b.date));
-      matched = [latest, ...rest];
-    }
-
-    const cleanedDates = matched.map(day => ({
-  date: day.date,
-  dailyExperience: day.dailyExperience,
-  weeklyBonus: day.weeklyBonus,
-  monthlyBonus: day.monthlyBonus,
-  deduction: day.deduction,
-  data: day.data.map(d => ({
-    type: d.type,
-    score: d.score
-  }))
-}));
-
-    return res.status(200).json({
-      bonuspoint: Math.round(updatedUser.bonuspoint || 0),
+    return res.json({
+      bonuspoint: Math.round(finalBonus),
       levelBonusPoint: Math.round(levelBonusPoint),
       experiencePoint,
-      level: newLevel,
+      level: currentLevel,
       dates: cleanedDates
     });
 
@@ -1694,12 +1577,17 @@ exports.StrikePath = async (req, res) => {
   }
 };
 
+
 const getLevelFromPoints = async (points) => {
-  const setting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
+  const setting = await MarkingSetting.findOne({})
+    .sort({ updatedAt: -1 })
+    .lean();
+
   const experiencePoint = setting?.experiencePoint || 1000;
-  if (points < experiencePoint) return 1;
+  if (!points || points < experiencePoint) return 1;
   return Math.floor(points / experiencePoint) + 1;
 };
+
 
 
 
