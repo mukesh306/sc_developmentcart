@@ -1394,12 +1394,20 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
+
+const getLevelFromPoints = async (points) => {
+  const setting = await MarkingSetting.findOne({})
+    .sort({ updatedAt: -1 })
+    .lean();
+
+  const experiencePoint = setting?.experiencePoint || 1000;
+  if (points < experiencePoint) return 1;
+  return Math.floor(points / experiencePoint) + 1;
+};
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
-    const requestedLevel = parseInt(req.query.level || 0);
-    const page = parseInt(req.query.page || 1);
-    const limit = parseInt(req.query.limit || 10);
 
     const user = await User.findById(userId).lean();
     if (!user?.endDate || !user?.className) {
@@ -1409,37 +1417,56 @@ exports.StrikePath = async (req, res) => {
     const endDate = user.endDate;
     const classId = user.className.toString();
 
-    /* ================= FETCH SCORES ================= */
+    /* ================= FETCH DATA ================= */
     const scores = await LearningScore.find({
       userId,
       endDate,
       classId,
       strickStatus: true
-    }).sort({ scoreDate: 1 }).lean();
+    })
+      .populate('learningId', 'name')
+      .sort({ scoreDate: 1 })
+      .lean();
 
     const topicScores = await TopicScore.find({
       userId,
       endDate,
       classId,
       strickStatus: true
-    }).sort({ updatedAt: 1 }).lean();
+    })
+      .populate('learningId', 'name')
+      .sort({ updatedAt: 1 })
+      .lean();
 
     /* ================= MAP DATE DATA ================= */
     const scoreMap = new Map();
 
-    scores.forEach(s => {
-      const d = moment(s.scoreDate).format('YYYY-MM-DD');
-      if (!scoreMap.has(d)) scoreMap.set(d, []);
-      if (!scoreMap.get(d).some(i => i.type === 'practice')) {
-        scoreMap.get(d).push({ type: 'practice', score: s.score });
+    scores.forEach(score => {
+      const date = moment(score.scoreDate).format('YYYY-MM-DD');
+      if (!scoreMap.has(date)) scoreMap.set(date, []);
+      if (!scoreMap.get(date).some(i => i.type === 'practice')) {
+        scoreMap.get(date).push({
+          type: 'practice',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          scoreDate: score.scoreDate,
+          learningId: score.learningId,
+          strickStatus: score.strickStatus
+        });
       }
     });
 
-    topicScores.forEach(s => {
-      const d = moment(s.updatedAt).format('YYYY-MM-DD');
-      if (!scoreMap.has(d)) scoreMap.set(d, []);
-      if (!scoreMap.get(d).some(i => i.type === 'topic')) {
-        scoreMap.get(d).push({ type: 'topic', score: s.score });
+    topicScores.forEach(score => {
+      const date = moment(score.updatedAt).format('YYYY-MM-DD');
+      if (!scoreMap.has(date)) scoreMap.set(date, []);
+      if (!scoreMap.get(date).some(i => i.type === 'topic')) {
+        scoreMap.get(date).push({
+          type: 'topic',
+          score: score.score,
+          updatedAt: score.updatedAt,
+          learningId: score.learningId,
+          strickStatus: score.strickStatus
+        });
       }
     });
 
@@ -1449,88 +1476,72 @@ exports.StrikePath = async (req, res) => {
 
     const baseDailyExp = markingSetting?.dailyExperience || 0;
     const deductions = markingSetting?.deductions || 0;
-    const weeklyBonus = markingSetting?.weeklyBonus || 0;
-    const monthlyBonus = markingSetting?.monthlyBonus || 0;
     const experiencePoint = markingSetting?.experiencePoint || 1000;
 
     const datesList = Array.from(scoreMap.keys()).sort();
     if (!datesList.length) {
-      return res.json({
+      return res.status(200).json({
         bonuspoint: user.bonuspoint || 0,
         levelBonusPoint: 0,
         experiencePoint,
         level: 1,
-        dates: [],
-        pagination: { page, limit, total: 0 }
+        dates: []
       });
     }
 
     /* ================= BUILD RESULT ================= */
+    const startDate = moment(datesList[0]).startOf('day');
+    const endDateMoment = moment().startOf('day');
+
     const result = [];
-    let hasStarted = false;
 
     for (
-      let m = moment(datesList[0]);
-      m.diff(moment(datesList[datesList.length - 1]), 'days') <= 0;
+      let m = moment(startDate);
+      m.diff(endDateMoment, 'days') <= 0;
       m.add(1, 'days')
     ) {
-      const date = m.format('YYYY-MM-DD');
-      const data = scoreMap.get(date) || [];
-      const item = { date, data };
+      const currentDate = m.format('YYYY-MM-DD');
+      const item = { date: currentDate, data: [] };
 
-      const hasPractice = data.some(d => d.type === 'practice');
-      const hasTopic = data.some(d => d.type === 'topic');
+      if (scoreMap.has(currentDate)) {
+        item.data = scoreMap.get(currentDate);
 
-      if (hasPractice || hasTopic) hasStarted = true;
+        const hasPractice = item.data.some(d => d.type === 'practice');
+        const hasTopic = item.data.some(d => d.type === 'topic');
 
-      if (hasPractice && hasTopic) {
-        const p = data.find(d => d.type === 'practice')?.score || 0;
-        const t = data.find(d => d.type === 'topic')?.score || 0;
-        const avg = (p + t) / 2;
-        item.dailyExperience =
-          Math.round((baseDailyExp / 100) * avg * 100) / 100;
-      } else if (hasStarted) {
-        item.deduction = deductions;
+        if (hasPractice && hasTopic && baseDailyExp > 0) {
+          const p = item.data.find(d => d.type === 'practice').score;
+          const t = item.data.find(d => d.type === 'topic').score;
+          const avg = (p + t) / 2;
+
+          item.dailyExperience =
+            Math.round((baseDailyExp / 100) * avg * 100) / 100;
+        }
+      } else {
+        if (currentDate !== endDateMoment.format('YYYY-MM-DD')) {
+          item.deduction = deductions;
+        }
       }
 
       result.push(item);
     }
 
-    /* ================= WEEKLY BONUS ================= */
-    for (let i = 6; i < result.length; i++) {
-      const streak = result.slice(i - 6, i + 1).every(r =>
-        r.data.some(d => d.type === 'practice') &&
-        r.data.some(d => d.type === 'topic')
-      );
-      if (streak) result[i].weeklyBonus = weeklyBonus;
-    }
-
-    /* ================= MONTHLY BONUS ================= */
-    for (let i = 29; i < result.length; i++) {
-      const streak = result.slice(i - 29, i + 1).every(r =>
-        r.data.some(d => d.type === 'practice') &&
-        r.data.some(d => d.type === 'topic')
-      );
-      if (streak) result[i].monthlyBonus = monthlyBonus;
-    }
-
     /* ================= LEVEL BONUS ================= */
-    const levelBonusPoint = Math.max(
-      0,
-      result.reduce(
-        (a, i) =>
-          a +
-          (i.dailyExperience || 0) +
-          (i.weeklyBonus || 0) +
-          (i.monthlyBonus || 0) -
-          (i.deduction || 0),
-        0
-      )
+    let levelBonusPoint = result.reduce(
+      (a, b) =>
+        a +
+        (b.dailyExperience || 0) -
+        (b.deduction || 0),
+      0
     );
+    levelBonusPoint = Math.max(0, levelBonusPoint);
 
-    /* ================= DELTA BONUS LOGIC ================= */
+    /* ================= 🔥 DELTA BONUS LOGIC (ONLY FIX) ================= */
     const currentLevel = await getLevelFromPoints(user.bonuspoint || 0);
-    const oldLevelData = user.userLevelData?.find(l => l.level === currentLevel);
+
+    const oldLevelData = user.userLevelData?.find(
+      l => l.level === currentLevel
+    );
     const oldLevelBonusPoint = oldLevelData?.levelBonusPoint || 0;
 
     const deltaBonus = levelBonusPoint - oldLevelBonusPoint;
@@ -1556,28 +1567,19 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
-    /* ================= FINAL USER STATE ================= */
+    /* ================= FINAL RESPONSE ================= */
     const updatedUser = await User.findById(userId)
       .select('bonuspoint')
       .lean();
 
     const finalLevel = await getLevelFromPoints(updatedUser.bonuspoint);
 
-    /* ================= PAGINATION ================= */
-    const start = (page - 1) * limit;
-    const paginatedDates = result.slice(start, start + limit);
-
-    return res.json({
+    return res.status(200).json({
       bonuspoint: Math.round(updatedUser.bonuspoint || 0),
-      levelBonusPoint: Math.round(levelBonusPoint),
+      levelBonusPoint,
       experiencePoint,
       level: finalLevel,
-      dates: paginatedDates,
-      pagination: {
-        page,
-        limit,
-        total: result.length
-      }
+      dates: result
     });
 
   } catch (error) {
@@ -1585,19 +1587,6 @@ exports.StrikePath = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-
-const getLevelFromPoints = async (points) => {
-  const setting = await MarkingSetting.findOne({})
-    .sort({ updatedAt: -1 })
-    .lean();
-
-  const experiencePoint = setting?.experiencePoint || 1000;
-  if (!points || points < experiencePoint) return 1;
-  return Math.floor(points / experiencePoint) + 1;
-};
-
-
 
 
 
