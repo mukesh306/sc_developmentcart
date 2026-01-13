@@ -1394,11 +1394,12 @@ exports.Strikecalculation = async (req, res) => {
 // };
 
 
-
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
     const requestedLevel = parseInt(req.query.level || 0);
+    const page = parseInt(req.query.page || 1);
+    const limit = parseInt(req.query.limit || 10);
 
     const user = await User.findById(userId).lean();
     if (!user?.endDate || !user?.className) {
@@ -1459,7 +1460,8 @@ exports.StrikePath = async (req, res) => {
         levelBonusPoint: 0,
         experiencePoint,
         level: 1,
-        dates: []
+        dates: [],
+        pagination: { page, limit, total: 0 }
       });
     }
 
@@ -1526,7 +1528,7 @@ exports.StrikePath = async (req, res) => {
       )
     );
 
-    /* ================= DELTA BONUS LOGIC (CORE FIX) ================= */
+    /* ================= DELTA BONUS LOGIC ================= */
     const currentLevel = await getLevelFromPoints(user.bonuspoint || 0);
     const oldLevelData = user.userLevelData?.find(l => l.level === currentLevel);
     const oldLevelBonusPoint = oldLevelData?.levelBonusPoint || 0;
@@ -1561,21 +1563,21 @@ exports.StrikePath = async (req, res) => {
 
     const finalLevel = await getLevelFromPoints(updatedUser.bonuspoint);
 
-    const cleanedDates = result.map(day => ({
-      date: day.date,
-      dailyExperience: day.dailyExperience,
-      weeklyBonus: day.weeklyBonus,
-      monthlyBonus: day.monthlyBonus,
-      deduction: day.deduction,
-      data: day.data
-    }));
+    /* ================= PAGINATION ================= */
+    const start = (page - 1) * limit;
+    const paginatedDates = result.slice(start, start + limit);
 
     return res.json({
       bonuspoint: Math.round(updatedUser.bonuspoint || 0),
       levelBonusPoint: Math.round(levelBonusPoint),
       experiencePoint,
       level: finalLevel,
-      dates: cleanedDates
+      dates: paginatedDates,
+      pagination: {
+        page,
+        limit,
+        total: result.length
+      }
     });
 
   } catch (error) {
@@ -1584,7 +1586,7 @@ exports.StrikePath = async (req, res) => {
   }
 };
 
-/* ================= LEVEL FUNCTION ================= */
+
 const getLevelFromPoints = async (points) => {
   const setting = await MarkingSetting.findOne({})
     .sort({ updatedAt: -1 })
@@ -1594,6 +1596,7 @@ const getLevelFromPoints = async (points) => {
   if (!points || points < experiencePoint) return 1;
   return Math.floor(points / experiencePoint) + 1;
 };
+
 
 
 
