@@ -2697,7 +2697,9 @@ exports.publishExam = async (req, res) => {
         tokens,
       };
 
-      await admin.messaging().sendMulticast(message);
+      // await admin.messaging().sendMulticast(message);
+      await admin.messaging().sendEachForMulticast(message);
+
     }
 
     return res.json({
