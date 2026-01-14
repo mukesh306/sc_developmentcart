@@ -14,7 +14,7 @@ const ExamUserStatus = require("../models/ExamUserStatus");
 const MarkingSetting = require("../models/markingSetting");
 const Notification = require("../models/notification");
 const moment = require("moment-timezone");
-// const admin = require("../config/firebase");
+const admin = require("../config/firebase");
 
 exports.createExam = async (req, res) => {
   try {
