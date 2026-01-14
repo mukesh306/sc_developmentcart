@@ -14,7 +14,7 @@ const ExamUserStatus = require("../models/ExamUserStatus");
 const MarkingSetting = require("../models/markingSetting");
 const Notification = require("../models/notification");
 const moment = require("moment-timezone");
-const admin = require("../config/firebase");
+// const admin = require("../config/firebase");
 
 exports.createExam = async (req, res) => {
   try {
@@ -2623,91 +2623,32 @@ exports.getExamsByAssignedGroup = async (req, res) => {
 //   }
 // };
 
+
+
+
+
+
 exports.publishExam = async (req, res) => {
   try {
     const { id } = req.params;
 
-    const exam = await Schoolerexam
-      .findById(id)
-      .populate("category", "name");
-
+    const exam = await Schoolerexam.findById(id);
     if (!exam) {
-      return res.status(404).json({ message: "Exam not found" });
+      return res.status(404).json({ message: "Exam not found." });
     }
 
-    if (exam.publish === true) {
-      return res.json({ message: "Exam already published" });
-    }
-
+    
     exam.publish = true;
     await exam.save();
 
-    if (!Array.isArray(exam.assignedGroup) || exam.assignedGroup.length === 0) {
-      return res.json({ message: "Exam published, no groups assigned" });
-    }
-
-    const groups = await UserExamGroup.find({
-      _id: { $in: exam.assignedGroup }
-    }).lean();
-
-    const userSet = new Set();
-
-    groups.forEach(group => {
-      if (Array.isArray(group.members)) {
-        group.members.forEach(uid => {
-          userSet.add(uid.toString());
-        });
-      }
+    res.status(200).json({
+      message: "Exam published successfully.",
     });
-
-   
-    const notifications = Array.from(userSet).map(userId => ({
-      userId,
-      examId: exam._id,
-      type: "scheduled",
-      title: "Exam Scheduled",
-      message: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
-      scheduleDate: exam.ScheduleDate,
-      scheduleTime: exam.ScheduleTime,
-    }));
-
-    await Notification.insertMany(notifications);
-
-   
-    const users = await User.find({
-      _id: { $in: Array.from(userSet) },
-      fcmToken: { $ne: null }
-    }).select("fcmToken").lean();
-
-    const tokens = users.map(u => u.fcmToken).filter(Boolean);
-
-    if (tokens.length > 0) {
-      const message = {
-        notification: {
-          title: "Exam Scheduled",
-          body: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
-        },
-        data: {
-          examId: exam._id.toString(),
-          type: "scheduled",
-        },
-        tokens,
-      };
-
-      await admin.messaging().sendMulticast(message);
-    }
-
-    return res.json({
-      message: "Exam published & Firebase notifications sent",
-      usersNotified: tokens.length,
-    });
-
-  } catch (err) {
-    console.error("Publish Exam Error:", err);
-    res.status(500).json({ message: "Internal server error" });
+  } catch (error) {
+    console.error("Error publishing exam:", error);
+    res.status(500).json({ message: "Internal server error.", error });
   }
 };
-
 
 
 
@@ -2715,24 +2656,86 @@ exports.publishExam = async (req, res) => {
 //   try {
 //     const { id } = req.params;
 
-//     const exam = await Schoolerexam.findById(id);
+//     const exam = await Schoolerexam
+//       .findById(id)
+//       .populate("category", "name");
+
 //     if (!exam) {
-//       return res.status(404).json({ message: "Exam not found." });
+//       return res.status(404).json({ message: "Exam not found" });
 //     }
 
-    
+//     if (exam.publish === true) {
+//       return res.json({ message: "Exam already published" });
+//     }
+
 //     exam.publish = true;
 //     await exam.save();
 
-//     res.status(200).json({
-//       message: "Exam published successfully.",
+//     if (!Array.isArray(exam.assignedGroup) || exam.assignedGroup.length === 0) {
+//       return res.json({ message: "Exam published, no groups assigned" });
+//     }
+
+//     const groups = await UserExamGroup.find({
+//       _id: { $in: exam.assignedGroup }
+//     }).lean();
+
+//     const userSet = new Set();
+
+//     groups.forEach(group => {
+//       if (Array.isArray(group.members)) {
+//         group.members.forEach(uid => {
+//           userSet.add(uid.toString());
+//         });
+//       }
 //     });
-//   } catch (error) {
-//     console.error("Error publishing exam:", error);
-//     res.status(500).json({ message: "Internal server error.", error });
+
+   
+//     const notifications = Array.from(userSet).map(userId => ({
+//       userId,
+//       examId: exam._id,
+//       type: "scheduled",
+//       title: "Exam Scheduled",
+//       message: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
+//       scheduleDate: exam.ScheduleDate,
+//       scheduleTime: exam.ScheduleTime,
+//     }));
+
+//     await Notification.insertMany(notifications);
+
+   
+//     const users = await User.find({
+//       _id: { $in: Array.from(userSet) },
+//       fcmToken: { $ne: null }
+//     }).select("fcmToken").lean();
+
+//     const tokens = users.map(u => u.fcmToken).filter(Boolean);
+
+//     if (tokens.length > 0) {
+//       const message = {
+//         notification: {
+//           title: "Exam Scheduled",
+//           body: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
+//         },
+//         data: {
+//           examId: exam._id.toString(),
+//           type: "scheduled",
+//         },
+//         tokens,
+//       };
+
+//       await admin.messaging().sendMulticast(message);
+//     }
+
+//     return res.json({
+//       message: "Exam published & Firebase notifications sent",
+//       usersNotified: tokens.length,
+//     });
+
+//   } catch (err) {
+//     console.error("Publish Exam Error:", err);
+//     res.status(500).json({ message: "Internal server error" });
 //   }
 // };
-
 
 exports.getMyNotifications = async (req, res) => {
   try {
