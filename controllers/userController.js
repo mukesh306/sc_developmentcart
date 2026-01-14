@@ -2613,6 +2613,7 @@ exports.getUserById = async (req, res) => {
 //   }
 // };
 
+
 exports.deleteUserExamData = async (req, res) => {
   try {
     const { userId } = req.params;
