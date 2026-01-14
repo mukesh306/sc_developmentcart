@@ -35,7 +35,6 @@ const classSeatRoutes = require("./routes/classSeatRoutes");
 
 const admin = require("./config/firebase");
 
-
 const app = express();
 const PORT = process.env.PORT || 5000;
 
