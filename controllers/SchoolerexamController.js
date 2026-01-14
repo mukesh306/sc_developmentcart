@@ -2534,6 +2534,7 @@ exports.getExamsByAssignedGroup = async (req, res) => {
         bufferTime,
       };
     });
+    
 
     return res.status(200).json({
       message: "Exams fetched successfully",
