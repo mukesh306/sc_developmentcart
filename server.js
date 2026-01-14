@@ -161,11 +161,13 @@
 
 
 
+
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 const connectDB = require('./config/db');
+
 const http = require('http');
 const { Server } = require('socket.io');
 const moment = require('moment-timezone');
@@ -190,6 +192,7 @@ const userexamGroupRoutes = require('./routes/userexamGroupRoutes');
 const organizationSignRoutes = require('./routes/organizationSignRoutes');
 const classSeatRoutes = require("./routes/classSeatRoutes");
 
+const admin = require("./config/firebase");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -288,6 +291,30 @@ io.on('connection', (socket) => {
     console.log(` User disconnected: (${socket.id})`);
   });
 });
+
+global.sendFirebaseNotification = async (tokens, payload) => {
+  if (!tokens || tokens.length === 0) return;
+
+  const message = {
+    notification: {
+      title: payload.title,
+      body: payload.message,
+    },
+    data: {
+      examId: payload.examId?.toString() || "",
+      type: payload.type || "",
+    },
+    tokens,
+  };
+
+  try {
+    const res = await admin.messaging().sendMulticast(message);
+    console.log("🔥 Firebase sent:", res.successCount);
+  } catch (err) {
+    console.error(" Firebase error:", err.message);
+  }
+};
+
 
 
 server.listen(PORT, () => console.log(`Server running on port ${PORT}`));

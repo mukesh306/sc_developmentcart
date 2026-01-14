@@ -14,7 +14,7 @@ const ExamUserStatus = require("../models/ExamUserStatus");
 const MarkingSetting = require("../models/markingSetting");
 const Notification = require("../models/notification");
 const moment = require("moment-timezone");
-
+const admin = require("../config/firebase");
 
 exports.createExam = async (req, res) => {
   try {
@@ -2549,7 +2549,6 @@ exports.getExamsByAssignedGroup = async (req, res) => {
   }
 };
 
-
 exports.publishExam = async (req, res) => {
   try {
     const { id } = req.params;
@@ -2562,27 +2561,21 @@ exports.publishExam = async (req, res) => {
       return res.status(404).json({ message: "Exam not found" });
     }
 
-    
     if (exam.publish === true) {
-      return res.json({
-        message: "Exam already published"
-      });
+      return res.json({ message: "Exam already published" });
     }
 
     exam.publish = true;
     await exam.save();
 
     if (!Array.isArray(exam.assignedGroup) || exam.assignedGroup.length === 0) {
-      return res.json({
-        message: "Exam published, no groups assigned"
-      });
+      return res.json({ message: "Exam published, no groups assigned" });
     }
 
     const groups = await UserExamGroup.find({
       _id: { $in: exam.assignedGroup }
     }).lean();
 
-    
     const userSet = new Set();
 
     groups.forEach(group => {
@@ -2592,6 +2585,8 @@ exports.publishExam = async (req, res) => {
         });
       }
     });
+
+    
 
     const notifications = Array.from(userSet).map(userId => ({
       userId,
@@ -2603,25 +2598,43 @@ exports.publishExam = async (req, res) => {
       scheduleTime: exam.ScheduleTime,
     }));
 
-    const savedNotifications = await Notification.insertMany(notifications);
+    await Notification.insertMany(notifications);
 
-   
-    savedNotifications.forEach(notify => {
-      if (global.sendNotificationToUser) {
-        global.sendNotificationToUser(notify.userId, notify);
-      }
-    });
+
+    const users = await User.find({
+      _id: { $in: Array.from(userSet) },
+      fcmToken: { $ne: null }
+    }).select("fcmToken").lean();
+
+    const tokens = users.map(u => u.fcmToken).filter(Boolean);
+
+    if (tokens.length > 0) {
+      const message = {
+        notification: {
+          title: "Exam Scheduled",
+          body: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
+        },
+        data: {
+          examId: exam._id.toString(),
+          type: "scheduled",
+        },
+        tokens,
+      };
+
+      await admin.messaging().sendMulticast(message);
+    }
 
     return res.json({
-      message: "Exam published & notifications sent",
-      count: savedNotifications.length
+      message: "Exam published & Firebase notifications sent",
+      usersNotified: tokens.length,
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("Publish Exam Error:", err);
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
 
 
 // exports.publishExam = async (req, res) => {
