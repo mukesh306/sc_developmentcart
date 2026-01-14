@@ -142,7 +142,9 @@ global.sendFirebaseNotification = async (tokens, payload) => {
   };
 
   try {
-    const res = await admin.messaging().sendMulticast(message);
+    // const res = await admin.messaging().sendMulticast(message);
+    const res = await admin.messaging().sendEachForMulticast(message);
+
     console.log(" Firebase sent:", res.successCount);
   } catch (err) {
     console.error(" Firebase error:", err.message);
