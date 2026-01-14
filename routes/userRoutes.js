@@ -49,7 +49,7 @@ router.get("/user-cities", userController.getCitiesFromUsers);
 router.get("/user-categories", userController.getCategoriesFromUsers);
 router.get("/schoolershipstatus-filter",auth, userController.getAvailableSchoolershipStatus);
 router.get("/user/:userId", userController.getUserById);
-// router.post("/user/save-fcm-token", auth,userController.saveFCMToken);
+router.post("/user/save-fcm-token", auth,userController.saveFCMToken);
 router.delete(
   "/user/examtypereset/:userId",userController.deleteUserExamData);
 
