@@ -2580,7 +2580,37 @@ exports.getUserById = async (req, res) => {
   }
 };
 
+exports.saveFCMToken = async (req, res) => {
+  try {
+    const userId = req.user._id; 
+    const { fcmToken } = req.body;
 
+    if (!fcmToken) {
+      return res.status(400).json({
+        success: false,
+        message: "FCM token required",
+      });
+    }
+
+    await User.findByIdAndUpdate(
+      userId,
+      { fcmToken },
+      { new: true }
+    );
+
+    return res.json({
+      success: true,
+      message: "FCM token saved successfully",
+    });
+
+  } catch (err) {
+    console.error("Save FCM Token Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to save FCM token",
+    });
+  }
+};
 
 exports.deleteUserExamData = async (req, res) => {
   try {
