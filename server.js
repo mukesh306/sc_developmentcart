@@ -3,16 +3,17 @@ const cors = require('cors');
 const path = require('path');
 require('dotenv').config();
 const connectDB = require('./config/db');
-
 const http = require('http');
 const { Server } = require('socket.io');
 const moment = require('moment-timezone');
 const mongoose = require('mongoose');
 const jwt = require('jsonwebtoken');
 
+
 const User = require('./models/User');
 const Schoolerexam = require('./models/Schoolerexam');
 const Notification = require('./models/notification');
+
 
 const authRoutes = require('./routes/authRoutes');
 const locationRoutes = require('./routes/locationRoutes');
@@ -31,7 +32,10 @@ const userexamGroupRoutes = require('./routes/userexamGroupRoutes');
 const organizationSignRoutes = require('./routes/organizationSignRoutes');
 const classSeatRoutes = require("./routes/classSeatRoutes");
 
-// const admin = require("./config/firebase");
+
+const admin = require("./config/firebase");
+
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -39,8 +43,8 @@ connectDB();
 
 app.use(cors());
 app.use(express.json());
-//  app.use(express.static(path.join(__dirname, 'public')));
 app.use('/uploads', express.static(path.join(__dirname, 'uploads')));
+
 
 app.use('/api/auth', authRoutes);
 app.use('/api/v1', locationRoutes);
@@ -59,53 +63,35 @@ app.use('/api/v1', userexamGroupRoutes);
 app.use('/api/v1', organizationSignRoutes);
 app.use('/api/v1', classSeatRoutes);
 
+
 const server = http.createServer(app);
+
+
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
 });
-
 global.io = io;
-
-const onlineUsers = new Map();
 
 io.use(async (socket, next) => {
   const token = socket.handshake.auth?.token;
-  if (!token) return next(new Error('Token required'));
+  if (!token) return next(new Error('Authentication error: Token required'));
 
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET || 'testsecret');
     const user = await User.findById(decoded.id);
-    if (!user) return next(new Error('User not found'));
+    if (!user) return next(new Error('Authentication error: User not found'));
     socket.user = user;
     next();
   } catch (err) {
-    next(new Error('Invalid token'));
+    next(new Error('Authentication error: Invalid token'));
   }
 });
 
 const examStartTimes = {};
 
 io.on('connection', (socket) => {
-  const userId = socket.user?._id?.toString();
+  console.log(`User connected: ${socket.user?.firstName || 'Unknown'}`);
 
-  if (userId) {
-    onlineUsers.set(userId, socket.id);
-    console.log(` User connected: ${userId}`);
-  }
-
-  (async () => {
-    try {
-      if (!userId) return;
-
-      const notifications = await Notification.find({ userId })
-        .sort({ createdAt: -1 });
-
-      socket.emit("myNotifications", notifications);
-    } catch (err) {
-      console.error("Notification socket error:", err);
-    }
-  })();
-console.log("Notification",Notification)
   socket.on('getExamTime', async (examId) => {
     try {
       if (!mongoose.Types.ObjectId.isValid(examId)) return;
@@ -136,22 +122,42 @@ console.log("Notification",Notification)
   });
 
   socket.on('disconnect', () => {
-    if (userId) onlineUsers.delete(userId);
-    console.log(` User disconnected: ${socket.id}`);
+    console.log('User disconnected');
   });
 });
 
-global.sendNotificationToUser = (userId, payload) => {
-  const socketId = onlineUsers.get(userId.toString());
-  if (socketId) {
-    io.to(socketId).emit("newNotification", payload);
+
+global.sendFirebaseNotification = async (tokens, payload) => {
+  if (!tokens || tokens.length === 0) return;
+
+  const message = {
+    notification: {
+      title: payload.title,
+      body: payload.message,
+    },
+    data: {
+      examId: payload.examId?.toString() || "",
+      type: payload.type || "",
+    },
+    tokens,
+  };
+
+  try {
+    const res = await admin.messaging().sendMulticast(message);
+    console.log(" Firebase sent:", res.successCount);
+  } catch (err) {
+    console.error(" Firebase error:", err.message);
   }
 };
+
+
+app.get("/", (req, res) => {
+  res.send(" Firebase + Node Server Running");
+});
 
 server.listen(PORT, () => {
   console.log(` Server running on port ${PORT}`);
 });
-
 
 
 
