@@ -1,3 +1,5 @@
+const cron = require("node-cron");
+const Notification = require("../models/notification");
 const User = require('../models/User');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
@@ -36,7 +38,6 @@ const moment = require('moment-timezone');
 //       confirmPassword
 //     } = req.body;
 
-    
 //     if (!firstName) return res.status(400).json({ message: 'First Name can’t remain empty.' });
 //     if (!lastName) return res.status(400).json({ message: 'Last Name can’t remain empty.' });
 //     if (!mobileNumber) return res.status(400).json({ message: 'Mobile Number can’t remain empty.' });
@@ -51,28 +52,51 @@ const moment = require('moment-timezone');
 
 //     const mobileRegex = /^[0-9]{10}$/;
 //     if (!mobileRegex.test(mobileNumber)) {
-//       return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits and contain only numbers.' });
+//       return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits.' });
 //     }
 
 //     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
 //     if (!passwordRegex.test(password)) {
 //       return res.status(400).json({
-//         message: 'Password must contain at least 8 characters with a mix of uppercase, lowercase letters, and numbers.'
+//         message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.'
 //       });
 //     }
 
-    
 //     if (password !== confirmPassword) {
 //       return res.status(400).json({ message: 'Passwords do not match.' });
 //     }
 
- 
 //     const existingUser = await User.findOne({ $or: [{ email }, { mobileNumber }] });
 //     if (existingUser) {
 //       return res.status(409).json({ message: 'User with this email or mobile already exists.' });
 //     }
 
 //     const hashedPassword = await bcrypt.hash(password, 10);
+
+   
+//     const allCategories = await Schoolercategory.find()
+//       .select("_id name examType")
+//       .sort({ createdAt: 1 })
+//       .lean();
+
+    
+//     let userDetails = [];
+//     allCategories.forEach((cat, catIndex) => {
+//       userDetails.push({
+//         category: {
+//           _id: cat._id,
+//           name: cat.name,
+//           examType: cat.examType || []
+//         },
+//         examTypes: (cat.examType || []).map((et, etIndex) => ({
+//            _id: et._id, 
+//           name: et.name,
+//           status: catIndex === 0 && etIndex === 0 ? "Eligible" : "NA",
+//           result: "NA",
+//           AttemptStatus:"NA"
+//         }))
+//       });
+//     });
 
 //     const newUser = new User({
 //       firstName,
@@ -81,39 +105,36 @@ const moment = require('moment-timezone');
 //       mobileNumber,
 //       email,
 //       password: hashedPassword,
+//       userDetails
 //     });
 
 //     await newUser.save();
 
-//     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
-//       expiresIn: '7d',
-//     });
+//     const token = jwt.sign(
+//       { id: newUser._id },
+//       process.env.JWT_SECRET,
+//       { expiresIn: '7d' }
+//     );
 
 //     res.status(201).json({
 //       message: 'Registered successfully. Redirecting to complete your profile.',
-//       token,
+//       token
 //     });
 
 //   } catch (error) {
 //     console.error('Signup error:', error);
-//     res.status(500).json({ message: 'Server error during signup.', error: error.message });
+//     res.status(500).json({
+//       message: 'Server error during signup.',
+//       error: error.message
+//     });
 //   }
 // };
 
-
-
 exports.signup = async (req, res) => {
   try {
-    const {
-      firstName,
-      middleName,
-      lastName,
-      mobileNumber,
-      email,
-      password,
-      confirmPassword
-    } = req.body;
+    const { firstName, middleName, lastName, mobileNumber, email, password, confirmPassword } = req.body;
 
+    
     if (!firstName) return res.status(400).json({ message: 'First Name can’t remain empty.' });
     if (!lastName) return res.status(400).json({ message: 'Last Name can’t remain empty.' });
     if (!mobileNumber) return res.status(400).json({ message: 'Mobile Number can’t remain empty.' });
@@ -122,75 +143,65 @@ exports.signup = async (req, res) => {
     if (!confirmPassword) return res.status(400).json({ message: 'Confirm Password can’t remain empty.' });
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: 'Please enter a valid email address.' });
-    }
+    if (!emailRegex.test(email)) return res.status(400).json({ message: 'Please enter a valid email address.' });
 
     const mobileRegex = /^[0-9]{10}$/;
-    if (!mobileRegex.test(mobileNumber)) {
-      return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits.' });
-    }
+    if (!mobileRegex.test(mobileNumber)) return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits.' });
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
-    if (!passwordRegex.test(password)) {
-      return res.status(400).json({
-        message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.'
-      });
-    }
+    if (!passwordRegex.test(password)) return res.status(400).json({ message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.' });
 
-    if (password !== confirmPassword) {
-      return res.status(400).json({ message: 'Passwords do not match.' });
-    }
+    if (password !== confirmPassword) return res.status(400).json({ message: 'Passwords do not match.' });
 
     const existingUser = await User.findOne({ $or: [{ email }, { mobileNumber }] });
-    if (existingUser) {
-      return res.status(409).json({ message: 'User with this email or mobile already exists.' });
-    }
+    if (existingUser) return res.status(409).json({ message: 'User with this email or mobile already exists.' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
-   
-    const allCategories = await Schoolercategory.find()
-      .select("_id name examType")
-      .sort({ createdAt: 1 })
-      .lean();
-
     
+    const allCategories = await Schoolercategory.find().select("_id name examType").sort({ createdAt: 1 }).lean();
+
     let userDetails = [];
     allCategories.forEach((cat, catIndex) => {
       userDetails.push({
-        category: {
-          _id: cat._id,
-          name: cat.name,
-          examType: cat.examType || []
-        },
+        category: { _id: cat._id, name: cat.name, examType: cat.examType || [] },
         examTypes: (cat.examType || []).map((et, etIndex) => ({
-           _id: et._id, 
+          _id: et._id,
           name: et.name,
           status: catIndex === 0 && etIndex === 0 ? "Eligible" : "NA",
           result: "NA",
-          AttemptStatus:"NA"
+          AttemptStatus: "NA"
         }))
       });
     });
 
     const newUser = new User({
-      firstName,
-      middleName,
-      lastName,
-      mobileNumber,
-      email,
-      password: hashedPassword,
-      userDetails
+      firstName, middleName, lastName, mobileNumber, email, password: hashedPassword,
+      userDetails,
+      status: "no" 
     });
 
     await newUser.save();
 
-    const token = jwt.sign(
-      { id: newUser._id },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+    
+    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
+
+    
+    const delays = [1, 2, 4, 8, 16]; 
+    const now = new Date();
+
+    const enrolledNotifications = delays.map((min, index) => ({
+      userId: newUser._id,
+      type: "enrolled",
+      title: "Exam not enrolled",
+      message: "Enrolled and learn more skill",
+      delayTime: min,
+      nextTriggerAt: new Date(now.getTime() + min * 60 * 1000),
+      attemptCount: index,
+      maxAttempts: 5
+    }));
+
+    await Notification.insertMany(enrolledNotifications);
 
     res.status(201).json({
       message: 'Registered successfully. Redirecting to complete your profile.',
@@ -199,13 +210,9 @@ exports.signup = async (req, res) => {
 
   } catch (error) {
     console.error('Signup error:', error);
-    res.status(500).json({
-      message: 'Server error during signup.',
-      error: error.message
-    });
+    res.status(500).json({ message: 'Server error during signup.', error: error.message });
   }
 };
-
 
 exports.Userlogin = async (req, res) => {
   try {

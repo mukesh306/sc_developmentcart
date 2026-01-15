@@ -34,7 +34,7 @@ const classSeatRoutes = require("./routes/classSeatRoutes");
 
 
 const admin = require("./config/firebase");
-
+require("./config/notificationCron");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
@@ -142,7 +142,6 @@ global.sendFirebaseNotification = async (tokens, payload) => {
   };
 
   try {
-    // const res = await admin.messaging().sendMulticast(message);
     const res = await admin.messaging().sendEachForMulticast(message);
 
     console.log(" Firebase sent:", res.successCount);

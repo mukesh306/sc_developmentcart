@@ -2783,14 +2783,11 @@ exports.getMyNotifications = async (req, res) => {
 exports.markAsRead = async (req, res) => {
   try {
     const userId = req.user._id;
-
-  
     await Notification.updateMany(
       { userId, isRead: false },
       { $set: { isRead: true } }
     );
 
-    
     const updatedNotifications = await Notification.find({ userId })
       .sort({ createdAt: -1 });
 
@@ -2807,5 +2804,5 @@ exports.markAsRead = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
-
+  
 

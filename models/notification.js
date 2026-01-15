@@ -16,7 +16,7 @@ const NotificationSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ["scheduled", "missedExam", "reminder"],
+      enum: ["scheduled", "missedExam", "reminder","enrolled"],
       required: true
     },
 
@@ -36,7 +36,13 @@ const NotificationSchema = new mongoose.Schema(
     isRead: {
       type: Boolean,
       default: false
-    }
+    },
+
+       delayTime: { type: Number, default: 0 }, 
+    nextTriggerAt: { type: Date, default: null },
+    attemptCount: { type: Number, default: 0 },
+    maxAttempts: { type: Number, default: 5 },
+    isCompleted: { type: Boolean, default: false }
   },
   { timestamps: true }
 );
