@@ -190,8 +190,8 @@ exports.signup = async (req, res) => {
     await Notification.create({
   userId: newUser._id,
   type: "enrolled",
-  title: "you r not enrolled",
-  message: "Enrolled and learn more skill"
+  title: "Enroll now & start your journey!",
+  message: "Enroll now to learn new skills everyday"
 });
 
 
