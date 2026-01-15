@@ -2745,6 +2745,7 @@ exports.getMyNotifications = async (req, res) => {
 
     const userId = req.user._id;
     const notifications = await Notification.find({ userId })
+     .select("type title message scheduleDate scheduleTime isRead")
       .sort({ createdAt: -1 })
       .limit(50);
 
@@ -2754,6 +2755,8 @@ exports.getMyNotifications = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+
 
 
 // exports.markAsRead = async (req, res) => {
