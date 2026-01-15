@@ -187,19 +187,15 @@ exports.signup = async (req, res) => {
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     
-    const delays = [2, 4, 8, 16, 32];
-const now = new Date();
-
-const notifications = delays.map(min => ({
+    await Notification.create({
   userId: newUser._id,
   type: "enrolled",
   title: "you r not enrolled",
-  message: "Enrolled and learn more skill",
-  delayTime: min,
-  nextTriggerAt: new Date(now.getTime() + min * 60 * 1000)
-}));
+  message: "Enrolled and learn more skill"
+});
 
-await Notification.insertMany(notifications);
+
+
 
 
     res.status(201).json({

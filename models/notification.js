@@ -37,7 +37,7 @@ const NotificationSchema = new mongoose.Schema(
       default: false
     },
 
-       delayTime: { type: Number, default: 0 }, 
+        
     nextTriggerAt: { type: Date, default: null },
     attemptCount: { type: Number, default: 0 },
     maxAttempts: { type: Number, default: 5 },
