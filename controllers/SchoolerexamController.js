@@ -2745,7 +2745,7 @@ exports.getMyNotifications = async (req, res) => {
 
     const userId = req.user._id;
     const notifications = await Notification.find({ userId })
-     .select("type title message scheduleDate scheduleTime isRead")
+     .select("type title message scheduleDate scheduleTime isRead createdAt")
       .sort({ createdAt: -1 })
       .limit(50);
 

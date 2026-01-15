@@ -101,6 +101,7 @@ const moment = require('moment-timezone');
 // };
 
 
+
 exports.signup = async (req, res) => {
   try {
     const {
@@ -204,7 +205,6 @@ exports.signup = async (req, res) => {
     });
   }
 };
-
 
 
 exports.Userlogin = async (req, res) => {

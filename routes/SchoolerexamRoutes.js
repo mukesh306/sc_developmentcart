@@ -7,9 +7,7 @@ router.post("/schooler/createExam", auth, SchoolerexamController.createExam);
 router.get("/schooler/getAllExams", SchoolerexamController.getAllExams);
 
 router.get("/schooler/getExam/:id", SchoolerexamController.getExamById);
-
 router.put("/schooler/updateExam/:id", auth, SchoolerexamController.updateExam);
-
 router.put("/schooler/publishExam/:id", SchoolerexamController.publishExam);
 router.get("/schooler/all-notifications",auth, SchoolerexamController.getMyNotifications);
 router.put("/schooler/notifications/read",auth, SchoolerexamController.markAsRead);
