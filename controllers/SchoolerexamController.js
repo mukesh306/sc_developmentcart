@@ -2693,6 +2693,8 @@ exports.publishExam = async (req, res) => {
         data: {
           examId: exam._id.toString(),
           type: "scheduled",
+           isRead: "false",       
+          createdAt: createdAt,
         },
         tokens,
       };
