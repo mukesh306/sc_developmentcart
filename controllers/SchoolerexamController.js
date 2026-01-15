@@ -2713,25 +2713,37 @@ exports.publishExam = async (req, res) => {
   }
 };
 
-
 exports.getMyNotifications = async (req, res) => {
   try {
     const userId = req.user._id;
 
-    
     const user = await User.findById(userId).select("status").lean();
-    if (!user || user.status !== "no") {
+    if (!user) {
       return res.json({ success: true, data: [] });
     }
 
-    
     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
 
-    const notifications = await Notification.find({
-      userId,
-      type: "enrolled",
-      createdAt: { $lte: twoMinutesAgo }
-    })
+    let query = { userId };
+
+    if (user.status === "no") {
+      // enrolled → 2 min condition
+      query.$or = [
+        {
+          type: "enrolled",
+          createdAt: { $lte: twoMinutesAgo }
+        }
+      ];
+    }
+
+    if (user.status === "yes") {
+      // scheduled → no time restriction
+      query.$or = [
+        { type: "scheduled" }
+      ];
+    }
+
+    const notifications = await Notification.find(query)
       .select("type title message scheduleDate scheduleTime isRead createdAt")
       .sort({ createdAt: -1 })
       .limit(50);
@@ -2765,25 +2777,25 @@ exports.getMyNotifications = async (req, res) => {
 
 
 
-// exports.markAsRead = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-//     const userId = req.user._id;
+exports.markAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user._id;
 
-//     const notif = await Notification.findOneAndUpdate(
-//       { _id: id, userId },
-//       { isRead: true },
-//       { new: true }
-//     );
+    const notif = await Notification.findOneAndUpdate(
+      { _id: id, userId },
+      { isRead: true },
+      { new: true }
+    );
 
-//     if (!notif) return res.status(404).json({ message: "Notification not found" });
+    if (!notif) return res.status(404).json({ message: "Notification not found" });
 
-//     res.json({ success: true});
-//   } catch (err) {
-//     console.error("markAsRead ERROR:", err);
-//     res.status(500).json({ message: "Internal server error" });
-//   }
-// };
+    res.json({ success: true});
+  } catch (err) {
+    console.error("markAsRead ERROR:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
 
 
 exports.markAsRead = async (req, res) => {
