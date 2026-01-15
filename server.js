@@ -138,7 +138,7 @@ global.sendFirebaseNotification = async (tokens, payload) => {
       examId: payload.examId?.toString() || "",
       type: payload.type || "",
       isRead: "false",                  
-      createdAt: new Date().toISOString(),
+      // createdAt: new Date().toISOString(),
     },
     tokens,
   };
