@@ -187,21 +187,20 @@ exports.signup = async (req, res) => {
     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
 
     
-    const delays = [1, 2, 4, 8, 16]; 
-    const now = new Date();
+    const delays = [2, 4, 8, 16, 32];
+const now = new Date();
 
-    const enrolledNotifications = delays.map((min, index) => ({
-      userId: newUser._id,
-      type: "enrolled",
-      title: "Exam not enrolled",
-      message: "Enrolled and learn more skill",
-      delayTime: min,
-      nextTriggerAt: new Date(now.getTime() + min * 60 * 1000),
-      attemptCount: index,
-      maxAttempts: 5
-    }));
+const notifications = delays.map(min => ({
+  userId: newUser._id,
+  type: "enrolled",
+  title: "you r not enrolled",
+  message: "Enrolled and learn more skill",
+  delayTime: min,
+  nextTriggerAt: new Date(now.getTime() + min * 60 * 1000)
+}));
 
-    await Notification.insertMany(enrolledNotifications);
+await Notification.insertMany(notifications);
+
 
     res.status(201).json({
       message: 'Registered successfully. Redirecting to complete your profile.',
