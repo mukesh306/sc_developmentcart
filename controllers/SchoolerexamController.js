@@ -2714,47 +2714,53 @@ exports.publishExam = async (req, res) => {
 };
 
 
-
-// exports.publishExam = async (req, res) => {
-//   try {
-//     const { id } = req.params;
-
-//     const exam = await Schoolerexam.findById(id);
-//     if (!exam) {
-//       return res.status(404).json({ message: "Exam not found." });
-//     }
-
-    
-//     exam.publish = true;
-//     await exam.save();
-
-//     res.status(200).json({
-//       message: "Exam published successfully.",
-//     });
-//   } catch (error) {
-//     console.error("Error publishing exam:", error);
-//     res.status(500).json({ message: "Internal server error.", error });
-//   }
-// };
-
-
-
-
 exports.getMyNotifications = async (req, res) => {
   try {
-
     const userId = req.user._id;
-    const notifications = await Notification.find({ userId })
-     .select("type title message scheduleDate scheduleTime isRead createdAt")
+
+    
+    const user = await User.findById(userId).select("status").lean();
+    if (!user || user.status !== "no") {
+      return res.json({ success: true, data: [] });
+    }
+
+    
+    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+
+    const notifications = await Notification.find({
+      userId,
+      type: "enrolled",
+      createdAt: { $lte: twoMinutesAgo }
+    })
+      .select("type title message scheduleDate scheduleTime isRead createdAt")
       .sort({ createdAt: -1 })
       .limit(50);
 
     res.json({ success: true, data: notifications });
+
   } catch (err) {
     console.error(err);
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
+
+
+// exports.getMyNotifications = async (req, res) => {
+//   try {
+
+//     const userId = req.user._id;
+//     const notifications = await Notification.find({ userId })
+//      .select("type title message scheduleDate scheduleTime isRead createdAt")
+//       .sort({ createdAt: -1 })
+//       .limit(50);
+
+//     res.json({ success: true, data: notifications });
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// };
 
 
 
