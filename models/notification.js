@@ -11,7 +11,6 @@ const NotificationSchema = new mongoose.Schema(
     examId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Schoolerexam",
-      required: true
     },
 
     type: {
