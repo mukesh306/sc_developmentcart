@@ -76,7 +76,6 @@
 
 
 
-
 const cron = require("node-cron");
 const Notification = require("../models/notification");
 const User = require("../models/User");
@@ -86,7 +85,9 @@ cron.schedule("* * * * *", async () => {
   try {
     const now = moment().tz("Asia/Kolkata");
 
-
+    /* ===============================
+       1️⃣ ENROLLED (UNCHANGED)
+    ================================ */
     const enrolledNotifications = await Notification.find({
       type: "enrolled",
       isCompleted: false,
@@ -146,82 +147,26 @@ cron.schedule("* * * * *", async () => {
       );
     }
 
-  
-    const scheduledNotifications = await Notification.find({
-      type: "scheduled"
-    }).lean();
-
-    for (const notif of scheduledNotifications) {
-      if (!notif.scheduleDate || !notif.scheduleTime) continue;
-
-      const examDateTime = moment.tz(
-        `${notif.scheduleDate} ${notif.scheduleTime}`,
-        "YYYY-MM-DD HH:mm",
-        "Asia/Kolkata"
-      );
-
-      const reminderTime = examDateTime.clone().subtract(2, "minutes");
-
-      if (!now.isSame(reminderTime, "minute")) continue;
-
-     
-      const exists = await Notification.exists({
-        userId: notif.userId,
-        examId: notif.examId,
-        type: "reminder"
-      });
-
-      if (exists) continue;
-
-      const user = await User.findById(notif.userId).select("fcmToken");
-
-    
-      const reminder = await Notification.create({
-        userId: notif.userId,
-        examId: notif.examId,
-        type: "reminder",
-        title: "Exam reminder",
-        message: notif.message,
-        scheduleDate: notif.scheduleDate,
-        scheduleTime: notif.scheduleTime,
-        isRead: false,
-        sent: false
-      });
-
-     
-      if (user?.fcmToken) {
-        await global.sendFirebaseNotification(
-          [user.fcmToken],
-          {
-            title: "Exam reminder",
-            message: notif.message,
-            type: "reminder"
-          }
-        );
-
-        await Notification.updateOne(
-          { _id: reminder._id },
-          { $set: { sent: true } }
-        );
-      }
-    }
-
-   
-    const reminderNotifications = await Notification.find({
+    /* ===============================
+       2️⃣ EXAM REMINDER (3 MIN BEFORE)
+    ================================ */
+    const reminders = await Notification.find({
       type: "reminder",
-      sent: { $ne: true }
-    }).lean();
+      sent: false
+    });
 
-    for (const notif of reminderNotifications) {
+    for (const notif of reminders) {
       if (!notif.scheduleDate || !notif.scheduleTime) continue;
 
       const examDateTime = moment.tz(
         `${notif.scheduleDate} ${notif.scheduleTime}`,
-        "YYYY-MM-DD HH:mm",
+        ["YYYY-MM-DD HH:mm", "YYYY-MM-DD hh:mm A"],
         "Asia/Kolkata"
       );
 
-      const reminderTime = examDateTime.clone().subtract(2, "minutes");
+      if (!examDateTime.isValid()) continue;
+
+      const reminderTime = examDateTime.clone().subtract(3, "minutes");
 
       if (!now.isSame(reminderTime, "minute")) continue;
 
@@ -237,7 +182,7 @@ cron.schedule("* * * * *", async () => {
       await global.sendFirebaseNotification(
         [user.fcmToken],
         {
-          title: "Exam reminder",
+          title: notif.title,
           message: notif.message,
           type: "reminder"
         }
@@ -253,5 +198,3 @@ cron.schedule("* * * * *", async () => {
     console.error("Notification Cron Error:", err.message);
   }
 });
-
-

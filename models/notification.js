@@ -36,6 +36,11 @@ const NotificationSchema = new mongoose.Schema(
       type: Boolean,
       default: false
     },
+sent: {
+  type: Boolean,
+  default: false
+},
+
 
         
     nextTriggerAt: { type: Date, default: null },

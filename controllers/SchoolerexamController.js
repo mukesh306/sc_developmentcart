@@ -2664,17 +2664,38 @@ exports.publishExam = async (req, res) => {
     });
 
    
-    const notifications = Array.from(userSet).map(userId => ({
-      userId,
-      examId: exam._id,
-      type: "scheduled",
-      title: "Exam Scheduled",
-      message: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
-      scheduleDate: exam.ScheduleDate,
-      scheduleTime: exam.ScheduleTime,
-    }));
+   const notifications = [];
 
-    await Notification.insertMany(notifications);
+Array.from(userSet).forEach(userId => {
+  // Scheduled notification
+  notifications.push({
+    userId,
+    examId: exam._id,
+    type: "scheduled",
+    title: "Exam Scheduled",
+    message: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
+    scheduleDate: exam.ScheduleDate,
+    scheduleTime: exam.ScheduleTime,
+    isRead: false,
+    sent: true 
+  });
+
+ 
+  notifications.push({
+    userId,
+    examId: exam._id,
+    type: "reminder",
+    title: "Exam Reminder",
+    message: `Your ${exam.category.name} exam will start in 3 minutes`,
+    scheduleDate: exam.ScheduleDate,
+    scheduleTime: exam.ScheduleTime,
+    isRead: false,
+    sent: false
+  });
+});
+
+await Notification.insertMany(notifications);
+   
 
    
     const users = await User.find({
