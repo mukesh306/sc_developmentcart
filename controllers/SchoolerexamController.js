@@ -2716,13 +2716,13 @@ await Notification.insertMany(notifications);
         data: {
           examId: exam._id.toString(),
           type: "scheduled",
+           examType: exam.category?.name || "",
           isRead: "false",
           createdAt: new Date().toISOString(),
         },
         tokens,
       };
 
-      // await admin.messaging().sendMulticast(message);
       await admin.messaging().sendEachForMulticast(message);
 
     }
@@ -2738,6 +2738,7 @@ await Notification.insertMany(notifications);
   }
 };
 
+
 exports.getMyNotifications = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -2746,7 +2747,7 @@ exports.getMyNotifications = async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
-    const now = moment().tz("Asia/Kolkata"); // Current time in IST
+    const now = moment().tz("Asia/Kolkata"); 
     const twoMinutesAgo = moment().subtract(2, "minutes");
 
     let query = { userId };
@@ -2766,7 +2767,7 @@ exports.getMyNotifications = async (req, res) => {
     }
 
     const notifications = await Notification.find(query)
-      .select("type title message scheduleDate scheduleTime isRead createdAt")
+      .select("type title message scheduleDate scheduleTime isRead examType createdAt")
       .sort({ createdAt: -1 })
       .limit(50)
       .lean();
@@ -2776,7 +2777,7 @@ exports.getMyNotifications = async (req, res) => {
 
       if (!n.scheduleDate || !n.scheduleTime) return false;
 
-      // Convert scheduleDate + scheduleTime to moment in IST
+    
       const examTime = moment.tz(
         `${n.scheduleDate} ${n.scheduleTime}`,
         "DD-MM-YYYY HH:mm:ss",
@@ -2785,7 +2786,7 @@ exports.getMyNotifications = async (req, res) => {
 
       const reminderTime = examTime.clone().subtract(3, "minutes");
 
-      return now.isSameOrAfter(reminderTime); // 3 min before check
+      return now.isSameOrAfter(reminderTime); 
     });
 
     res.json({ success: true, data: filtered });
