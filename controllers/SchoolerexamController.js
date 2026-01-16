@@ -2739,27 +2739,20 @@ await Notification.insertMany(notifications);
 exports.getMyNotifications = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const user = await User.findById(userId).select("status").lean();
     if (!user) {
       return res.json({ success: true, data: [] });
     }
 
-    const now = new Date();
-    const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+    const now = moment().tz("Asia/Kolkata"); // Current time in IST
+    const twoMinutesAgo = moment().subtract(2, "minutes");
 
-    // Base query
     let query = { userId };
 
     if (user.status === "no") {
       query.$or = [
-        {
-          type: "enrolled",
-          createdAt: { $lte: twoMinutesAgo }
-        },
-        {
-          type: "reminder"
-        }
+        { type: "enrolled", createdAt: { $lte: twoMinutesAgo.toDate() } },
+        { type: "reminder" }
       ];
     }
 
@@ -2776,20 +2769,21 @@ exports.getMyNotifications = async (req, res) => {
       .limit(50)
       .lean();
 
-    
     const filtered = notifications.filter(n => {
       if (n.type !== "reminder") return true;
 
       if (!n.scheduleDate || !n.scheduleTime) return false;
 
-      
-      const [dd, mm, yyyy] = n.scheduleDate.split("-");
-      const examTime = new Date(`${yyyy}-${mm}-${dd}T${n.scheduleTime}`);
+      // Convert scheduleDate + scheduleTime to moment in IST
+      const examTime = moment.tz(
+        `${n.scheduleDate} ${n.scheduleTime}`,
+        "DD-MM-YYYY HH:mm:ss",
+        "Asia/Kolkata"
+      );
 
-      const reminderTime = new Date(examTime.getTime() - 3 * 60 * 1000);
+      const reminderTime = examTime.clone().subtract(3, "minutes");
 
-      
-      return now >= reminderTime;
+      return now.isSameOrAfter(reminderTime); // 3 min before check
     });
 
     res.json({ success: true, data: filtered });
