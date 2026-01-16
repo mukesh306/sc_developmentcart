@@ -2676,6 +2676,7 @@ Array.from(userSet).forEach(userId => {
     message: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
     scheduleDate: exam.ScheduleDate,
     scheduleTime: exam.ScheduleTime,
+    examType: exam.category.name,
     isRead: false,
     sent: true 
   });
@@ -2690,7 +2691,8 @@ Array.from(userSet).forEach(userId => {
     scheduleDate: exam.ScheduleDate,
     scheduleTime: exam.ScheduleTime,
     isRead: false,
-    sent: false
+    sent: false,
+   examType: exam.category.name,
   });
 });
 
