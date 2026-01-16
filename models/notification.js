@@ -18,7 +18,9 @@ const NotificationSchema = new mongoose.Schema(
       enum: ["scheduled", "missedExam", "reminder","enrolled"],
       required: true
     },
-
+ examType: {                     
+    type: String,
+  },
     title: {
       type: String,
       required: true
