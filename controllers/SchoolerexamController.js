@@ -2736,6 +2736,7 @@ await Notification.insertMany(notifications);
   }
 };
 
+
 exports.getMyNotifications = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -2745,33 +2746,57 @@ exports.getMyNotifications = async (req, res) => {
       return res.json({ success: true, data: [] });
     }
 
+    const now = new Date();
     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
 
+    // base query
     let query = { userId };
 
     if (user.status === "no") {
-      // enrolled → 2 min condition
+      // enrolled (2 min delay) + reminder (3 min before)
       query.$or = [
         {
           type: "enrolled",
           createdAt: { $lte: twoMinutesAgo }
+        },
+        {
+          type: "reminder"
         }
       ];
     }
 
     if (user.status === "yes") {
-      // scheduled → no time restriction
+      // scheduled always visible
       query.$or = [
-        { type: "scheduled" }
+        { type: "scheduled" },
+        { type: "reminder" }
       ];
     }
 
     const notifications = await Notification.find(query)
       .select("type title message scheduleDate scheduleTime isRead createdAt")
       .sort({ createdAt: -1 })
-      .limit(50);
+      .limit(50)
+      .lean();
 
-    res.json({ success: true, data: notifications });
+    /* ===============================
+       ⏰ REMINDER TIME FILTER
+    ================================ */
+    const filtered = notifications.filter(n => {
+      if (n.type !== "reminder") return true;
+
+      if (!n.scheduleDate || !n.scheduleTime) return false;
+
+      const examTime = new Date(
+        `${n.scheduleDate.split("-").reverse().join("-")}T${n.scheduleTime}`
+      );
+
+      const reminderTime = new Date(examTime.getTime() - 3 * 60 * 1000);
+
+      return now >= reminderTime;
+    });
+
+    res.json({ success: true, data: filtered });
 
   } catch (err) {
     console.error(err);
@@ -2783,14 +2808,41 @@ exports.getMyNotifications = async (req, res) => {
 
 // exports.getMyNotifications = async (req, res) => {
 //   try {
-
 //     const userId = req.user._id;
-//     const notifications = await Notification.find({ userId })
-//      .select("type title message scheduleDate scheduleTime isRead createdAt")
+
+//     const user = await User.findById(userId).select("status").lean();
+//     if (!user) {
+//       return res.json({ success: true, data: [] });
+//     }
+
+//     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+
+//     let query = { userId };
+
+//     if (user.status === "no") {
+//       // enrolled → 2 min condition
+//       query.$or = [
+//         {
+//           type: "enrolled",
+//           createdAt: { $lte: twoMinutesAgo }
+//         }
+//       ];
+//     }
+
+//     if (user.status === "yes") {
+//       // scheduled → no time restriction
+//       query.$or = [
+//         { type: "scheduled" }
+//       ];
+//     }
+
+//     const notifications = await Notification.find(query)
+//       .select("type title message scheduleDate scheduleTime isRead createdAt")
 //       .sort({ createdAt: -1 })
 //       .limit(50);
 
 //     res.json({ success: true, data: notifications });
+
 //   } catch (err) {
 //     console.error(err);
 //     res.status(500).json({ message: "Internal server error" });
