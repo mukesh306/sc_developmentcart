@@ -32,7 +32,6 @@ const userexamGroupRoutes = require('./routes/userexamGroupRoutes');
 const organizationSignRoutes = require('./routes/organizationSignRoutes');
 const classSeatRoutes = require("./routes/classSeatRoutes");
 
-
 const admin = require("./config/firebase");
 require("./config/notificationCron");
 const app = express();
@@ -61,10 +60,7 @@ app.use('/api/v1', SchoolerexamRoutes);
 app.use('/api/v1', userexamGroupRoutes);
 app.use('/api/v1', organizationSignRoutes);
 app.use('/api/v1', classSeatRoutes);
-
-
 const server = http.createServer(app);
-
 
 const io = new Server(server, {
   cors: { origin: '*', methods: ['GET', 'POST'] },
