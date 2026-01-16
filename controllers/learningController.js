@@ -1980,11 +1980,12 @@ exports.getUserLevelData = async (req, res) => {
 //   }
 // };
 
+
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
     const learningIdFilter = req.query.learningId;
-    const { page = 1, limit = 2 } = req.query;
+    const { page = 1, limit = 10 } = req.query;
 
     const currentPage = Math.max(parseInt(page), 1);
     const pageLimit = Math.max(parseInt(limit), 1);
