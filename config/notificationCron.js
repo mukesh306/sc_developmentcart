@@ -85,9 +85,7 @@ cron.schedule("* * * * *", async () => {
   try {
     const now = moment().tz("Asia/Kolkata");
 
-    /* ===============================
-       1️⃣ ENROLLED (UNCHANGED)
-    ================================ */
+  
     const enrolledNotifications = await Notification.find({
       type: "enrolled",
       isCompleted: false,
