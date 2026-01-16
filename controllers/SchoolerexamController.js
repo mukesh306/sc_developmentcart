@@ -2686,7 +2686,7 @@ Array.from(userSet).forEach(userId => {
     examId: exam._id,
     type: "reminder",
     title: "Exam Reminder",
-    message: `Your ${exam.category.name} exam will start in 3 minutes`,
+     message: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate},don't miss it`,
     scheduleDate: exam.ScheduleDate,
     scheduleTime: exam.ScheduleTime,
     isRead: false,

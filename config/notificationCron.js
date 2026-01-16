@@ -147,10 +147,7 @@ cron.schedule("* * * * *", async () => {
       );
     }
 
-    /* ===============================
-       2️⃣ EXAM REMINDER (3 MIN BEFORE)
-       ✅ FIXED FORMAT
-    ================================ */
+   
     const reminders = await Notification.find({
       type: "reminder",
       sent: false
@@ -159,7 +156,7 @@ cron.schedule("* * * * *", async () => {
     for (const notif of reminders) {
       if (!notif.scheduleDate || !notif.scheduleTime) continue;
 
-      // 🔥 EXACT DB FORMAT
+    
       const examDateTime = moment.tz(
         `${notif.scheduleDate} ${notif.scheduleTime}`,
         "DD-MM-YYYY HH:mm:ss",
