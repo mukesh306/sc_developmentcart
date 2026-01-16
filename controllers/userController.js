@@ -702,7 +702,6 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
 // exports.SendEmailverifyOTP = async (req, res) => {
 //   try {
 //     const { email } = req.body;
-
 //     const user = await User.findOne({ email });
 //     if (!user) return res.status(404).json({ message: 'User not found' });
 //     const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
@@ -710,8 +709,6 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
 //     user.resetPasswordOTP = otp;
 //     user.resetPasswordExpires = expiry;
 //     await user.save();
-
-//     // Email setup
 //    const transporter = nodemailer.createTransport({
 //      service: 'gmail',
 //      auth: {
@@ -734,14 +731,23 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
 //   }
 // };
 
-
 exports.SendEmailverifyOTP = async (req, res) => {
   try {
     const { email } = req.body;
-    if (!email) {
-      return res.status(400).json({ message: "Email is required" });
+
+    let user = await User.findOne({ email });
+    if (!user) {
+      user = new User({ email });   
     }
+
     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 5 * 60 * 1000);
+
+    user.resetPasswordOTP = otp;
+    user.resetPasswordExpires = expiry;
+
+    await user.save(); 
+
     const transporter = nodemailer.createTransport({
       service: 'gmail',
       auth: {
@@ -754,20 +760,17 @@ exports.SendEmailverifyOTP = async (req, res) => {
       from: 'noreply@shikshacart.com',
       to: email,
       subject: 'Email Verify OTP',
-      text: `Your OTP is: ${otp}. It is valid for 5 minutes.`,
+      text: `Your OTP is: ${otp}`,
     });
 
-   
-    return res.status(200).json({
-      success: true,
-      message: 'OTP sent successfully to email'
-    });
+    res.status(200).json({ message: 'OTP sent to email for Verify Email.' });
 
   } catch (error) {
     console.error('Send OTP Error:', error);
-    return res.status(500).json({ message: 'Failed to send OTP' });
+    res.status(500).json({ message: error.message });
   }
 };
+
 
 
 exports.EmailVerifyOtp = async (req, res) => {
