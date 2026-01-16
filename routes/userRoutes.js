@@ -45,7 +45,7 @@ router.post(
   router.get('/getUserHistory', userController.getUserHistories );
   router.get('/userforAdmin',auth, userController.userforAdmin );
   router.get("/user-states", userController.getStatesFromUsers);
-router.get("/user-cities", userController.getCitiesFromUsers);
+  router.get("/user-cities", userController.getCitiesFromUsers);
 router.get("/user-categories", userController.getCategoriesFromUsers);
 router.get("/schoolershipstatus-filter",auth, userController.getAvailableSchoolershipStatus);
 router.get("/user/:userId", userController.getUserById);
