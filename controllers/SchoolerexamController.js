@@ -2736,7 +2736,6 @@ await Notification.insertMany(notifications);
   }
 };
 
-
 exports.getMyNotifications = async (req, res) => {
   try {
     const userId = req.user._id;
@@ -2749,11 +2748,10 @@ exports.getMyNotifications = async (req, res) => {
     const now = new Date();
     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
 
-    // base query
+    // Base query
     let query = { userId };
 
     if (user.status === "no") {
-      // enrolled (2 min delay) + reminder (3 min before)
       query.$or = [
         {
           type: "enrolled",
@@ -2766,7 +2764,6 @@ exports.getMyNotifications = async (req, res) => {
     }
 
     if (user.status === "yes") {
-      // scheduled always visible
       query.$or = [
         { type: "scheduled" },
         { type: "reminder" }
@@ -2779,20 +2776,19 @@ exports.getMyNotifications = async (req, res) => {
       .limit(50)
       .lean();
 
-    /* ===============================
-       ⏰ REMINDER TIME FILTER
-    ================================ */
+    
     const filtered = notifications.filter(n => {
       if (n.type !== "reminder") return true;
 
       if (!n.scheduleDate || !n.scheduleTime) return false;
 
-      const examTime = new Date(
-        `${n.scheduleDate.split("-").reverse().join("-")}T${n.scheduleTime}`
-      );
+      
+      const [dd, mm, yyyy] = n.scheduleDate.split("-");
+      const examTime = new Date(`${yyyy}-${mm}-${dd}T${n.scheduleTime}`);
 
       const reminderTime = new Date(examTime.getTime() - 3 * 60 * 1000);
 
+      
       return now >= reminderTime;
     });
 
@@ -2803,6 +2799,7 @@ exports.getMyNotifications = async (req, res) => {
     res.status(500).json({ message: "Internal server error" });
   }
 };
+
 
 
 
@@ -2820,7 +2817,6 @@ exports.getMyNotifications = async (req, res) => {
 //     let query = { userId };
 
 //     if (user.status === "no") {
-//       // enrolled → 2 min condition
 //       query.$or = [
 //         {
 //           type: "enrolled",
@@ -2830,7 +2826,7 @@ exports.getMyNotifications = async (req, res) => {
 //     }
 
 //     if (user.status === "yes") {
-//       // scheduled → no time restriction
+      
 //       query.$or = [
 //         { type: "scheduled" }
 //       ];
