@@ -149,6 +149,7 @@ cron.schedule("* * * * *", async () => {
 
     /* ===============================
        2️⃣ EXAM REMINDER (3 MIN BEFORE)
+       ✅ FIXED FORMAT
     ================================ */
     const reminders = await Notification.find({
       type: "reminder",
@@ -158,9 +159,10 @@ cron.schedule("* * * * *", async () => {
     for (const notif of reminders) {
       if (!notif.scheduleDate || !notif.scheduleTime) continue;
 
+      // 🔥 EXACT DB FORMAT
       const examDateTime = moment.tz(
         `${notif.scheduleDate} ${notif.scheduleTime}`,
-        ["YYYY-MM-DD HH:mm", "YYYY-MM-DD hh:mm A"],
+        "DD-MM-YYYY HH:mm:ss",
         "Asia/Kolkata"
       );
 
@@ -171,6 +173,7 @@ cron.schedule("* * * * *", async () => {
       if (!now.isSame(reminderTime, "minute")) continue;
 
       const user = await User.findById(notif.userId).select("fcmToken");
+
       if (!user?.fcmToken) {
         await Notification.updateOne(
           { _id: notif._id },
