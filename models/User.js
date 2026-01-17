@@ -1,16 +1,16 @@
 
 const mongoose = require('mongoose');
 const userSchema = new mongoose.Schema({
-  firstName: { type: String },
+  firstName: { type: String, required: true },
   middleName: { type: String },
-  lastName: { type: String },
-  mobileNumber: { type: String, unique: true },
+  lastName: { type: String, required: true },
+  mobileNumber: { type: String, required: true, unique: true },
   email: { type: String, required: true, unique: true },
   VerifyEmail: {
     type: String,
     default: 'no'
   },
-  password: { type: String },
+  password: { type: String, required: true },
   countryId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location' },
   stateId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location' },
   cityId: { type: mongoose.Schema.Types.ObjectId, ref: 'Location' },
