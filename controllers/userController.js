@@ -89,6 +89,7 @@ const moment = require('moment-timezone');
 //   }
 // };
 
+
 exports.signup = async (req, res) => {
   try {
     const {
@@ -178,8 +179,8 @@ exports.signup = async (req, res) => {
     );
 
     res.status(201).json({
-      message: 'Registered successfully. Redirecting to complete your profile.',
-      token
+      message: 'Now verify Your Email.',
+      // token
     });
 
   } catch (error) {
