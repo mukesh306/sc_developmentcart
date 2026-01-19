@@ -27,7 +27,7 @@ const Tempuser = require('../models/tempuser');
 const fs = require('fs');
 const path = require('path');
 const moment = require('moment-timezone');
-
+const Payment = require("../models/payment");
 
 
 // exports.signup = async (req, res) => {
@@ -1222,13 +1222,20 @@ exports.updateProfile = async (req, res) => {
 
 
 
-
 const PHONEPE_CLIENT_ID = "M23A2SU4U5TRS_2601191723";
 const PHONEPE_CLIENT_SECRET = "NTRmMjIwY2EtMThjYS00NmU4LThiMDItNGQ5MzkyMDkxYjk2";
 const PHONEPE_CLIENT_VERSION = "1";
 const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
 
+
+let phonePeToken = null;
+let phonePeTokenExpiry = null;
+
 const getPhonePeToken = async () => {
+  if (phonePeToken && phonePeTokenExpiry && Date.now() < phonePeTokenExpiry) {
+    return phonePeToken;
+  }
+
   const response = await axios.post(
     `${PHONEPE_BASE_URL}/v1/oauth/token`,
     {
@@ -1237,12 +1244,14 @@ const getPhonePeToken = async () => {
       client_version: PHONEPE_CLIENT_VERSION,
       grant_type: "client_credentials"
     },
-    {
-      headers: { "Content-Type": "application/json" }
-    }
+    { headers: { "Content-Type": "application/json" } }
   );
 
-  return response.data.access_token;
+  phonePeToken = response.data.access_token;
+  phonePeTokenExpiry =
+    Date.now() + (response.data.expires_in - 60) * 1000;
+
+  return phonePeToken;
 };
 
 
@@ -1261,7 +1270,7 @@ exports.createPhonePePayment = async (req, res) => {
         type: "PG_CHECKOUT",
         message: "Profile activation payment",
         merchantUrls: {
-          redirectUrl: "https://www.youtube.com/"
+          redirectUrl: "https://dev.backend.shikshacart.com/payment-success"
         }
       }
     };
@@ -1277,15 +1286,26 @@ exports.createPhonePePayment = async (req, res) => {
       }
     );
 
+    await Payment.create({
+      userId,
+      merchantOrderId,
+      amount,
+      status: "PENDING",
+      rawResponse: response.data
+    });
+
     res.json({
       success: true,
-      orderId: response.data.orderId,
+      merchantOrderId,
       redirectUrl: response.data.redirectUrl
     });
+
   } catch (error) {
+    console.error("PHONEPE PAY ERROR:", error.response?.data || error.message);
+
     res.status(500).json({
       success: false,
-      message: error.response?.data || error.message
+      error: error.response?.data || error.message
     });
   }
 };
@@ -1306,7 +1326,14 @@ exports.verifyPhonePePayment = async (req, res) => {
       }
     );
 
-    if (response.data.state === "COMPLETED") {
+    const paymentStatus = response.data.state;
+
+    await Payment.findOneAndUpdate(
+      { merchantOrderId },
+      { status: paymentStatus, rawResponse: response.data }
+    );
+
+    if (paymentStatus === "COMPLETED") {
       await User.findByIdAndUpdate(req.user.id, {
         status: "yes",
         updatedAt: new Date()
@@ -1315,17 +1342,19 @@ exports.verifyPhonePePayment = async (req, res) => {
 
     res.json({
       success: true,
-      paymentStatus: response.data.state,
+      status: paymentStatus,
       data: response.data
     });
+
   } catch (error) {
+    console.error("PHONEPE VERIFY ERROR:", error.response?.data || error.message);
+
     res.status(500).json({
       success: false,
-      message: error.response?.data || error.message
+      error: error.response?.data || error.message
     });
   }
 };
-
 
 
 
