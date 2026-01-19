@@ -1245,14 +1245,16 @@ exports.updateProfile = async (req, res) => {
 //   }
 // };
 
+
 exports.updateProfileStatus = async (req, res) => {
   try {
     const userId = req.user.id; 
 
     
-    const PHONEPE_MERCHANT_ID = "M23HL0YHON0IL_2601071815";
+    const PHONEPE_MERCHANT_ID = "M23HL0YHON0IL";
     const PHONEPE_SALT_KEY = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
     const PHONEPE_SALT_INDEX = 1;
+    // const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
     const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
     const merchantTransactionId = "MT" + Date.now();
     const amount = 100 * 100;
