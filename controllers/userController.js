@@ -1245,23 +1245,20 @@ exports.updateProfile = async (req, res) => {
 //   }
 // };
 
-
 exports.updateProfileStatus = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const userId = req.user.id; 
 
-   const PHONEPE_MERCHANT_ID = "M23HL0YHON0IL_2601071815";
-const PHONEPE_SALT_KEY = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
-const PHONEPE_SALT_INDEX = 1;
-const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
-
+    
+    const PHONEPE_MERCHANT_ID = "YOUR_SANDBOX_MERCHANT_ID";
+    const PHONEPE_SALT_KEY = "YOUR_SANDBOX_SALT_KEY";
+    const PHONEPE_SALT_INDEX = 1;
+    const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
     const merchantTransactionId = "MT" + Date.now();
-    const amount = 100 * 100; 
-
+    const amount = 100 * 100;
     const payload = {
       merchantId: PHONEPE_MERCHANT_ID,
       merchantTransactionId,
-      // merchantUserId: userId,
       merchantUserId: userId.toString(),
       amount,
       redirectUrl: "https://backend.shikshacart.com/api/phonepe/redirect",
@@ -1270,18 +1267,17 @@ const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
       paymentInstrument: { type: "PAY_PAGE" }
     };
 
+    
     const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString("base64");
 
-    const stringToSign =
-      payloadBase64 + "/pg/v1/pay" + PHONEPE_SALT_KEY;
-
+    
+    const stringToSign = payloadBase64 + "/pg/v1/pay" + PHONEPE_SALT_KEY;
     const checksum =
-      crypto.createHash("sha256")
-        .update(stringToSign)
-        .digest("hex") +
+      crypto.createHash("sha256").update(stringToSign).digest("hex") +
       "###" +
       PHONEPE_SALT_INDEX;
 
+    
     const response = await axios.post(
       `${PHONEPE_BASE_URL}/pg/v1/pay`,
       { request: payloadBase64 },
@@ -1293,15 +1289,44 @@ const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
       }
     );
 
+    // Success: return redirect URL
     return res.status(200).json({
       success: true,
-      redirectUrl:
-        response.data.data.instrumentResponse.redirectInfo.url
+      redirectUrl: response.data.data.instrumentResponse.redirectInfo.url
     });
 
   } catch (error) {
-    console.error(error);
-    return res.status(500).json({ message: error.message });
+    console.error("PhonePe Error:", error.response?.data || error.message);
+    return res.status(500).json({ message: error.response?.data || error.message });
+  }
+};
+
+exports.phonepeCallback = async (req, res) => {
+  try {
+  
+    const callbackData = req.body;
+
+    console.log("PhonePe Callback Data:", callbackData);
+
+
+    res.status(200).send("OK");
+  } catch (error) {
+    console.error("Callback Error:", error);
+    res.status(500).send("Error");
+  }
+};
+
+
+exports.phonepeRedirect = async (req, res) => {
+  try {
+   
+    const redirectData = req.body; 
+    console.log("PhonePe Redirect Data:", redirectData);
+
+    res.send("Payment Completed. Thank you!");
+  } catch (error) {
+    console.error("Redirect Error:", error);
+    res.status(500).send("Error");
   }
 };
 
