@@ -20,6 +20,7 @@ const Schoolercategory = require("../models/schoolershipcategory");
 const Schoolerexam = require("../models/Schoolerexam");
 const UserExamGroup = require("../models/userExamGroup");
 const LearningScore = require('../models/learningScore');
+const Tempuser = require('../models/tempuser');
 const fs = require('fs');
 const path = require('path');
 // const moment = require('moment');
@@ -130,11 +131,10 @@ const moment = require('moment-timezone');
 //   }
 // };
 
+
 exports.signup = async (req, res) => {
   try {
-    const { firstName, middleName, lastName, mobileNumber, email, password, confirmPassword } = req.body;
-
-    
+    const { firstName, middleName, lastName, mobileNumber, email, password, confirmPassword } = req.body;  
     if (!firstName) return res.status(400).json({ message: 'First Name can’t remain empty.' });
     if (!lastName) return res.status(400).json({ message: 'Last Name can’t remain empty.' });
     if (!mobileNumber) return res.status(400).json({ message: 'Mobile Number can’t remain empty.' });
@@ -153,8 +153,8 @@ exports.signup = async (req, res) => {
 
     if (password !== confirmPassword) return res.status(400).json({ message: 'Passwords do not match.' });
 
-    const existingUser = await User.findOne({ $or: [{ email }, { mobileNumber }] });
-    if (existingUser) return res.status(409).json({ message: 'User with this email or mobile already exists.' });
+    const existingUser = await Tempuser.findOne({ $or: [{ email }, { mobileNumber }] });
+    if (existingUser) return res.status(409).json({ message: 'User with this email  already exists.' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -175,28 +175,21 @@ exports.signup = async (req, res) => {
       });
     });
 
-    const newUser = new User({
+    const newUser = new Tempuser({
       firstName, middleName, lastName, mobileNumber, email, password: hashedPassword,
       userDetails,
       status: "no" 
     });
 
     await newUser.save();
-
-    
-    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });
-
-    
+ 
+    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });    
     await Notification.create({
   userId: newUser._id,
   type: "enrolled",
   title: "Enroll now & start your journey!",
   message: "Enroll now to learn new skills everyday"
 });
-
-
-
-
 
     res.status(201).json({
       message: 'Registered successfully. Redirecting to complete your profile.',
