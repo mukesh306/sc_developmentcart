@@ -23,9 +23,13 @@ const LearningScore = require('../models/learningScore');
 const Tempuser = require('../models/tempuser');
 const fs = require('fs');
 const path = require('path');
-// const moment = require('moment');
 const moment = require('moment-timezone');
 
+
+const PHONEPE_MERCHANT_ID = "M23HL0YHON0IL_2601071815";
+const PHONEPE_SALT_KEY = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
+const PHONEPE_SALT_INDEX = 1;
+const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
 
 // exports.signup = async (req, res) => {
 //   try {
@@ -1219,180 +1223,77 @@ exports.updateProfile = async (req, res) => {
 
 
 
-// exports.updateProfile = async (req, res) => {
+// exports.updateProfileStatus = async (req, res) => {
 //   try {
 //     const userId = req.user.id;
-
-//     const existingUser = await User.findById(userId);
-//     if (!existingUser) {
+//     const user = await User.findByIdAndUpdate(
+//       userId,
+//       {
+//         status: 'yes',
+//         updatedAt: new Date() 
+//       },
+//       { new: true }
+//     );
+//     if (!user) {
 //       return res.status(404).json({ message: 'User not found' });
 //     }
-
-//     if (existingUser.status === 'yes') {
-//       return res.status(403).json({ message: 'You are not eligible to update.' });
-//     }
-
-//     let {
-//       countryId,
-//       stateId,
-//       cityId,
-//       pincode,
-//       studentType,
-//       schoolName,
-//       instituteName,
-//       collegeName,
-//       className
-//     } = req.body;
-
-//     if (pincode && !/^\d+$/.test(pincode)) {
-//       return res.status(400).json({ message: 'Invalid Pincode' });
-//     }
-
-//     const updatedFields = {
-//       pincode,
-//       studentType,
-//       schoolName,
-//       instituteName,
-//       collegeName
-//     };
-
-//     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
-//     if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
-//     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
-//     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
-
-//     if (req.files?.aadharCard?.[0]) {
-//       updatedFields.aadharCard = req.files.aadharCard[0].path;
-//     }
-
-//     if (req.files?.marksheet?.[0]) {
-//       updatedFields.marksheet = req.files.marksheet[0].path;
-//     }
-
-//     let classDetails = null;
-//     if (mongoose.Types.ObjectId.isValid(className)) {
-//       classDetails =
-//         (await School.findById(className)) ||
-//         (await College.findById(className));
-
-//       if (classDetails?.updatedBy) {
-//         let shouldClone = false;
-
-//         if (!existingUser.updatedBy) {
-//           shouldClone = true;
-//         }
-
-//         if (existingUser.className?.toString() !== className?.toString()) {
-//           shouldClone = true;
-//         }
-
-//         if (
-//           existingUser.className?.toString() === className?.toString() &&
-//           existingUser.updatedBy?.toString() !== classDetails.updatedBy.toString()
-//         ) {
-//           shouldClone = true;
-//         }
-
-       
-//         if (shouldClone) {
-//           const alreadyExists = await UserHistory.findOne({
-//             originalUserId: existingUser._id,
-//             className: className,
-//             updatedBy: classDetails.updatedBy
-//           });
-
-         
-//           if (!alreadyExists) {
-//             const userData = existingUser.toObject();
-
-//             delete userData._id;
-//             delete userData.__v;
-
-//             if (userData.countryId?._id) userData.countryId = userData.countryId._id;
-//             if (userData.stateId?._id) userData.stateId = userData.stateId._id;
-//             if (userData.cityId?._id) userData.cityId = userData.cityId._id;
-//             if (userData.updatedBy?._id) userData.updatedBy = userData.updatedBy._id;
-//             if (userData.className?._id) userData.className = userData.className._id;
-
-//             await UserHistory.create({
-//               ...userData,
-//               originalUserId: existingUser._id,
-//               clonedAt: new Date()
-//             });
-//           }
-//         }
-     
-
-//         updatedFields.updatedBy = classDetails.updatedBy;
-
-//         const admin = await Admin1.findById(classDetails.updatedBy);
-//         if (admin?.session) {
-//           updatedFields.session = admin.session;
-//         }
-//       }
-//     }
-
-//     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
-//       .populate('countryId')
-//       .populate('stateId')
-//       .populate('cityId')
-//       .populate('updatedBy', 'email session startDate endDate');
-
-//     const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-//     }
-//     if (user.marksheet && fs.existsSync(user.marksheet)) {
-//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-//     }
-
-//     const formattedUser = {
-//       ...user._doc,
-//       country: user.countryId?.name || '',
-//       state: user.stateId?.name || '',
-//       city: user.cityId?.name || '',
-//       institutionName: schoolName || collegeName || instituteName || '',
-//       institutionType: studentType || '',
-//       classOrYear: classDetails?.name || '',
-//       session: user.session || '',
-//       updatedBy: user.updatedBy || null
-//     };
-
-//     return res.status(200).json({
-//       message: 'Profile updated. Redirecting to home page.',
-//       user: formattedUser
-//     });
-
+//     res.status(200).json({ message: 'yes' });
 //   } catch (error) {
-//     console.error('Update Profile Error:', error);
-//     return res.status(500).json({ message: error.message });
+//     res.status(500).json({ message: error.message });
 //   }
 // };
-
 
 exports.updateProfileStatus = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const user = await User.findByIdAndUpdate(
-      userId,
+    const merchantTransactionId = "MT" + Date.now();
+    const amount = 100 * 100; 
+
+    const payload = {
+      merchantId: process.env.PHONEPE_MERCHANT_ID,
+      merchantTransactionId,
+      merchantUserId: userId,
+      amount,
+      redirectUrl: "https://backend.shikshacart.com/api/phonepe/redirect",
+      redirectMode: "POST",
+      callbackUrl: "https://backend.shikshacart.com/api/phonepe/callback",
+      paymentInstrument: { type: "PAY_PAGE" }
+    };
+
+    const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString("base64");
+
+    const stringToSign =
+      payloadBase64 + "/pg/v1/pay" + process.env.PHONEPE_SALT_KEY;
+
+    const checksum =
+      crypto.createHash("sha256").update(stringToSign).digest("hex") +
+      "###" +
+      process.env.PHONEPE_SALT_INDEX;
+
+    const response = await axios.post(
+      `${process.env.PHONEPE_BASE_URL}/pg/v1/pay`,
+      { request: payloadBase64 },
       {
-        status: 'yes',
-        updatedAt: new Date() 
-      },
-      { new: true }
+        headers: {
+          "Content-Type": "application/json",
+          "X-VERIFY": checksum
+        }
+      }
     );
 
-    if (!user) {
-      return res.status(404).json({ message: 'User not found' });
-    }
+    
+    return res.status(200).json({
+      success: true,
+      redirectUrl:
+        response.data.data.instrumentResponse.redirectInfo.url
+    });
 
-    res.status(200).json({ message: 'yes' });
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.UserSessionDetails = async (req, res) => {
   try {
