@@ -683,39 +683,91 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
 };
 
 
+// exports.SendEmailverifyOTP = async (req, res) => {
+//   try {
+//     const { email } = req.body;
+//     const user = await Tempuser.findOne({ email });
+//     if (!user) return res.status(404).json({ message: 'User not found' });
+//     const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
+//     const expiry = new Date(Date.now() + 5 * 60 * 1000); 
+//     user.resetPasswordOTP = otp;
+//     user.resetPasswordExpires = expiry;
+//     await user.save();
+//    const transporter = nodemailer.createTransport({
+//      service: 'gmail',
+//      auth: {
+//        user: 'noreply@shikshacart.com', 
+//        pass: 'xyrx ryad ondf jaum' 
+//      }
+//    });
+
+//     await transporter.sendMail({
+//       from: 'noreply@shikshacart.com',
+//       to: email,
+//       subject: 'Email Verify OTP',
+//       text: `Your OTP is: ${otp}`,
+//     });
+
+//     res.status(200).json({ message: 'OTP sent to email for Verify Email.' });
+//   } catch (error) {
+//     console.error('Send OTP Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.SendEmailverifyOTP = async (req, res) => {
   try {
     const { email } = req.body;
+
     const user = await Tempuser.findOne({ email });
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
-    const expiry = new Date(Date.now() + 5 * 60 * 1000); 
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 5 * 60 * 1000);
+
     user.resetPasswordOTP = otp;
     user.resetPasswordExpires = expiry;
     await user.save();
-   const transporter = nodemailer.createTransport({
-     service: 'gmail',
-     auth: {
-       user: 'noreply@shikshacart.com', 
-       pass: 'xyrx ryad ondf jaum' 
-     }
-   });
 
-    await transporter.sendMail({
-      from: 'noreply@shikshacart.com',
-      to: email,
-      subject: 'Email Verify OTP',
-      text: `Your OTP is: ${otp}`,
+   
+    const templatePath = path.join(
+      __dirname,
+      "../public/verify-email.html"
+    );
+
+    let htmlTemplate = fs.readFileSync(templatePath, "utf8");
+
+    
+    htmlTemplate = htmlTemplate.replace("{{OTP}}", otp);
+ 
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: "noreply@shikshacart.com",
+        pass: "xyrx ryad ondf jaum", 
+      },
     });
 
-    res.status(200).json({ message: 'OTP sent to email for Verify Email.' });
+  
+    await transporter.sendMail({
+      from: `"ShikshaCart" <noreply@shikshacart.com>`,
+      to: email,
+      subject: "Email Verification OTP",
+      html: htmlTemplate, 
+    });
+
+    res.status(200).json({
+      message: "OTP sent to email for Verify Email.",
+    });
   } catch (error) {
-    console.error('Send OTP Error:', error);
+    console.error("Send OTP Error:", error);
     res.status(500).json({ message: error.message });
   }
 };
-
-
 
 
 
