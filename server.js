@@ -34,6 +34,7 @@ const classSeatRoutes = require("./routes/classSeatRoutes");
 
 const admin = require("./config/firebase");
 require("./config/notificationCron");
+require("./config/tempUserCleanupCron");
 const app = express();
 const PORT = process.env.PORT || 5000;
 
