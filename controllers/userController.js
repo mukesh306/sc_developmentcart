@@ -1289,7 +1289,7 @@ exports.updateProfileStatus = async (req, res) => {
       }
     );
 
-    // Success: return redirect URL
+   
     return res.status(200).json({
       success: true,
       redirectUrl: response.data.data.instrumentResponse.redirectInfo.url
@@ -1300,6 +1300,7 @@ exports.updateProfileStatus = async (req, res) => {
     return res.status(500).json({ message: error.response?.data || error.message });
   }
 };
+
 
 exports.phonepeCallback = async (req, res) => {
   try {
