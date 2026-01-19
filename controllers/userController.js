@@ -1245,15 +1245,21 @@ exports.updateProfile = async (req, res) => {
 //   }
 // };
 
+
 exports.updateProfileStatus = async (req, res) => {
   try {
     const userId = req.user.id;
+
+   const PHONEPE_MERCHANT_ID = "M23HL0YHON0IL_2601071815";
+const PHONEPE_SALT_KEY = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
+const PHONEPE_SALT_INDEX = 1;
+const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
 
     const merchantTransactionId = "MT" + Date.now();
     const amount = 100 * 100; 
 
     const payload = {
-      merchantId: process.env.PHONEPE_MERCHANT_ID,
+      merchantId: PHONEPE_MERCHANT_ID,
       merchantTransactionId,
       merchantUserId: userId,
       amount,
@@ -1266,15 +1272,17 @@ exports.updateProfileStatus = async (req, res) => {
     const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString("base64");
 
     const stringToSign =
-      payloadBase64 + "/pg/v1/pay" + process.env.PHONEPE_SALT_KEY;
+      payloadBase64 + "/pg/v1/pay" + PHONEPE_SALT_KEY;
 
     const checksum =
-      crypto.createHash("sha256").update(stringToSign).digest("hex") +
+      crypto.createHash("sha256")
+        .update(stringToSign)
+        .digest("hex") +
       "###" +
-      process.env.PHONEPE_SALT_INDEX;
+      PHONEPE_SALT_INDEX;
 
     const response = await axios.post(
-      `${process.env.PHONEPE_BASE_URL}/pg/v1/pay`,
+      `${PHONEPE_BASE_URL}/pg/v1/pay`,
       { request: payloadBase64 },
       {
         headers: {
@@ -1284,7 +1292,6 @@ exports.updateProfileStatus = async (req, res) => {
       }
     );
 
-    
     return res.status(200).json({
       success: true,
       redirectUrl:
@@ -1292,9 +1299,61 @@ exports.updateProfileStatus = async (req, res) => {
     });
 
   } catch (error) {
+    console.error(error);
     return res.status(500).json({ message: error.message });
   }
 };
+
+// exports.updateProfileStatus = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     const merchantTransactionId = "MT" + Date.now();
+//     const amount = 100 * 100; 
+
+//     const payload = {
+//       merchantId: process.env.PHONEPE_MERCHANT_ID,
+//       merchantTransactionId,
+//       merchantUserId: userId,
+//       amount,
+//       redirectUrl: "https://backend.shikshacart.com/api/phonepe/redirect",
+//       redirectMode: "POST",
+//       callbackUrl: "https://backend.shikshacart.com/api/phonepe/callback",
+//       paymentInstrument: { type: "PAY_PAGE" }
+//     };
+
+//     const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString("base64");
+
+//     const stringToSign =
+//       payloadBase64 + "/pg/v1/pay" + process.env.PHONEPE_SALT_KEY;
+
+//     const checksum =
+//       crypto.createHash("sha256").update(stringToSign).digest("hex") +
+//       "###" +
+//       process.env.PHONEPE_SALT_INDEX;
+
+//     const response = await axios.post(
+//       `${process.env.PHONEPE_BASE_URL}/pg/v1/pay`,
+//       { request: payloadBase64 },
+//       {
+//         headers: {
+//           "Content-Type": "application/json",
+//           "X-VERIFY": checksum
+//         }
+//       }
+//     );
+
+    
+//     return res.status(200).json({
+//       success: true,
+//       redirectUrl:
+//         response.data.data.instrumentResponse.redirectInfo.url
+//     });
+
+//   } catch (error) {
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.UserSessionDetails = async (req, res) => {
