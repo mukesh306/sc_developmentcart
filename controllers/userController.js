@@ -1261,7 +1261,8 @@ const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
     const payload = {
       merchantId: PHONEPE_MERCHANT_ID,
       merchantTransactionId,
-      merchantUserId: userId,
+      // merchantUserId: userId,
+      merchantUserId: userId.toString(),
       amount,
       redirectUrl: "https://backend.shikshacart.com/api/phonepe/redirect",
       redirectMode: "POST",
