@@ -29,16 +29,7 @@ const moment = require('moment-timezone');
 
 // exports.signup = async (req, res) => {
 //   try {
-//     const {
-//       firstName,
-//       middleName,
-//       lastName,
-//       mobileNumber,
-//       email,
-//       password,
-//       confirmPassword
-//     } = req.body;
-
+//     const { firstName, middleName, lastName, mobileNumber, email, password, confirmPassword } = req.body;  
 //     if (!firstName) return res.status(400).json({ message: 'First Name can’t remain empty.' });
 //     if (!lastName) return res.status(400).json({ message: 'Last Name can’t remain empty.' });
 //     if (!mobileNumber) return res.status(400).json({ message: 'Mobile Number can’t remain empty.' });
@@ -47,76 +38,46 @@ const moment = require('moment-timezone');
 //     if (!confirmPassword) return res.status(400).json({ message: 'Confirm Password can’t remain empty.' });
 
 //     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-//     if (!emailRegex.test(email)) {
-//       return res.status(400).json({ message: 'Please enter a valid email address.' });
-//     }
+//     if (!emailRegex.test(email)) return res.status(400).json({ message: 'Please enter a valid email address.' });
 
 //     const mobileRegex = /^[0-9]{10}$/;
-//     if (!mobileRegex.test(mobileNumber)) {
-//       return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits.' });
-//     }
+//     if (!mobileRegex.test(mobileNumber)) return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits.' });
 
 //     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
-//     if (!passwordRegex.test(password)) {
-//       return res.status(400).json({
-//         message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.'
-//       });
-//     }
+//     if (!passwordRegex.test(password)) return res.status(400).json({ message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.' });
 
-//     if (password !== confirmPassword) {
-//       return res.status(400).json({ message: 'Passwords do not match.' });
-//     }
+//     if (password !== confirmPassword) return res.status(400).json({ message: 'Passwords do not match.' });
 
-//     const existingUser = await User.findOne({ $or: [{ email }, { mobileNumber }] });
-//     if (existingUser) {
-//       return res.status(409).json({ message: 'User with this email or mobile already exists.' });
-//     }
+//     const existingUser = await Tempuser.findOne({ $or: [{ email }, { mobileNumber }] });
+//     if (existingUser) return res.status(409).json({ message: 'User with this email  already exists.' });
 
 //     const hashedPassword = await bcrypt.hash(password, 10);
+ 
+//     const allCategories = await Schoolercategory.find().select("_id name examType").sort({ createdAt: 1 }).lean();
 
-   
-//     const allCategories = await Schoolercategory.find()
-//       .select("_id name examType")
-//       .sort({ createdAt: 1 })
-//       .lean();
-
-    
 //     let userDetails = [];
 //     allCategories.forEach((cat, catIndex) => {
 //       userDetails.push({
-//         category: {
-//           _id: cat._id,
-//           name: cat.name,
-//           examType: cat.examType || []
-//         },
+//         category: { _id: cat._id, name: cat.name, examType: cat.examType || [] },
 //         examTypes: (cat.examType || []).map((et, etIndex) => ({
-//            _id: et._id, 
+//           _id: et._id,
 //           name: et.name,
 //           status: catIndex === 0 && etIndex === 0 ? "Eligible" : "NA",
 //           result: "NA",
-//           AttemptStatus:"NA"
+//           AttemptStatus: "NA"
 //         }))
 //       });
 //     });
 
-//     const newUser = new User({
-//       firstName,
-//       middleName,
-//       lastName,
-//       mobileNumber,
-//       email,
-//       password: hashedPassword,
-//       userDetails
+//     const newUser = new Tempuser({
+//       firstName, middleName, lastName, mobileNumber, email, password: hashedPassword,
+//       userDetails,
+//       status: "no" 
 //     });
 
 //     await newUser.save();
-
-//     const token = jwt.sign(
-//       { id: newUser._id },
-//       process.env.JWT_SECRET,
-//       { expiresIn: '7d' }
-//     );
-
+ 
+//     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });    
 //     res.status(201).json({
 //       message: 'Registered successfully. Redirecting to complete your profile.',
 //       token
@@ -124,46 +85,62 @@ const moment = require('moment-timezone');
 
 //   } catch (error) {
 //     console.error('Signup error:', error);
-//     res.status(500).json({
-//       message: 'Server error during signup.',
-//       error: error.message
-//     });
+//     res.status(500).json({ message: 'Server error during signup.', error: error.message });
 //   }
 // };
 
-
 exports.signup = async (req, res) => {
   try {
-    const { firstName, middleName, lastName, mobileNumber, email, password, confirmPassword } = req.body;  
+    const {
+      firstName,
+      middleName,
+      lastName,
+      mobileNumber,
+      email,
+      password,
+      confirmPassword
+    } = req.body;
+
     if (!firstName) return res.status(400).json({ message: 'First Name can’t remain empty.' });
     if (!lastName) return res.status(400).json({ message: 'Last Name can’t remain empty.' });
-    if (!mobileNumber) return res.status(400).json({ message: 'Mobile Number can’t remain empty.' });
     if (!email) return res.status(400).json({ message: 'Email address can’t remain empty.' });
     if (!password) return res.status(400).json({ message: 'Create Password can’t remain empty.' });
     if (!confirmPassword) return res.status(400).json({ message: 'Confirm Password can’t remain empty.' });
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) return res.status(400).json({ message: 'Please enter a valid email address.' });
-
-    const mobileRegex = /^[0-9]{10}$/;
-    if (!mobileRegex.test(mobileNumber)) return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits.' });
+    if (!emailRegex.test(email)) {
+      return res.status(400).json({ message: 'Please enter a valid email address.' });
+    }
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
-    if (!passwordRegex.test(password)) return res.status(400).json({ message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.' });
+    if (!passwordRegex.test(password)) {
+      return res.status(400).json({
+        message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.'
+      });
+    }
 
-    if (password !== confirmPassword) return res.status(400).json({ message: 'Passwords do not match.' });
+    if (password !== confirmPassword) {
+      return res.status(400).json({ message: 'Passwords do not match.' });
+    }
 
-    const existingUser = await Tempuser.findOne({ $or: [{ email }, { mobileNumber }] });
-    if (existingUser) return res.status(409).json({ message: 'User with this email  already exists.' });
-
+   
     const hashedPassword = await bcrypt.hash(password, 10);
- 
-    const allCategories = await Schoolercategory.find().select("_id name examType").sort({ createdAt: 1 }).lean();
+
+   
+    const allCategories = await Schoolercategory
+      .find()
+      .select("_id name examType")
+      .sort({ createdAt: 1 })
+      .lean();
 
     let userDetails = [];
     allCategories.forEach((cat, catIndex) => {
       userDetails.push({
-        category: { _id: cat._id, name: cat.name, examType: cat.examType || [] },
+        category: {
+          _id: cat._id,
+          name: cat.name,
+          examType: cat.examType || []
+        },
         examTypes: (cat.examType || []).map((et, etIndex) => ({
           _id: et._id,
           name: et.name,
@@ -174,21 +151,31 @@ exports.signup = async (req, res) => {
       });
     });
 
-    const newUser = new Tempuser({
-      firstName, middleName, lastName, mobileNumber, email, password: hashedPassword,
-      userDetails,
-      status: "no" 
-    });
+  
+    const tempUser = await Tempuser.findOneAndUpdate(
+      { email },
+      {
+        firstName,
+        middleName,
+        lastName,
+        mobileNumber,
+        password: hashedPassword,
+        userDetails,
+        status: "no",
+        VerifyEmail: "No"
+      },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true
+      }
+    );
 
-    await newUser.save();
- 
-    const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });    
-    await Notification.create({
-  userId: newUser._id,
-  type: "enrolled",
-  title: "Enroll now & start your journey!",
-  message: "Enroll now to learn new skills everyday"
-});
+    const token = jwt.sign(
+      { id: tempUser._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.status(201).json({
       message: 'Registered successfully. Redirecting to complete your profile.',
@@ -197,9 +184,13 @@ exports.signup = async (req, res) => {
 
   } catch (error) {
     console.error('Signup error:', error);
-    res.status(500).json({ message: 'Server error during signup.', error: error.message });
+    res.status(500).json({
+      message: 'Server error during signup.',
+      error: error.message
+    });
   }
 };
+
 
 exports.Userlogin = async (req, res) => {
   try {
@@ -773,9 +764,8 @@ exports.EmailVerifyOtp = async (req, res) => {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
 
-    
     const existingUser = await User.findOne({
-      $or: [{ email: tempUser.email }, { mobileNumber: tempUser.mobileNumber }]
+      $or: [{ email: tempUser.email }]
     });
 
     if (existingUser) {
