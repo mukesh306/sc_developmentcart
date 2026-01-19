@@ -1250,8 +1250,8 @@ exports.updateProfileStatus = async (req, res) => {
     const userId = req.user.id; 
 
     
-    const PHONEPE_MERCHANT_ID = "YOUR_SANDBOX_MERCHANT_ID";
-    const PHONEPE_SALT_KEY = "YOUR_SANDBOX_SALT_KEY";
+    const PHONEPE_MERCHANT_ID = "M23HL0YHON0IL_2601071815";
+    const PHONEPE_SALT_KEY = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
     const PHONEPE_SALT_INDEX = 1;
     const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
     const merchantTransactionId = "MT" + Date.now();
