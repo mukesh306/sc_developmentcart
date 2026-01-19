@@ -1251,10 +1251,10 @@ exports.updateProfileStatus = async (req, res) => {
     const userId = req.user.id; 
 
     
-    const PHONEPE_MERCHANT_ID = "M23HL0YHON0IL";
-    const PHONEPE_SALT_KEY = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
+    const PHONEPE_MERCHANT_ID = "M23A2SU4U5TRS_2601191723";
+    const PHONEPE_SALT_KEY = "NTRmMjIwY2EtMThjYS00NmU4LThiMDItNGQ5MzkyMDkxYjk2";
     const PHONEPE_SALT_INDEX = 1;
-    // const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
+    
     const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
     const merchantTransactionId = "MT" + Date.now();
     const amount = 100 * 100;
