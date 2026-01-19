@@ -157,8 +157,7 @@ exports.signup = async (req, res) => {
     if (existingUser) return res.status(409).json({ message: 'User with this email  already exists.' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    
+ 
     const allCategories = await Schoolercategory.find().select("_id name examType").sort({ createdAt: 1 }).lean();
 
     let userDetails = [];
@@ -695,7 +694,7 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
 exports.SendEmailverifyOTP = async (req, res) => {
   try {
     const { email } = req.body;
-    const user = await User.findOne({ email });
+    const user = await Tempuser.findOne({ email });
     if (!user) return res.status(404).json({ message: 'User not found' });
     const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
     const expiry = new Date(Date.now() + 5 * 60 * 1000); 
@@ -728,35 +727,105 @@ exports.SendEmailverifyOTP = async (req, res) => {
 
 
 
+// exports.EmailVerifyOtp = async (req, res) => {
+//   try {
+//     const { email, otp } = req.body;
+//     const user = await Tempuser.findOne({ email });
+//     if (!user) return res.status(404).json({ message: 'User not found' });
+//     if (
+//       !user.resetPasswordOTP ||
+//       user.resetPasswordOTP !== otp ||
+//       new Date() > user.resetPasswordExpires
+//     ) {
+//       return res.status(400).json({ message: 'Invalid or expired OTP' });
+//     }
+
+//     user.resetPasswordOTP = undefined;
+//     user.resetPasswordExpires = undefined;
+//     user.VerifyEmail = 'Yes'; 
+//     await user.save();
+
+//     res.status(200).json({
+//       message: 'Email Verified Successfully',
+//       VerifyEmail: user.VerifyEmail,
+//     });
+//   } catch (error) {
+//     console.error('Email Verify Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.EmailVerifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    const tempUser = await Tempuser.findOne({ email });
+    if (!tempUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
     if (
-      !user.resetPasswordOTP ||
-      user.resetPasswordOTP !== otp ||
-      new Date() > user.resetPasswordExpires
+      !tempUser.resetPasswordOTP ||
+      tempUser.resetPasswordOTP !== otp ||
+      new Date() > tempUser.resetPasswordExpires
     ) {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
 
-    user.resetPasswordOTP = undefined;
-    user.resetPasswordExpires = undefined;
-    user.VerifyEmail = 'Yes'; 
-    await user.save();
+    
+    const existingUser = await User.findOne({
+      $or: [{ email: tempUser.email }, { mobileNumber: tempUser.mobileNumber }]
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ message: 'User already exists' });
+    }
+
+   
+    const newUser = new User({
+      firstName: tempUser.firstName,
+      middleName: tempUser.middleName,
+      lastName: tempUser.lastName,
+      mobileNumber: tempUser.mobileNumber,
+      email: tempUser.email,
+      password: tempUser.password, 
+      userDetails: tempUser.userDetails,
+      status: tempUser.status || "no",
+      VerifyEmail: "Yes"
+    });
+
+    await newUser.save();
+
+    
+    await Notification.create({
+      userId: newUser._id,
+      type: "enrolled",
+      title: "Enroll now & start your journey!",
+      message: "Enroll now to learn new skills everyday"
+    });
+
+    
+    await Tempuser.findByIdAndDelete(tempUser._id);
+
+ 
+    const token = jwt.sign(
+      { id: newUser._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.status(200).json({
-      message: 'Email Verified Successfully',
-      VerifyEmail: user.VerifyEmail,
+      message: 'Email verified & account activated successfully',
+      token
     });
+
   } catch (error) {
     console.error('Email Verify Error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
 
 exports.updateUser = async (req, res) => {
   try { 
