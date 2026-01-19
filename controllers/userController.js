@@ -1,5 +1,5 @@
 const crypto = require("crypto");
-const qs = require("qs");
+const qs = require("querystring");
 const axios = require("axios");
 const cron = require("node-cron");
 const Notification = require("../models/notification");
@@ -1227,7 +1227,6 @@ const PHONEPE_CLIENT_SECRET = "NTRmMjIwY2EtMThjYS00NmU4LThiMDItNGQ5MzkyMDkxYjk2"
 const PHONEPE_CLIENT_VERSION = "1";
 const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
 
-
 let phonePeToken = null;
 let phonePeTokenExpiry = null;
 
@@ -1236,15 +1235,22 @@ const getPhonePeToken = async () => {
     return phonePeToken;
   }
 
+ 
+  const payload = qs.stringify({
+    client_id: PHONEPE_CLIENT_ID,
+    client_secret: PHONEPE_CLIENT_SECRET,
+    client_version: PHONEPE_CLIENT_VERSION,
+    grant_type: "client_credentials"
+  });
+
   const response = await axios.post(
     `${PHONEPE_BASE_URL}/v1/oauth/token`,
+    payload,
     {
-      client_id: PHONEPE_CLIENT_ID,
-      client_secret: PHONEPE_CLIENT_SECRET,
-      client_version: PHONEPE_CLIENT_VERSION,
-      grant_type: "client_credentials"
-    },
-    { headers: { "Content-Type": "application/json" } }
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    }
   );
 
   phonePeToken = response.data.access_token;
@@ -1286,6 +1292,7 @@ exports.createPhonePePayment = async (req, res) => {
       }
     );
 
+    
     await Payment.create({
       userId,
       merchantOrderId,
@@ -1333,6 +1340,7 @@ exports.verifyPhonePePayment = async (req, res) => {
       { status: paymentStatus, rawResponse: response.data }
     );
 
+    
     if (paymentStatus === "COMPLETED") {
       await User.findByIdAndUpdate(req.user.id, {
         status: "yes",
@@ -1355,7 +1363,6 @@ exports.verifyPhonePePayment = async (req, res) => {
     });
   }
 };
-
 
 
 
