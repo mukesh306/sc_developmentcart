@@ -28,10 +28,6 @@ const path = require('path');
 const moment = require('moment-timezone');
 
 
-const PHONEPE_MERCHANT_ID = "M23HL0YHON0IL_2601071815";
-const PHONEPE_SALT_KEY = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
-const PHONEPE_SALT_INDEX = 1;
-const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
 
 // exports.signup = async (req, res) => {
 //   try {
@@ -1225,113 +1221,139 @@ exports.updateProfile = async (req, res) => {
 
 
 
-// exports.updateProfileStatus = async (req, res) => {
-//   try {
-//     const userId = req.user.id;
-//     const user = await User.findByIdAndUpdate(
-//       userId,
-//       {
-//         status: 'yes',
-//         updatedAt: new Date() 
-//       },
-//       { new: true }
-//     );
-//     if (!user) {
-//       return res.status(404).json({ message: 'User not found' });
-//     }
-//     res.status(200).json({ message: 'yes' });
-//   } catch (error) {
-//     res.status(500).json({ message: error.message });
-//   }
-// };
+
+const PHONEPE_CLIENT_ID = "M23A2SU4U5TRS_2601191723";
+const PHONEPE_CLIENT_SECRET = "NTRmMjIwY2EtMThjYS00NmU4LThiMDItNGQ5MzkyMDkxYjk2";
+const PHONEPE_CLIENT_VERSION = "1";
+const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
+
+const getPhonePeToken = async () => {
+  const response = await axios.post(
+    `${PHONEPE_BASE_URL}/v1/oauth/token`,
+    {
+      client_id: PHONEPE_CLIENT_ID,
+      client_secret: PHONEPE_CLIENT_SECRET,
+      client_version: PHONEPE_CLIENT_VERSION,
+      grant_type: "client_credentials"
+    },
+    {
+      headers: { "Content-Type": "application/json" }
+    }
+  );
+
+  return response.data.access_token;
+};
 
 
-exports.updateProfileStatus = async (req, res) => {
+exports.createPhonePePayment = async (req, res) => {
   try {
-    const userId = req.user.id; 
+    const userId = req.user.id;
+    const amount = 100; 
+    const merchantOrderId = `ORDER_${Date.now()}`;
 
-    
-    const PHONEPE_MERCHANT_ID = "M23A2SU4U5TRS_2601191723";
-    const PHONEPE_SALT_KEY = "NTRmMjIwY2EtMThjYS00NmU4LThiMDItNGQ5MzkyMDkxYjk2";
-    const PHONEPE_SALT_INDEX = 1;
-    
-    const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
-    const merchantTransactionId = "MT" + Date.now();
-    const amount = 100 * 100;
+    const token = await getPhonePeToken();
+
     const payload = {
-      merchantId: PHONEPE_MERCHANT_ID,
-      merchantTransactionId,
-      merchantUserId: userId.toString(),
+      merchantOrderId,
       amount,
-      redirectUrl: "https://backend.shikshacart.com/api/phonepe/redirect",
-      redirectMode: "POST",
-      callbackUrl: "https://backend.shikshacart.com/api/phonepe/callback",
-      paymentInstrument: { type: "PAY_PAGE" }
+      paymentFlow: {
+        type: "PG_CHECKOUT",
+        message: "Profile activation payment",
+        merchantUrls: {
+          redirectUrl: "https://www.youtube.com/"
+        }
+      }
     };
 
-    
-    const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString("base64");
-
-    
-    const stringToSign = payloadBase64 + "/pg/v1/pay" + PHONEPE_SALT_KEY;
-    const checksum =
-      crypto.createHash("sha256").update(stringToSign).digest("hex") +
-      "###" +
-      PHONEPE_SALT_INDEX;
-
-    
     const response = await axios.post(
-      `${PHONEPE_BASE_URL}/pg/v1/pay`,
-      { request: payloadBase64 },
+      `${PHONEPE_BASE_URL}/checkout/v2/pay`,
+      payload,
       {
         headers: {
-          "Content-Type": "application/json",
-          "X-VERIFY": checksum
+          Authorization: `O-Bearer ${token}`,
+          "Content-Type": "application/json"
         }
       }
     );
 
-   
-    return res.status(200).json({
+    res.json({
       success: true,
-      redirectUrl: response.data.data.instrumentResponse.redirectInfo.url
+      orderId: response.data.orderId,
+      redirectUrl: response.data.redirectUrl
     });
-
   } catch (error) {
-    console.error("PhonePe Error:", error.response?.data || error.message);
-    return res.status(500).json({ message: error.response?.data || error.message });
+    res.status(500).json({
+      success: false,
+      message: error.response?.data || error.message
+    });
   }
 };
 
 
-exports.phonepeCallback = async (req, res) => {
+exports.verifyPhonePePayment = async (req, res) => {
   try {
-  
-    const callbackData = req.body;
+    const { merchantOrderId } = req.params;
 
-    console.log("PhonePe Callback Data:", callbackData);
+    const token = await getPhonePeToken();
 
+    const response = await axios.get(
+      `${PHONEPE_BASE_URL}/checkout/v2/order/${merchantOrderId}`,
+      {
+        headers: {
+          Authorization: `O-Bearer ${token}`
+        }
+      }
+    );
 
-    res.status(200).send("OK");
+    if (response.data.state === "COMPLETED") {
+      await User.findByIdAndUpdate(req.user.id, {
+        status: "yes",
+        updatedAt: new Date()
+      });
+    }
+
+    res.json({
+      success: true,
+      paymentStatus: response.data.state,
+      data: response.data
+    });
   } catch (error) {
-    console.error("Callback Error:", error);
-    res.status(500).send("Error");
+    res.status(500).json({
+      success: false,
+      message: error.response?.data || error.message
+    });
   }
 };
 
 
-exports.phonepeRedirect = async (req, res) => {
+
+
+
+
+
+
+
+exports.updateProfileStatus = async (req, res) => {
   try {
-   
-    const redirectData = req.body; 
-    console.log("PhonePe Redirect Data:", redirectData);
-
-    res.send("Payment Completed. Thank you!");
+    const userId = req.user.id;
+    const user = await User.findByIdAndUpdate(
+      userId,
+      {
+        status: 'yes',
+        updatedAt: new Date() 
+      },
+      { new: true }
+    );
+    if (!user) {
+      return res.status(404).json({ message: 'User not found' });
+    }
+    res.status(200).json({ message: 'yes' });
   } catch (error) {
-    console.error("Redirect Error:", error);
-    res.status(500).send("Error");
+    res.status(500).json({ message: error.message });
   }
 };
+
+
 
 // exports.updateProfileStatus = async (req, res) => {
 //   try {

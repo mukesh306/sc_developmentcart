@@ -33,6 +33,9 @@ router.post(
    router.post('/login-with-otp',userController.loginWithOTP);
     router.post('/reset-password-after-otp',userController.resetPasswordAfterOTPLogin);
 
+    router.post("/phonepe/pay", auth, userController.createPhonePePayment);
+router.get("/phonepe/verify/:merchantOrderId", auth, userController.verifyPhonePePayment);
+
   router.get('/check', (req, res) => {
   return res.status(200).json({ response: true });
 });
