@@ -1220,8 +1220,6 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
-
-
 const PHONEPE_CLIENT_ID = "M23A2SU4U5TRS_2601191723";
 const PHONEPE_CLIENT_SECRET = "NTRmMjIwY2EtMThjYS00NmU4LThiMDItNGQ5MzkyMDkxYjk2";
 const PHONEPE_CLIENT_VERSION = "1";
@@ -1264,14 +1262,24 @@ const getPhonePeToken = async () => {
 exports.createPhonePePayment = async (req, res) => {
   try {
     const userId = req.user.id;
-    const amount = 100; 
+
+    const { amount } = req.body; 
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid amount is required"
+      });
+    }
+
+    const amountInPaise = amount * 100; 
     const merchantOrderId = `ORDER_${Date.now()}`;
 
     const token = await getPhonePeToken();
 
     const payload = {
       merchantOrderId,
-      amount,
+      amount: amountInPaise,
       paymentFlow: {
         type: "PG_CHECKOUT",
         message: "Profile activation payment",
@@ -1292,11 +1300,11 @@ exports.createPhonePePayment = async (req, res) => {
       }
     );
 
-    
     await Payment.create({
       userId,
       merchantOrderId,
-      amount,
+      amount: amountInPaise, 
+      displayAmount: amount, 
       status: "PENDING",
       rawResponse: response.data
     });
@@ -1309,7 +1317,6 @@ exports.createPhonePePayment = async (req, res) => {
 
   } catch (error) {
     console.error("PHONEPE PAY ERROR:", error.response?.data || error.message);
-
     res.status(500).json({
       success: false,
       error: error.response?.data || error.message
