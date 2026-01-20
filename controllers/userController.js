@@ -1220,6 +1220,7 @@ exports.updateProfile = async (req, res) => {
   }
 };
 
+
 const PHONEPE_CLIENT_ID = "M23A2SU4U5TRS_2601191723";
 const PHONEPE_CLIENT_SECRET = "NTRmMjIwY2EtMThjYS00NmU4LThiMDItNGQ5MzkyMDkxYjk2";
 const PHONEPE_CLIENT_VERSION = "1";
@@ -1332,7 +1333,7 @@ exports.verifyPhonePePayment = async (req, res) => {
     const token = await getPhonePeToken();
 
     const response = await axios.get(
-      `${PHONEPE_BASE_URL}/checkout/v2/order/${merchantOrderId}`,
+      `${PHONEPE_BASE_URL}/checkout/v2/status/${merchantOrderId}`,
       {
         headers: {
           Authorization: `O-Bearer ${token}`
