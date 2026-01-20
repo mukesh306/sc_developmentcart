@@ -580,7 +580,15 @@ exports.sendResetOTP = async (req, res) => {
     user.resetPasswordOTP = otp;
     user.resetPasswordExpires = expiry;
     await user.save();
+     const templatePath = path.join(
+      __dirname,
+      "../public/forgot-password.html"
+    );
 
+    let htmlTemplate = fs.readFileSync(templatePath, "utf8");
+
+    
+    htmlTemplate = htmlTemplate.replace("{{OTP}}", otp);
 
    const transporter = nodemailer.createTransport({
      service: 'gmail',
@@ -591,10 +599,11 @@ exports.sendResetOTP = async (req, res) => {
    });
 
     await transporter.sendMail({
-      from: 'noreply@shikshacart.com',
+       from: `"ShikshaCart" <noreply@shikshacart.com>`,
       to: email,
       subject: 'Login OTP',
-      text: `Your OTP is: ${otp}`,
+      html: htmlTemplate, 
+      // text: `Your OTP is: ${otp}`,
     });
 
     res.status(200).json({ message: 'OTP sent to email.' });
