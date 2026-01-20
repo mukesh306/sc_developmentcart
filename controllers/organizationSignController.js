@@ -1199,10 +1199,10 @@ exports.getOrganizationUserById = async (req, res) => {
 //   }
 // };
 
+
 exports.inviteUsers = async (req, res) => {
   try {
     const { emails } = req.body;
-
     if (!emails || !Array.isArray(emails) || emails.length === 0) {
       return res.status(400).json({
         success: false,
@@ -1217,8 +1217,7 @@ exports.inviteUsers = async (req, res) => {
         pass: "xyrx ryad ondf jaum",
       },
     });
-
-    
+   
     const templatePath = path.join(
       __dirname,
       "../public/complete-profile.html"

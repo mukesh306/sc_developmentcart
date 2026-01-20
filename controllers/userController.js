@@ -1230,8 +1230,8 @@ exports.updateProfile = async (req, res) => {
 };
 
 
-const PHONEPE_CLIENT_ID = "M23A2SU4U5TRS_2601191723";
-const PHONEPE_CLIENT_SECRET = "NTRmMjIwY2EtMThjYS00NmU4LThiMDItNGQ5MzkyMDkxYjk2";
+const PHONEPE_CLIENT_ID = "M23HL0YHON0IL_2601071815";
+const PHONEPE_CLIENT_SECRET = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
 const PHONEPE_CLIENT_VERSION = "1";
 const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
 
