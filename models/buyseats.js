@@ -14,10 +14,10 @@ const BuySchema = new mongoose.Schema(
     price: { type: Number, required: true },
     totalPrice: { type: Number, required: true },
 
-    amountPaid: { type: Number, default: 0 }, // ✅ user ne jo pay kiya
-    paymentStatus: { type: Boolean, default: false }, // ✅ paid ya nahi
+    amountPaid: { type: Number, default: 0 }, 
+    paymentStatus: { type: Boolean, default: false }, 
 
-    grandTotal: { type: Number, default: 0 } // ✅ agar grand total pass karna hai
+    grandTotal: { type: Number, default: 0 } 
   },
   { timestamps: true }
 );
