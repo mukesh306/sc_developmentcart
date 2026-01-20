@@ -1210,7 +1210,6 @@ exports.inviteUsers = async (req, res) => {
       });
     }
 
-    // Mail transporter
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
@@ -1219,7 +1218,7 @@ exports.inviteUsers = async (req, res) => {
       },
     });
 
-    // Read HTML template from public
+    
     const templatePath = path.join(
       __dirname,
       "../public/complete-profile.html"
@@ -1238,13 +1237,21 @@ exports.inviteUsers = async (req, res) => {
           });
           await user.save();
         }
+const fullName = [
+      user.firstName,
+      user.middleName,
+      user.lastName,
+    ]
+      .filter(Boolean) 
+      .join(" ");
 
+    const studentName = fullName || "Student";
         const inviteLink = `https://dev.product.shikshacart.com/complete-profile/${user._id}`;
 
-        // Replace placeholders
+        
         let finalHtml = baseTemplate
           .replace(/{{INVITE_LINK}}/g, inviteLink)
-          .replace(/{{STUDENT_NAME}}/g, "Student");
+         .replace(/{{STUDENT_NAME}}/g, studentName);
 
         await transporter.sendMail({
           from: `"ShikshaCart" <noreply@shikshacart.com>`,
