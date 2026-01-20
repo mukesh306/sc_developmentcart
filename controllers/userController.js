@@ -1263,9 +1263,7 @@ const getPhonePeToken = async () => {
 exports.createPhonePePayment = async (req, res) => {
   try {
     const userId = req.user.id;
-
     const { amount } = req.body; 
-
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
@@ -1285,7 +1283,7 @@ exports.createPhonePePayment = async (req, res) => {
         type: "PG_CHECKOUT",
         message: "Profile activation payment",
         merchantUrls: {
-          redirectUrl: "https://dev.backend.shikshacart.com/payment-success"
+           redirectUrl: `https://dev.product.shikshacart.com/payment-redirect/${merchantOrderId}`
         }
       }
     };
@@ -1329,11 +1327,10 @@ exports.createPhonePePayment = async (req, res) => {
 exports.verifyPhonePePayment = async (req, res) => {
   try {
     const { merchantOrderId } = req.params;
-
     const token = await getPhonePeToken();
-
     const response = await axios.get(
-      `${PHONEPE_BASE_URL}/checkout/v2/status/${merchantOrderId}`,
+     
+      `${PHONEPE_BASE_URL}/checkout/v2/order/${merchantOrderId}/status`,
       {
         headers: {
           Authorization: `O-Bearer ${token}`,
