@@ -1222,7 +1222,7 @@ exports.inviteUsers = async (req, res) => {
     // Read HTML template from public
     const templatePath = path.join(
       __dirname,
-      "../public/user-profile.html"
+      "../public/complete-profile.html"
     );
 
     const baseTemplate = fs.readFileSync(templatePath, "utf8");
