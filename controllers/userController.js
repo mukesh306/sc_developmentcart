@@ -1230,10 +1230,17 @@ exports.updateProfile = async (req, res) => {
 };
 
 
-const PHONEPE_CLIENT_ID = "M23HL0YHON0IL_2601071815";
-const PHONEPE_CLIENT_SECRET = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
-const PHONEPE_CLIENT_VERSION = "1";
-const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
+// const PHONEPE_CLIENT_ID = "M23HL0YHON0IL_2601071815";
+// const PHONEPE_CLIENT_SECRET = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
+// const PHONEPE_CLIENT_VERSION = "1";
+// const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
+
+
+const PHONEPE_CLIENT_ID = process.env.PHONEPE_CLIENT_ID;
+const PHONEPE_CLIENT_SECRET = process.env.PHONEPE_CLIENT_SECRET;
+const PHONEPE_CLIENT_VERSION = process.env.PHONEPE_CLIENT_VERSION;
+const PHONEPE_BASE_URL = process.env.PHONEPE_BASE_URL;
+
 
 let phonePeToken = null;
 let phonePeTokenExpiry = null;

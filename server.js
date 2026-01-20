@@ -14,7 +14,6 @@ const User = require('./models/User');
 const Schoolerexam = require('./models/Schoolerexam');
 const Notification = require('./models/notification');
 
-
 const authRoutes = require('./routes/authRoutes');
 const locationRoutes = require('./routes/locationRoutes');
 const learningRoutes = require('./routes/learningRoutes');
