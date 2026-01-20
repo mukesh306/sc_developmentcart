@@ -465,7 +465,6 @@ exports.filterAvalibleSeat = async (req, res) => {
     const userId = req.user._id;
     const { classId } = req.query; 
 
-   
     const buys = await Buy.find({ userId })
       .populate({
         path: "classSeatId",
