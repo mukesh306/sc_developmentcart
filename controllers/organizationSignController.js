@@ -1199,90 +1199,157 @@ exports.getOrganizationUserById = async (req, res) => {
 //   }
 // };
 
-
 exports.inviteUsers = async (req, res) => {
   try {
     const { emails } = req.body;
 
     if (!emails || !Array.isArray(emails) || emails.length === 0) {
-      return res.status(400).json({ message: "Please provide at least one email." });
+      return res.status(400).json({
+        success: false,
+        message: "Please provide at least one email address",
+      });
     }
 
-    // ✅ Setup mail transporter
+    // Mail transporter
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
         user: "noreply@shikshacart.com",
-        pass: "xyrx ryad ondf jaum", // use app password
-      }, 
+        pass: "xyrx ryad ondf jaum",
+      },
     });
 
-    // ✅ Process each email
-    const sendEmailPromises = emails.map(async (email) => {
-      // 1️⃣ Find the user by email
-      let user = await Organizationuser.findOne({ email });
+    // Read HTML template from public
+    const templatePath = path.join(
+      __dirname,
+      "../public/user-profile.html"
+    );
 
-      // 2️⃣ If user doesn't exist, create a new record
-      if (!user) {
-        user = new Organizationuser({
-          email,
-          invitedBy: req.user?._id || null,
+    const baseTemplate = fs.readFileSync(templatePath, "utf8");
+
+    await Promise.all(
+      emails.map(async (email) => {
+        let user = await Organizationuser.findOne({ email });
+
+        if (!user) {
+          user = new Organizationuser({
+            email,
+            invitedBy: req.user?._id || null,
+          });
+          await user.save();
+        }
+
+        const inviteLink = `https://dev.product.shikshacart.com/complete-profile/${user._id}`;
+
+        // Replace placeholders
+        let finalHtml = baseTemplate
+          .replace(/{{INVITE_LINK}}/g, inviteLink)
+          .replace(/{{STUDENT_NAME}}/g, "Student");
+
+        await transporter.sendMail({
+          from: `"ShikshaCart" <noreply@shikshacart.com>`,
+          to: email,
+          subject: "Complete your ShikshaCart profile",
+          html: finalHtml,
         });
-        await user.save();
-      }
-
-      // 3️⃣ Generate user-specific profile link
-      const inviteLink = `https://dev.product.shikshacart.com/complete-profile/${user._id}`;
-
-      // 4️⃣ Prepare email content
-      const mailOptions = {
-        from: "noreply@shikshacart.com",
-        to: email,
-        subject: "You are invited to join ShikshaCart!",
-        text: `
-Hello,
-
-You have been invited to complete your profile on ShikshaCart!
-
-Please click the link below to complete your profile:
-${inviteLink}
-
-Best regards,
-ShikshaCart Team
-`,
-        html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-            <h3>Hello,</h3>
-            <p>You have been invited to complete your profile on <b>ShikshaCart</b>!</p>
-            <p>
-              Please click the button below to complete your profile:
-            </p>
-            <p>
-              <a href="${inviteLink}" style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
-                Complete Profile
-              </a>
-            </p>
-            <p>If the button doesn’t work, copy and paste this link into your browser:</p>
-            <p><a href="${inviteLink}">${inviteLink}</a></p>
-            <p>Best regards,<br><b>ShikshaCart Team</b></p>
-          </div>
-        `,
-      };
-
-      // 5️⃣ Send email
-      await transporter.sendMail(mailOptions);
-    });
-
-    await Promise.all(sendEmailPromises);
+      })
+    );
 
     res.status(200).json({
+      success: true,
       message: `Invitations sent successfully to ${emails.length} email(s).`,
     });
   } catch (error) {
     console.error("Invite Users Error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
+
+// exports.inviteUsers = async (req, res) => {
+//   try {
+//     const { emails } = req.body;
+
+//     if (!emails || !Array.isArray(emails) || emails.length === 0) {
+//       return res.status(400).json({ message: "Please provide at least one email." });
+//     }
+
+//     const transporter = nodemailer.createTransport({
+//       service: "gmail",
+//       auth: {
+//         user: "noreply@shikshacart.com",
+//         pass: "xyrx ryad ondf jaum", 
+//       }, 
+//     });
+
+    
+//     const sendEmailPromises = emails.map(async (email) => {
+      
+//       let user = await Organizationuser.findOne({ email });
+
+      
+//       if (!user) {
+//         user = new Organizationuser({
+//           email,
+//           invitedBy: req.user?._id || null,
+//         });
+//         await user.save();
+//       }
+
+      
+//       const inviteLink = `https://dev.product.shikshacart.com/complete-profile/${user._id}`;
+
+      
+//       const mailOptions = {
+//         from: "noreply@shikshacart.com",
+//         to: email,
+//         subject: "You are invited to join ShikshaCart!",
+//         text: `
+// Hello,
+
+// You have been invited to complete your profile on ShikshaCart!
+
+// Please click the link below to complete your profile:
+// ${inviteLink}
+
+// Best regards,
+// ShikshaCart Team
+// `,
+//         html: `
+//           <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+//             <h3>Hello,</h3>
+//             <p>You have been invited to complete your profile on <b>ShikshaCart</b>!</p>
+//             <p>
+//               Please click the button below to complete your profile:
+//             </p>
+//             <p>
+//               <a href="${inviteLink}" style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
+//                 Complete Profile
+//               </a>
+//             </p>
+//             <p>If the button doesn’t work, copy and paste this link into your browser:</p>
+//             <p><a href="${inviteLink}">${inviteLink}</a></p>
+//             <p>Best regards,<br><b>ShikshaCart Team</b></p>
+//           </div>
+//         `,
+//       };
+
+     
+//       await transporter.sendMail(mailOptions);
+//     });
+
+//     await Promise.all(sendEmailPromises);
+
+//     res.status(200).json({
+//       message: `Invitations sent successfully to ${emails.length} email(s).`,
+//     });
+//   } catch (error) {
+//     console.error("Invite Users Error:", error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 
