@@ -459,12 +459,16 @@ exports.getUserBuys = async (req, res) => {
   }
 };
 
-
 exports.filterAvalibleSeat = async (req, res) => {
   try {
-    const userId = req.user._id;
-    const { classId } = req.query; 
+    const userId = req.user?._id;
+    const classId = req.query?.classId; // classSeatId from query
 
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized user" });
+    }
+
+    // 1️⃣ Fetch all buys of user
     const buys = await Buy.find({ userId })
       .populate({
         path: "classSeatId",
@@ -473,25 +477,25 @@ exports.filterAvalibleSeat = async (req, res) => {
       .sort({ createdAt: -1 });
 
     if (!buys || buys.length === 0) {
-      return res.status(404).json({
-        message: "No purchases found",
-      });
+      return res.status(404).json({ message: "No purchases found" });
     }
 
     const buyRecords = [];
     let totalSeats = 0;
 
-    
+    // 2️⃣ Loop through purchases
     for (const buy of buys) {
-      const classSeat = buy.classSeatId;
-      if (!classSeat) continue;
+      const classSeat = buy?.classSeatId;
 
-      
-      if (classId && classSeat._id.toString() !== classId.toString()) {
+      // 🔒 Hard safety checks
+      if (!classSeat || !classSeat._id) continue;
+
+      // ✅ SAFE classSeatId filter
+      if (classId && String(classSeat._id) !== String(classId)) {
         continue;
       }
 
-      
+      // 3️⃣ Get School / College data
       let classData = await School.findById(classSeat.className).select(
         "name className"
       );
@@ -502,22 +506,23 @@ exports.filterAvalibleSeat = async (req, res) => {
         );
       }
 
-      if (!classData) continue;
+      if (!classData || !classData._id) continue;
 
-     
+      // 4️⃣ Count allocated users
       const allocatedUsersCount = await User.countDocuments({
         className: classSeat.className,
       });
 
-      
+      // 5️⃣ Calculate remaining seats
+      const totalClassSeats = Number(classSeat.seat || 0);
       const remainingSeats = Math.max(
-        (classSeat.seat || 0) - allocatedUsersCount,
+        totalClassSeats - allocatedUsersCount,
         0
       );
 
       buyRecords.push({
-        id: classSeat._id,                 
-        classId: classData._id,             
+        id: classSeat._id, // classSeatId
+        classId: classData._id, // School / College ID
         className: classData.className || classData.name,
         seat: remainingSeats,
       });
@@ -525,25 +530,26 @@ exports.filterAvalibleSeat = async (req, res) => {
       totalSeats += remainingSeats;
     }
 
-    
+    // 6️⃣ Final validation
     if (buyRecords.length === 0) {
       return res.status(404).json({
         message: "No purchases found for this classId",
       });
     }
 
-    
-    res.status(200).json({
+    // 7️⃣ Success response
+    return res.status(200).json({
       totalRecords: totalSeats,
       buyRecords,
     });
   } catch (error) {
     console.error("filterAvalibleSeat error:", error);
-    res.status(500).json({
+    return res.status(500).json({
       message: error.message || "Internal Server Error",
     });
   }
 };
+
 
 
 
