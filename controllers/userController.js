@@ -1336,7 +1336,8 @@ exports.verifyPhonePePayment = async (req, res) => {
       `${PHONEPE_BASE_URL}/checkout/v2/status/${merchantOrderId}`,
       {
         headers: {
-          Authorization: `O-Bearer ${token}`
+          Authorization: `O-Bearer ${token}`,
+          "Content-Type": "application/json"
         }
       }
     );
@@ -1345,10 +1346,12 @@ exports.verifyPhonePePayment = async (req, res) => {
 
     await Payment.findOneAndUpdate(
       { merchantOrderId },
-      { status: paymentStatus, rawResponse: response.data }
+      {
+        status: paymentStatus,
+        rawResponse: response.data
+      }
     );
 
-    
     if (paymentStatus === "COMPLETED") {
       await User.findByIdAndUpdate(req.user.id, {
         status: "yes",
@@ -1371,6 +1374,8 @@ exports.verifyPhonePePayment = async (req, res) => {
     });
   }
 };
+
+
 
 
 
