@@ -33,6 +33,9 @@ router.post(
    router.post('/login-with-otp',userController.loginWithOTP);
     router.post('/reset-password-after-otp',userController.resetPasswordAfterOTPLogin);
 
+    router.post("/phonepe/pay", auth, userController.createPhonePePayment);
+router.get("/phonepe/verify/:merchantOrderId", auth, userController.verifyPhonePePayment);
+
   router.get('/check', (req, res) => {
   return res.status(200).json({ response: true });
 });
@@ -45,11 +48,11 @@ router.post(
   router.get('/getUserHistory', userController.getUserHistories );
   router.get('/userforAdmin',auth, userController.userforAdmin );
   router.get("/user-states", userController.getStatesFromUsers);
-router.get("/user-cities", userController.getCitiesFromUsers);
+  router.get("/user-cities", userController.getCitiesFromUsers);
 router.get("/user-categories", userController.getCategoriesFromUsers);
 router.get("/schoolershipstatus-filter",auth, userController.getAvailableSchoolershipStatus);
 router.get("/user/:userId", userController.getUserById);
-
+router.post("/user/save-fcm-token", auth,userController.saveFCMToken);
 router.delete(
   "/user/examtypereset/:userId",userController.deleteUserExamData);
 

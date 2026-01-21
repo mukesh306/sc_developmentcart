@@ -13,6 +13,7 @@ const ExamUserStatus = require("../models/ExamUserStatus");
 const Category = require("../models/schoolershipcategory");
 
 
+
 // exports.createGroup = async (req, res) => {
 //   try {
 //     const { memberIds, category, className } = req.body;
@@ -1082,3 +1083,5 @@ exports.getUserCitiesByState = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
+

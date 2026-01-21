@@ -1203,86 +1203,159 @@ exports.getOrganizationUserById = async (req, res) => {
 exports.inviteUsers = async (req, res) => {
   try {
     const { emails } = req.body;
-
     if (!emails || !Array.isArray(emails) || emails.length === 0) {
-      return res.status(400).json({ message: "Please provide at least one email." });
+      return res.status(400).json({
+        success: false,
+        message: "Please provide at least one email address",
+      });
     }
 
-    // ✅ Setup mail transporter
     const transporter = nodemailer.createTransport({
       service: "gmail",
       auth: {
         user: "noreply@shikshacart.com",
-        pass: "xyrx ryad ondf jaum", // use app password
-      }, 
+        pass: "xyrx ryad ondf jaum",
+      },
     });
+   
+    const templatePath = path.join(
+      __dirname,
+      "../public/complete-profile.html"
+    );
 
-    // ✅ Process each email
-    const sendEmailPromises = emails.map(async (email) => {
-      // 1️⃣ Find the user by email
-      let user = await Organizationuser.findOne({ email });
+    const baseTemplate = fs.readFileSync(templatePath, "utf8");
 
-      // 2️⃣ If user doesn't exist, create a new record
-      if (!user) {
-        user = new Organizationuser({
-          email,
-          invitedBy: req.user?._id || null,
+    await Promise.all(
+      emails.map(async (email) => {
+        let user = await Organizationuser.findOne({ email });
+
+        if (!user) {
+          user = new Organizationuser({
+            email,
+            invitedBy: req.user?._id || null,
+          });
+          await user.save();
+        }
+const fullName = [
+      user.firstName,
+      user.middleName,
+      user.lastName,
+    ]
+      .filter(Boolean) 
+      .join(" ");
+
+    const studentName = fullName || "Student";
+        const inviteLink = `https://dev.product.shikshacart.com/complete-profile/${user._id}`;
+
+        
+        let finalHtml = baseTemplate
+          .replace(/{{INVITE_LINK}}/g, inviteLink)
+         .replace(/{{STUDENT_NAME}}/g, studentName);
+
+        await transporter.sendMail({
+          from: `"ShikshaCart" <noreply@shikshacart.com>`,
+          to: email,
+          subject: "Complete your ShikshaCart profile",
+          html: finalHtml,
         });
-        await user.save();
-      }
-
-      // 3️⃣ Generate user-specific profile link
-      const inviteLink = `https://dev.product.shikshacart.com/complete-profile/${user._id}`;
-
-      // 4️⃣ Prepare email content
-      const mailOptions = {
-        from: "noreply@shikshacart.com",
-        to: email,
-        subject: "You are invited to join ShikshaCart!",
-        text: `
-Hello,
-
-You have been invited to complete your profile on ShikshaCart!
-
-Please click the link below to complete your profile:
-${inviteLink}
-
-Best regards,
-ShikshaCart Team
-`,
-        html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-            <h3>Hello,</h3>
-            <p>You have been invited to complete your profile on <b>ShikshaCart</b>!</p>
-            <p>
-              Please click the button below to complete your profile:
-            </p>
-            <p>
-              <a href="${inviteLink}" style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
-                Complete Profile
-              </a>
-            </p>
-            <p>If the button doesn’t work, copy and paste this link into your browser:</p>
-            <p><a href="${inviteLink}">${inviteLink}</a></p>
-            <p>Best regards,<br><b>ShikshaCart Team</b></p>
-          </div>
-        `,
-      };
-
-      // 5️⃣ Send email
-      await transporter.sendMail(mailOptions);
-    });
-
-    await Promise.all(sendEmailPromises);
+      })
+    );
 
     res.status(200).json({
+      success: true,
       message: `Invitations sent successfully to ${emails.length} email(s).`,
     });
   } catch (error) {
     console.error("Invite Users Error:", error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };
+
+// exports.inviteUsers = async (req, res) => {
+//   try {
+//     const { emails } = req.body;
+
+//     if (!emails || !Array.isArray(emails) || emails.length === 0) {
+//       return res.status(400).json({ message: "Please provide at least one email." });
+//     }
+
+//     const transporter = nodemailer.createTransport({
+//       service: "gmail",
+//       auth: {
+//         user: "noreply@shikshacart.com",
+//         pass: "xyrx ryad ondf jaum", 
+//       }, 
+//     });
+
+    
+//     const sendEmailPromises = emails.map(async (email) => {
+      
+//       let user = await Organizationuser.findOne({ email });
+
+      
+//       if (!user) {
+//         user = new Organizationuser({
+//           email,
+//           invitedBy: req.user?._id || null,
+//         });
+//         await user.save();
+//       }
+
+      
+//       const inviteLink = `https://dev.product.shikshacart.com/complete-profile/${user._id}`;
+
+      
+//       const mailOptions = {
+//         from: "noreply@shikshacart.com",
+//         to: email,
+//         subject: "You are invited to join ShikshaCart!",
+//         text: `
+// Hello,
+
+// You have been invited to complete your profile on ShikshaCart!
+
+// Please click the link below to complete your profile:
+// ${inviteLink}
+
+// Best regards,
+// ShikshaCart Team
+// `,
+//         html: `
+//           <div style="font-family: Arial, sans-serif; line-height: 1.6;">
+//             <h3>Hello,</h3>
+//             <p>You have been invited to complete your profile on <b>ShikshaCart</b>!</p>
+//             <p>
+//               Please click the button below to complete your profile:
+//             </p>
+//             <p>
+//               <a href="${inviteLink}" style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
+//                 Complete Profile
+//               </a>
+//             </p>
+//             <p>If the button doesn’t work, copy and paste this link into your browser:</p>
+//             <p><a href="${inviteLink}">${inviteLink}</a></p>
+//             <p>Best regards,<br><b>ShikshaCart Team</b></p>
+//           </div>
+//         `,
+//       };
+
+     
+//       await transporter.sendMail(mailOptions);
+//     });
+
+//     await Promise.all(sendEmailPromises);
+
+//     res.status(200).json({
+//       message: `Invitations sent successfully to ${emails.length} email(s).`,
+//     });
+//   } catch (error) {
+//     console.error("Invite Users Error:", error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 
@@ -1415,33 +1488,83 @@ exports.Organizationallocation = async (req, res) => {
 //       return res.status(400).json({ message: "Please provide at least one email." });
 //     }
 
-//     // ✅ Setup mail transporter
 //     const transporter = nodemailer.createTransport({
 //       service: "gmail",
 //       auth: {
 //         user: "noreply@shikshacart.com",
-//         pass: "xyrx ryad ondf jaum", // Gmail app password
+//         pass: "xyrx ryad ondf jaum",
 //       },
 //     });
 
-//     // ✅ Process each email
 //     const sendEmailPromises = emails.map(async (email) => {
-//       // 1️⃣ Check if user exists
-//       let user = await Organizationuser.findOne({ email });
-
-//       // 2️⃣ If not, create a record
-//       if (!user) {
-//         user = new Organizationuser({
+      
+//       let orgUser = await Organizationuser.findOne({ email });
+//       if (!orgUser) {
+//         orgUser = new Organizationuser({
 //           email,
 //           invitedBy: req.user?._id || null,
 //         });
+//         await orgUser.save();
+//       }
+
+     
+//       const tempPassword = Math.random().toString(36).slice(-8);
+//       const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
+      
+//       const userData = {
+//         firstName: orgUser.firstName || "User",
+//         middleName: orgUser.middleName || "",
+//         lastName: orgUser.lastName || "Allocated",
+//         mobileNumber: orgUser.mobileNumber || `999${Math.floor(Math.random() * 10000000)}`,
+//         email: orgUser.email,
+//         VerifyEmail: "Yes",
+//         status:"yes",
+//         password: hashedPassword,
+//         countryId: orgUser.countryId || null,
+//         stateId: orgUser.stateId || null,
+//         cityId: orgUser.cityId || null,
+//         pincode: orgUser.pincode || "",
+//         studentType: orgUser.studentType || "",
+//         instituteName: orgUser.instituteName || "",
+//         className: orgUser.className || null,
+//         session: orgUser.session || "",
+//         startDate: orgUser.startDate || "",
+//         endDate: orgUser.endDate || "",
+//         endTime: orgUser.endTime || "",
+//         platformDetails: orgUser.platformDetails || "",
+//         aadharCard: orgUser.aadharCard || "",
+//         marksheet: orgUser.marksheet || "",
+//         updatedBy: req.user?._id || null,
+//       };
+
+      
+//       let user = await User.findOne({ email });
+
+//       if (!user) {
+        
+//         userData.allocatedBy = orgUser.createdBy || req.user?._id || null;
+
+//         user = new User(userData);
+//         await user.save();
+//       } else {
+        
+//         const existingAllocatedBy = user.allocatedBy;
+//         Object.assign(user, userData);
+
+        
+//         if (!existingAllocatedBy) {
+//           user.allocatedBy = orgUser.createdBy || req.user?._id || null;
+//         } else {
+//           user.allocatedBy = existingAllocatedBy;
+//         }
+
 //         await user.save();
 //       }
 
-//       // 3️⃣ Login page link
-//       const loginLink = `https://dev.organization.shikshacart.com/login`;
+      
+//       const loginLink = `https://dev.product.shikshacart.com/login`;
 
-//       // 4️⃣ Prepare login credentials email
 //       const mailOptions = {
 //         from: "noreply@shikshacart.com",
 //         to: email,
@@ -1450,15 +1573,14 @@ exports.Organizationallocation = async (req, res) => {
 //           <div style="font-family: Arial, sans-serif; line-height: 1.6;">
 //             <h2>Welcome to ShikshaCart!</h2>
 //             <p>You have been invited to join the <b>ShikshaCart Organization Portal</b>.</p>
-            
-//             <p><b>Your Login Credentials:</b></p>
-//             <p style="background-color:#f7f7f7;padding:10px;border-radius:6px;">
-//               <b>Email:</b> ${email}
-//             </p>
 
-//             <p>
-//               Click the button below to log in and access your account:
-//             </p>
+//             <p><b>Your Login Credentials:</b></p>
+//             <div style="background-color:#f7f7f7;padding:10px;border-radius:6px;">
+//               <p><b>Email:</b> ${email}</p>
+//               <p><b>Temporary Password:</b> ${tempPassword}</p>
+//             </div>
+
+//             <p>Click below to log in:</p>
 //             <p>
 //               <a href="${loginLink}" 
 //                 style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
@@ -1466,7 +1588,7 @@ exports.Organizationallocation = async (req, res) => {
 //               </a>
 //             </p>
 
-//             <p>If the button doesn’t work, copy and paste this link into your browser:</p>
+//             <p>If button doesn't work, copy this link:</p>
 //             <p><a href="${loginLink}">${loginLink}</a></p>
 
 //             <p>Best regards,<br><b>ShikshaCart Team</b></p>
@@ -1474,21 +1596,19 @@ exports.Organizationallocation = async (req, res) => {
 //         `,
 //       };
 
-//       // 5️⃣ Send the email
 //       await transporter.sendMail(mailOptions);
 //     });
 
 //     await Promise.all(sendEmailPromises);
 
 //     res.status(200).json({
-//       message: `Login credential emails sent successfully to ${emails.length} user(s).`,
+//       message: `Users allocated successfully. Login credentials sent to ${emails.length} user(s).`,
 //     });
 //   } catch (error) {
-//     console.error("Invite Users Error:", error);
+//     console.error("Allocate Users Error:", error);
 //     res.status(500).json({ message: error.message });
 //   }
 // };
-
 
 exports.allocateuser = async (req, res) => {
   try {
@@ -1506,8 +1626,12 @@ exports.allocateuser = async (req, res) => {
       },
     });
 
+   
+    const templatePath = path.join(__dirname, "../public/allocated-seat.html");
+    const emailTemplate = fs.readFileSync(templatePath, "utf8");
+
     const sendEmailPromises = emails.map(async (email) => {
-      // 1️⃣ Find or create org user
+
       let orgUser = await Organizationuser.findOne({ email });
       if (!orgUser) {
         orgUser = new Organizationuser({
@@ -1517,11 +1641,9 @@ exports.allocateuser = async (req, res) => {
         await orgUser.save();
       }
 
-      // 2️⃣ Generate temp password
       const tempPassword = Math.random().toString(36).slice(-8);
       const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-      // 3️⃣ Prepare copied data
       const userData = {
         firstName: orgUser.firstName || "User",
         middleName: orgUser.middleName || "",
@@ -1529,7 +1651,7 @@ exports.allocateuser = async (req, res) => {
         mobileNumber: orgUser.mobileNumber || `999${Math.floor(Math.random() * 10000000)}`,
         email: orgUser.email,
         VerifyEmail: "Yes",
-        status:"yes",
+        status: "yes",
         password: hashedPassword,
         countryId: orgUser.countryId || null,
         stateId: orgUser.stateId || null,
@@ -1548,65 +1670,33 @@ exports.allocateuser = async (req, res) => {
         updatedBy: req.user?._id || null,
       };
 
-      // 4️⃣ Create or update in User collection
       let user = await User.findOne({ email });
 
       if (!user) {
-        // ✅ New user, set allocatedBy properly
         userData.allocatedBy = orgUser.createdBy || req.user?._id || null;
-
         user = new User(userData);
         await user.save();
       } else {
-        // ✅ Existing user, overwrite other fields but not allocatedBy if already set
         const existingAllocatedBy = user.allocatedBy;
         Object.assign(user, userData);
-
-        // agar pehle se allocatedBy nahi hai tab hi set karo
-        if (!existingAllocatedBy) {
-          user.allocatedBy = orgUser.createdBy || req.user?._id || null;
-        } else {
-          user.allocatedBy = existingAllocatedBy;
-        }
-
+        user.allocatedBy = existingAllocatedBy || orgUser.createdBy || req.user?._id || null;
         await user.save();
       }
 
-      // 5️⃣ Send login email
-      const loginLink = `https://dev.product.shikshacart.com/login`;
+      const loginLink = "https://dev.product.shikshacart.com/login";
 
-      const mailOptions = {
+      
+      const finalHtml = emailTemplate
+        .replace(/{{EMAIL}}/g, email)
+        .replace(/{{PASSWORD}}/g, tempPassword)
+        .replace(/{{LOGIN_LINK}}/g, loginLink);
+
+      await transporter.sendMail({
         from: "noreply@shikshacart.com",
         to: email,
         subject: "Your ShikshaCart Login Credentials",
-        html: `
-          <div style="font-family: Arial, sans-serif; line-height: 1.6;">
-            <h2>Welcome to ShikshaCart!</h2>
-            <p>You have been invited to join the <b>ShikshaCart Organization Portal</b>.</p>
-
-            <p><b>Your Login Credentials:</b></p>
-            <div style="background-color:#f7f7f7;padding:10px;border-radius:6px;">
-              <p><b>Email:</b> ${email}</p>
-              <p><b>Temporary Password:</b> ${tempPassword}</p>
-            </div>
-
-            <p>Click below to log in:</p>
-            <p>
-              <a href="${loginLink}" 
-                style="background-color:#4CAF50;color:white;padding:10px 20px;text-decoration:none;border-radius:5px;">
-                Login to ShikshaCart
-              </a>
-            </p>
-
-            <p>If button doesn't work, copy this link:</p>
-            <p><a href="${loginLink}">${loginLink}</a></p>
-
-            <p>Best regards,<br><b>ShikshaCart Team</b></p>
-          </div>
-        `,
-      };
-
-      await transporter.sendMail(mailOptions);
+        html: finalHtml,
+      });
     });
 
     await Promise.all(sendEmailPromises);
@@ -1619,113 +1709,6 @@ exports.allocateuser = async (req, res) => {
     res.status(500).json({ message: error.message });
   }
 };
-
-
-// exports.getAllocatedUsers = async (req, res) => {
-//   try {
-//     const allocatorId = req.user?._id;
-
-//     if (!allocatorId) {
-//       return res.status(400).json({ message: "Allocator ID not found in request." });
-//     }
-
-//     const { fields } = req.query;
-
-//     // Fetch allocated users and populate necessary references
-//     const users = await User.find({ allocatedBy: allocatorId })
-//       .populate([
-//         { path: "allocatedBy", select: "firstName lastName email" },
-//         { path: "countryId", select: "name" },
-//         { path: "stateId", select: "name" },
-//         { path: "cityId", select: "name" },
-       
-//       ])
-//       .sort({ createdAt: -1 });
-
-//     if (!users || users.length === 0) {
-//       return res.status(200).json({
-//         message: 'Allocated users fetched successfully.',
-//         users: []
-//       });
-//     }
-
-//     const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
-
-//     const formattedUsers = await Promise.all(
-//       users.map(async (user) => {
-//         let classId = user.className;
-//         let classDetails = null;
-//         if (mongoose.Types.ObjectId.isValid(classId)) {
-//           classDetails =
-//             (await School.findById(classId)) ||
-//             (await College.findById(classId));
-//         }
-
-//         // File URLs
-//         if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//           user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-//         }
-//         if (user.marksheet && fs.existsSync(user.marksheet)) {
-//           user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-//         }
-
-//         if (!classDetails || classDetails.price == null) {
-//           classId = null;
-//           user.className = null;
-//         }
-
-//         const formattedUser = {
-//           _id: user._id,
-//           firstName: user.firstName,
-//           middleName: user.middleName || '',
-//           lastName: user.lastName,
-//           mobileNumber: user.mobileNumber,
-//           pincode: user.pincode,
-//           email: user.email,
-//           VerifyEmail: user.VerifyEmail || 'no',
-//           status: user.status || 'no',
-//           createdBy: user.createdBy?._id || null,
-//           createdAt: user.createdAt,
-//           __v: user.__v,
-//           aadharCard: user.aadharCard || null,
-//           marksheet: user.marksheet || null,
-//           countryId: user.countryId || null,
-//           stateId: user.stateId || null,
-//           cityId: user.cityId || null,
-//           country: user.countryId?.name || '',
-//           state: user.stateId?.name || '',
-//           city: user.cityId?.name || '',
-//           instituteName: user.schoolName || user.collegeName || user.instituteName || '',
-//           studentType: user.studentType || '',
-//           classOrYear: classDetails?.name || '',
-//           className: classId,
-//           updatedBy: user.updatedBy?._id || null
-//         };
-
-//         if (fields) {
-//           const requestedFields = fields.split(',');
-//           const limited = {};
-//           requestedFields.forEach(f => {
-//             if (formattedUser.hasOwnProperty(f)) limited[f] = formattedUser[f];
-//           });
-//           return limited;
-//         }
-
-//         return formattedUser;
-//       })
-//     );
-
-//     res.status(200).json({
-//       message: 'Allocated users fetched successfully.',
-//       users: formattedUsers
-//     });
-
-//   } catch (error) {
-//     console.error("Get Allocated Users Error:", error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
-
 
 exports.getAllocatedUsers = async (req, res) => {
   try {

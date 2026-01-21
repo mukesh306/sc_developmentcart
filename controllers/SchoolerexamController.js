@@ -12,8 +12,9 @@ const UserExamGroup  = require("../models/userExamGroup");
 const CategoryTopUser = require("../models/CategoryTopUser");
 const ExamUserStatus = require("../models/ExamUserStatus");
 const MarkingSetting = require("../models/markingSetting");
+const Notification = require("../models/notification");
 const moment = require("moment-timezone");
-
+const admin = require("../config/firebase");
 
 exports.createExam = async (req, res) => {
   try {
@@ -291,28 +292,6 @@ exports.updateExam = async (req, res) => {
   }
 };
 
-exports.publishExam = async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    
-    const exam = await Schoolerexam.findById(id);
-    if (!exam) {
-      return res.status(404).json({ message: "Exam not found." });
-    }
-
-    // Update publish to true
-    exam.publish = true;
-    await exam.save();
-
-    res.status(200).json({
-      message: "Exam published successfully.",
-    });
-  } catch (error) {
-    console.error("Error publishing exam:", error);
-    res.status(500).json({ message: "Internal server error.", error });
-  }
-};
 
 
 // exports.assignGroupToExam = async (req, res) => {
@@ -487,7 +466,7 @@ exports.getExamByGroupAndExamType = async (req, res) => {
       examObj.className = null;
     }
 
-    // ⭐ totalQuestions
+  
     examObj.totalQuestions = exam.topicQuestions
       ? exam.topicQuestions.length
       : 0;
@@ -555,10 +534,10 @@ exports.updateGroupInExam = async (req, res) => {
       });
     }
 
-    // 1️⃣ Find the exam where this group is currently assigned
+    
     const oldExam = await Schoolerexam.findOne({
       examType: examType,
-      assignedGroup: { $in: [groupId] }   // FIXED
+      assignedGroup: { $in: [groupId] }  
     });
 
     if (!oldExam) {
@@ -567,7 +546,7 @@ exports.updateGroupInExam = async (req, res) => {
       });
     }
 
-    // 2️⃣ Find the new exam to move this group
+    
     const newExam = await Schoolerexam.findOne({
       _id: examId,
       examType: examType
@@ -579,13 +558,13 @@ exports.updateGroupInExam = async (req, res) => {
       });
     }
 
-    // 3️⃣ Remove group from OLD exam
+    
     oldExam.assignedGroup = oldExam.assignedGroup.filter(
       (id) => id.toString() !== groupId.toString()
     );
     await oldExam.save();
 
-    // 4️⃣ Add group to NEW exam
+    
     if (!newExam.assignedGroup.includes(groupId)) {
       newExam.assignedGroup.push(groupId);
       await newExam.save();
@@ -2555,6 +2534,7 @@ exports.getExamsByAssignedGroup = async (req, res) => {
         bufferTime,
       };
     });
+    
 
     return res.status(200).json({
       message: "Exams fetched successfully",
@@ -2571,5 +2551,344 @@ exports.getExamsByAssignedGroup = async (req, res) => {
 };
 
 
+// exports.publishExam = async (req, res) => {
+//   try {
+//     const { id } = req.params;
 
+//     const exam = await Schoolerexam
+//       .findById(id)
+//       .populate("category", "name");
+
+//     if (!exam) {
+//       return res.status(404).json({ message: "Exam not found" });
+//     }
+
+    
+//     if (exam.publish === true) {
+//       return res.json({
+//         message: "Exam already published"
+//       });
+//     }
+
+//     exam.publish = true;
+//     await exam.save();
+
+//     if (!Array.isArray(exam.assignedGroup) || exam.assignedGroup.length === 0) {
+//       return res.json({
+//         message: "Exam published, no groups assigned"
+//       });
+//     }
+
+//     const groups = await UserExamGroup.find({
+//       _id: { $in: exam.assignedGroup }
+//     }).lean();
+
+    
+//     const userSet = new Set();
+
+//     groups.forEach(group => {
+//       if (Array.isArray(group.members)) {
+//         group.members.forEach(uid => {
+//           userSet.add(uid.toString());
+//         });
+//       }
+//     });
+
+//     const notifications = Array.from(userSet).map(userId => ({
+//       userId,
+//       examId: exam._id,
+//       type: "scheduled",
+//       title: "Exam Scheduled",
+//       message: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
+//       scheduleDate: exam.ScheduleDate,
+//       scheduleTime: exam.ScheduleTime,
+//     }));
+
+//     const savedNotifications = await Notification.insertMany(notifications);
+
+   
+//     savedNotifications.forEach(notify => {
+//       if (global.sendNotificationToUser) {
+//         global.sendNotificationToUser(notify.userId, notify);
+//       }
+//     });
+
+//     return res.json({
+//       message: "Exam published & notifications sent",
+//       count: savedNotifications.length
+//     });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// };
+
+
+
+exports.publishExam = async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const exam = await Schoolerexam
+      .findById(id)
+      .populate("category", "name");
+
+    if (!exam) {
+      return res.status(404).json({ message: "Exam not found" });
+    }
+
+    if (exam.publish === true) {
+      return res.json({ message: "Exam already published" });
+    }
+
+    exam.publish = true;
+    await exam.save();
+
+    if (!Array.isArray(exam.assignedGroup) || exam.assignedGroup.length === 0) {
+      return res.json({ message: "Exam published, no groups assigned" });
+    }
+
+    const groups = await UserExamGroup.find({
+      _id: { $in: exam.assignedGroup }
+    }).lean();
+
+    const userSet = new Set();
+
+    groups.forEach(group => {
+      if (Array.isArray(group.members)) {
+        group.members.forEach(uid => {
+          userSet.add(uid.toString());
+        });
+      }
+    });
+
+   
+   const notifications = [];
+
+Array.from(userSet).forEach(userId => {
+  // Scheduled notification
+  notifications.push({
+    userId,
+    examId: exam._id,
+    type: "scheduled",
+    title: "Exam Scheduled",
+    message: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
+    scheduleDate: exam.ScheduleDate,
+    scheduleTime: exam.ScheduleTime,
+    examType: exam.category.name,
+    isRead: false,
+    sent: true 
+  });
+
+ 
+  notifications.push({
+    userId,
+    examId: exam._id,
+    type: "reminder",
+    title: "Exam Reminder",
+     message: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate},don't miss it`,
+    scheduleDate: exam.ScheduleDate,
+    scheduleTime: exam.ScheduleTime,
+    isRead: false,
+    sent: false,
+   examType: exam.category.name,
+  });
+});
+
+await Notification.insertMany(notifications);
+   
+
+   
+    const users = await User.find({
+      _id: { $in: Array.from(userSet) },
+      fcmToken: { $ne: null }
+    }).select("fcmToken").lean();
+
+    const tokens = users.map(u => u.fcmToken).filter(Boolean);
+
+    if (tokens.length > 0) {
+      const message = {
+        notification: {
+          title: "Exam Scheduled",
+          body: `Your ${exam.category.name} exam is scheduled on ${exam.ScheduleDate}`,
+        },
+        data: {
+          examId: exam._id.toString(),
+          type: "scheduled",
+           examType: exam.category?.name || "",
+          isRead: "false",
+          createdAt: new Date().toISOString(),
+        },
+        tokens,
+      };
+
+      await admin.messaging().sendEachForMulticast(message);
+
+    }
+
+    return res.json({
+      message: "Exam published & Firebase notifications sent",
+      usersNotified: tokens.length,
+    });
+
+  } catch (err) {
+    console.error("Publish Exam Error:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+exports.getMyNotifications = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).select("status").lean();
+    if (!user) {
+      return res.json({ success: true, data: [] });
+    }
+
+    const now = moment().tz("Asia/Kolkata"); 
+    const twoMinutesAgo = moment().subtract(2, "minutes");
+
+    let query = { userId };
+
+    if (user.status === "no") {
+      query.$or = [
+        { type: "enrolled", createdAt: { $lte: twoMinutesAgo.toDate() } },
+        { type: "reminder" }
+      ];
+    }
+
+    if (user.status === "yes") {
+      query.$or = [
+        { type: "scheduled" },
+        { type: "reminder" }
+      ];
+    }
+
+    const notifications = await Notification.find(query)
+      .select("type title message scheduleDate scheduleTime isRead examType createdAt")
+      .sort({ createdAt: -1 })
+      .limit(50)
+      .lean();
+
+    const filtered = notifications.filter(n => {
+      if (n.type !== "reminder") return true;
+
+      if (!n.scheduleDate || !n.scheduleTime) return false;
+
+    
+      const examTime = moment.tz(
+        `${n.scheduleDate} ${n.scheduleTime}`,
+        "DD-MM-YYYY HH:mm:ss",
+        "Asia/Kolkata"
+      );
+
+      const reminderTime = examTime.clone().subtract(3, "minutes");
+
+      return now.isSameOrAfter(reminderTime); 
+    });
+
+    res.json({ success: true, data: filtered });
+
+  } catch (err) {
+    console.error(err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+
+
+// exports.getMyNotifications = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+
+//     const user = await User.findById(userId).select("status").lean();
+//     if (!user) {
+//       return res.json({ success: true, data: [] });
+//     }
+
+//     const twoMinutesAgo = new Date(Date.now() - 2 * 60 * 1000);
+
+//     let query = { userId };
+
+//     if (user.status === "no") {
+//       query.$or = [
+//         {
+//           type: "enrolled",
+//           createdAt: { $lte: twoMinutesAgo }
+//         }
+//       ];
+//     }
+
+//     if (user.status === "yes") {
+      
+//       query.$or = [
+//         { type: "scheduled" }
+//       ];
+//     }
+
+//     const notifications = await Notification.find(query)
+//       .select("type title message scheduleDate scheduleTime isRead createdAt")
+//       .sort({ createdAt: -1 })
+//       .limit(50);
+
+//     res.json({ success: true, data: notifications });
+
+//   } catch (err) {
+//     console.error(err);
+//     res.status(500).json({ message: "Internal server error" });
+//   }
+// };
+
+
+
+
+exports.markAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user._id;
+
+    const notif = await Notification.findOneAndUpdate(
+      { _id: id, userId },
+      { isRead: true },
+      { new: true }
+    );
+
+    if (!notif) return res.status(404).json({ message: "Notification not found" });
+
+    res.json({ success: true});
+  } catch (err) {
+    console.error("markAsRead ERROR:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+
+
+exports.markAsRead = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    await Notification.updateMany(
+      { userId, isRead: false },
+      { $set: { isRead: true } }
+    );
+
+    const updatedNotifications = await Notification.find({ userId })
+      .sort({ createdAt: -1 });
+
+   
+    if (global.sendToUser) {
+      global.sendToUser(userId, "myNotifications", updatedNotifications);
+    }
+
+   
+    res.json({ success: true });
+
+  } catch (err) {
+    console.error("markAsRead ERROR:", err);
+    res.status(500).json({ message: "Internal server error" });
+  }
+};
+  
 

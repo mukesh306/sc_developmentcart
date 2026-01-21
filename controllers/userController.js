@@ -1,4 +1,10 @@
+const crypto = require("crypto");
+const qs = require("querystring");
+const axios = require("axios");
+const cron = require("node-cron");
+const Notification = require("../models/notification");
 const User = require('../models/User');
+const TempUser = require('../models/tempuser');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const College = require('../models/college');
@@ -18,25 +24,16 @@ const Schoolercategory = require("../models/schoolershipcategory");
 const Schoolerexam = require("../models/Schoolerexam");
 const UserExamGroup = require("../models/userExamGroup");
 const LearningScore = require('../models/learningScore');
+const Tempuser = require('../models/tempuser');
 const fs = require('fs');
 const path = require('path');
-// const moment = require('moment');
 const moment = require('moment-timezone');
+const Payment = require("../models/payment");
 
 
 // exports.signup = async (req, res) => {
 //   try {
-//     const {
-//       firstName,
-//       middleName,
-//       lastName,
-//       mobileNumber,
-//       email,
-//       password,
-//       confirmPassword
-//     } = req.body;
-
-    
+//     const { firstName, middleName, lastName, mobileNumber, email, password, confirmPassword } = req.body;  
 //     if (!firstName) return res.status(400).json({ message: 'First Name can’t remain empty.' });
 //     if (!lastName) return res.status(400).json({ message: 'Last Name can’t remain empty.' });
 //     if (!mobileNumber) return res.status(400).json({ message: 'Mobile Number can’t remain empty.' });
@@ -45,53 +42,49 @@ const moment = require('moment-timezone');
 //     if (!confirmPassword) return res.status(400).json({ message: 'Confirm Password can’t remain empty.' });
 
 //     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-//     if (!emailRegex.test(email)) {
-//       return res.status(400).json({ message: 'Please enter a valid email address.' });
-//     }
+//     if (!emailRegex.test(email)) return res.status(400).json({ message: 'Please enter a valid email address.' });
 
 //     const mobileRegex = /^[0-9]{10}$/;
-//     if (!mobileRegex.test(mobileNumber)) {
-//       return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits and contain only numbers.' });
-//     }
+//     if (!mobileRegex.test(mobileNumber)) return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits.' });
 
 //     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
-//     if (!passwordRegex.test(password)) {
-//       return res.status(400).json({
-//         message: 'Password must contain at least 8 characters with a mix of uppercase, lowercase letters, and numbers.'
-//       });
-//     }
+//     if (!passwordRegex.test(password)) return res.status(400).json({ message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.' });
 
-    
-//     if (password !== confirmPassword) {
-//       return res.status(400).json({ message: 'Passwords do not match.' });
-//     }
+//     if (password !== confirmPassword) return res.status(400).json({ message: 'Passwords do not match.' });
 
- 
-//     const existingUser = await User.findOne({ $or: [{ email }, { mobileNumber }] });
-//     if (existingUser) {
-//       return res.status(409).json({ message: 'User with this email or mobile already exists.' });
-//     }
+//     const existingUser = await Tempuser.findOne({ $or: [{ email }, { mobileNumber }] });
+//     if (existingUser) return res.status(409).json({ message: 'User with this email  already exists.' });
 
 //     const hashedPassword = await bcrypt.hash(password, 10);
+ 
+//     const allCategories = await Schoolercategory.find().select("_id name examType").sort({ createdAt: 1 }).lean();
 
-//     const newUser = new User({
-//       firstName,
-//       middleName,
-//       lastName,
-//       mobileNumber,
-//       email,
-//       password: hashedPassword,
+//     let userDetails = [];
+//     allCategories.forEach((cat, catIndex) => {
+//       userDetails.push({
+//         category: { _id: cat._id, name: cat.name, examType: cat.examType || [] },
+//         examTypes: (cat.examType || []).map((et, etIndex) => ({
+//           _id: et._id,
+//           name: et.name,
+//           status: catIndex === 0 && etIndex === 0 ? "Eligible" : "NA",
+//           result: "NA",
+//           AttemptStatus: "NA"
+//         }))
+//       });
+//     });
+
+//     const newUser = new Tempuser({
+//       firstName, middleName, lastName, mobileNumber, email, password: hashedPassword,
+//       userDetails,
+//       status: "no" 
 //     });
 
 //     await newUser.save();
-
-//     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, {
-//       expiresIn: '7d',
-//     });
-
+ 
+//     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });    
 //     res.status(201).json({
 //       message: 'Registered successfully. Redirecting to complete your profile.',
-//       token,
+//       token
 //     });
 
 //   } catch (error) {
@@ -115,7 +108,6 @@ exports.signup = async (req, res) => {
 
     if (!firstName) return res.status(400).json({ message: 'First Name can’t remain empty.' });
     if (!lastName) return res.status(400).json({ message: 'Last Name can’t remain empty.' });
-    if (!mobileNumber) return res.status(400).json({ message: 'Mobile Number can’t remain empty.' });
     if (!email) return res.status(400).json({ message: 'Email address can’t remain empty.' });
     if (!password) return res.status(400).json({ message: 'Create Password can’t remain empty.' });
     if (!confirmPassword) return res.status(400).json({ message: 'Confirm Password can’t remain empty.' });
@@ -123,11 +115,6 @@ exports.signup = async (req, res) => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({ message: 'Please enter a valid email address.' });
-    }
-
-    const mobileRegex = /^[0-9]{10}$/;
-    if (!mobileRegex.test(mobileNumber)) {
-      return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits.' });
     }
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
@@ -141,20 +128,16 @@ exports.signup = async (req, res) => {
       return res.status(400).json({ message: 'Passwords do not match.' });
     }
 
-    const existingUser = await User.findOne({ $or: [{ email }, { mobileNumber }] });
-    if (existingUser) {
-      return res.status(409).json({ message: 'User with this email or mobile already exists.' });
-    }
-
+   
     const hashedPassword = await bcrypt.hash(password, 10);
 
    
-    const allCategories = await Schoolercategory.find()
+    const allCategories = await Schoolercategory
+      .find()
       .select("_id name examType")
       .sort({ createdAt: 1 })
       .lean();
 
-    
     let userDetails = [];
     allCategories.forEach((cat, catIndex) => {
       userDetails.push({
@@ -164,36 +147,44 @@ exports.signup = async (req, res) => {
           examType: cat.examType || []
         },
         examTypes: (cat.examType || []).map((et, etIndex) => ({
-           _id: et._id, 
+          _id: et._id,
           name: et.name,
           status: catIndex === 0 && etIndex === 0 ? "Eligible" : "NA",
           result: "NA",
-          AttemptStatus:"NA"
+          AttemptStatus: "NA"
         }))
       });
     });
 
-    const newUser = new User({
-      firstName,
-      middleName,
-      lastName,
-      mobileNumber,
-      email,
-      password: hashedPassword,
-      userDetails
-    });
-
-    await newUser.save();
+  
+    const tempUser = await Tempuser.findOneAndUpdate(
+      { email },
+      {
+        firstName,
+        middleName,
+        lastName,
+        mobileNumber,
+        password: hashedPassword,
+        userDetails,
+        status: "no",
+        VerifyEmail: "No"
+      },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true
+      }
+    );
 
     const token = jwt.sign(
-      { id: newUser._id },
+      { id: tempUser._id },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
     res.status(201).json({
-      message: 'Registered successfully. Redirecting to complete your profile.',
-      token
+      message: 'Now verify Your Email.',
+      // token
     });
 
   } catch (error) {
@@ -204,7 +195,6 @@ exports.signup = async (req, res) => {
     });
   }
 };
-
 
 
 exports.Userlogin = async (req, res) => {
@@ -484,9 +474,8 @@ exports.getUserProfile = async (req, res) => {
       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
     }
 
-    console.log("baseUrl",baseUrl)
-    console.log("protocol",req.protocol)
-    console.log("req.get",req.get('host'))
+    // console.log("baseUrl",baseUrl)
+   
 
     if (!classDetails || classDetails.price == null) {
       classId = null;
@@ -567,7 +556,7 @@ exports.getUserProfile = async (req, res) => {
         startDate: user.startDate || "",      
      endDate: user.endDate || ""  
     };
-console.log("formattedUser",formattedUser)
+
     return res.status(200).json({
       message: "User profile fetched successfully.",
       user: formattedUser
@@ -592,7 +581,15 @@ exports.sendResetOTP = async (req, res) => {
     user.resetPasswordOTP = otp;
     user.resetPasswordExpires = expiry;
     await user.save();
+     const templatePath = path.join(
+      __dirname,
+      "../public/forgot-password.html"
+    );
 
+    let htmlTemplate = fs.readFileSync(templatePath, "utf8");
+
+    
+    htmlTemplate = htmlTemplate.replace("{{OTP}}", otp);
 
    const transporter = nodemailer.createTransport({
      service: 'gmail',
@@ -603,10 +600,11 @@ exports.sendResetOTP = async (req, res) => {
    });
 
     await transporter.sendMail({
-      from: 'noreply@shikshacart.com',
+       from: `"ShikshaCart" <noreply@shikshacart.com>`,
       to: email,
       subject: 'Login OTP',
-      text: `Your OTP is: ${otp}`,
+      html: htmlTemplate, 
+      // text: `Your OTP is: ${otp}`,
     });
 
     res.status(200).json({ message: 'OTP sent to email.' });
@@ -697,71 +695,193 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
   }
 };
 
+
+// exports.SendEmailverifyOTP = async (req, res) => {
+//   try {
+//     const { email } = req.body;
+//     const user = await Tempuser.findOne({ email });
+//     if (!user) return res.status(404).json({ message: 'User not found' });
+//     const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
+//     const expiry = new Date(Date.now() + 5 * 60 * 1000); 
+//     user.resetPasswordOTP = otp;
+//     user.resetPasswordExpires = expiry;
+//     await user.save();
+//    const transporter = nodemailer.createTransport({
+//      service: 'gmail',
+//      auth: {
+//        user: 'noreply@shikshacart.com', 
+//        pass: 'xyrx ryad ondf jaum' 
+//      }
+//    });
+
+//     await transporter.sendMail({
+//       from: 'noreply@shikshacart.com',
+//       to: email,
+//       subject: 'Email Verify OTP',
+//       text: `Your OTP is: ${otp}`,
+//     });
+
+//     res.status(200).json({ message: 'OTP sent to email for Verify Email.' });
+//   } catch (error) {
+//     console.error('Send OTP Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.SendEmailverifyOTP = async (req, res) => {
   try {
     const { email } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: 'User not found' });
-    const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
-    const expiry = new Date(Date.now() + 5 * 60 * 1000); 
+    const user = await Tempuser.findOne({ email });
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+
+    
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiry = new Date(Date.now() + 5 * 60 * 1000);
+
     user.resetPasswordOTP = otp;
     user.resetPasswordExpires = expiry;
     await user.save();
 
-    // Email setup
-   const transporter = nodemailer.createTransport({
-     service: 'gmail',
-     auth: {
-       user: 'noreply@shikshacart.com', 
-       pass: 'xyrx ryad ondf jaum' 
-     }
-   });
+   
+    const templatePath = path.join(
+      __dirname,
+      "../public/verify-email.html"
+    );
 
-    await transporter.sendMail({
-      from: 'noreply@shikshacart.com',
-      to: email,
-      subject: 'Email Verify OTP',
-      text: `Your OTP is: ${otp}`,
+    let htmlTemplate = fs.readFileSync(templatePath, "utf8");
+
+    
+    htmlTemplate = htmlTemplate.replace("{{OTP}}", otp);
+ 
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: {
+        user: "noreply@shikshacart.com",
+        pass: "xyrx ryad ondf jaum", 
+      },
     });
 
-    res.status(200).json({ message: 'OTP sent to email for Verify Email.' });
+  
+    await transporter.sendMail({
+      from: `"ShikshaCart" <noreply@shikshacart.com>`,
+      to: email,
+      subject: "Email Verification OTP",
+      html: htmlTemplate, 
+    });
+
+    res.status(200).json({
+      message: "OTP sent to email for Verify Email.",
+    });
   } catch (error) {
-    console.error('Send OTP Error:', error);
+    console.error("Send OTP Error:", error);
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// exports.EmailVerifyOtp = async (req, res) => {
+//   try {
+//     const { email, otp } = req.body;
+//     const user = await Tempuser.findOne({ email });
+//     if (!user) return res.status(404).json({ message: 'User not found' });
+//     if (
+//       !user.resetPasswordOTP ||
+//       user.resetPasswordOTP !== otp ||
+//       new Date() > user.resetPasswordExpires
+//     ) {
+//       return res.status(400).json({ message: 'Invalid or expired OTP' });
+//     }
+
+//     user.resetPasswordOTP = undefined;
+//     user.resetPasswordExpires = undefined;
+//     user.VerifyEmail = 'Yes'; 
+//     await user.save();
+
+//     res.status(200).json({
+//       message: 'Email Verified Successfully',
+//       VerifyEmail: user.VerifyEmail,
+//     });
+//   } catch (error) {
+//     console.error('Email Verify Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.EmailVerifyOtp = async (req, res) => {
   try {
     const { email, otp } = req.body;
 
-    const user = await User.findOne({ email });
-    if (!user) return res.status(404).json({ message: 'User not found' });
+    const tempUser = await Tempuser.findOne({ email });
+    if (!tempUser) {
+      return res.status(404).json({ message: 'User not found' });
+    }
 
     if (
-      !user.resetPasswordOTP ||
-      user.resetPasswordOTP !== otp ||
-      new Date() > user.resetPasswordExpires
+      !tempUser.resetPasswordOTP ||
+      tempUser.resetPasswordOTP !== otp ||
+      new Date() > tempUser.resetPasswordExpires
     ) {
       return res.status(400).json({ message: 'Invalid or expired OTP' });
     }
 
-    user.resetPasswordOTP = undefined;
-    user.resetPasswordExpires = undefined;
-    user.VerifyEmail = 'Yes'; 
-    await user.save();
+    const existingUser = await User.findOne({
+      $or: [{ email: tempUser.email }]
+    });
+
+    if (existingUser) {
+      return res.status(409).json({ message: 'User already exists' });
+    }
+
+   
+    const newUser = new User({
+      firstName: tempUser.firstName,
+      middleName: tempUser.middleName,
+      lastName: tempUser.lastName,
+      mobileNumber: tempUser.mobileNumber,
+      email: tempUser.email,
+      password: tempUser.password, 
+      userDetails: tempUser.userDetails,
+      status: tempUser.status || "no",
+      VerifyEmail: "Yes"
+    });
+
+    await newUser.save();
+
+    
+    await Notification.create({
+      userId: newUser._id,
+      type: "enrolled",
+      title: "Enroll now & start your journey!",
+      message: "Enroll now to learn new skills everyday"
+    });
+
+    
+    await Tempuser.findByIdAndDelete(tempUser._id);
+
+ 
+    const token = jwt.sign(
+      { id: newUser._id },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
 
     res.status(200).json({
-      message: 'Email Verified Successfully',
-      VerifyEmail: user.VerifyEmail,
+      message: 'Email verified & account activated successfully',
+      token
     });
+
   } catch (error) {
     console.error('Email Verify Error:', error);
-    res.status(500).json({ message: error.message });
+    res.status(500).json({ message: 'Server error', error: error.message });
   }
 };
+
 
 exports.updateUser = async (req, res) => {
   try { 
@@ -1111,163 +1231,175 @@ exports.updateProfile = async (req, res) => {
 };
 
 
+// const PHONEPE_CLIENT_ID = "M23HL0YHON0IL_2601071815";
+// const PHONEPE_CLIENT_SECRET = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
+// const PHONEPE_CLIENT_VERSION = "1";
+// const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
 
-// exports.updateProfile = async (req, res) => {
-//   try {
-//     const userId = req.user.id;
 
-//     const existingUser = await User.findById(userId);
-//     if (!existingUser) {
-//       return res.status(404).json({ message: 'User not found' });
-//     }
+const PHONEPE_CLIENT_ID = process.env.PHONEPE_CLIENT_ID;
+const PHONEPE_CLIENT_SECRET = process.env.PHONEPE_CLIENT_SECRET;
+const PHONEPE_CLIENT_VERSION = process.env.PHONEPE_CLIENT_VERSION;
+const PHONEPE_BASE_URL = process.env.PHONEPE_BASE_URL;
 
-//     if (existingUser.status === 'yes') {
-//       return res.status(403).json({ message: 'You are not eligible to update.' });
-//     }
 
-//     let {
-//       countryId,
-//       stateId,
-//       cityId,
-//       pincode,
-//       studentType,
-//       schoolName,
-//       instituteName,
-//       collegeName,
-//       className
-//     } = req.body;
+let phonePeToken = null;
+let phonePeTokenExpiry = null;
 
-//     if (pincode && !/^\d+$/.test(pincode)) {
-//       return res.status(400).json({ message: 'Invalid Pincode' });
-//     }
+const getPhonePeToken = async () => {
+  if (phonePeToken && phonePeTokenExpiry && Date.now() < phonePeTokenExpiry) {
+    return phonePeToken;
+  }
 
-//     const updatedFields = {
-//       pincode,
-//       studentType,
-//       schoolName,
-//       instituteName,
-//       collegeName
-//     };
+ 
+  const payload = qs.stringify({
+    client_id: PHONEPE_CLIENT_ID,
+    client_secret: PHONEPE_CLIENT_SECRET,
+    client_version: PHONEPE_CLIENT_VERSION,
+    grant_type: "client_credentials"
+  });
 
-//     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
-//     if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
-//     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
-//     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
+  const response = await axios.post(
+    `${PHONEPE_BASE_URL}/v1/oauth/token`,
+    payload,
+    {
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded"
+      }
+    }
+  );
 
-//     if (req.files?.aadharCard?.[0]) {
-//       updatedFields.aadharCard = req.files.aadharCard[0].path;
-//     }
+  phonePeToken = response.data.access_token;
+  phonePeTokenExpiry =
+    Date.now() + (response.data.expires_in - 60) * 1000;
 
-//     if (req.files?.marksheet?.[0]) {
-//       updatedFields.marksheet = req.files.marksheet[0].path;
-//     }
+  return phonePeToken;
+};
 
-//     let classDetails = null;
-//     if (mongoose.Types.ObjectId.isValid(className)) {
-//       classDetails =
-//         (await School.findById(className)) ||
-//         (await College.findById(className));
 
-//       if (classDetails?.updatedBy) {
-//         let shouldClone = false;
+exports.createPhonePePayment = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { amount } = req.body; 
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid amount is required"
+      });
+    }
 
-//         if (!existingUser.updatedBy) {
-//           shouldClone = true;
-//         }
+    const amountInPaise = amount * 100; 
+    const merchantOrderId = `ORDER_${Date.now()}`;
 
-//         if (existingUser.className?.toString() !== className?.toString()) {
-//           shouldClone = true;
-//         }
+    const token = await getPhonePeToken();
 
-//         if (
-//           existingUser.className?.toString() === className?.toString() &&
-//           existingUser.updatedBy?.toString() !== classDetails.updatedBy.toString()
-//         ) {
-//           shouldClone = true;
-//         }
+    const payload = {
+      merchantOrderId,
+      amount: amountInPaise,
+      paymentFlow: {
+        type: "PG_CHECKOUT",
+        message: "Profile activation payment",
+        merchantUrls: {
+           redirectUrl: `https://dev.product.shikshacart.com/payment-redirect/${merchantOrderId}`
+        }
+      }
+    };
 
-       
-//         if (shouldClone) {
-//           const alreadyExists = await UserHistory.findOne({
-//             originalUserId: existingUser._id,
-//             className: className,
-//             updatedBy: classDetails.updatedBy
-//           });
+    const response = await axios.post(
+      `${PHONEPE_BASE_URL}/checkout/v2/pay`,
+      payload,
+      {
+        headers: {
+          Authorization: `O-Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
 
-         
-//           if (!alreadyExists) {
-//             const userData = existingUser.toObject();
+    await Payment.create({
+      userId,
+      merchantOrderId,
+      amount: amountInPaise, 
+      displayAmount: amount, 
+      status: "PENDING",
+      rawResponse: response.data
+    });
 
-//             delete userData._id;
-//             delete userData.__v;
+    res.json({
+      success: true,
+      merchantOrderId,
+      redirectUrl: response.data.redirectUrl
+    });
 
-//             if (userData.countryId?._id) userData.countryId = userData.countryId._id;
-//             if (userData.stateId?._id) userData.stateId = userData.stateId._id;
-//             if (userData.cityId?._id) userData.cityId = userData.cityId._id;
-//             if (userData.updatedBy?._id) userData.updatedBy = userData.updatedBy._id;
-//             if (userData.className?._id) userData.className = userData.className._id;
+  } catch (error) {
+    console.error("PHONEPE PAY ERROR:", error.response?.data || error.message);
+    res.status(500).json({
+      success: false,
+      error: error.response?.data || error.message
+    });
+  }
+};
 
-//             await UserHistory.create({
-//               ...userData,
-//               originalUserId: existingUser._id,
-//               clonedAt: new Date()
-//             });
-//           }
-//         }
+
+exports.verifyPhonePePayment = async (req, res) => {
+  try {
+    const { merchantOrderId } = req.params;
+    const token = await getPhonePeToken();
+    const response = await axios.get(
      
+      `${PHONEPE_BASE_URL}/checkout/v2/order/${merchantOrderId}/status`,
+      {
+        headers: {
+          Authorization: `O-Bearer ${token}`,
+          "Content-Type": "application/json"
+        }
+      }
+    );
 
-//         updatedFields.updatedBy = classDetails.updatedBy;
+    const paymentStatus = response.data.state;
 
-//         const admin = await Admin1.findById(classDetails.updatedBy);
-//         if (admin?.session) {
-//           updatedFields.session = admin.session;
-//         }
-//       }
-//     }
+    await Payment.findOneAndUpdate(
+      { merchantOrderId },
+      {
+        status: paymentStatus,
+        rawResponse: response.data
+      }
+    );
 
-//     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
-//       .populate('countryId')
-//       .populate('stateId')
-//       .populate('cityId')
-//       .populate('updatedBy', 'email session startDate endDate');
+    if (paymentStatus === "COMPLETED") {
+      await User.findByIdAndUpdate(req.user.id, {
+        status: "yes",
+        updatedAt: new Date()
+      });
+    }
 
-//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+    res.json({
+      success: true,
+      status: paymentStatus,
+      data: response.data
+    });
 
-//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-//     }
-//     if (user.marksheet && fs.existsSync(user.marksheet)) {
-//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-//     }
+  } catch (error) {
+    console.error("PHONEPE VERIFY ERROR:", error.response?.data || error.message);
 
-//     const formattedUser = {
-//       ...user._doc,
-//       country: user.countryId?.name || '',
-//       state: user.stateId?.name || '',
-//       city: user.cityId?.name || '',
-//       institutionName: schoolName || collegeName || instituteName || '',
-//       institutionType: studentType || '',
-//       classOrYear: classDetails?.name || '',
-//       session: user.session || '',
-//       updatedBy: user.updatedBy || null
-//     };
+    res.status(500).json({
+      success: false,
+      error: error.response?.data || error.message
+    });
+  }
+};
 
-//     return res.status(200).json({
-//       message: 'Profile updated. Redirecting to home page.',
-//       user: formattedUser
-//     });
 
-//   } catch (error) {
-//     console.error('Update Profile Error:', error);
-//     return res.status(500).json({ message: error.message });
-//   }
-// };
+
+
+
+
+
 
 
 exports.updateProfileStatus = async (req, res) => {
   try {
     const userId = req.user.id;
-
     const user = await User.findByIdAndUpdate(
       userId,
       {
@@ -1276,16 +1408,68 @@ exports.updateProfileStatus = async (req, res) => {
       },
       { new: true }
     );
-
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
     res.status(200).json({ message: 'yes' });
   } catch (error) {
     res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// exports.updateProfileStatus = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     const merchantTransactionId = "MT" + Date.now();
+//     const amount = 100 * 100; 
+
+//     const payload = {
+//       merchantId: process.env.PHONEPE_MERCHANT_ID,
+//       merchantTransactionId,
+//       merchantUserId: userId,
+//       amount,
+//       redirectUrl: "https://backend.shikshacart.com/api/phonepe/redirect",
+//       redirectMode: "POST",
+//       callbackUrl: "https://backend.shikshacart.com/api/phonepe/callback",
+//       paymentInstrument: { type: "PAY_PAGE" }
+//     };
+
+//     const payloadBase64 = Buffer.from(JSON.stringify(payload)).toString("base64");
+
+//     const stringToSign =
+//       payloadBase64 + "/pg/v1/pay" + process.env.PHONEPE_SALT_KEY;
+
+//     const checksum =
+//       crypto.createHash("sha256").update(stringToSign).digest("hex") +
+//       "###" +
+//       process.env.PHONEPE_SALT_INDEX;
+
+//     const response = await axios.post(
+//       `${process.env.PHONEPE_BASE_URL}/pg/v1/pay`,
+//       { request: payloadBase64 },
+//       {
+//         headers: {
+//           "Content-Type": "application/json",
+//           "X-VERIFY": checksum
+//         }
+//       }
+//     );
+
+    
+//     return res.status(200).json({
+//       success: true,
+//       redirectUrl:
+//         response.data.data.instrumentResponse.redirectInfo.url
+//     });
+
+//   } catch (error) {
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
 
 exports.UserSessionDetails = async (req, res) => {
   try {
@@ -1788,8 +1972,6 @@ exports.getCategoriesFromUsers = async (req, res) => {
   }
 };
 
-
-
 // exports.userforAdmin = async (req, res) => {
 //   try {
 //     const adminId = req.user._id;
@@ -1890,6 +2072,21 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //     let finalUsers = [];
 
 //     for (let user of users) {
+
+      
+//       let classDetails = null;
+//       let classOrYear = "";
+
+//       if (user.className && mongoose.Types.ObjectId.isValid(user.className)) {
+//         classDetails =
+//           (await School.findById(user.className).select("name price")) ||
+//           (await College.findById(user.className).select("name price"));
+
+//         if (classDetails && classDetails.price != null) {
+//           classOrYear = classDetails.name;
+//         }
+//       }
+
 //       if (user.startDate && user.endDate) {
 //         const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
 //         const uEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
@@ -1912,9 +2109,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //         if (category?._id) {
 //           const key = `${user._id}_${category._id}`;
 
-//           if (failedMap[key]) {
-//             computedSchoolershipstatus = "Eliminated";
-//           }
+//           if (failedMap[key]) computedSchoolershipstatus = "Eliminated";
 
 //           const notAttempted = examStatuses.find(
 //             es =>
@@ -1923,39 +2118,79 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //               es.attemptStatus === "Not Attempted"
 //           );
 
-//           if (notAttempted) {
-//             computedSchoolershipstatus = "Eliminated";
-//           }
+//           if (notAttempted) computedSchoolershipstatus = "Eliminated";
 
-//           if (finalistMap[key]) {
-//             computedSchoolershipstatus = "Finalist";
-//           }
+//           if (finalistMap[key]) computedSchoolershipstatus = "Finalist";
 //         }
 //       }
-  
+
+//       if (user.userDetails && user.userDetails.length > 0) {
+//         user.userDetails.forEach((ud) => {
+//           if (
+//             ud.category?._id?.toString() === category._id?.toString() &&
+//             ud.examTypes?.length > 0
+//           ) {
+//             ud.examTypes[0].status = "Eligible";
+//           }
+//         });
+//       }
+
 //       await User.updateOne(
 //         { _id: user._id },
 //         {
 //           $set: {
 //             schoolershipstatus: computedSchoolershipstatus,
-//             category
+//             category,
+//             userDetails: user.userDetails
 //           }
 //         }
 //       );
 
+     
 //       finalUsers.push({
-//         ...user._doc,
+//         _id: user._id,
+
+//         firstName: user.firstName,
+//         middleName: user.middleName,
+//         lastName: user.lastName,
+//         mobileNumber: user.mobileNumber,
+//         email: user.email,
+//         VerifyEmail: user.VerifyEmail,
+
+//         schoolershipstatus: computedSchoolershipstatus,
+//         category,
+
+//         aadharCard: user.aadharCard,
+//         marksheet: user.marksheet,
+//         pincode: user.pincode,
+
+//         className: user.className,
+//         studentType: user.studentType,
+
+//         instituteName:
+//           user.schoolName || user.collegeName || user.instituteName || "",
+
+//         countryId: user.countryId,
+//         stateId: user.stateId,
+//         cityId: user.cityId,
+
 //         country: user.countryId?.name || "",
 //         state: user.stateId?.name || "",
 //         city: user.cityId?.name || "",
+
 //         institutionName:
 //           user.schoolName || user.collegeName || user.instituteName || "",
 //         institutionType: user.studentType || "",
-//         category,
-//         schoolershipstatus: computedSchoolershipstatus
+
+//         startDate: user.startDate,
+//         endDate: user.endDate,
+//         session: user.session,
+
+//         classOrYear
 //       });
 //     }
 
+ 
 //     if (categoryId) {
 //       const categoriesArray = categoryId.split(",");
 //       finalUsers = finalUsers.filter(u =>
@@ -2053,11 +2288,23 @@ exports.userforAdmin = async (req, res) => {
         : cityId;
     }
 
+   
+
     const users = await User.find(filterQuery)
       .populate("countryId", "name")
       .populate("stateId", "name")
       .populate("cityId", "name")
       .populate("updatedBy", "email name role");
+
+   
+
+    const tempUsers = await TempUser.find(filterQuery)
+      .populate("countryId", "name")
+      .populate("stateId", "name")
+      .populate("cityId", "name")
+      .lean();
+
+  
 
     const userIds = users.map(u => u._id);
 
@@ -2091,8 +2338,7 @@ exports.userforAdmin = async (req, res) => {
     const failedMap = {};
     examStatuses.forEach(es => {
       if (es.result === "failed" && es.category?._id) {
-        const key = `${es.userId}_${es.category._id}`;
-        failedMap[key] = true;
+        failedMap[`${es.userId}_${es.category._id}`] = true;
       }
     });
 
@@ -2104,28 +2350,14 @@ exports.userforAdmin = async (req, res) => {
 
     const finalistMap = {};
     categoryTopUsers.forEach(ctu => {
-      const key = `${ctu.userId}_${ctu.schoolerStatus}`;
-      finalistMap[key] = true;
+      finalistMap[`${ctu.userId}_${ctu.schoolerStatus}`] = true;
     });
 
     let finalUsers = [];
 
+    
+
     for (let user of users) {
-
-      /* ===== ONLY ADDITION START (classOrYear) ===== */
-      let classDetails = null;
-      let classOrYear = "";
-
-      if (user.className && mongoose.Types.ObjectId.isValid(user.className)) {
-        classDetails =
-          (await School.findById(user.className).select("name price")) ||
-          (await College.findById(user.className).select("name price"));
-
-        if (classDetails && classDetails.price != null) {
-          classOrYear = classDetails.name;
-        }
-      }
-      /* ===== ONLY ADDITION END ===== */
 
       if (user.startDate && user.endDate) {
         const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
@@ -2149,9 +2381,7 @@ exports.userforAdmin = async (req, res) => {
         if (category?._id) {
           const key = `${user._id}_${category._id}`;
 
-          if (failedMap[key]) {
-            computedSchoolershipstatus = "Eliminated";
-          }
+          if (failedMap[key]) computedSchoolershipstatus = "Eliminated";
 
           const notAttempted = examStatuses.find(
             es =>
@@ -2160,70 +2390,78 @@ exports.userforAdmin = async (req, res) => {
               es.attemptStatus === "Not Attempted"
           );
 
-          if (notAttempted) {
-            computedSchoolershipstatus = "Eliminated";
-          }
-
-          if (finalistMap[key]) {
-            computedSchoolershipstatus = "Finalist";
-          }
+          if (notAttempted) computedSchoolershipstatus = "Eliminated";
+          if (finalistMap[key]) computedSchoolershipstatus = "Finalist";
         }
       }
-
-      if (user.userDetails && user.userDetails.length > 0) {
-        user.userDetails.forEach((ud) => {
-          if (
-            ud.category?._id?.toString() === category._id?.toString() &&
-            ud.examTypes?.length > 0
-          ) {
-            ud.examTypes[0].status = "Eligible";
-          }
-        });
-      }
-
-      await User.updateOne(
-        { _id: user._id },
-        {
-          $set: {
-            schoolershipstatus: computedSchoolershipstatus,
-            category,
-            userDetails: user.userDetails
-          }
-        }
-      );
 
       finalUsers.push({
-        ...user._doc,
+        _id: user._id,
+
+        status: user.status,  
+
+        firstName: user.firstName,
+        middleName: user.middleName,
+        lastName: user.lastName,
+        mobileNumber: user.mobileNumber,
+        email: user.email,
+
+        schoolershipstatus: computedSchoolershipstatus,
+        category,
+
         country: user.countryId?.name || "",
         state: user.stateId?.name || "",
         city: user.cityId?.name || "",
-        institutionName:
-          user.schoolName || user.collegeName || user.instituteName || "",
-        institutionType: user.studentType || "",
-        classOrYear, // ✅ ADDED
-        category,
-        schoolershipstatus: computedSchoolershipstatus
+
+        startDate: user.startDate,
+        endDate: user.endDate
       });
     }
 
+   
+
+    for (let tUser of tempUsers) {
+      finalUsers.push({
+        _id: tUser._id,
+
+        status: tUser.status,   
+
+        firstName: tUser.firstName,
+        middleName: tUser.middleName,
+        lastName: tUser.lastName,
+        mobileNumber: tUser.mobileNumber,
+        email: tUser.email,
+
+        schoolershipstatus: "NA",
+        category: { _id: null, name: "NA" },
+
+        country: tUser.countryId?.name || "",
+        state: tUser.stateId?.name || "",
+        city: tUser.cityId?.name || "",
+
+        startDate: tUser.startDate,
+        endDate: tUser.endDate
+      });
+    }
+
+   
+
     if (categoryId) {
-      const categoriesArray = categoryId.split(",");
-      finalUsers = finalUsers.filter(u =>
-        u.category?._id && categoriesArray.includes(u.category._id.toString())
+      const arr = categoryId.split(",");
+      finalUsers = finalUsers.filter(
+        u => u.category?._id && arr.includes(u.category._id.toString())
       );
     }
 
     if (schoolershipstatus) {
-      const statusArray = schoolershipstatus.split(",").map(s => s.trim());
-      finalUsers = finalUsers.filter(u =>
-        statusArray.includes(u.schoolershipstatus)
-      );
+      const arr = schoolershipstatus.split(",").map(s => s.trim());
+      finalUsers = finalUsers.filter(u => arr.includes(u.schoolershipstatus));
     }
 
     if (status) {
-      const statusArray = status.split(",").map(s => s.trim().toLowerCase());
+      const arr = status.split(",").map(s => s.trim().toLowerCase());
       finalUsers = finalUsers.filter(
-        u => u.status && statusArray.includes(u.status.toLowerCase())
+        u => u.status && arr.includes(u.status.toLowerCase())
       );
     }
 
@@ -2238,6 +2476,8 @@ exports.userforAdmin = async (req, res) => {
       });
     }
 
+    
+
     const totalUsers = finalUsers.length;
     const paginated = finalUsers.slice(skip, skip + limit);
 
@@ -2250,8 +2490,8 @@ exports.userforAdmin = async (req, res) => {
       limit,
       totalUsers,
       totalPages: Math.ceil(totalUsers / limit),
-      from,
-      to,
+      from,        
+      to,          
       users: paginated
     });
 
@@ -2261,238 +2501,6 @@ exports.userforAdmin = async (req, res) => {
   }
 };
 
-
-// exports.userforAdmin = async (req, res) => {
-//   try {
-//     const adminId = req.user._id;
-//     let {
-//       className,
-//       stateId,
-//       cityId,
-//       categoryId,
-//       schoolershipstatus,
-//       status,
-//       page = 1,
-//       limit = 10,
-//       fields
-//     } = req.query;
-
-//     page = parseInt(page);
-//     limit = parseInt(limit);
-//     const skip = (page - 1) * limit;
-
-//     const admin = await Admin1.findById(adminId).select("startDate endDate");
-//     if (!admin) {
-//       return res.status(404).json({ message: "Admin not found." });
-//     }
-
-//     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
-//     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
-
-//     let filterQuery = {};
-//     if (className) filterQuery.className = className;
-
-//     if (stateId) {
-//       filterQuery.stateId = stateId.includes(",")
-//         ? { $in: stateId.split(",") }
-//         : stateId;
-//     }
-
-//     if (cityId) {
-//       filterQuery.cityId = cityId.includes(",")
-//         ? { $in: cityId.split(",") }
-//         : cityId;
-//     }
-
-//     const users = await User.find(filterQuery)
-//       .populate("countryId", "name")
-//       .populate("stateId", "name")
-//       .populate("cityId", "name")
-//       .populate("updatedBy", "email name role");
-
-//     const userIds = users.map(u => u._id);
-
-//     const groups = await userexamGroup.find({
-//       members: { $in: userIds }
-//     })
-//       .sort({ createdAt: -1 })
-//       .populate("category", "_id name")
-//       .lean();
-
-//     const userGroupCategoryMap = {};
-//     groups.forEach(g => {
-//       g.members.forEach(uid => {
-//         if (!userGroupCategoryMap[uid] && g.category) {
-//           userGroupCategoryMap[uid] = g.category;
-//         }
-//       });
-//     });
-
-//     const defaultCategory = await Schoolercategory.findOne()
-//       .select("_id name")
-//       .sort({ createdAt: 1 })
-//       .lean();
-
-//     const examStatuses = await ExamUserStatus.find({
-//       userId: { $in: userIds }
-//     })
-//       .select("userId category result attemptStatus")
-//       .lean();
-
-//     const failedMap = {};
-//     examStatuses.forEach(es => {
-//       if (es.result === "failed" && es.category?._id) {
-//         const key = `${es.userId}_${es.category._id}`;
-//         failedMap[key] = true;
-//       }
-//     });
-
-//     const categoryTopUsers = await CategoryTopUser.find({
-//       userId: { $in: userIds }
-//     })
-//       .select("userId schoolerStatus")
-//       .lean();
-
-//     const finalistMap = {};
-//     categoryTopUsers.forEach(ctu => {
-//       const key = `${ctu.userId}_${ctu.schoolerStatus}`;
-//       finalistMap[key] = true;
-//     });
-
-//     let finalUsers = [];
-
-//     for (let user of users) {
-//       if (user.startDate && user.endDate) {
-//         const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
-//         const uEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
-//         if (!uStart.isSameOrAfter(adminStart) || !uEnd.isSameOrBefore(adminEnd)) {
-//           continue;
-//         }
-//       }
-
-//       let category = { _id: null, name: "NA" };
-//       let computedSchoolershipstatus = "NA";
-
-//       if (user.status === "yes") {
-//         computedSchoolershipstatus = "Participant";
-
-//         category =
-//           userGroupCategoryMap[user._id] ||
-//           defaultCategory ||
-//           { _id: null, name: "NA" };
-
-//         if (category?._id) {
-//           const key = `${user._id}_${category._id}`;
-
-//           if (failedMap[key]) {
-//             computedSchoolershipstatus = "Eliminated";
-//           }
-
-//           const notAttempted = examStatuses.find(
-//             es =>
-//               es.userId.toString() === user._id.toString() &&
-//               es.category?._id.toString() === category._id.toString() &&
-//               es.attemptStatus === "Not Attempted"
-//           );
-
-//           if (notAttempted) {
-//             computedSchoolershipstatus = "Eliminated";
-//           }
-
-//           if (finalistMap[key]) {
-//             computedSchoolershipstatus = "Finalist";
-//           }
-//         }
-//       }
-
-
-//       if (user.userDetails && user.userDetails.length > 0) {
-//         user.userDetails.forEach((ud) => {
-//           if (ud.category._id?.toString() === category._id?.toString() && ud.examTypes?.length > 0) {
-//             ud.examTypes[0].status = "Eligible"; 
-//           }
-//         });
-//       }
-      
-
-//       await User.updateOne(
-//         { _id: user._id },
-//         {
-//           $set: {
-//             schoolershipstatus: computedSchoolershipstatus,
-//             category,
-//             userDetails: user.userDetails
-//           }
-//         }
-//       );
-
-//       finalUsers.push({
-//         ...user._doc,
-//         country: user.countryId?.name || "",
-//         state: user.stateId?.name || "",
-//         city: user.cityId?.name || "",
-//         institutionName:
-//           user.schoolName || user.collegeName || user.instituteName || "",
-//         institutionType: user.studentType || "",
-//         category,
-//         schoolershipstatus: computedSchoolershipstatus
-//       });
-//     }
-
-//     if (categoryId) {
-//       const categoriesArray = categoryId.split(",");
-//       finalUsers = finalUsers.filter(u =>
-//         u.category?._id && categoriesArray.includes(u.category._id.toString())
-//       );
-//     }
-
-//     if (schoolershipstatus) {
-//       const statusArray = schoolershipstatus.split(",").map(s => s.trim());
-//       finalUsers = finalUsers.filter(u =>
-//         statusArray.includes(u.schoolershipstatus)
-//       );
-//     }
-
-//     if (status) {
-//       const statusArray = status.split(",").map(s => s.trim().toLowerCase());
-//       finalUsers = finalUsers.filter(
-//         u => u.status && statusArray.includes(u.status.toLowerCase())
-//       );
-//     }
-
-//     if (fields) {
-//       const reqFields = fields.split(",").map(f => f.trim());
-//       finalUsers = finalUsers.map(u => {
-//         const obj = { _id: u._id };
-//         reqFields.forEach(f => {
-//           if (u[f] !== undefined) obj[f] = u[f];
-//         });
-//         return obj;
-//       });
-//     }
-
-//     const totalUsers = finalUsers.length;
-//     const paginated = finalUsers.slice(skip, skip + limit);
-
-//     const from = totalUsers === 0 ? 0 : skip + 1;
-//     const to = Math.min(skip + paginated.length, totalUsers);
-
-//     return res.status(200).json({
-//       message: "Users fetched successfully",
-//       page,
-//       limit,
-//       totalUsers,
-//       totalPages: Math.ceil(totalUsers / limit),
-//       from,
-//       to,
-//       users: paginated
-//     });
-
-//   } catch (error) {
-//     console.error("userforAdmin Error:", error);
-//     return res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 exports.getAvailableSchoolershipStatus = async (req, res) => {
@@ -2762,6 +2770,38 @@ exports.getUserById = async (req, res) => {
 };
 
 
+// exports.saveFCMToken = async (req, res) => {
+//   try {
+//     const userId = req.user._id; 
+//     const { fcmToken } = req.body;
+
+//     if (!fcmToken) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "FCM token required",
+//       });
+//     }
+
+//     await User.findByIdAndUpdate(
+//       userId,
+//       { fcmToken },
+//       { new: true }
+//     );
+
+//     return res.json({
+//       success: true,
+//       message: "FCM token saved successfully",
+//     });
+
+//   } catch (err) {
+//     console.error("Save FCM Token Error:", err);
+//     return res.status(500).json({
+//       success: false,
+//       message: "Failed to save FCM token",
+//     });
+//   }
+// };
+
 
 exports.deleteUserExamData = async (req, res) => {
   try {
@@ -2873,3 +2913,34 @@ exports.getClassTimeline = async (req, res) => {
   }
 };
 
+exports.saveFCMToken = async (req, res) => {
+  try {
+    const userId = req.user._id; 
+    const { fcmToken } = req.body;
+
+    if (!fcmToken) {
+      return res.status(400).json({
+        success: false,
+        message: "FCM token required",
+      });
+    }
+
+    await User.findByIdAndUpdate(
+      userId,
+      { fcmToken },
+      { new: true }
+    );
+
+    return res.json({
+      success: true,
+      message: "FCM token saved successfully",
+    });
+
+  } catch (err) {
+    console.error("Save FCM Token Error:", err);
+    return res.status(500).json({
+      success: false,
+      message: "Failed to save FCM token",
+    });
+  }
+};

@@ -307,18 +307,23 @@ exports.scoreCard = async (req, res) => {
     const userId = req.user._id;
     const { learningId, fromDate, toDate, page = 1 } = req.query;
 
-    const limit = 2;
+    const limit = 10;
     const currentPage = Math.max(parseInt(page), 1);
     const skip = (currentPage - 1) * limit;
 
     const user = await User.findById(userId);
-    if (!user) return res.status(400).json({ message: "User not found" });
-    if (!user.endDate || !user.className)
-      return res.status(400).json({ message: "Please complete your profile." });
+    if (!user) {
+      return res.status(400).json({ message: "User not found" });
+    }
+
+    if (!user.endDate || !user.className) {
+      return res
+        .status(400)
+        .json({ message: "Please complete your profile." });
+    }
 
     const today = moment().startOf("day");
     const todayStr = today.format("YYYY-MM-DD");
- 
     const todayAnyLearning = await TopicScore.findOne({
       userId: userId,
       endDate: user.endDate,
@@ -329,7 +334,7 @@ exports.scoreCard = async (req, res) => {
       }
     })
       .populate("learningId", "name")
-      .sort({ createdAt: 1 })
+      .sort({ createdAt: 1 }) 
       .lean();
 
     const todayScore = {
@@ -341,27 +346,29 @@ exports.scoreCard = async (req, res) => {
       isToday: true
     };
 
- 
-    let startDate = fromDate
+    
+    const startDate = fromDate
       ? moment(fromDate).startOf("day")
       : moment(user.updatedAt).startOf("day");
 
-    let endDate = toDate
+    const endDate = toDate
       ? moment(toDate).startOf("day")
       : today;
-    const match = {
+
+   
+    const baseMatch = {
       userId: new mongoose.Types.ObjectId(userId),
       endDate: user.endDate,
       classId: user.className.toString()
     };
 
-    if (learningId) {
-      match.learningId = new mongoose.Types.ObjectId(learningId);
-    }
-
     const rawScores = await TopicScore.aggregate([
-      { $match: match },
+      { $match: baseMatch },
+
+      
       { $sort: { scoreDate: 1, createdAt: 1 } },
+
+    
       {
         $group: {
           _id: {
@@ -372,7 +379,19 @@ exports.scoreCard = async (req, res) => {
           doc: { $first: "$$ROOT" }
         }
       },
-      { $replaceRoot: { newRoot: "$doc" } }
+
+      { $replaceRoot: { newRoot: "$doc" } },
+
+      
+      ...(learningId
+        ? [
+            {
+              $match: {
+                learningId: new mongoose.Types.ObjectId(learningId)
+              }
+            }
+          ]
+        : [])
     ]);
 
     const populatedScores = await TopicScore.populate(rawScores, [
@@ -380,7 +399,7 @@ exports.scoreCard = async (req, res) => {
       { path: "learningId", select: "name" }
     ]);
 
-
+   
     const scoreMap = new Map();
     for (const score of populatedScores) {
       const dateStr = moment(score.scoreDate).format("YYYY-MM-DD");
@@ -391,7 +410,7 @@ exports.scoreCard = async (req, res) => {
       });
     }
 
-  
+   
     const fullResult = [];
     for (
       let d = moment(startDate);
@@ -418,31 +437,23 @@ exports.scoreCard = async (req, res) => {
 
     const paginatedScores = sortedFinal.slice(skip, skip + limit);
 
-  
-    // const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
-    //   ...item,
-    //   day: skip + index + 1  
-     
-    // }));
+    const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
+      learningId: item.learningId || null,
+      score: item.score ?? null,
+      marksObtained: item.marksObtained ?? null,
+      totalMarks: item.totalMarks ?? null,
+      date: item.date,
+      isToday: item.isToday,
+      day: skip + index + 1
+    }));
 
-const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
-  learningId: item.learningId || null,
-  score: item.score ?? null,
-  marksObtained: item.marksObtained ?? null,
-  totalMarks: item.totalMarks ?? null,
-  date: item.date,
-  isToday: item.isToday,
-  day: skip + index + 1
-}));
-
-
-
-
+   
     const learningScores = {};
     for (const entry of fullResult) {
       if (entry.score !== null && entry.learningId?._id) {
         const lid = entry.learningId._id.toString();
         const lname = entry.learningId.name || "Unknown";
+
         if (!learningScores[lid]) {
           learningScores[lid] = {
             learningId: lid,
@@ -460,12 +471,14 @@ const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
       averageScore: item.totalScore
     }));
 
+   
     for (const item of learningWiseAverage) {
       const idx = user.learning.findIndex(
         l =>
           l.learningId.toString() === item.learningId &&
           l.session === user.session
       );
+
       if (idx !== -1) {
         user.learning[idx].totalScore = item.averageScore;
         user.learning[idx].updatedAt = new Date();
@@ -487,6 +500,7 @@ const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
             h.date === entry.date &&
             h.session === user.session
         );
+
         if (!exists) {
           user.learningDailyHistory.push({
             learningId: entry.learningId._id,
@@ -502,7 +516,7 @@ const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
 
     await user.save();
 
-  
+    
     return res.status(200).json({
       today: todayScore,
       scores: paginatedScoresWithDay,
@@ -514,12 +528,232 @@ const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
       },
       learningWiseAverage
     });
-
   } catch (error) {
     console.error("scoreCard error:", error);
     return res.status(500).json({ message: error.message });
   }
 };
+
+
+
+// exports.scoreCard = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const { learningId, fromDate, toDate, page = 1 } = req.query;
+
+//     const limit = 2;
+//     const currentPage = Math.max(parseInt(page), 1);
+//     const skip = (currentPage - 1) * limit;
+
+//     const user = await User.findById(userId);
+//     if (!user) return res.status(400).json({ message: "User not found" });
+//     if (!user.endDate || !user.className)
+//       return res.status(400).json({ message: "Please complete your profile." });
+
+//     const today = moment().startOf("day");
+//     const todayStr = today.format("YYYY-MM-DD");
+ 
+//     const todayAnyLearning = await TopicScore.findOne({
+//       userId: userId,
+//       endDate: user.endDate,
+//       classId: user.className.toString(),
+//       scoreDate: {
+//         $gte: today.toDate(),
+//         $lte: moment(today).endOf("day").toDate()
+//       }
+//     })
+//       .populate("learningId", "name")
+//       .sort({ createdAt: 1 })
+//       .lean();
+
+//     const todayScore = {
+//       learningId: todayAnyLearning?.learningId || null,
+//       score: todayAnyLearning?.score ?? null,
+//       marksObtained: todayAnyLearning?.marksObtained ?? null,
+//       totalMarks: todayAnyLearning?.totalMarks ?? null,
+//       date: todayStr,
+//       isToday: true
+//     };
+
+ 
+//     let startDate = fromDate
+//       ? moment(fromDate).startOf("day")
+//       : moment(user.updatedAt).startOf("day");
+
+//     let endDate = toDate
+//       ? moment(toDate).startOf("day")
+//       : today;
+//     const match = {
+//       userId: new mongoose.Types.ObjectId(userId),
+//       endDate: user.endDate,
+//       classId: user.className.toString()
+//     };
+
+//     if (learningId) {
+//       match.learningId = new mongoose.Types.ObjectId(learningId);
+//     }
+
+//     const rawScores = await TopicScore.aggregate([
+//       { $match: match },
+//       { $sort: { scoreDate: 1, createdAt: 1 } },
+//       {
+//         $group: {
+//           _id: {
+//             date: {
+//               $dateToString: { format: "%Y-%m-%d", date: "$scoreDate" }
+//             }
+//           },
+//           doc: { $first: "$$ROOT" }
+//         }
+//       },
+//       { $replaceRoot: { newRoot: "$doc" } }
+//     ]);
+
+//     const populatedScores = await TopicScore.populate(rawScores, [
+//       { path: "topicId", select: "topic" },
+//       { path: "learningId", select: "name" }
+//     ]);
+
+
+//     const scoreMap = new Map();
+//     for (const score of populatedScores) {
+//       const dateStr = moment(score.scoreDate).format("YYYY-MM-DD");
+//       scoreMap.set(dateStr, {
+//         ...score,
+//         date: dateStr,
+//         isToday: dateStr === todayStr
+//       });
+//     }
+
+  
+//     const fullResult = [];
+//     for (
+//       let d = moment(startDate);
+//       d.diff(endDate, "days") <= 0;
+//       d.add(1, "days")
+//     ) {
+//       const dateStr = d.format("YYYY-MM-DD");
+//       fullResult.push(
+//         scoreMap.get(dateStr) || {
+//           date: dateStr,
+//           score: null,
+//           isToday: dateStr === todayStr
+//         }
+//       );
+//     }
+
+//     const sortedFinal = fullResult.sort(
+//       (a, b) => new Date(a.date) - new Date(b.date)
+//     );
+
+   
+//     const totalRecords = sortedFinal.length;
+//     const totalPages = Math.ceil(totalRecords / limit);
+
+//     const paginatedScores = sortedFinal.slice(skip, skip + limit);
+
+  
+//     // const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
+//     //   ...item,
+//     //   day: skip + index + 1  
+     
+//     // }));
+
+// const paginatedScoresWithDay = paginatedScores.map((item, index) => ({
+//   learningId: item.learningId || null,
+//   score: item.score ?? null,
+//   marksObtained: item.marksObtained ?? null,
+//   totalMarks: item.totalMarks ?? null,
+//   date: item.date,
+//   isToday: item.isToday,
+//   day: skip + index + 1
+// }));
+
+
+
+
+//     const learningScores = {};
+//     for (const entry of fullResult) {
+//       if (entry.score !== null && entry.learningId?._id) {
+//         const lid = entry.learningId._id.toString();
+//         const lname = entry.learningId.name || "Unknown";
+//         if (!learningScores[lid]) {
+//           learningScores[lid] = {
+//             learningId: lid,
+//             name: lname,
+//             totalScore: 0
+//           };
+//         }
+//         learningScores[lid].totalScore += entry.score;
+//       }
+//     }
+
+//     const learningWiseAverage = Object.values(learningScores).map(item => ({
+//       learningId: item.learningId,
+//       name: item.name,
+//       averageScore: item.totalScore
+//     }));
+
+//     for (const item of learningWiseAverage) {
+//       const idx = user.learning.findIndex(
+//         l =>
+//           l.learningId.toString() === item.learningId &&
+//           l.session === user.session
+//       );
+//       if (idx !== -1) {
+//         user.learning[idx].totalScore = item.averageScore;
+//         user.learning[idx].updatedAt = new Date();
+//       } else {
+//         user.learning.push({
+//           learningId: item.learningId,
+//           session: user.session,
+//           totalScore: item.averageScore,
+//           updatedAt: new Date()
+//         });
+//       }
+//     }
+
+//     for (const entry of fullResult) {
+//       if (entry.score !== null && entry.learningId?._id) {
+//         const exists = user.learningDailyHistory.some(
+//           h =>
+//             h.learningId.toString() === entry.learningId._id.toString() &&
+//             h.date === entry.date &&
+//             h.session === user.session
+//         );
+//         if (!exists) {
+//           user.learningDailyHistory.push({
+//             learningId: entry.learningId._id,
+//             name: entry.learningId.name,
+//             date: entry.date,
+//             score: entry.score,
+//             session: user.session,
+//             createdAt: new Date()
+//           });
+//         }
+//       }
+//     }
+
+//     await user.save();
+
+  
+//     return res.status(200).json({
+//       today: todayScore,
+//       scores: paginatedScoresWithDay,
+//       pagination: {
+//         page: currentPage,
+//         limit,
+//         totalRecords,
+//         totalPages
+//       },
+//       learningWiseAverage
+//     });
+
+//   } catch (error) {
+//     console.error("scoreCard error:", error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
 
 
 exports.Practicestrike = async (req, res) => {
@@ -1161,10 +1395,19 @@ exports.Strikecalculation = async (req, res) => {
 
 
 
+const getLevelFromPoints = async (points) => {
+  const setting = await MarkingSetting.findOne({})
+    .sort({ updatedAt: -1 })
+    .lean();
+
+  const experiencePoint = setting?.experiencePoint || 1000;
+  if (points < experiencePoint) return 1;
+  return Math.floor(points / experiencePoint) + 1;
+};
+
 exports.StrikePath = async (req, res) => {
   try {
     const userId = req.user._id;
-    const requestedLevel = parseInt(req.query.level || 0);
 
     const user = await User.findById(userId).lean();
     if (!user?.endDate || !user?.className) {
@@ -1194,13 +1437,13 @@ exports.StrikePath = async (req, res) => {
       .sort({ updatedAt: 1 })
       .lean();
 
+     
     const scoreMap = new Map();
 
     scores.forEach(score => {
       const date = moment(score.scoreDate).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
-      const exists = scoreMap.get(date).some(item => item.type === 'practice');
-      if (!exists) {
+      if (!scoreMap.get(date).some(i => i.type === 'practice')) {
         scoreMap.get(date).push({
           type: 'practice',
           score: score.score,
@@ -1215,8 +1458,7 @@ exports.StrikePath = async (req, res) => {
     topicScores.forEach(score => {
       const date = moment(score.updatedAt).format('YYYY-MM-DD');
       if (!scoreMap.has(date)) scoreMap.set(date, []);
-      const exists = scoreMap.get(date).some(item => item.type === 'topic');
-      if (!exists) {
+      if (!scoreMap.get(date).some(i => i.type === 'topic')) {
         scoreMap.get(date).push({
           type: 'topic',
           score: score.score,
@@ -1227,24 +1469,18 @@ exports.StrikePath = async (req, res) => {
       }
     });
 
-    const markingSetting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
+    const markingSetting = await MarkingSetting.findOne({})
+      .sort({ updatedAt: -1 })
+      .lean();
+
     const baseDailyExp = markingSetting?.dailyExperience || 0;
     const deductions = markingSetting?.deductions || 0;
-    const weeklyBonus = markingSetting?.weeklyBonus || 0;
-    const monthlyBonus = markingSetting?.monthlyBonus || 0;
     const experiencePoint = markingSetting?.experiencePoint || 1000;
 
     const datesList = Array.from(scoreMap.keys()).sort();
-    const minDate = user.updatedAt
-      ? moment(user.updatedAt).startOf('day')
-      : (datesList.length ? moment(datesList[0]) : moment().startOf('day'));
-    const maxDate = datesList.length
-      ? moment(datesList[datesList.length - 1])
-      : moment().startOf('day');
-
-    if (datesList.length === 0) {
+    if (!datesList.length) {
       return res.status(200).json({
-        bonuspoint: 0,
+        bonuspoint: user.bonuspoint || 0,
         levelBonusPoint: 0,
         experiencePoint,
         level: 1,
@@ -1252,20 +1488,17 @@ exports.StrikePath = async (req, res) => {
       });
     }
 
+    
+    const startDate = moment(datesList[0]).startOf('day');
+    const endDateMoment = moment().startOf('day');
+
     const result = [];
 
-    const existingBonusDates = user?.bonusDates || [];
-    const existingDeductedDates = user?.deductedDates || [];
-    const existingWeeklyBonusDates = user?.weeklyBonusDates || [];
-    const existingMonthlyBonusDates = user?.monthlyBonusDates || [];
-
-    let bonusToAdd = 0, deductionToSubtract = 0;
-    let weeklyBonusToAdd = 0, monthlyBonusToAdd = 0;
-    let datesToAddBonus = [], datesToDeduct = [], weeklyBonusDatesToAdd = [], monthlyBonusDatesToAdd = [];
-
-    let hasStartedLearning = false; // 🔑 KEY FLAG
-
-    for (let m = moment(minDate); m.diff(maxDate, 'days') <= 0; m.add(1, 'days')) {
+    for (
+      let m = moment(startDate);
+      m.diff(endDateMoment, 'days') <= 0;
+      m.add(1, 'days')
+    ) {
       const currentDate = m.format('YYYY-MM-DD');
       const item = { date: currentDate, data: [] };
 
@@ -1275,182 +1508,77 @@ exports.StrikePath = async (req, res) => {
         const hasPractice = item.data.some(d => d.type === 'practice');
         const hasTopic = item.data.some(d => d.type === 'topic');
 
-        if (hasPractice || hasTopic) {
-          hasStartedLearning = true; 
-        }
-
         if (hasPractice && hasTopic && baseDailyExp > 0) {
-          const practiceScore = item.data.find(d => d.type === 'practice')?.score || 0;
-          const topicScore = item.data.find(d => d.type === 'topic')?.score || 0;
-          const avgScore = (practiceScore + topicScore) / 2;
-          const calculatedDailyExp =
-            Math.round((baseDailyExp / 100) * avgScore * 100) / 100;
+          const p = item.data.find(d => d.type === 'practice').score;
+          const t = item.data.find(d => d.type === 'topic').score;
+          const avg = (p + t) / 2;
 
-          item.dailyExperience = calculatedDailyExp;
-
-          if (!existingBonusDates.includes(currentDate)) {
-            bonusToAdd += calculatedDailyExp;
-            datesToAddBonus.push(currentDate);
-          }
+          item.dailyExperience =
+            Math.round((baseDailyExp / 100) * avg * 100) / 100;
         }
-      }
-     
-      else if (hasStartedLearning) {
-        item.deduction = deductions;
-        if (!existingDeductedDates.includes(currentDate)) {
-          deductionToSubtract += deductions;
-          datesToDeduct.push(currentDate);
+      } else {
+        if (currentDate !== endDateMoment.format('YYYY-MM-DD')) {
+          item.deduction = deductions;
         }
       }
 
       result.push(item);
     }
 
-    
-    for (let i = 6; i < result.length; i++) {
-      const streak = result.slice(i - 6, i + 1).every(r =>
-        r.data.some(d => d.type === 'practice') &&
-        r.data.some(d => d.type === 'topic')
-      );
-      const bonusDate = result[i].date;
-
-      if (streak && !existingWeeklyBonusDates.includes(bonusDate)) {
-        result[i].weeklyBonus = weeklyBonus;
-        weeklyBonusToAdd += weeklyBonus;
-        weeklyBonusDatesToAdd.push(bonusDate);
-      }
-      if (existingWeeklyBonusDates.includes(bonusDate)) {
-        result[i].weeklyBonus = weeklyBonus;
-      }
-    }
-
-  
-    for (let i = 29; i < result.length; i++) {
-      const streak = result.slice(i - 29, i + 1).every(r =>
-        r.data.some(d => d.type === 'practice') &&
-        r.data.some(d => d.type === 'topic')
-      );
-      const bonusDate = result[i].date;
-
-      if (streak && !existingMonthlyBonusDates.includes(bonusDate)) {
-        result[i].monthlyBonus = monthlyBonus;
-        monthlyBonusToAdd += monthlyBonus;
-        monthlyBonusDatesToAdd.push(bonusDate);
-      }
-      if (existingMonthlyBonusDates.includes(bonusDate)) {
-        result[i].monthlyBonus = monthlyBonus;
-      }
-    }
-
    
-    const updateData = {};
-    if (bonusToAdd > 0) {
-      updateData.$inc = { bonuspoint: bonusToAdd };
-      updateData.$push = { bonusDates: { $each: datesToAddBonus } };
-    }
-    if (deductionToSubtract > 0) {
-      updateData.$inc = updateData.$inc || {};
-      updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) - deductionToSubtract;
-      updateData.$push = updateData.$push || {};
-      updateData.$push.deductedDates = { $each: datesToDeduct };
-    }
-    if (weeklyBonusToAdd > 0) {
-      updateData.$inc = updateData.$inc || {};
-      updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) + weeklyBonusToAdd;
-      updateData.$push = updateData.$push || {};
-      updateData.$push.weeklyBonusDates = { $each: weeklyBonusDatesToAdd };
-    }
-    if (monthlyBonusToAdd > 0) {
-      updateData.$inc = updateData.$inc || {};
-      updateData.$inc.bonuspoint = (updateData.$inc.bonuspoint || 0) + monthlyBonusToAdd;
-      updateData.$push = updateData.$push || {};
-      updateData.$push.monthlyBonusDates = { $each: monthlyBonusDatesToAdd };
-    }
-
-    if (Object.keys(updateData).length > 0) {
-      await User.findByIdAndUpdate(userId, updateData);
-    }
+    let levelBonusPoint = result.reduce(
+      (a, b) =>
+        a +
+        (b.dailyExperience || 0) -
+        (b.deduction || 0),
+      0
+    );
+    levelBonusPoint = Math.max(0, levelBonusPoint);
 
   
-    await User.findByIdAndUpdate(
-      userId,
-      [{ $set: { bonuspoint: { $cond: [{ $lt: ["$bonuspoint", 0] }, 0, "$bonuspoint"] } } }]
+    const currentLevel = await getLevelFromPoints(user.bonuspoint || 0);
+
+    const oldLevelData = user.userLevelData?.find(
+      l => l.level === currentLevel
     );
+    const oldLevelBonusPoint = oldLevelData?.levelBonusPoint || 0;
 
-    const updatedUser = await User.findById(userId)
-      .select('bonuspoint userLevelData endDate className')
-      .lean();
+    const deltaBonus = levelBonusPoint - oldLevelBonusPoint;
 
-    const newLevel = await getLevelFromPoints(updatedUser.bonuspoint);
-
-    await User.findByIdAndUpdate(userId, { level: newLevel });
-    await User.findByIdAndUpdate(userId, { $pull: { userLevelData: { level: newLevel } } });
+    if (deltaBonus > 0) {
+      await User.findByIdAndUpdate(userId, {
+        $inc: { bonuspoint: deltaBonus }
+      });
+    }
 
     
-    const levelBonusPoint = Math.max(
-      0,
-      result.reduce((acc, item) =>
-        acc +
-        (item.dailyExperience || 0) +
-        (item.weeklyBonus || 0) +
-        (item.monthlyBonus || 0) -
-        (item.deduction || 0), 0
-      )
-    );
+    await User.findByIdAndUpdate(userId, {
+      $pull: { userLevelData: { level: currentLevel } }
+    });
 
     await User.findByIdAndUpdate(userId, {
       $push: {
         userLevelData: {
-          level: newLevel,
+          level: currentLevel,
           levelBonusPoint,
           data: result
         }
       }
     });
 
-    const existingExp = await Experienceleavel.findOne({ userId, endDate, classId });
-    if (existingExp) {
-      await Experienceleavel.findByIdAndUpdate(existingExp._id, {
-        $set: { levelBonusPoint, endDate, classId }
-      });
-    } else {
-      await Experienceleavel.create({
-        userId,
-        levelBonusPoint,
-        endDate,
-        classId
-      });
-    }
+    
+    const updatedUser = await User.findById(userId)
+      .select('bonuspoint')
+      .lean();
 
-    let matched =
-      requestedLevel && requestedLevel !== newLevel
-        ? updatedUser.userLevelData.find(l => l.level === requestedLevel)?.data || []
-        : result;
-
-    if (matched.length > 1) {
-      const latest = matched[matched.length - 1];
-      const rest = matched.slice(0, -1).sort((a, b) => new Date(a.date) - new Date(b.date));
-      matched = [latest, ...rest];
-    }
-
-    const cleanedDates = matched.map(day => ({
-  date: day.date,
-  dailyExperience: day.dailyExperience,
-  weeklyBonus: day.weeklyBonus,
-  monthlyBonus: day.monthlyBonus,
-  deduction: day.deduction,
-  data: day.data.map(d => ({
-    type: d.type,
-    score: d.score
-  }))
-}));
+    const finalLevel = await getLevelFromPoints(updatedUser.bonuspoint);
 
     return res.status(200).json({
       bonuspoint: Math.round(updatedUser.bonuspoint || 0),
-      levelBonusPoint: Math.round(levelBonusPoint),
+      levelBonusPoint,
       experiencePoint,
-      level: newLevel,
-      dates: cleanedDates
+      level: finalLevel,
+      dates: result
     });
 
   } catch (error) {
@@ -1458,15 +1586,6 @@ exports.StrikePath = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
-
-const getLevelFromPoints = async (points) => {
-  const setting = await MarkingSetting.findOne({}).sort({ updatedAt: -1 }).lean();
-  const experiencePoint = setting?.experiencePoint || 1000;
-  if (points < experiencePoint) return 1;
-  return Math.floor(points / experiencePoint) + 1;
-};
-
-
 
 
 
@@ -1717,10 +1836,160 @@ exports.getUserLevelData = async (req, res) => {
 
 
 
+
+// exports.genraliqAverage = async (req, res) => {
+//   try {
+//     const userId = req.user._id;
+//     const learningIdFilter = req.query.learningId;
+
+//     if (!learningIdFilter) {
+//       return res.status(400).json({ message: 'learningId is required.' });
+//     }
+
+//     const user = await User.findById(userId).lean();
+//     if (!user || !user.className || !user.endDate) {
+//       return res.status(400).json({ message: 'User class or endDate not found.' });
+//     }
+//     const classId = user.className.toString();
+//     const endDate = user.endDate;
+
+    
+//     const allPractice = await LearningScore.find({
+//       userId,
+//       classId,
+//       endDate,
+//       strickStatus: true
+//     })
+//       .sort({ createdAt: 1 })
+//       .populate('learningId', 'name')
+//       .lean();
+
+//     const allTopic = await TopicScore.find({
+//       userId,
+//       classId,
+//       endDate,
+//       strickStatus: true
+//     })
+//       .sort({ createdAt: 1 })
+//       .populate('learningId', 'name')
+//       .lean();
+
+//     const dateWiseMap = new Map(); 
+
+//     for (const score of allPractice) {
+//       const date = moment(score.scoreDate || score.createdAt).format('YYYY-MM-DD');
+//       if (!dateWiseMap.has(date)) dateWiseMap.set(date, {});
+
+//       const record = dateWiseMap.get(date);
+//       if (!record.practice) {
+//         record.practice = score;
+//       }
+//     }
+
+//     for (const score of allTopic) {
+//       const date = moment(score.createdAt).format('YYYY-MM-DD');
+//       if (!dateWiseMap.has(date)) dateWiseMap.set(date, {});
+
+//       const record = dateWiseMap.get(date);
+//       if (!record.topic) {
+//         record.topic = score;
+//       }
+//     }
+
+//     const results = [];
+//     let total = 0;
+//     let count = 0;
+
+//     for (let [date, record] of dateWiseMap.entries()) {
+//       const { practice, topic } = record;
+
+//       const isValidPractice = practice?.learningId?._id?.toString() === learningIdFilter;
+//       const isValidTopic = topic?.learningId?._id?.toString() === learningIdFilter;
+
+//       if (
+//         (practice && !isValidPractice && (!topic || !isValidTopic)) ||
+//         (topic && !isValidTopic && (!practice || !isValidPractice))
+//       ) {
+//         continue;
+//       }
+
+//       const practiceObj = isValidPractice
+//         ? {
+//             type: 'practice',
+//             score: practice.score,
+//             updatedAt: practice.updatedAt,
+//             scoreDate: practice.scoreDate,
+//             learningId: practice.learningId
+//           }
+//         : {
+//             type: 'practice',
+//             score: null,
+//             updatedAt: null,
+//             scoreDate: null,
+//             learningId: { _id: learningIdFilter, name: '' }
+//           };
+
+//       const topicObj = isValidTopic
+//         ? {
+//             type: 'topic',
+//             score: topic.score,
+//             updatedAt: topic.updatedAt,
+//             learningId: topic.learningId
+//           }
+//         : {
+//             type: 'topic',
+//             score: null,
+//             updatedAt: null,
+//             learningId: { _id: learningIdFilter, name: '' }
+//           };
+
+//       let avg = 0;
+//       if (practiceObj.score !== null && topicObj.score !== null) {
+//         avg = (practiceObj.score + topicObj.score) / 2;
+//       } else if (practiceObj.score !== null || topicObj.score !== null) {
+//         avg = practiceObj.score ?? topicObj.score;
+//       }
+
+//       total += avg;
+//       count++;
+
+//       results.push({
+//         date,
+//         data: [practiceObj, topicObj],
+//         average: Math.round(avg * 100) / 100
+//       });
+//     }
+
+//     results.sort((a, b) => new Date(b.date) - new Date(a.date));
+//     const overallAverage = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
+
+//     await GenralIQ.findOneAndUpdate(
+//       { userId, learningId: learningIdFilter, endDate, classId },
+//       { overallAverage }, 
+//       { upsert: true, new: true }
+//     );
+
+//     return res.status(200).json({
+//       count,
+//       overallAverage,
+//       results
+//     });
+//   } catch (error) {
+//     console.error('Error in genraliqAverage:', error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.genraliqAverage = async (req, res) => {
   try {
     const userId = req.user._id;
     const learningIdFilter = req.query.learningId;
+    const { page = 1, limit = 10 } = req.query;
+
+    const currentPage = Math.max(parseInt(page), 1);
+    const pageLimit = Math.max(parseInt(limit), 1);
+    const skip = (currentPage - 1) * pageLimit;
 
     if (!learningIdFilter) {
       return res.status(400).json({ message: 'learningId is required.' });
@@ -1734,7 +2003,6 @@ exports.genraliqAverage = async (req, res) => {
     const classId = user.className.toString();
     const endDate = user.endDate;
 
-    
     const allPractice = await LearningScore.find({
       userId,
       classId,
@@ -1755,33 +2023,46 @@ exports.genraliqAverage = async (req, res) => {
       .populate('learningId', 'name')
       .lean();
 
-    const dateWiseMap = new Map(); 
+    const dateWiseMap = new Map();
 
     for (const score of allPractice) {
       const date = moment(score.scoreDate || score.createdAt).format('YYYY-MM-DD');
       if (!dateWiseMap.has(date)) dateWiseMap.set(date, {});
-
-      const record = dateWiseMap.get(date);
-      if (!record.practice) {
-        record.practice = score;
+      if (!dateWiseMap.get(date).practice) {
+        dateWiseMap.get(date).practice = score;
       }
     }
 
     for (const score of allTopic) {
       const date = moment(score.createdAt).format('YYYY-MM-DD');
       if (!dateWiseMap.has(date)) dateWiseMap.set(date, {});
-
-      const record = dateWiseMap.get(date);
-      if (!record.topic) {
-        record.topic = score;
+      if (!dateWiseMap.get(date).topic) {
+        dateWiseMap.get(date).topic = score;
       }
     }
 
-    const results = [];
+    const startDate = moment(user.updatedAt).startOf('day');
+    const endDay = moment().startOf('day');
+
+    const fullResults = [];
     let total = 0;
     let count = 0;
+    let day = 1;
 
-    for (let [date, record] of dateWiseMap.entries()) {
+    for (let d = moment(startDate); d.diff(endDay, 'days') <= 0; d.add(1, 'days')) {
+      const date = d.format('YYYY-MM-DD');
+      const record = dateWiseMap.get(date);
+
+      if (!record) {
+        fullResults.push({
+          day: day++,
+          date,
+          data: [],
+          average: null
+        });
+        continue;
+      }
+
       const { practice, topic } = record;
 
       const isValidPractice = practice?.learningId?._id?.toString() === learningIdFilter;
@@ -1791,69 +2072,90 @@ exports.genraliqAverage = async (req, res) => {
         (practice && !isValidPractice && (!topic || !isValidTopic)) ||
         (topic && !isValidTopic && (!practice || !isValidPractice))
       ) {
+        fullResults.push({
+          day: day++,
+          date,
+          data: [],
+          average: null
+        });
         continue;
       }
 
-      const practiceObj = isValidPractice
-        ? {
-            type: 'practice',
-            score: practice.score,
-            updatedAt: practice.updatedAt,
-            scoreDate: practice.scoreDate,
-            learningId: practice.learningId
-          }
-        : {
-            type: 'practice',
-            score: null,
-            updatedAt: null,
-            scoreDate: null,
-            learningId: { _id: learningIdFilter, name: '' }
-          };
+      let totalMarks = 0;
+      let marksObtained = 0;
 
-      const topicObj = isValidTopic
-        ? {
-            type: 'topic',
-            score: topic.score,
-            updatedAt: topic.updatedAt,
-            learningId: topic.learningId
-          }
-        : {
-            type: 'topic',
-            score: null,
-            updatedAt: null,
-            learningId: { _id: learningIdFilter, name: '' }
-          };
-
-      let avg = 0;
-      if (practiceObj.score !== null && topicObj.score !== null) {
-        avg = (practiceObj.score + topicObj.score) / 2;
-      } else if (practiceObj.score !== null || topicObj.score !== null) {
-        avg = practiceObj.score ?? topicObj.score;
+      if (isValidPractice && practice?.totalMarks) {
+        totalMarks += Number(practice.totalMarks);
+        marksObtained += Number(practice.marksObtained || 0);
       }
 
-      total += avg;
-      count++;
+      if (isValidTopic && topic?.totalMarks) {
+        totalMarks += Number(topic.totalMarks);
+        marksObtained += Number(topic.marksObtained || 0);
+      }
 
-      results.push({
+      const avg =
+        totalMarks > 0
+          ? Number(((marksObtained / totalMarks) * 100).toFixed(2))
+          : null;
+
+      total += avg ?? 0;
+      if (avg !== null) count++;
+
+      fullResults.push({
+        day: day++,
         date,
-        data: [practiceObj, topicObj],
-        average: Math.round(avg * 100) / 100
+        data: [
+          {
+            type: 'practice',
+            score: isValidPractice
+              ? Number(((practice.marksObtained / practice.totalMarks) * 100).toFixed(2))
+              : null,
+            marksObtained: practice?.marksObtained ?? null,
+            totalMarks: practice?.totalMarks ?? null,
+            updatedAt: practice?.updatedAt ?? null,
+            scoreDate: practice?.scoreDate ?? null,
+            learningId: practice?.learningId || null
+          },
+          {
+            type: 'topic',
+            score: isValidTopic
+              ? Number(((topic.marksObtained / topic.totalMarks) * 100).toFixed(2))
+              : null,
+            marksObtained: topic?.marksObtained ?? null,
+            totalMarks: topic?.totalMarks ?? null,
+            updatedAt: topic?.updatedAt ?? null,
+            learningId: topic?.learningId || null
+          }
+        ],
+        average: avg
       });
     }
 
-    results.sort((a, b) => new Date(b.date) - new Date(a.date));
-    const overallAverage = count > 0 ? Math.round((total / count) * 100) / 100 : 0;
+    const overallAverage =
+      count > 0 ? Number((total / count).toFixed(2)) : 0;
 
     await GenralIQ.findOneAndUpdate(
       { userId, learningId: learningIdFilter, endDate, classId },
-      { overallAverage }, 
+      { overallAverage },
       { upsert: true, new: true }
     );
+
+    // ✅ Pagination
+    const totalRecords = fullResults.length;
+    const totalPages = Math.ceil(totalRecords / pageLimit);
+    const paginatedResults = fullResults.slice(skip, skip + pageLimit);
 
     return res.status(200).json({
       count,
       overallAverage,
-      results
+      results: paginatedResults,
+      pagination: {
+        page: currentPage,
+        limit: pageLimit,
+        totalRecords,
+        totalPages
+      }
     });
   } catch (error) {
     console.error('Error in genraliqAverage:', error);
@@ -1865,61 +2167,212 @@ exports.genraliqAverage = async (req, res) => {
 
 
 
-// exports.getGenrelIq = async (req, res) => {
+
+
+
+// exports.genraliqAverage = async (req, res) => {
 //   try {
 //     const userId = req.user._id;
+//     const learningIdFilter = req.query.learningId;
+
+//     if (!learningIdFilter) {
+//       return res.status(400).json({ message: 'learningId is required.' });
+//     }
+
 //     const user = await User.findById(userId).lean();
 //     if (!user || !user.className || !user.endDate) {
-//       return res.status(400).json({ message: 'Please complete your profile.' });
+//       return res.status(400).json({ message: 'User class or endDate not found.' });
 //     }
+
 //     const classId = user.className.toString();
-//     const assignedList = await Assigned.find({ classId })
-//       .populate('learning')
-//       .populate('learning2')
-//       .populate('learning3')
-//       .populate('learning4')
+//     const endDate = user.endDate;
+
+//     const allPractice = await LearningScore.find({
+//       userId,
+//       classId,
+//       endDate,
+//       strickStatus: true
+//     })
+//       .sort({ createdAt: 1 })
+//       .populate('learningId', 'name')
 //       .lean();
-//     for (let item of assignedList) {
-//       // Get school or college info
-//       let classInfo = await School.findById(item.classId).lean();
-//       if (!classInfo) {
-//         classInfo = await College.findById(item.classId).lean();
+
+//     const allTopic = await TopicScore.find({
+//       userId,
+//       classId,
+//       endDate,
+//       strickStatus: true
+//     })
+//       .sort({ createdAt: 1 })
+//       .populate('learningId', 'name')
+//       .lean();
+
+//     const dateWiseMap = new Map();
+
+//     for (const score of allPractice) {
+//       const date = moment(score.scoreDate || score.createdAt).format('YYYY-MM-DD');
+//       if (!dateWiseMap.has(date)) dateWiseMap.set(date, {});
+//       if (!dateWiseMap.get(date).practice) {
+//         dateWiseMap.get(date).practice = score;
 //       }
-//       item.classInfo = classInfo || null;
-
-//       const getIQScore = async (learningField) => {
-//         if (item[learningField]?._id) {
-//           const iqRecord = await GenralIQ.findOne({
-//             userId,
-//             endDate: user.endDate,
-//             classId,
-//             learningId: item[learningField]._id,
-//           }).lean();
-
-//           return iqRecord?.overallAverage ?? 0;
-//         }
-//         return 0;
-//       };
-
-//       // Nullify empty learning fields
-//       if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
-//       if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
-//       if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
-//       if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
-
-//       // Attach averages
-//       item.learningAverage = await getIQScore('learning');
-//       item.learning2Average = await getIQScore('learning2');
-//       item.learning3Average = await getIQScore('learning3');
-//       item.learning4Average = await getIQScore('learning4');
 //     }
 
-//     res.status(200).json({ data: assignedList });
+//     for (const score of allTopic) {
+//       const date = moment(score.createdAt).format('YYYY-MM-DD');
+//       if (!dateWiseMap.has(date)) dateWiseMap.set(date, {});
+//       if (!dateWiseMap.get(date).topic) {
+//         dateWiseMap.get(date).topic = score;
+//       }
+//     }
+
+//     const results = [];
+//     let total = 0;
+//     let count = 0;
+
+//     const calcPercent = (marks, totalMarks) => {
+//       if (!totalMarks || totalMarks <= 0) return null;
+//       return Number(((marks / totalMarks) * 100).toFixed(2));
+//     };
+
+//     for (let [date, record] of dateWiseMap.entries()) {
+//       const { practice, topic } = record;
+
+//       const isValidPractice = practice?.learningId?._id?.toString() === learningIdFilter;
+//       const isValidTopic = topic?.learningId?._id?.toString() === learningIdFilter;
+
+//       if (
+//         (practice && !isValidPractice && (!topic || !isValidTopic)) ||
+//         (topic && !isValidTopic && (!practice || !isValidPractice))
+//       ) {
+//         continue;
+//       }
+
+//       const practiceScore = isValidPractice
+//         ? calcPercent(practice.marksObtained, practice.totalMarks)
+//         : null;
+
+//       const topicScore = isValidTopic
+//         ? calcPercent(topic.marksObtained, topic.totalMarks)
+//         : null;
+
+//       let avg = 0;
+//       if (practiceScore !== null && topicScore !== null) {
+//         avg = (practiceScore + topicScore) / 2;
+//       } else if (practiceScore !== null || topicScore !== null) {
+//         avg = practiceScore ?? topicScore;
+//       }
+
+//       total += avg;
+//       count++;
+
+//       results.push({
+//         date,
+//         data: [
+//           {
+//             type: 'practice',
+//             score: practiceScore,
+//             marksObtained: practice?.marksObtained ?? null,
+//             totalMarks: practice?.totalMarks ?? null,
+//             updatedAt: practice?.updatedAt ?? null,
+//             scoreDate: practice?.scoreDate ?? null,
+//             learningId: practice?.learningId || { _id: learningIdFilter, name: '' }
+//           },
+//           {
+//             type: 'topic',
+//             score: topicScore,
+//             marksObtained: topic?.marksObtained ?? null,
+//             totalMarks: topic?.totalMarks ?? null,
+//             updatedAt: topic?.updatedAt ?? null,
+//             learningId: topic?.learningId || { _id: learningIdFilter, name: '' }
+//           }
+//         ],
+//         average: Number(avg.toFixed(2))
+//       });
+//     }
+
+//     results.sort((a, b) => new Date(b.date) - new Date(a.date));
+
+//     const overallAverage =
+//       count > 0 ? Number((total / count).toFixed(2)) : 0;
+
+//     await GenralIQ.findOneAndUpdate(
+//       { userId, learningId: learningIdFilter, endDate, classId },
+//       { overallAverage },
+//       { upsert: true, new: true }
+//     );
+
+//     return res.status(200).json({
+//       count,
+//       overallAverage,
+//       results
+//     });
 //   } catch (error) {
-//     console.error('Get GenrelIQ Error:', error);
-//     res.status(500).json({ message: 'Internal server error', error: error.message });
+//     console.error('Error in genraliqAverage:', error);
+//     return res.status(500).json({ message: error.message });
 //   }
 // };
+
+
+
+
+
+
+
+exports.getGenrelIq = async (req, res) => {
+  try {
+    const userId = req.user._id;
+    const user = await User.findById(userId).lean();
+    if (!user || !user.className || !user.endDate) {
+      return res.status(400).json({ message: 'Please complete your profile.' });
+    }
+    const classId = user.className.toString();
+    const assignedList = await Assigned.find({ classId })
+      .populate('learning')
+      .populate('learning2')
+      .populate('learning3')
+      .populate('learning4')
+      .lean();
+    for (let item of assignedList) {
+      // Get school or college info
+      let classInfo = await School.findById(item.classId).lean();
+      if (!classInfo) {
+        classInfo = await College.findById(item.classId).lean();
+      }
+      item.classInfo = classInfo || null;
+
+      const getIQScore = async (learningField) => {
+        if (item[learningField]?._id) {
+          const iqRecord = await GenralIQ.findOne({
+            userId,
+            endDate: user.endDate,
+            classId,
+            learningId: item[learningField]._id,
+          }).lean();
+
+          return iqRecord?.overallAverage ?? 0;
+        }
+        return 0;
+      };
+
+      // Nullify empty learning fields
+      if (!item.learning || Object.keys(item.learning).length === 0) item.learning = null;
+      if (!item.learning2 || Object.keys(item.learning2).length === 0) item.learning2 = null;
+      if (!item.learning3 || Object.keys(item.learning3).length === 0) item.learning3 = null;
+      if (!item.learning4 || Object.keys(item.learning4).length === 0) item.learning4 = null;
+
+      // Attach averages
+      item.learningAverage = await getIQScore('learning');
+      item.learning2Average = await getIQScore('learning2');
+      item.learning3Average = await getIQScore('learning3');
+      item.learning4Average = await getIQScore('learning4');
+    }
+
+    res.status(200).json({ data: assignedList });
+  } catch (error) {
+    console.error('Get GenrelIQ Error:', error);
+    res.status(500).json({ message: 'Internal server error', error: error.message });
+  }
+};
 
 
 
@@ -1998,7 +2451,6 @@ const calculateAndSaveGeneralIQ = async ({
 exports.getGenrelIq = async (req, res) => {
   try {
     const userId = req.user._id;
-
     const user = await User.findById(userId).lean();
     if (!user || !user.className || !user.endDate) {
       return res
