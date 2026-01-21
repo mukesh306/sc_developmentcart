@@ -4,6 +4,7 @@ const axios = require("axios");
 const cron = require("node-cron");
 const Notification = require("../models/notification");
 const User = require('../models/User');
+const TempUser = require('../models/tempuser');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const College = require('../models/college');
@@ -1971,7 +1972,6 @@ exports.getCategoriesFromUsers = async (req, res) => {
   }
 };
 
-
 // exports.userforAdmin = async (req, res) => {
 //   try {
 //     const adminId = req.user._id;
@@ -2073,7 +2073,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
 
 //     for (let user of users) {
 
-//       /* ===== ONLY ADDITION START (classOrYear) ===== */
+      
 //       let classDetails = null;
 //       let classOrYear = "";
 
@@ -2086,7 +2086,6 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //           classOrYear = classDetails.name;
 //         }
 //       }
-//       /* ===== ONLY ADDITION END ===== */
 
 //       if (user.startDate && user.endDate) {
 //         const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
@@ -2110,9 +2109,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //         if (category?._id) {
 //           const key = `${user._id}_${category._id}`;
 
-//           if (failedMap[key]) {
-//             computedSchoolershipstatus = "Eliminated";
-//           }
+//           if (failedMap[key]) computedSchoolershipstatus = "Eliminated";
 
 //           const notAttempted = examStatuses.find(
 //             es =>
@@ -2121,13 +2118,9 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //               es.attemptStatus === "Not Attempted"
 //           );
 
-//           if (notAttempted) {
-//             computedSchoolershipstatus = "Eliminated";
-//           }
+//           if (notAttempted) computedSchoolershipstatus = "Eliminated";
 
-//           if (finalistMap[key]) {
-//             computedSchoolershipstatus = "Finalist";
-//           }
+//           if (finalistMap[key]) computedSchoolershipstatus = "Finalist";
 //         }
 //       }
 
@@ -2153,20 +2146,51 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //         }
 //       );
 
+     
 //       finalUsers.push({
-//         ...user._doc,
+//         _id: user._id,
+
+//         firstName: user.firstName,
+//         middleName: user.middleName,
+//         lastName: user.lastName,
+//         mobileNumber: user.mobileNumber,
+//         email: user.email,
+//         VerifyEmail: user.VerifyEmail,
+
+//         schoolershipstatus: computedSchoolershipstatus,
+//         category,
+
+//         aadharCard: user.aadharCard,
+//         marksheet: user.marksheet,
+//         pincode: user.pincode,
+
+//         className: user.className,
+//         studentType: user.studentType,
+
+//         instituteName:
+//           user.schoolName || user.collegeName || user.instituteName || "",
+
+//         countryId: user.countryId,
+//         stateId: user.stateId,
+//         cityId: user.cityId,
+
 //         country: user.countryId?.name || "",
 //         state: user.stateId?.name || "",
 //         city: user.cityId?.name || "",
+
 //         institutionName:
 //           user.schoolName || user.collegeName || user.instituteName || "",
 //         institutionType: user.studentType || "",
-//         classOrYear, // ✅ ADDED
-//         category,
-//         schoolershipstatus: computedSchoolershipstatus
+
+//         startDate: user.startDate,
+//         endDate: user.endDate,
+//         session: user.session,
+
+//         classOrYear
 //       });
 //     }
 
+ 
 //     if (categoryId) {
 //       const categoriesArray = categoryId.split(",");
 //       finalUsers = finalUsers.filter(u =>
@@ -2222,7 +2246,6 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //   }
 // };
 
-
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -2265,11 +2288,23 @@ exports.userforAdmin = async (req, res) => {
         : cityId;
     }
 
+   
+
     const users = await User.find(filterQuery)
       .populate("countryId", "name")
       .populate("stateId", "name")
       .populate("cityId", "name")
       .populate("updatedBy", "email name role");
+
+   
+
+    const tempUsers = await TempUser.find(filterQuery)
+      .populate("countryId", "name")
+      .populate("stateId", "name")
+      .populate("cityId", "name")
+      .lean();
+
+  
 
     const userIds = users.map(u => u._id);
 
@@ -2303,8 +2338,7 @@ exports.userforAdmin = async (req, res) => {
     const failedMap = {};
     examStatuses.forEach(es => {
       if (es.result === "failed" && es.category?._id) {
-        const key = `${es.userId}_${es.category._id}`;
-        failedMap[key] = true;
+        failedMap[`${es.userId}_${es.category._id}`] = true;
       }
     });
 
@@ -2316,27 +2350,14 @@ exports.userforAdmin = async (req, res) => {
 
     const finalistMap = {};
     categoryTopUsers.forEach(ctu => {
-      const key = `${ctu.userId}_${ctu.schoolerStatus}`;
-      finalistMap[key] = true;
+      finalistMap[`${ctu.userId}_${ctu.schoolerStatus}`] = true;
     });
 
     let finalUsers = [];
 
+    
+
     for (let user of users) {
-
-      
-      let classDetails = null;
-      let classOrYear = "";
-
-      if (user.className && mongoose.Types.ObjectId.isValid(user.className)) {
-        classDetails =
-          (await School.findById(user.className).select("name price")) ||
-          (await College.findById(user.className).select("name price"));
-
-        if (classDetails && classDetails.price != null) {
-          classOrYear = classDetails.name;
-        }
-      }
 
       if (user.startDate && user.endDate) {
         const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
@@ -2370,96 +2391,77 @@ exports.userforAdmin = async (req, res) => {
           );
 
           if (notAttempted) computedSchoolershipstatus = "Eliminated";
-
           if (finalistMap[key]) computedSchoolershipstatus = "Finalist";
         }
       }
 
-      if (user.userDetails && user.userDetails.length > 0) {
-        user.userDetails.forEach((ud) => {
-          if (
-            ud.category?._id?.toString() === category._id?.toString() &&
-            ud.examTypes?.length > 0
-          ) {
-            ud.examTypes[0].status = "Eligible";
-          }
-        });
-      }
-
-      await User.updateOne(
-        { _id: user._id },
-        {
-          $set: {
-            schoolershipstatus: computedSchoolershipstatus,
-            category,
-            userDetails: user.userDetails
-          }
-        }
-      );
-
-     
       finalUsers.push({
         _id: user._id,
+
+        status: user.status,  
 
         firstName: user.firstName,
         middleName: user.middleName,
         lastName: user.lastName,
         mobileNumber: user.mobileNumber,
         email: user.email,
-        VerifyEmail: user.VerifyEmail,
 
         schoolershipstatus: computedSchoolershipstatus,
         category,
-
-        aadharCard: user.aadharCard,
-        marksheet: user.marksheet,
-        pincode: user.pincode,
-
-        className: user.className,
-        studentType: user.studentType,
-
-        instituteName:
-          user.schoolName || user.collegeName || user.instituteName || "",
-
-        countryId: user.countryId,
-        stateId: user.stateId,
-        cityId: user.cityId,
 
         country: user.countryId?.name || "",
         state: user.stateId?.name || "",
         city: user.cityId?.name || "",
 
-        institutionName:
-          user.schoolName || user.collegeName || user.instituteName || "",
-        institutionType: user.studentType || "",
-
         startDate: user.startDate,
-        endDate: user.endDate,
-        session: user.session,
-
-        classOrYear
+        endDate: user.endDate
       });
     }
 
- 
+   
+
+    for (let tUser of tempUsers) {
+      finalUsers.push({
+        _id: tUser._id,
+
+        status: tUser.status,   
+
+        firstName: tUser.firstName,
+        middleName: tUser.middleName,
+        lastName: tUser.lastName,
+        mobileNumber: tUser.mobileNumber,
+        email: tUser.email,
+
+        schoolershipstatus: "NA",
+        category: { _id: null, name: "NA" },
+
+        country: tUser.countryId?.name || "",
+        state: tUser.stateId?.name || "",
+        city: tUser.cityId?.name || "",
+
+        startDate: tUser.startDate,
+        endDate: tUser.endDate
+      });
+    }
+
+   
+
     if (categoryId) {
-      const categoriesArray = categoryId.split(",");
-      finalUsers = finalUsers.filter(u =>
-        u.category?._id && categoriesArray.includes(u.category._id.toString())
+      const arr = categoryId.split(",");
+      finalUsers = finalUsers.filter(
+        u => u.category?._id && arr.includes(u.category._id.toString())
       );
     }
 
     if (schoolershipstatus) {
-      const statusArray = schoolershipstatus.split(",").map(s => s.trim());
-      finalUsers = finalUsers.filter(u =>
-        statusArray.includes(u.schoolershipstatus)
-      );
+      const arr = schoolershipstatus.split(",").map(s => s.trim());
+      finalUsers = finalUsers.filter(u => arr.includes(u.schoolershipstatus));
     }
 
     if (status) {
-      const statusArray = status.split(",").map(s => s.trim().toLowerCase());
+      const arr = status.split(",").map(s => s.trim().toLowerCase());
       finalUsers = finalUsers.filter(
-        u => u.status && statusArray.includes(u.status.toLowerCase())
+        u => u.status && arr.includes(u.status.toLowerCase())
       );
     }
 
@@ -2474,6 +2476,8 @@ exports.userforAdmin = async (req, res) => {
       });
     }
 
+    
+
     const totalUsers = finalUsers.length;
     const paginated = finalUsers.slice(skip, skip + limit);
 
@@ -2486,8 +2490,8 @@ exports.userforAdmin = async (req, res) => {
       limit,
       totalUsers,
       totalPages: Math.ceil(totalUsers / limit),
-      from,
-      to,
+      from,        
+      to,          
       users: paginated
     });
 
@@ -2496,6 +2500,7 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 
 exports.getAvailableSchoolershipStatus = async (req, res) => {
