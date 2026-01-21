@@ -5,8 +5,6 @@ const cron = require("node-cron");
 const Notification = require("../models/notification");
 const User = require('../models/User');
 // const TempUser = require('../models/tempuser');
-
-
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const College = require('../models/college');
