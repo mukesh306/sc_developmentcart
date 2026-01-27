@@ -4,7 +4,7 @@ const Tempuser = require("../models/tempuser");
 
 cron.schedule(
 //   "40 23 * * *", 
-  "45 12 * * *", 
+  "23 19 * * *", 
   async () => {
     try {
       const now = moment().tz("Asia/Kolkata");

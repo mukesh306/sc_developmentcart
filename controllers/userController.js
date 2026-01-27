@@ -4,7 +4,7 @@ const axios = require("axios");
 const cron = require("node-cron");
 const Notification = require("../models/notification");
 const User = require('../models/User');
-// const TempUser = require('../models/tempuser');
+const TempUser = require('../models/tempuser');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const College = require('../models/college');
@@ -24,9 +24,12 @@ const Schoolercategory = require("../models/schoolershipcategory");
 const Schoolerexam = require("../models/Schoolerexam");
 const UserExamGroup = require("../models/userExamGroup");
 const LearningScore = require('../models/learningScore');
+const { SESClient, SendEmailCommand } = require("@aws-sdk/client-ses");
 const Tempuser = require('../models/tempuser');
 const fs = require('fs');
 const path = require('path');
+
+
 const moment = require('moment-timezone');
 const Payment = require("../models/payment");
 
@@ -227,6 +230,91 @@ exports.Userlogin = async (req, res) => {
 };
 
 
+// exports.completeProfile = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+
+//     let {
+//       countryId,
+//       stateId,
+//       cityId,
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//       className
+//     } = req.body;
+
+//     if (pincode && !/^\d+$/.test(pincode)) {
+//       return res.status(400).json({ message: 'Invalid Pincode' });
+//     }
+
+//     const updatedFields = {
+//       pincode,
+//       studentType,
+//       schoolName,
+//       instituteName,
+//       collegeName,
+//     };
+
+//     if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
+//     if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
+//     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
+//     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
+
+//     // if (req.files?.aadharCard?.[0]) {
+//     //   updatedFields.aadharCard = req.files.aadharCard[0].path;
+//     // }
+//     if (req.files?.marksheet?.[0]) {
+//       updatedFields.marksheet = req.files.marksheet[0].path;
+//     }
+
+   
+//     let user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
+//       .populate('countryId')
+//       .populate('stateId')
+//       .populate('cityId');
+
+    
+//     let classDetails = null;
+//     if (mongoose.Types.ObjectId.isValid(className)) {
+//       classDetails =
+//         (await School.findById(className)) ||
+//         (await College.findById(className)) ;
+//         // (await Institute.findById(className));
+//     }
+
+//     const baseUrl = `${req.protocol}://${req.get('host')}`;
+//     // if (user.aadharCard && fs.existsSync(user.aadharCard)) {
+//     //   user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
+//     // }
+//     if (user.marksheet && fs.existsSync(user.marksheet)) {
+//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
+//     }
+
+//     const formattedUser = {
+//       ...user._doc,
+//       country: user.countryId?.name || '',
+//       state: user.stateId?.name || '',
+//       city: user.cityId?.name || '',
+//       institutionName: schoolName || collegeName || instituteName || '',
+//       institutionType: studentType || '',
+//       classOrYear: classDetails?.name || '',
+//     };
+
+//     res.status(200).json({
+//       message: 'Profile updated. Redirecting to home page.',
+//       user: formattedUser
+//     });
+
+//   } catch (error) {
+//     console.error('Complete Profile Error:', error);
+//     res.status(500).json({ message: error.message });
+//   }
+// };
+
+
 exports.completeProfile = async (req, res) => {
   try {
     const userId = req.user.id;
@@ -243,10 +331,12 @@ exports.completeProfile = async (req, res) => {
       className
     } = req.body;
 
+  
     if (pincode && !/^\d+$/.test(pincode)) {
-      return res.status(400).json({ message: 'Invalid Pincode' });
+      return res.status(400).json({ message: "Invalid Pincode" });
     }
 
+   
     const updatedFields = {
       pincode,
       studentType,
@@ -255,188 +345,68 @@ exports.completeProfile = async (req, res) => {
       collegeName,
     };
 
-    if (mongoose.Types.ObjectId.isValid(countryId)) updatedFields.countryId = countryId;
-    if (mongoose.Types.ObjectId.isValid(stateId)) updatedFields.stateId = stateId;
-    if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
-    if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
+    if (mongoose.Types.ObjectId.isValid(countryId))
+      updatedFields.countryId = countryId;
 
-    // if (req.files?.aadharCard?.[0]) {
-    //   updatedFields.aadharCard = req.files.aadharCard[0].path;
-    // }
+    if (mongoose.Types.ObjectId.isValid(stateId))
+      updatedFields.stateId = stateId;
+
+    if (mongoose.Types.ObjectId.isValid(cityId))
+      updatedFields.cityId = cityId;
+
+    if (mongoose.Types.ObjectId.isValid(className))
+      updatedFields.className = className;
+
+    
     if (req.files?.marksheet?.[0]) {
-      updatedFields.marksheet = req.files.marksheet[0].path;
+      updatedFields.marksheet = req.files.marksheet[0].location; 
     }
 
    
-    let user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
-      .populate('countryId')
-      .populate('stateId')
-      .populate('cityId');
+    let user = await User.findByIdAndUpdate(
+      userId,
+      updatedFields,
+      { new: true }
+    )
+      .populate("countryId")
+      .populate("stateId")
+      .populate("cityId");
 
     
     let classDetails = null;
     if (mongoose.Types.ObjectId.isValid(className)) {
       classDetails =
         (await School.findById(className)) ||
-        (await College.findById(className)) ;
-        // (await Institute.findById(className));
+        (await College.findById(className));
+        // || (await Institute.findById(className));
     }
 
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-    // if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-    //   user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-    // }
-    if (user.marksheet && fs.existsSync(user.marksheet)) {
-      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-    }
+    
 
+    
     const formattedUser = {
       ...user._doc,
-      country: user.countryId?.name || '',
-      state: user.stateId?.name || '',
-      city: user.cityId?.name || '',
-      institutionName: schoolName || collegeName || instituteName || '',
-      institutionType: studentType || '',
-      classOrYear: classDetails?.name || '',
+      country: user.countryId?.name || "",
+      state: user.stateId?.name || "",
+      city: user.cityId?.name || "",
+      institutionName: schoolName || collegeName || instituteName || "",
+      institutionType: studentType || "",
+      classOrYear: classDetails?.name || "",
+      marksheet: user.marksheet || "" 
     };
 
     res.status(200).json({
-      message: 'Profile updated. Redirecting to home page.',
-      user: formattedUser
+      message: "Profile updated successfully",
+      user: formattedUser,
     });
 
   } catch (error) {
-    console.error('Complete Profile Error:', error);
+    console.error("Complete Profile Error:", error);
     res.status(500).json({ message: error.message });
   }
 };
 
 
-
-// exports.getUserProfile = async (req, res) => {
-//   try {
-//     const userId = req.user.id;
-
-//     // 1) लाओ user (populate कुछ फील्ड्स के साथ)
-//     let user = await User.findById(userId)
-//       .populate('countryId', 'name')
-//       .populate('stateId', 'name')
-//       .populate('cityId', 'name')
-//       .populate({
-//         path: 'updatedBy',
-//         select: 'email session startDate endDate endTime name role'
-//       });
-
-//     if (!user) {
-//       return res.status(404).json({ message: 'User not found.' });
-//     }
-
-//     // 2) className से classDetails ढूंढो (School या College)
-//     let classId = user.className;
-//     let classDetails = null;
-
-//     if (mongoose.Types.ObjectId.isValid(classId)) {
-//       classDetails =
-//         (await School.findById(classId)) ||
-//         (await College.findById(classId));
-//     }
-
-//     // 3) file URLs (aadharCard / marksheet) को public URL बनाना (अगर local path है तो)
-//     // const baseUrl = `${req.protocol}://${req.get('host')}`;
-// const baseUrl = `${req.protocol}://${req.get('host')}`.replace('http://', 'https://');
-//     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-//       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-//     }
-//     if (user.marksheet && fs.existsSync(user.marksheet)) {
-//       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-//     }
-
-//     // 4) अगर classDetails invalid हो तो className हटाओ
-//     if (!classDetails || classDetails.price == null) {
-//       classId = null;
-//       await User.findByIdAndUpdate(userId, { className: null });
-//       user.className = null;
-//     } else {
-//       // 5) अगर institution.updatedBy बदल गया है तो सिर्फ updatedBy अपडेट करो (clone logic हटाया गया है)
-//       const institutionUpdatedBy = classDetails.updatedBy || null;
-
-//       if (institutionUpdatedBy) {
-//         const existingUser = await User.findById(userId).select('updatedBy');
-
-//         if (existingUser.updatedBy?.toString() !== institutionUpdatedBy.toString()) {
-//           await User.findByIdAndUpdate(userId, { updatedBy: institutionUpdatedBy });
-//           user.updatedBy = institutionUpdatedBy;
-//         }
-//       }
-//     }
-
-//     // 6) Sync session-related fields from updatedBy (if populated object) to user
-//     if (user.updatedBy && typeof user.updatedBy === 'object') {
-//       const updates = {};
-
-//       if (user.updatedBy.session && user.session !== user.updatedBy.session) {
-//         updates.session = user.updatedBy.session;
-//         user.session = user.updatedBy.session;
-//       }
-
-//       if (user.updatedBy.startDate && user.startDate !== user.updatedBy.startDate) {
-//         updates.startDate = user.updatedBy.startDate;
-//         user.startDate = user.updatedBy.startDate;
-//       }
-
-//       if (user.updatedBy.endDate && user.endDate !== user.updatedBy.endDate) {
-//         updates.endDate = user.updatedBy.endDate;
-//         user.endDate = user.updatedBy.endDate;
-//       }
-
-//       if (Object.keys(updates).length > 0) {
-//         await User.findByIdAndUpdate(userId, updates);
-//       }
-//     }
-
-//     // 7) Check session expiry (using moment-timezone)
-//     if (user.updatedBy?.endDate) {
-//       const rawEndDate = String(user.updatedBy.endDate).trim();
-//       const endDate = moment.tz(rawEndDate, 'DD-MM-YYYY', 'Asia/Kolkata').endOf('day');
-//       const currentDate = moment.tz('Asia/Kolkata');
-
-//       if (!endDate.isValid()) {
-//         console.warn("⚠️ Invalid endDate. Format must be DD-MM-YYYY");
-//       } else if (currentDate.isSameOrAfter(endDate)) {
-//         if (user.status !== 'no') {
-//           await User.findByIdAndUpdate(userId, { status: 'no' });
-//           user.status = 'no';
-//         }
-//       }
-//     }
-
-//     // 8) Final formatted response
-//     const formattedUser = {
-//       ...user._doc,
-//       status: user.status,
-//       className: classId,
-//       country: user.countryId?.name || '',
-//       state: user.stateId?.name || '',
-//       city: user.cityId?.name || '',
-//       institutionName: user.schoolName || user.collegeName || user.instituteName || '',
-//       institutionType: user.studentType || '',
-//       updatedBy: user.updatedBy || null
-//     };
-
-//     if (classDetails && classDetails.price != null) {
-//       formattedUser.classOrYear = classDetails.name;
-//     }
-
-//     return res.status(200).json({
-//       message: 'User profile fetched successfully.',
-//       user: formattedUser
-//     });
-
-//   } catch (error) {
-//     console.error('Get User Profile Error:', error);
-//     return res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 exports.getUserProfile = async (req, res) => {
@@ -696,92 +666,145 @@ exports.resetPasswordAfterOTPLogin = async (req, res) => {
 };
 
 
+exports.SendEmailverifyOTP = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const user = await Tempuser.findOne({ email });
+    if (!user) return res.status(404).json({ message: 'User not found' });
+    const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
+    const expiry = new Date(Date.now() + 5 * 60 * 1000); 
+    user.resetPasswordOTP = otp;
+    user.resetPasswordExpires = expiry;
+    await user.save();
+   const transporter = nodemailer.createTransport({
+     service: 'gmail',
+     auth: {
+       user: 'noreply@shikshacart.com', 
+       pass: 'xyrx ryad ondf jaum' 
+     }
+   });
+
+    await transporter.sendMail({
+      from: 'noreply@shikshacart.com',
+      to: email,
+      subject: 'Email Verify OTP',
+      text: `Your OTP is: ${otp}`,
+    });
+
+    res.status(200).json({ message: 'OTP sent to email for Verify Email.' });
+  } catch (error) {
+    console.error('Send OTP Error:', error);
+    res.status(500).json({ message: error.message });
+  }
+};
+
+
 // exports.SendEmailverifyOTP = async (req, res) => {
 //   try {
 //     const { email } = req.body;
+
 //     const user = await Tempuser.findOne({ email });
-//     if (!user) return res.status(404).json({ message: 'User not found' });
-//     const otp = Math.floor(100000 + Math.random() * 900000).toString(); 
-//     const expiry = new Date(Date.now() + 5 * 60 * 1000); 
+//     if (!user) {
+//       return res.status(404).json({ message: "User not found" });
+//     }
+
+   
+//     const otp = Math.floor(100000 + Math.random() * 900000).toString();
+//     const expiry = new Date(Date.now() + 5 * 60 * 1000);
+
 //     user.resetPasswordOTP = otp;
 //     user.resetPasswordExpires = expiry;
 //     await user.save();
-//    const transporter = nodemailer.createTransport({
-//      service: 'gmail',
-//      auth: {
-//        user: 'noreply@shikshacart.com', 
-//        pass: 'xyrx ryad ondf jaum' 
-//      }
-//    });
 
-//     await transporter.sendMail({
-//       from: 'noreply@shikshacart.com',
-//       to: email,
-//       subject: 'Email Verify OTP',
-//       text: `Your OTP is: ${otp}`,
+   
+//     const templatePath = path.join(__dirname, "../public/verify-email.html");
+//     let htmlTemplate = fs.readFileSync(templatePath, "utf8");
+//     htmlTemplate = htmlTemplate.replace("{{OTP}}", otp);
+
+   
+//     const sesClient = new SESClient({
+//       region: "ap-south-1",
+//       credentials: {
+//         accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+//         secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+//       },
 //     });
 
-//     res.status(200).json({ message: 'OTP sent to email for Verify Email.' });
+    
+//     const params = {
+//       Source: "noreply@shikshacart.com", 
+//       Destination: {
+//         ToAddresses: [email],
+//       },
+//       Message: {
+//         Subject: {
+//           Data: "Email Verification OTP",
+//           Charset: "UTF-8",
+//         },
+//         Body: {
+//           Html: {
+//             Data: htmlTemplate,
+//             Charset: "UTF-8",
+//           },
+//         },
+//       },
+//     };
+
+//     await sesClient.send(new SendEmailCommand(params));
+
+//     res.status(200).json({
+//       message: "OTP sent to email for verification.",
+//     });
 //   } catch (error) {
-//     console.error('Send OTP Error:', error);
+//     console.error("Send OTP Error:", error);
 //     res.status(500).json({ message: error.message });
 //   }
 // };
 
 
-exports.SendEmailverifyOTP = async (req, res) => {
+
+
+exports.testSESEmail = async (req, res) => {
   try {
-    const { email } = req.body;
-
-    const user = await Tempuser.findOne({ email });
-    if (!user) {
-      return res.status(404).json({ message: "User not found" });
-    }
-
-    
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const expiry = new Date(Date.now() + 5 * 60 * 1000);
-
-    user.resetPasswordOTP = otp;
-    user.resetPasswordExpires = expiry;
-    await user.save();
-
-   
-    const templatePath = path.join(
-      __dirname,
-      "../public/verify-email.html"
-    );
-
-    let htmlTemplate = fs.readFileSync(templatePath, "utf8");
-
-    
-    htmlTemplate = htmlTemplate.replace("{{OTP}}", otp);
- 
-    const transporter = nodemailer.createTransport({
-      service: "gmail",
-      auth: {
-        user: "noreply@shikshacart.com",
-        pass: "xyrx ryad ondf jaum", 
+    const ses = new SESClient({
+     region: "us-east-1",
+      credentials: {
+        accessKeyId: process.env.AWS_SES_ACCESS_KEY,
+        secretAccessKey: process.env.AWS_SES_SECRET_KEY,
       },
     });
 
-  
-    await transporter.sendMail({
-      from: `"ShikshaCart" <noreply@shikshacart.com>`,
-      to: email,
-      subject: "Email Verification OTP",
-      html: htmlTemplate, 
-    });
+    const params = {
+      Source: "mukesh@developmentcart.com", // VERIFIED
+      Destination: {
+        ToAddresses: ["chandrakant@developmentcart.com"], // VERIFIED
+      },
+      Message: {
+        Subject: {
+          Data: "SES TEST OK",
+        },
+        Body: {
+          Text: {
+            Data: "Agar ye mail aaya hai to SES perfectly kaam kar raha hai ✅",
+          },
+        },
+      },
+    };
 
-    res.status(200).json({
-      message: "OTP sent to email for Verify Email.",
+    await ses.send(new SendEmailCommand(params));
+
+    return res.json({
+      success: true,
+      message: "SES test email sent successfully",
     });
   } catch (error) {
-    console.error("Send OTP Error:", error);
-    res.status(500).json({ message: error.message });
+    console.error("SES TEST ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      error: error.message,
+    });
   }
 };
-
 
 
 // exports.EmailVerifyOtp = async (req, res) => {
@@ -910,6 +933,7 @@ exports.updateUser = async (req, res) => {
 //   try {
 //     const userId = req.user.id;
 
+    
 //     const existingUser = await User.findById(userId);
 //     if (!existingUser) {
 //       return res.status(404).json({ message: 'User not found' });
@@ -935,6 +959,7 @@ exports.updateUser = async (req, res) => {
 //       return res.status(400).json({ message: 'Invalid Pincode' });
 //     }
 
+   
 //     const updatedFields = {
 //       pincode,
 //       studentType,
@@ -956,20 +981,19 @@ exports.updateUser = async (req, res) => {
 //       updatedFields.marksheet = req.files.marksheet[0].path;
 //     }
 
-    
 //     let classDetails = null;
+
+   
 //     if (mongoose.Types.ObjectId.isValid(className)) {
-//       classDetails = await School.findById(className) || await College.findById(className);
+//       classDetails =
+//         (await School.findById(className)) ||
+//         (await College.findById(className));
 
 //       if (classDetails?.updatedBy) {
+
 //         let shouldClone = false;
 
-      
-//         if (!existingUser.updatedBy) {
-//           shouldClone = true;
-//         }
-
-       
+        
 //         if (existingUser.className?.toString() !== className?.toString()) {
 //           shouldClone = true;
 //         }
@@ -977,40 +1001,55 @@ exports.updateUser = async (req, res) => {
        
 //         if (
 //           existingUser.className?.toString() === className?.toString() &&
-//           existingUser.updatedBy?.toString() !== classDetails.updatedBy.toString()
+//           (
+//             existingUser.session !== classDetails.session ||
+//             existingUser.startDate !== classDetails.startDate ||
+//             existingUser.endDate !== classDetails.endDate
+//           )
 //         ) {
 //           shouldClone = true;
 //         }
 
-        
+      
 //         if (shouldClone) {
-//           const userData = existingUser.toObject();
-//           const currentUserId = userData._id;
-//           delete userData._id;
 
-//           if (userData.countryId && typeof userData.countryId === 'object') {
-//             userData.countryId = userData.countryId._id || userData.countryId;
-//           }
-//           if (userData.stateId && typeof userData.stateId === 'object') {
-//             userData.stateId = userData.stateId._id || userData.stateId;
-//           }
-//           if (userData.cityId && typeof userData.cityId === 'object') {
-//             userData.cityId = userData.cityId._id || userData.cityId;
-//           }
-//           if (userData.updatedBy && typeof userData.updatedBy === 'object') {
-//             userData.updatedBy = userData.updatedBy._id || userData.updatedBy;
-//           }
-//           delete userData.__v;
-
-//           await UserHistory.create({
-//             ...userData,
-//             _id: currentUserId,
-//             originalUserId: new mongoose.Types.ObjectId(),
-//             clonedAt: new Date()
+//           const hasLearning = await LearningScore.exists({
+//             userId: existingUser._id,
+//             classId: existingUser.className,
+//             session: existingUser.session,
+//             startDate: existingUser.startDate,
+//             endDate: existingUser.endDate
 //           });
+
+//           if (hasLearning) {
+
+//             const alreadyExists = await UserHistory.findOne({
+//               originalUserId: existingUser._id,
+//               className: existingUser.className,
+//               session: existingUser.session,
+//               startDate: existingUser.startDate,
+//               endDate: existingUser.endDate
+//             });
+
+//             if (!alreadyExists) {
+//               const userData = existingUser.toObject();
+//               delete userData._id;
+//               delete userData.__v;
+
+//               await UserHistory.create({
+//                 ...userData,
+//                 originalUserId: existingUser._id,
+//                 clonedAt: new Date()
+//               });
+//             }
+//           }
 //         }
 
+        
 //         updatedFields.updatedBy = classDetails.updatedBy;
+//         updatedFields.session = classDetails.session;
+//         updatedFields.startDate = classDetails.startDate;
+//         updatedFields.endDate = classDetails.endDate;
 
 //         const admin = await Admin1.findById(classDetails.updatedBy);
 //         if (admin?.session) {
@@ -1018,17 +1057,25 @@ exports.updateUser = async (req, res) => {
 //         }
 //       }
 //     }
- 
-//     const user = await User.findByIdAndUpdate(userId, updatedFields, { new: true })
-//       .populate('countryId')
-//       .populate('stateId')
-//       .populate('cityId')
+
+   
+//     const user = await User.findByIdAndUpdate(
+//       userId,
+//       updatedFields,
+//       { new: true }
+//     )
+//       .populate('countryId', 'name')
+//       .populate('stateId', 'name')
+//       .populate('cityId', 'name')
 //       .populate('updatedBy', 'email session startDate endDate');
 
+   
 //     const baseUrl = `${req.protocol}://${req.get('host')}`;
+
 //     if (user.aadharCard && fs.existsSync(user.aadharCard)) {
 //       user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
 //     }
+
 //     if (user.marksheet && fs.existsSync(user.marksheet)) {
 //       user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
 //     }
@@ -1046,21 +1093,21 @@ exports.updateUser = async (req, res) => {
 //     };
 
 //     return res.status(200).json({
-//       message: 'Profile updated. Redirecting to home page.',
+//       message: 'Profile updated successfully.',
 //       user: formattedUser
 //     });
 
 //   } catch (error) {
 //     console.error('Update Profile Error:', error);
-//     res.status(500).json({ message: error.message });
+//     return res.status(500).json({ message: error.message });
 //   }
 // };
+
 
 exports.updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    
     const existingUser = await User.findById(userId);
     if (!existingUser) {
       return res.status(404).json({ message: 'User not found' });
@@ -1086,7 +1133,6 @@ exports.updateProfile = async (req, res) => {
       return res.status(400).json({ message: 'Invalid Pincode' });
     }
 
-   
     const updatedFields = {
       pincode,
       studentType,
@@ -1100,32 +1146,26 @@ exports.updateProfile = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(cityId)) updatedFields.cityId = cityId;
     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
 
-    if (req.files?.aadharCard?.[0]) {
-      updatedFields.aadharCard = req.files.aadharCard[0].path;
-    }
-
+    
     if (req.files?.marksheet?.[0]) {
-      updatedFields.marksheet = req.files.marksheet[0].path;
+      updatedFields.marksheet = req.files.marksheet[0].location; 
     }
+    
 
     let classDetails = null;
 
-   
     if (mongoose.Types.ObjectId.isValid(className)) {
       classDetails =
         (await School.findById(className)) ||
         (await College.findById(className));
 
       if (classDetails?.updatedBy) {
-
         let shouldClone = false;
 
-        
         if (existingUser.className?.toString() !== className?.toString()) {
           shouldClone = true;
         }
 
-       
         if (
           existingUser.className?.toString() === className?.toString() &&
           (
@@ -1137,9 +1177,7 @@ exports.updateProfile = async (req, res) => {
           shouldClone = true;
         }
 
-      
         if (shouldClone) {
-
           const hasLearning = await LearningScore.exists({
             userId: existingUser._id,
             classId: existingUser.className,
@@ -1149,7 +1187,6 @@ exports.updateProfile = async (req, res) => {
           });
 
           if (hasLearning) {
-
             const alreadyExists = await UserHistory.findOne({
               originalUserId: existingUser._id,
               className: existingUser.className,
@@ -1172,7 +1209,6 @@ exports.updateProfile = async (req, res) => {
           }
         }
 
-        
         updatedFields.updatedBy = classDetails.updatedBy;
         updatedFields.session = classDetails.session;
         updatedFields.startDate = classDetails.startDate;
@@ -1185,7 +1221,6 @@ exports.updateProfile = async (req, res) => {
       }
     }
 
-   
     const user = await User.findByIdAndUpdate(
       userId,
       updatedFields,
@@ -1195,17 +1230,6 @@ exports.updateProfile = async (req, res) => {
       .populate('stateId', 'name')
       .populate('cityId', 'name')
       .populate('updatedBy', 'email session startDate endDate');
-
-   
-    const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-    if (user.aadharCard && fs.existsSync(user.aadharCard)) {
-      user.aadharCard = `${baseUrl}/uploads/${path.basename(user.aadharCard)}`;
-    }
-
-    if (user.marksheet && fs.existsSync(user.marksheet)) {
-      user.marksheet = `${baseUrl}/uploads/${path.basename(user.marksheet)}`;
-    }
 
     const formattedUser = {
       ...user._doc,
@@ -1231,17 +1255,10 @@ exports.updateProfile = async (req, res) => {
 };
 
 
-// const PHONEPE_CLIENT_ID = "M23HL0YHON0IL_2601071815";
-// const PHONEPE_CLIENT_SECRET = "MWNkMjhkODktNmZhZi00MGE3LTkwNDQtMDkxNzVkYTk3ZGE4";
-// const PHONEPE_CLIENT_VERSION = "1";
-// const PHONEPE_BASE_URL = "https://api-preprod.phonepe.com/apis/pg-sandbox";
-
-
 const PHONEPE_CLIENT_ID = process.env.PHONEPE_CLIENT_ID;
 const PHONEPE_CLIENT_SECRET = process.env.PHONEPE_CLIENT_SECRET;
 const PHONEPE_CLIENT_VERSION = process.env.PHONEPE_CLIENT_VERSION;
 const PHONEPE_BASE_URL = process.env.PHONEPE_BASE_URL;
-
 
 let phonePeToken = null;
 let phonePeTokenExpiry = null;
@@ -1280,7 +1297,7 @@ const getPhonePeToken = async () => {
 exports.createPhonePePayment = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { amount } = req.body; 
+    const { amount, } = req.body; 
     if (!amount || amount <= 0) {
       return res.status(400).json({
         success: false,
@@ -1292,7 +1309,7 @@ exports.createPhonePePayment = async (req, res) => {
     const merchantOrderId = `ORDER_${Date.now()}`;
 
     const token = await getPhonePeToken();
-
+    const baseUrl = `${req.get('referer')}`;
     const payload = {
       merchantOrderId,
       amount: amountInPaise,
@@ -1300,7 +1317,7 @@ exports.createPhonePePayment = async (req, res) => {
         type: "PG_CHECKOUT",
         message: "Profile activation payment",
         merchantUrls: {
-           redirectUrl: `https://dev.product.shikshacart.com/payment-redirect/${merchantOrderId}`
+           redirectUrl: `${baseUrl}payment-redirect/${merchantOrderId}`
         }
       }
     };
@@ -1339,6 +1356,134 @@ exports.createPhonePePayment = async (req, res) => {
     });
   }
 };
+
+exports.phonePeWebhook = async (req, res) => {
+  try {
+    const webhookData = req.body;
+
+    
+    if (!webhookData || Object.keys(webhookData).length === 0) {
+      console.log("PHONEPE EMPTY WEBHOOK HIT");
+      return res.status(200).send("OK");
+    }
+
+    console.log(
+      "PHONEPE WEBHOOK RECEIVED:",
+      JSON.stringify(webhookData, null, 2)
+    );
+
+    const merchantOrderId =
+      webhookData?.payload?.merchantOrderId ||
+      webhookData?.payload?.orderId;
+
+    if (!merchantOrderId) {
+      console.log("No merchantOrderId found in webhook!");
+      return res.status(200).send("OK");
+    }
+
+    const payment = await Payment.findOneAndUpdate(
+      { merchantOrderId },
+      {
+        status: webhookData?.payload?.state || "UNKNOWN",
+        rawResponse: webhookData,
+      },
+      { new: true, upsert: true }
+    );
+
+    if (
+      webhookData?.payload?.state === "COMPLETED" &&
+      payment?.userId
+    ) {
+      await User.findByIdAndUpdate(payment.userId, {
+        status: "yes",
+        updatedAt: new Date(),
+      });
+    }
+
+    return res.status(200).send("OK"); 
+  } catch (error) {
+    console.error("PHONEPE WEBHOOK ERROR:", error);
+    return res.status(200).send("OK"); 
+  }
+};
+
+
+exports.checkPaymentStatus = async (req, res) => {
+  try {
+    const { merchantOrderId } = req.params;
+
+    const payment = await Payment.findOne({ merchantOrderId });
+
+    if (!payment) {
+      return res.json({
+        success: false,
+        message: "Payment not found",
+      });
+    }
+
+    const status = payment.status;
+
+    const transactionId =
+      payment?.rawResponse?.payload?.paymentDetails?.[0]?.transactionId || null;
+
+    return res.json({
+      success: true,
+      status,
+      transactionId,
+    });
+  } catch (err) {
+    return res.status(500).json({
+      success: false,
+      message: "Server error",
+    });
+  }
+};
+
+
+// exports.phonePeWebhook = async (req, res) => {
+//   try {
+//     const webhookData = req.body;
+
+//     console.log(
+//       "PHONEPE WEBHOOK:",
+//       JSON.stringify(webhookData, null, 2)
+//     );
+//  console.log("HEADERS:", req.headers);
+//   console.log("BODY TYPE:", typeof req.body);
+//   console.log("BODY CONTENT:", req.body);
+//     const merchantOrderId = webhookData?.data?.merchantOrderId;
+//     const paymentStatus = webhookData?.data?.state;
+    
+
+//     if (!merchantOrderId) {
+//       return res.status(200).json({ success: false });
+//     }
+
+//     const payment = await Payment.findOneAndUpdate(
+//       { merchantOrderId },
+//       {
+//         status: paymentStatus,
+//         rawResponse: webhookData
+//       },
+//       { new: true }
+//     );
+
+//     if (paymentStatus === "COMPLETED" && payment) {
+//       await User.findByIdAndUpdate(payment.userId, {
+//         status: "yes",
+//         updatedAt: new Date()
+//       });
+//     }
+
+    
+//     res.status(200).json({ success: true });
+
+//   } catch (error) {
+//     console.error("PHONEPE WEBHOOK ERROR:", error);
+//     res.status(200).json({ success: false });
+//   }
+// };
+
 
 
 exports.verifyPhonePePayment = async (req, res) => {
@@ -1804,26 +1949,26 @@ exports.getUserHistories = async (req, res) => {
       .sort({ clonedAt: -1 })
       .lean();
 
-    // Add computed fields like institutionName, classOrYear for each history
+    
     for (const hist of histories) {
-      // Fetch class details from School or College
+      
       let classDetails = null;
       if (hist.className && mongoose.Types.ObjectId.isValid(hist.className)) {
         classDetails = (await School.findById(hist.className).lean()) || (await College.findById(hist.className).lean());
       }
 
-      // institutionName priority: schoolName > collegeName > instituteName (from hist)
+      
       hist.institutionName = hist.schoolName || hist.collegeName || hist.instituteName || '';
       hist.institutionType = hist.studentType || '';
 
       hist.classOrYear = (classDetails && classDetails.price != null) ? classDetails.name : null;
 
-      // Attach readable country/state/city names
+      
       hist.country = hist.countryId?.name || '';
       hist.state = hist.stateId?.name || '';
       hist.city = hist.cityId?.name || '';
 
-      // Clean up to keep only useful fields (optional)
+      
       delete hist.countryId;
       delete hist.stateId;
       delete hist.cityId;
@@ -1931,7 +2076,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
       else filterQuery.cityId = cityId;
     }
 
-    // 2️⃣ Fetch Users
+   
     const users = await User.find(filterQuery).select("_id");
 
     if (!users.length) {
@@ -1940,7 +2085,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
 
     const userIds = users.map((u) => u._id);
 
-    // 3️⃣ Fetch ExamUserStatus for these users
+    
     const examStatuses = await ExamUserStatus.find({ userId: { $in: userIds } })
       .populate({
         path: "examId",
@@ -1949,7 +2094,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
       })
       .lean();
 
-    // 4️⃣ Extract unique categories
+   
     const uniqueCategoriesMap = {};
     examStatuses.forEach((ex) => {
       if (ex.examId?.category?._id) {
@@ -2246,261 +2391,81 @@ exports.userforAdmin = async (req, res) => {
   }
 };
 
+exports.tempuserforAdmin = async (req, res) => {
+  try {
+    let { page = 1, limit = 10, fields } = req.query;
 
-// exports.userforAdmin = async (req, res) => {
-//   try {
-//     const adminId = req.user._id;
-//     let {
-//       className,
-//       stateId,
-//       cityId,
-//       categoryId,
-//       schoolershipstatus,
-//       status,
-//       page = 1,
-//       limit = 10,
-//       fields
-//     } = req.query;
-
-//     page = parseInt(page);
-//     limit = parseInt(limit);
-//     const skip = (page - 1) * limit;
-
-//     const admin = await Admin1.findById(adminId).select("startDate endDate");
-//     if (!admin) {
-//       return res.status(404).json({ message: "Admin not found." });
-//     }
-
-//     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
-//     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
-
-//     let filterQuery = {};
-//     if (className) filterQuery.className = className;
-
-//     if (stateId) {
-//       filterQuery.stateId = stateId.includes(",")
-//         ? { $in: stateId.split(",") }
-//         : stateId;
-//     }
-
-//     if (cityId) {
-//       filterQuery.cityId = cityId.includes(",")
-//         ? { $in: cityId.split(",") }
-//         : cityId;
-//     }
-
-   
-
-//     const users = await User.find(filterQuery)
-//       .populate("countryId", "name")
-//       .populate("stateId", "name")
-//       .populate("cityId", "name")
-//       .populate("updatedBy", "email name role");
-
-   
-
-//     const tempUsers = await TempUser.find(filterQuery)
-//       .populate("countryId", "name")
-//       .populate("stateId", "name")
-//       .populate("cityId", "name")
-//       .lean();
-
-  
-
-//     const userIds = users.map(u => u._id);
-
-//     const groups = await userexamGroup.find({
-//       members: { $in: userIds }
-//     })
-//       .sort({ createdAt: -1 })
-//       .populate("category", "_id name")
-//       .lean();
-
-//     const userGroupCategoryMap = {};
-//     groups.forEach(g => {
-//       g.members.forEach(uid => {
-//         if (!userGroupCategoryMap[uid] && g.category) {
-//           userGroupCategoryMap[uid] = g.category;
-//         }
-//       });
-//     });
-
-//     const defaultCategory = await Schoolercategory.findOne()
-//       .select("_id name")
-//       .sort({ createdAt: 1 })
-//       .lean();
-
-//     const examStatuses = await ExamUserStatus.find({
-//       userId: { $in: userIds }
-//     })
-//       .select("userId category result attemptStatus")
-//       .lean();
-
-//     const failedMap = {};
-//     examStatuses.forEach(es => {
-//       if (es.result === "failed" && es.category?._id) {
-//         failedMap[`${es.userId}_${es.category._id}`] = true;
-//       }
-//     });
-
-//     const categoryTopUsers = await CategoryTopUser.find({
-//       userId: { $in: userIds }
-//     })
-//       .select("userId schoolerStatus")
-//       .lean();
-
-//     const finalistMap = {};
-//     categoryTopUsers.forEach(ctu => {
-//       finalistMap[`${ctu.userId}_${ctu.schoolerStatus}`] = true;
-//     });
-
-//     let finalUsers = [];
+    page = parseInt(page);
+    limit = parseInt(limit);
+    const skip = (page - 1) * limit;
 
     
-
-//     for (let user of users) {
-
-//       if (user.startDate && user.endDate) {
-//         const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
-//         const uEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
-//         if (!uStart.isSameOrAfter(adminStart) || !uEnd.isSameOrBefore(adminEnd)) {
-//           continue;
-//         }
-//       }
-
-//       let category = { _id: null, name: "NA" };
-//       let computedSchoolershipstatus = "NA";
-
-//       if (user.status === "yes") {
-//         computedSchoolershipstatus = "Participant";
-
-//         category =
-//           userGroupCategoryMap[user._id] ||
-//           defaultCategory ||
-//           { _id: null, name: "NA" };
-
-//         if (category?._id) {
-//           const key = `${user._id}_${category._id}`;
-
-//           if (failedMap[key]) computedSchoolershipstatus = "Eliminated";
-
-//           const notAttempted = examStatuses.find(
-//             es =>
-//               es.userId.toString() === user._id.toString() &&
-//               es.category?._id.toString() === category._id.toString() &&
-//               es.attemptStatus === "Not Attempted"
-//           );
-
-//           if (notAttempted) computedSchoolershipstatus = "Eliminated";
-//           if (finalistMap[key]) computedSchoolershipstatus = "Finalist";
-//         }
-//       }
-
-//       finalUsers.push({
-//         _id: user._id,
-
-//         status: user.status,  
-
-//         firstName: user.firstName,
-//         middleName: user.middleName,
-//         lastName: user.lastName,
-//         mobileNumber: user.mobileNumber,
-//         email: user.email,
-
-//         schoolershipstatus: computedSchoolershipstatus,
-//         category,
-
-//         country: user.countryId?.name || "",
-//         state: user.stateId?.name || "",
-//         city: user.cityId?.name || "",
-
-//         startDate: user.startDate,
-//         endDate: user.endDate
-//       });
-//     }
+    const totalUsers = await TempUser.countDocuments();
 
    
+    let tempUsers = await TempUser.find()
+      .populate("countryId", "name")
+      .populate("stateId", "name")
+      .populate("cityId", "name")
+      .skip(skip)
+      .limit(limit)
+      .lean();
 
-//     for (let tUser of tempUsers) {
-//       finalUsers.push({
-//         _id: tUser._id,
+ 
+    let finalUsers = tempUsers.map(tUser => ({
+      _id: tUser._id,
 
-//         status: tUser.status,   
+      status: tUser.status,
 
-//         firstName: tUser.firstName,
-//         middleName: tUser.middleName,
-//         lastName: tUser.lastName,
-//         mobileNumber: tUser.mobileNumber,
-//         email: tUser.email,
+      firstName: tUser.firstName,
+      middleName: tUser.middleName,
+      lastName: tUser.lastName,
+      mobileNumber: tUser.mobileNumber,
+      email: tUser.email,
 
-//         schoolershipstatus: "NA",
-//         category: { _id: null, name: "NA" },
+      schoolershipstatus: "NA",
+      category: { _id: null, name: "NA" },
 
-//         country: tUser.countryId?.name || "",
-//         state: tUser.stateId?.name || "",
-//         city: tUser.cityId?.name || "",
+      country: tUser.countryId?.name || "",
+      state: tUser.stateId?.name || "",
+      city: tUser.cityId?.name || "",
 
-//         startDate: tUser.startDate,
-//         endDate: tUser.endDate
-//       });
-//     }
+      startDate: tUser.startDate,
+      endDate: tUser.endDate
+    }));
 
    
+    if (fields) {
+      const reqFields = fields.split(",").map(f => f.trim());
+      finalUsers = finalUsers.map(u => {
+        const obj = { _id: u._id };
+        reqFields.forEach(f => {
+          if (u[f] !== undefined) obj[f] = u[f];
+        });
+        return obj;
+      });
+    }
 
-//     if (categoryId) {
-//       const arr = categoryId.split(",");
-//       finalUsers = finalUsers.filter(
-//         u => u.category?._id && arr.includes(u.category._id.toString())
-//       );
-//     }
+    const from = totalUsers === 0 ? 0 : skip + 1;
+    const to = Math.min(skip + finalUsers.length, totalUsers);
 
-//     if (schoolershipstatus) {
-//       const arr = schoolershipstatus.split(",").map(s => s.trim());
-//       finalUsers = finalUsers.filter(u => arr.includes(u.schoolershipstatus));
-//     }
+    return res.status(200).json({
+      message: "Users fetched successfully",
+      page,
+      limit,
+      totalUsers,
+      totalPages: Math.ceil(totalUsers / limit),
+      from,
+      to,
+      users: finalUsers
+    });
 
-//     if (status) {
-//       const arr = status.split(",").map(s => s.trim().toLowerCase());
-//       finalUsers = finalUsers.filter(
-//         u => u.status && arr.includes(u.status.toLowerCase())
-//       );
-//     }
+  } catch (error) {
+    console.error("userforAdmin Error:", error);
+    return res.status(500).json({ message: error.message });
+  }
+};
 
-//     if (fields) {
-//       const reqFields = fields.split(",").map(f => f.trim());
-//       finalUsers = finalUsers.map(u => {
-//         const obj = { _id: u._id };
-//         reqFields.forEach(f => {
-//           if (u[f] !== undefined) obj[f] = u[f];
-//         });
-//         return obj;
-//       });
-//     }
-
-    
-
-//     const totalUsers = finalUsers.length;
-//     const paginated = finalUsers.slice(skip, skip + limit);
-
-//     const from = totalUsers === 0 ? 0 : skip + 1;
-//     const to = Math.min(skip + paginated.length, totalUsers);
-
-//     return res.status(200).json({
-//       message: "Users fetched successfully",
-//       page,
-//       limit,
-//       totalUsers,
-//       totalPages: Math.ceil(totalUsers / limit),
-//       from,        
-//       to,          
-//       users: paginated
-//     });
-
-//   } catch (error) {
-//     console.error("userforAdmin Error:", error);
-//     return res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 

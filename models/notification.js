@@ -31,6 +31,22 @@ const NotificationSchema = new mongoose.Schema(
       required: true
     },
 
+
+sendHistory: [
+  {
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User"
+    },
+    title: String,
+     type: String,
+    message: String,
+    attempt: Number,
+    sentAt: Date
+  }
+],
+
+
     scheduleDate: String,
     scheduleTime: String,
 

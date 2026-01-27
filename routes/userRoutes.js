@@ -4,20 +4,31 @@ const router = express.Router();
 const userController = require('../controllers/userController');
 const auth = require('../middleware/auth');
 const upload = require('../middleware/upload');
+const uploadMarksheetS3 = require("../middleware/marksheetUploadS3");
+
 const User = require('../models/User');
 // Signup Route   
 router.post('/signup', userController.signup);
 router.put('/updateUser/:id', userController.updateUser);
 router.post('/userlogin', userController.Userlogin);
 
+// router.post(
+//     '/complete-profile',
+//     auth,upload.fields([
+//       { name: 'aadharCard', maxCount: 1 },
+//       { name: 'marksheet', maxCount: 1 }
+//     ]),
+//     userController.completeProfile
+//   );
+
 router.post(
-    '/complete-profile',
-    auth,upload.fields([
-      { name: 'aadharCard', maxCount: 1 },
-      { name: 'marksheet', maxCount: 1 }
-    ]),
-    userController.completeProfile
-  );
+  "/complete-profile",
+  auth,
+  uploadMarksheetS3.fields([{ name: "marksheet", maxCount: 1 }]),
+  userController.completeProfile
+);
+
+
 
   router.put(
     '/update-profile',
@@ -27,6 +38,18 @@ router.post(
     ]),
     userController.updateProfile
   );
+
+// router.put(
+//   "/update-profile",
+//   auth,
+//   uploads3.fields([
+//     { name: "aadharCard", maxCount: 1 },
+//     { name: "marksheet", maxCount: 1 }
+//   ]),
+//   userController.updateProfile
+// );
+
+
   router.put('/updateProfileStatus',auth, userController.updateProfileStatus);
   router.get('/getUserProfile',auth, userController.getUserProfile);
    router.post('/send-reset-otp', userController.sendResetOTP);
@@ -34,6 +57,10 @@ router.post(
     router.post('/reset-password-after-otp',userController.resetPasswordAfterOTPLogin);
 
     router.post("/phonepe/pay", auth, userController.createPhonePePayment);
+   router.post("/phonepe/webhook", userController.phonePeWebhook);
+   router.get("/phonepe/payment-status/:merchantOrderId", userController.checkPaymentStatus);
+
+
 router.get("/phonepe/verify/:merchantOrderId", auth, userController.verifyPhonePePayment);
 
   router.get('/check', (req, res) => {
@@ -47,6 +74,7 @@ router.get("/phonepe/verify/:merchantOrderId", auth, userController.verifyPhoneP
   router.get('/active-session-users', userController.getActiveSessionUsers);
   router.get('/getUserHistory', userController.getUserHistories );
   router.get('/userforAdmin',auth, userController.userforAdmin );
+  router.get('/tempuserforAdmin',auth, userController.tempuserforAdmin );
   router.get("/user-states", userController.getStatesFromUsers);
   router.get("/user-cities", userController.getCitiesFromUsers);
 router.get("/user-categories", userController.getCategoriesFromUsers);
@@ -62,7 +90,8 @@ router.get(
   userController.getClassTimeline
 );
 
-  
+  router.get("/test-ses", userController.testSESEmail);
+
 router.get('/verify-token', (req, res) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
