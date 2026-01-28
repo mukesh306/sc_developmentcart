@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      # Step 1: Test SSH connectivity (optional, but recommended)
+      # Step 1: Testt SSH connectivity (optional, but recommended)
       - name: Test SSH Connection
         uses: appleboy/ssh-action@v1
         with:
