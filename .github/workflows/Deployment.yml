@@ -3,15 +3,28 @@ name: Deploy Backend to Server
 on:
   push:
     branches:
-      - dev
+      - dev  # Run workflow whenever code is pushed to dev branch
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Deploy via SSH
-        uses: appleboy/ssh-action@v1.0.3
+      # Step 1: Test SSH connectivity (optional, but recommended)
+      - name: Test SSH Connection
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            echo "SSH is working!"
+            whoami
+            pwd
+
+      # Step 2: Pull latest code and restart backend
+      - name: Deploy Backend
+        uses: appleboy/ssh-action@v1
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
@@ -21,3 +34,4 @@ jobs:
             git pull origin dev
             npm install
             pm2 restart shikshacart-backend
+
