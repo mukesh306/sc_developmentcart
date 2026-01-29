@@ -9,6 +9,7 @@ module.exports = multer({
     s3,
     bucket: process.env.AWS_S3_BUCKET_NAME,
     contentType: multerS3.AUTO_CONTENT_TYPE,
+     acl: "private",
     key: (req, file, cb) => {
       cb(
         null,
