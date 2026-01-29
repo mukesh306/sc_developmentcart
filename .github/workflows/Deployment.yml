@@ -1,57 +1,37 @@
-name: Deploy Backend
+name: Deploy Backend to Server
 
 on:
   push:
     branches:
-      - dev
-      - UAT
-      - production
+      - dev  # Run workflow whenever code is pushed to dev branch
 
 jobs:
   deploy:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Set EC2 Host and Port based on branch
-        id: set-host-port
-        run: |
-          if [[ "${GITHUB_REF_NAME}" == "production" ]]; then
-            echo "EC2_HOST=${{ secrets.EC2_PROD_HOST }}" >> $GITHUB_ENV
-            echo "EC2_PORT=${{ secrets.EC2_PROD_PORT }}" >> $GITHUB_ENV
-          elif [[ "${GITHUB_REF_NAME}" == "UAT" ]]; then
-            echo "EC2_HOST=${{ secrets.EC2_UAT_HOST }}" >> $GITHUB_ENV
-            echo "EC2_PORT=${{ secrets.EC2_UAT_PORT }}" >> $GITHUB_ENV
-          else
-            echo "EC2_HOST=${{ secrets.EC2_DEV_HOST }}" >> $GITHUB_ENV
-            echo "EC2_PORT=${{ secrets.EC2_DEV_PORT }}" >> $GITHUB_ENV
-          fi
-
-      - name: SSH into EC2 & Deploy
-        uses: appleboy/ssh-action@v0.1.7
+      # Step 1: Testt SSH connectivity (optional, but recommended)
+      - name: Test SSH Connection
+        uses: appleboy/ssh-action@v1
         with:
-          host: ${{ env.EC2_HOST }}
-          username: ubuntu
-          key: ${{ secrets.EC2_SSH_KEY }}
-          port: ${{ env.EC2_PORT }}
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
-            git config --global user.name "CI Bot"
-            git config --global user.email "ci@bussibees.com"
-            git config --global --add safe.directory /home/ubuntu/Shikshacart-code/SC_Backend
+            echo "SSH is working!"
+            whoami
+            pwd
 
-            cd /home/ubuntu/Shikshacart-code/SC_Backend/
+      # Step 2: Pull latest code and restart backend
+      - name: Deploy Backend
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd ~/shikshacart-code/SC_Backend-dev
+            git pull origin dev
+            npm install
+            pm2 restart shikshacart-backend
 
-            git reset --hard
-            git clean -fd
-            git pull origin $GITHUB_REF_NAME
-
-            export DOCKER_BUILDKIT=1
-            export COMPOSE_DOCKER_CLI_BUILD=1
-
-            sudo docker compose down
-            sudo docker compose build --no-cache
-            sudo docker compose up -d
-            sudo docker builder prune -a -f
-            sudo docker image prune -f
