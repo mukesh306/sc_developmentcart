@@ -52,6 +52,8 @@ router.post(
 
   router.put('/updateProfileStatus',auth, userController.updateProfileStatus);
   router.get('/getUserProfile',auth, userController.getUserProfile);
+   router.get("/marksheet",auth,userController.getUserMarksheetSecure);
+
    router.post('/send-reset-otp', userController.sendResetOTP);
    router.post('/login-with-otp',userController.loginWithOTP);
     router.post('/reset-password-after-otp',userController.resetPasswordAfterOTPLogin);
