@@ -492,6 +492,7 @@ exports.getUserProfile = async (req, res) => {
       lastName: user.lastName,
       mobileNumber: user.mobileNumber,
       email: user.email,
+      
       // aadharCard: user.aadharCard || "",
       // marksheet: user.marksheet || "",
       pincode: user.pincode || "",
