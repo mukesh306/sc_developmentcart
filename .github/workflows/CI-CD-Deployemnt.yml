@@ -72,11 +72,15 @@ jobs:
           host: ${{ secrets.DEV_HOST }}
           username: ${{ secrets.DEV_USER }}
           key: ${{ secrets.DEV_SSH_KEY }}
+<<<<<<< HEAD
           port: ${{ secrets.DEV_PORT }}
+=======
+          port: 7828
+>>>>>>> 5631575 (fix correct dev server path)
 
           script: |
 
-            cd /var/www/sc_backend
+            cd /home/ubuntu/Dev-projects/shikshacart-code/Backend
 
             docker compose pull
 
