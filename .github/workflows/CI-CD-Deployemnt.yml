@@ -76,8 +76,8 @@ jobs:
 
           script: |
             cd /home/ubuntu/Dev-projects/shikshacart-code/Backend
-            docker compose pull
-            docker compose up -d
+            docker-compose pull
+            docker-compose up -d
             docker image prune -f
 
 
@@ -103,6 +103,6 @@ jobs:
 
           script: |
             cd /home/ubuntu/Dev-projects/shikshacart-code/Backend
-            docker compose pull
-            docker compose up -d
+            docker-compose pull
+            docker-compose up -d
             docker image prune -f
