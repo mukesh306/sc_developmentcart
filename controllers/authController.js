@@ -93,7 +93,7 @@ exports.login = async (req, res) => {
       `
     });
 
-    res.json({ message: 'OTP sent to your email', email: user.email,otp:user.otp });
+    res.json({ message: 'OTP sent to your email', email: user.email });
   } catch (err) {
     console.error(err);
     res.status(500).send('Server error');

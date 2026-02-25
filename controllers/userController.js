@@ -1516,8 +1516,6 @@ exports.createPhonePePayment = async (req, res) => {
 exports.phonePeWebhook = async (req, res) => {
   try {
     const webhookData = req.body;
-
-    
     if (!webhookData || Object.keys(webhookData).length === 0) {
       console.log("PHONEPE EMPTY WEBHOOK HIT");
       return res.status(200).send("OK");
@@ -2273,6 +2271,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
   }
 };
 
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -2546,6 +2545,7 @@ exports.userforAdmin = async (req, res) => {
     return res.status(500).json({ message: error.message });
   }
 };
+
 
 exports.tempuserforAdmin = async (req, res) => {
   try {
