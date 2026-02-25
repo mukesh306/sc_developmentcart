@@ -1,7 +1,7 @@
 # -------- Stage 1: Builder --------
-FROM node:18-alpine AS builder
+FROM node:20-alpine AS builder
 
-# Install build tools and dependencies for canvas
+# Install build dependencies (required for canvas)
 RUN apk add --no-cache \
     python3 \
     make \
@@ -11,43 +11,50 @@ RUN apk add --no-cache \
     jpeg-dev \
     giflib-dev
 
-# Set working directory
 WORKDIR /app
 
-# Copy package files and install dependencies
+# Copy only package files first (better caching)
 COPY package*.json ./
-RUN npm install
 
-# Copy all source code
+# Install only production dependencies
+RUN npm ci --omit=dev
+
+# Copy source code
 COPY . .
 
-# Optionally build assets if required (e.g. TypeScript, webpack)
-# RUN npm run build
 
 # -------- Stage 2: Runtime --------
-FROM node:18-alpine
+FROM node:20-alpine
 
-# Create app user with known UID:GID (match Docker volume permissions)
-RUN addgroup -g 1001 appgroup && adduser -S -u 1001 -G appgroup appuser
+# Install runtime dependencies required for canvas
+RUN apk add --no-cache \
+    cairo \
+    pango \
+    jpeg \
+    giflib
 
-# Working directory for runtime
+# Create non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup
+
 WORKDIR /app
 
-# Copy built app and dependencies from builder
+# Copy built app
 COPY --from=builder /app .
 
-# Create and set permissions for uploads directory
+# Create uploads directory with proper permissions
 RUN mkdir -p /app/uploads && \
-    chown -R appuser:appgroup /app/uploads && \
-    chmod -R 775 /app/uploads
+    chown -R appuser:appgroup /app
 
-# Use non-root user
 USER appuser
 
-# Expose API port
-# Use PORT from environment (.env via docker-compose)
-ENV PORT=${PORT}
-EXPOSE ${PORT}
+ENV NODE_ENV=production
+ENV PORT=5001
 
-# Run app
+EXPOSE 5001
+
+# Healthcheck (important for production)
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s \
+  CMD node -e "require('http').get('http://localhost:' + process.env.PORT, res => process.exit(res.statusCode === 200 ? 0 : 1)).on('error', () => process.exit(1))"
+
 CMD ["node", "server.js"]
+
