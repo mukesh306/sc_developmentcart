@@ -30,6 +30,11 @@ const s3 = require("../config/s3");
 const fs = require('fs');
 const path = require('path');
 
+const Razorpay = require("razorpay");
+const razorpay = new Razorpay({
+  key_id: process.env.RAZORPAY_KEY_ID,
+  key_secret: process.env.RAZORPAY_KEY_SECRET,
+});
 
 const moment = require('moment-timezone');
 const Payment = require("../models/payment");
@@ -1514,6 +1519,70 @@ exports.createPhonePePayment = async (req, res) => {
 };
 
 
+// exports.createPhonePePayment = async (req, res) => {
+//   try {
+//     const userId = req.user.id;
+//     const { amount } = req.body;
+
+//     if (!amount || amount <= 0) {
+//       return res.status(400).json({
+//         success: false,
+//         message: "Valid amount is required",
+//       });
+//     }
+
+//     const amountInPaise = amount * 100;
+//     const merchantOrderId = `ORDER_${Date.now()}`;
+
+//     const token = await getPhonePeToken();
+
+//     const payload = {
+//       merchantOrderId,
+//       amount: amountInPaise,
+//       paymentFlow: {
+//         type: "PG_CHECKOUT",
+//         message: "Profile activation payment",
+//         merchantUrls: {
+//           redirectUrl: `${baseUrl}payment-redirect/${merchantOrderId}`
+//         },
+//       },
+//     };
+
+//     const response = await axios.post(
+//       `${PHONEPE_BASE_URL}/checkout/v2/pay`,
+//       payload,
+//       {
+//         headers: {
+//           Authorization: `O-Bearer ${token}`,
+//           "Content-Type": "application/json",
+//         },
+//       }
+//     );
+
+//     await Payment.create({
+//   userId,
+//   merchantOrderId,
+//   amount: amountInPaise,
+//   displayAmount: amount,
+//   status: "PENDING",
+//   rawResponse: response.data,
+// });
+
+//     return res.json({
+//       success: true,
+//       merchantOrderId,
+//       redirectUrl: response.data.redirectUrl,
+//     });
+//   } catch (error) {
+//     console.error("CREATE PAYMENT ERROR:", error.response?.data || error.message);
+
+//     return res.status(500).json({
+//       success: false,
+//       error: error.response?.data || error.message,
+//     });
+//   }
+// };
+
 exports.phonePeWebhook = async (req, res) => {
   try {
     const webhookData = req.body;
@@ -1562,7 +1631,6 @@ exports.phonePeWebhook = async (req, res) => {
   }
 };
 
-
 exports.checkPaymentStatus = async (req, res) => {
   try {
     const { merchantOrderId } = req.params;
@@ -1570,76 +1638,32 @@ exports.checkPaymentStatus = async (req, res) => {
     const payment = await Payment.findOne({ merchantOrderId });
 
     if (!payment) {
-      return res.json({
+      return res.status(404).json({
         success: false,
         message: "Payment not found",
       });
     }
 
-    const status = payment.status;
-
     const transactionId =
-      payment?.rawResponse?.payload?.paymentDetails?.[0]?.transactionId || null;
+      payment?.rawResponse?.paymentDetails?.[0]?.transactionId || null;
+
+    const paymentMethod =
+      payment?.rawResponse?.paymentDetails?.[0]?.paymentMode || null;
 
     return res.json({
       success: true,
-      status,
+      status: payment.status,
       transactionId,
+      paymentMethod,
     });
-  } catch (err) {
+
+  } catch (error) {
     return res.status(500).json({
       success: false,
       message: "Server error",
     });
   }
 };
-
-
-// exports.phonePeWebhook = async (req, res) => {
-//   try {
-//     const webhookData = req.body;
-
-//     console.log(
-//       "PHONEPE WEBHOOK:",
-//       JSON.stringify(webhookData, null, 2)
-//     );
-//  console.log("HEADERS:", req.headers);
-//   console.log("BODY TYPE:", typeof req.body);
-//   console.log("BODY CONTENT:", req.body);
-//     const merchantOrderId = webhookData?.data?.merchantOrderId;
-//     const paymentStatus = webhookData?.data?.state;
-    
-
-//     if (!merchantOrderId) {
-//       return res.status(200).json({ success: false });
-//     }
-
-//     const payment = await Payment.findOneAndUpdate(
-//       { merchantOrderId },
-//       {
-//         status: paymentStatus,
-//         rawResponse: webhookData
-//       },
-//       { new: true }
-//     );
-
-//     if (paymentStatus === "COMPLETED" && payment) {
-//       await User.findByIdAndUpdate(payment.userId, {
-//         status: "yes",
-//         updatedAt: new Date()
-//       });
-//     }
-
-    
-//     res.status(200).json({ success: true });
-
-//   } catch (error) {
-//     console.error("PHONEPE WEBHOOK ERROR:", error);
-//     res.status(200).json({ success: false });
-//   }
-// };
-
-
 
 exports.verifyPhonePePayment = async (req, res) => {
   try {
@@ -1688,7 +1712,6 @@ exports.verifyPhonePePayment = async (req, res) => {
     });
   }
 };
-
 
 
 
@@ -3326,6 +3349,102 @@ exports.saveFCMToken = async (req, res) => {
     return res.status(500).json({
       success: false,
       message: "Failed to save FCM token",
+    });
+  }
+};
+
+exports.createRazorpayOrder = async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { amount } = req.body;
+
+    if (!amount || amount <= 0) {
+      return res.status(400).json({
+        success: false,
+        message: "Valid amount required",
+      });
+    }
+
+    const options = {
+      amount: amount * 100, 
+      currency: "INR",
+      receipt: `receipt_${Date.now()}`,
+    };
+
+    const order = await razorpay.orders.create(options);
+
+    await Payment.create({
+      userId,
+      razorpayOrderId: order.id,
+      amount: options.amount,
+      displayAmount: amount,
+      status: "CREATED",
+    });
+
+    return res.json({
+      success: true,
+      orderId: order.id,
+      key: process.env.RAZORPAY_KEY_ID,
+      amount: options.amount,
+      currency: "INR",
+    });
+
+  } catch (error) {
+    console.error("ORDER ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Order creation failed",
+    });
+  }
+};
+exports.verifyRazorpayPayment = async (req, res) => {
+  try {
+    const {
+      razorpay_order_id,
+      razorpay_payment_id,
+      razorpay_signature,
+    } = req.body;
+
+    const body = razorpay_order_id + "|" + razorpay_payment_id;
+
+    const expectedSignature = crypto
+      .createHmac("sha256", process.env.RAZORPAY_KEY_SECRET)
+      .update(body.toString())
+      .digest("hex");
+
+    if (expectedSignature !== razorpay_signature) {
+      return res.status(400).json({
+        success: false,
+        message: "Payment verification failed",
+      });
+    }
+
+    const payment = await Payment.findOneAndUpdate(
+      { razorpayOrderId: razorpay_order_id },
+      {
+        status: "COMPLETED",
+        razorpayPaymentId: razorpay_payment_id,
+      },
+      { new: true }
+    );
+
+    if (payment?.userId) {
+      await User.findByIdAndUpdate(payment.userId, {
+        status: "yes",
+        updatedAt: new Date(),
+      });
+    }
+
+    return res.json({
+      success: true,
+      message: "Payment successful",
+    });
+
+  } catch (error) {
+    console.error("VERIFY ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Verification failed",
     });
   }
 };
