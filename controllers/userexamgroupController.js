@@ -32,7 +32,13 @@ const Category = require("../models/schoolershipcategory");
 //       return res.status(400).json({ message: "Valid className ID is required." });
 //     }
 
+//     const groupCount = await UserExamGroup.countDocuments({ category });
+
+//     const nextNumber = (groupCount + 1).toString().padStart(3, "0");
+//     const groupName = `Group_${nextNumber}`;
+
 //     const newGroup = await UserExamGroup.create({
+//       name: groupName,
 //       members: memberIds,
 //       category,
 //       className,
@@ -42,6 +48,7 @@ const Category = require("../models/schoolershipcategory");
 //       message: "Group created successfully",
 //       group: newGroup,
 //     });
+
 //   } catch (error) {
 //     console.error("Error creating group:", error);
 //     res.status(500).json({ message: "Internal Server Error", error });
@@ -51,6 +58,10 @@ const Category = require("../models/schoolershipcategory");
 exports.createGroup = async (req, res) => {
   try {
     const { memberIds, category, className } = req.body;
+    const createdBy = req.user?.id || req.user;
+    if (!createdBy || !mongoose.Types.ObjectId.isValid(createdBy)) {
+      return res.status(401).json({ message: "Unauthorized. Invalid token." });
+    }
 
     if (!memberIds || !Array.isArray(memberIds) || memberIds.length === 0) {
       return res
@@ -66,19 +77,17 @@ exports.createGroup = async (req, res) => {
       return res.status(400).json({ message: "Valid className ID is required." });
     }
 
-   
     const groupCount = await UserExamGroup.countDocuments({ category });
 
-   
     const nextNumber = (groupCount + 1).toString().padStart(3, "0");
     const groupName = `Group_${nextNumber}`;
 
-   
     const newGroup = await UserExamGroup.create({
       name: groupName,
       members: memberIds,
       category,
       className,
+      createdBy, 
     });
 
     res.status(201).json({
@@ -95,7 +104,7 @@ exports.createGroup = async (req, res) => {
 
 // exports.AlluserExamGroups = async (req, res) => {
 //   try {
-//     const { className, category } = req.query; 
+//     const { className, category } = req.query;
 
 //     let query = {};
 //     if (className && mongoose.Types.ObjectId.isValid(className)) {
@@ -105,9 +114,8 @@ exports.createGroup = async (req, res) => {
 //       query.category = category;
 //     }
 
-  
 //     const groups = await UserExamGroup.find(query)
-//       .populate("category", "name _id")
+//       .populate("category", "name _id examType")
 //       .sort({ createdAt: 1 });
 
 //     let finalGroups = [];
@@ -122,20 +130,42 @@ exports.createGroup = async (req, res) => {
 //           (await College.findById(classId).select("name _id"));
 //       }
 
-     
+//       // ⭐ Only examType length added
+//       const examCount = group.category?.examType?.length || 0;
+
+//       // ⭐ Count: this group is assigned in how many exams
+//       const examsWithThisGroup = await Schoolerexam.find({
+//         assignedGroup: group._id
+//       }).select("assignedGroup");
+
+//       const ExamAssignedCount = examsWithThisGroup.length;
+
+    
+//       // let AssignedGroupCount = 0;
+//       // for (let ex of examsWithThisGroup) {
+//       //   AssignedGroupCount += (ex.assignedGroup?.length || 0);
+//       // }
+
 //       finalGroups.push({
 //         _id: group._id,
 //         name: group.name,
+
 //         category: {
 //           _id: group.category ? group.category._id : null,
 //           name: group.category ? group.category.name : "N/A",
 //         },
+
+//         ExamCount: examCount,               
+//         ExamAssignedCount,                  
+//         // AssignedGroupCount,                 
+
 //         className: {
 //           _id: classDetails ? classDetails._id : null,
 //           name: classDetails ? classDetails.name : "N/A",
 //         },
+
 //         totalMembers: group.members ? group.members.length : 0,
-//         members: group.members || [], 
+//         members: group.members || [],
 //         createdAt: group.createdAt,
 //       });
 //     }
@@ -147,21 +177,28 @@ exports.createGroup = async (req, res) => {
 //     });
 //   } catch (error) {
 //     console.error("Error fetching groups:", error);
-//     res
-//       .status(500)
-//       .json({ message: "Internal Server Error", error: error.message });
+//     res.status(500).json({
+//       message: "Internal Server Error",
+//       error: error.message,
+//     });
 //   }
 // };
-
 
 exports.AlluserExamGroups = async (req, res) => {
   try {
     const { className, category } = req.query;
+    const createdBy = req.user?.id || req.user;
 
-    let query = {};
+    if (!createdBy || !mongoose.Types.ObjectId.isValid(createdBy)) {
+      return res.status(401).json({ message: "Unauthorized. Invalid token." });
+    }
+
+    let query = { createdBy }; 
+
     if (className && mongoose.Types.ObjectId.isValid(className)) {
       query.className = className;
     }
+
     if (category && mongoose.Types.ObjectId.isValid(category)) {
       query.category = category;
     }
@@ -182,21 +219,13 @@ exports.AlluserExamGroups = async (req, res) => {
           (await College.findById(classId).select("name _id"));
       }
 
-      // ⭐ Only examType length added
       const examCount = group.category?.examType?.length || 0;
 
-      // ⭐ Count: this group is assigned in how many exams
       const examsWithThisGroup = await Schoolerexam.find({
         assignedGroup: group._id
       }).select("assignedGroup");
 
       const ExamAssignedCount = examsWithThisGroup.length;
-
-    
-      // let AssignedGroupCount = 0;
-      // for (let ex of examsWithThisGroup) {
-      //   AssignedGroupCount += (ex.assignedGroup?.length || 0);
-      // }
 
       finalGroups.push({
         _id: group._id,
@@ -207,9 +236,8 @@ exports.AlluserExamGroups = async (req, res) => {
           name: group.category ? group.category.name : "N/A",
         },
 
-        ExamCount: examCount,               
-        ExamAssignedCount,                  
-        // AssignedGroupCount,                 
+        ExamCount: examCount,
+        ExamAssignedCount,
 
         className: {
           _id: classDetails ? classDetails._id : null,
@@ -227,6 +255,7 @@ exports.AlluserExamGroups = async (req, res) => {
       totalGroups: finalGroups.length,
       groups: finalGroups,
     });
+
   } catch (error) {
     console.error("Error fetching groups:", error);
     res.status(500).json({
@@ -235,6 +264,7 @@ exports.AlluserExamGroups = async (req, res) => {
     });
   }
 };
+
 
 
 exports.updateGroup = async (req, res) => {
