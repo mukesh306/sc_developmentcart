@@ -123,7 +123,9 @@ router.get('/verify-token', (req, res) => {
 router.post("/Razorpay/create-payment", auth, userController.createRazorpayOrder);
 
 router.post("/Razorpay/verify-payment", auth, userController.verifyRazorpayPayment);
-
+router.get(
+  "/payment-details/:orderId",
+  auth,userController.PaymentDetailsByOrderId);
 
 module.exports = router;
 

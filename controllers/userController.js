@@ -3448,3 +3448,54 @@ exports.verifyRazorpayPayment = async (req, res) => {
     });
   }
 };
+
+exports.PaymentDetailsByOrderId = async (req, res) => {
+  try {
+    const { orderId } = req.params;
+
+    const payments = await razorpay.orders.fetchPayments(orderId);
+
+    if (!payments.items.length) {
+      return res.json({
+        success: false,
+        message: "No payment found for this order",
+      });
+    }
+
+    const payment = payments.items[0];
+
+    let updatedStatus = "CREATED";
+
+    if (payment.status === "captured") {
+      updatedStatus = "COMPLETED";
+    } else if (payment.status === "failed") {
+      updatedStatus = "FAILED";
+    }
+    await Payment.findOneAndUpdate(
+      { razorpayOrderId: orderId },
+      {
+        status: updatedStatus,
+        razorpayPaymentId: payment.id,
+        paymentMethod: payment.method,
+      },
+      { new: true }
+    );
+
+    return res.json({
+      success: true,
+      orderId,
+      paymentId: payment.id,   
+      status: updatedStatus,
+      method: payment.method,
+      amount: payment.amount / 100,
+      currency: payment.currency,
+    });
+
+  } catch (error) {
+    console.error("CHECK STATUS ERROR:", error);
+    return res.status(500).json({
+      success: false,
+      message: "Error fetching payment status",
+    });
+  }
+};
