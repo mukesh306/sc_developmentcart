@@ -142,6 +142,7 @@ const Payment = require("../models/payment");
 //   }
 // };
 
+
 exports.signup = async (req, res) => {
   try {
     const {
@@ -2338,6 +2339,254 @@ exports.getCategoriesFromUsers = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
+
+// exports.userforAdmin = async (req, res) => {
+//   try {
+//     const adminId = req.user._id;
+//     let {
+//       className,
+//       stateId,
+//       cityId,
+//       categoryId,
+//       schoolershipstatus,
+//       status,
+//       page = 1,
+//       limit = 10,
+//       fields
+//     } = req.query;
+
+//     page = parseInt(page);
+//     limit = parseInt(limit);
+//     const skip = (page - 1) * limit;
+
+//     const admin = await Admin1.findById(adminId).select("startDate endDate");
+//     if (!admin) {
+//       return res.status(404).json({ message: "Admin not found." });
+//     }
+
+//     const adminStart = moment(admin.startDate, "DD-MM-YYYY").startOf("day");
+//     const adminEnd = moment(admin.endDate, "DD-MM-YYYY").endOf("day");
+
+//     let filterQuery = {};
+//     if (className) filterQuery.className = className;
+
+//     if (stateId) {
+//       filterQuery.stateId = stateId.includes(",")
+//         ? { $in: stateId.split(",") }
+//         : stateId;
+//     }
+
+//     if (cityId) {
+//       filterQuery.cityId = cityId.includes(",")
+//         ? { $in: cityId.split(",") }
+//         : cityId;
+//     }
+
+//     const users = await User.find(filterQuery)
+//       .populate("countryId", "name")
+//       .populate("stateId", "name")
+//       .populate("cityId", "name")
+//       .populate("updatedBy", "email name role");
+
+//     const userIds = users.map(u => u._id);
+
+//     const groups = await userexamGroup.find({
+//       members: { $in: userIds }
+//     })
+//       .sort({ createdAt: -1 })
+//       .populate("category", "_id name")
+//       .lean();
+
+//     const userGroupCategoryMap = {};
+//     groups.forEach(g => {
+//       g.members.forEach(uid => {
+//         if (!userGroupCategoryMap[uid] && g.category) {
+//           userGroupCategoryMap[uid] = g.category;
+//         }
+//       });
+//     });
+
+//     const defaultCategory = await Schoolercategory.findOne()
+//       .select("_id name")
+//       .sort({ createdAt: 1 })
+//       .lean();
+
+//     const examStatuses = await ExamUserStatus.find({
+//       userId: { $in: userIds }
+//     })
+//       .select("userId category result attemptStatus")
+//       .lean();
+
+//     const failedMap = {};
+//     examStatuses.forEach(es => {
+//       if (es.result === "failed" && es.category?._id) {
+//         const key = `${es.userId}_${es.category._id}`;
+//         failedMap[key] = true;
+//       }
+//     });
+
+//     const categoryTopUsers = await CategoryTopUser.find({
+//       userId: { $in: userIds }
+//     })
+//       .select("userId schoolerStatus")
+//       .lean();
+
+//     const finalistMap = {};
+//     categoryTopUsers.forEach(ctu => {
+//       const key = `${ctu.userId}_${ctu.schoolerStatus}`;
+//       finalistMap[key] = true;
+//     });
+
+//     let finalUsers = [];
+
+//     for (let user of users) {
+
+//       let includeUser = false;
+
+     
+//       if (user.startDate && user.endDate) {
+//         const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
+//         const uEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
+
+//         if (uStart.isSameOrAfter(adminStart) && uEnd.isSameOrBefore(adminEnd)) {
+//           includeUser = true;
+//         }
+//       }
+
+//       else if (user.createdAt) {
+//         const createdAt = moment(user.createdAt);
+//         if (createdAt.isSameOrAfter(adminStart) && createdAt.isSameOrBefore(adminEnd)) {
+//           includeUser = true;
+//         }
+//       }
+
+//       if (!includeUser) continue;
+
+//       let classDetails = null;
+//       let classOrYear = "";
+
+//       if (user.className && mongoose.Types.ObjectId.isValid(user.className)) {
+//         classDetails =
+//           (await School.findById(user.className).select("name price")) ||
+//           (await College.findById(user.className).select("name price"));
+
+//         if (classDetails && classDetails.price != null) {
+//           classOrYear = classDetails.name;
+//         }
+//       }
+
+//       let category =
+//         userGroupCategoryMap[user._id] ||
+//         defaultCategory ||
+//         { _id: null, name: "NA" };
+
+//       let computedSchoolershipstatus = "NA";
+
+//       if (category?._id) {
+//         computedSchoolershipstatus = "Participant";
+
+//         const key = `${user._id}_${category._id}`;
+
+//         if (failedMap[key]) computedSchoolershipstatus = "Eliminated";
+
+//         const notAttempted = examStatuses.find(
+//           es =>
+//             es.userId.toString() === user._id.toString() &&
+//             es.category?._id?.toString() === category._id.toString() &&
+//             es.attemptStatus === "Not Attempted"
+//         );
+
+//         if (notAttempted) computedSchoolershipstatus = "Eliminated";
+
+//         if (finalistMap[key]) computedSchoolershipstatus = "Finalist";
+//       }
+
+//       finalUsers.push({
+//         _id: user._id,
+//         firstName: user.firstName,
+//         middleName: user.middleName,
+//         lastName: user.lastName,
+//         mobileNumber: user.mobileNumber,
+//         email: user.email,
+//         VerifyEmail: user.VerifyEmail,
+//         schoolershipstatus: computedSchoolershipstatus,
+//         category,
+//         status: user.status,
+//         aadharCard: user.aadharCard,
+//         marksheet: user.marksheet,
+//         pincode: user.pincode,
+//         className: user.className,
+//         studentType: user.studentType,
+//         instituteName:
+//           user.schoolName || user.collegeName || user.instituteName || "",
+//         countryId: user.countryId,
+//         stateId: user.stateId,
+//         cityId: user.cityId,
+//         country: user.countryId?.name || "",
+//         state: user.stateId?.name || "",
+//         city: user.cityId?.name || "",
+//         startDate: user.startDate,
+//         endDate: user.endDate,
+//         session: user.session,
+//         classOrYear
+//       });
+//     }
+
+//     if (categoryId) {
+//       const categoriesArray = categoryId.split(",");
+//       finalUsers = finalUsers.filter(u =>
+//         u.category?._id && categoriesArray.includes(u.category._id.toString())
+//       );
+//     }
+
+//     if (schoolershipstatus) {
+//       const statusArray = schoolershipstatus.split(",").map(s => s.trim());
+//       finalUsers = finalUsers.filter(u =>
+//         statusArray.includes(u.schoolershipstatus)
+//       );
+//     }
+
+//     if (status) {
+//       const statusArray = status.split(",").map(s => s.trim().toLowerCase());
+//       finalUsers = finalUsers.filter(
+//         u => u.status && statusArray.includes(u.status.toLowerCase())
+//       );
+//     }
+
+//     if (fields) {
+//       const reqFields = fields.split(",").map(f => f.trim());
+//       finalUsers = finalUsers.map(u => {
+//         const obj = { _id: u._id };
+//         reqFields.forEach(f => {
+//           if (u[f] !== undefined) obj[f] = u[f];
+//         });
+//         return obj;
+//       });
+//     }
+
+//     const totalUsers = finalUsers.length;
+//     const paginated = finalUsers.slice(skip, skip + limit);
+
+//     const from = totalUsers === 0 ? 0 : skip + 1;
+//     const to = Math.min(skip + paginated.length, totalUsers);
+
+//     return res.status(200).json({
+//       message: "Users fetched successfully",
+//       page,
+//       limit,
+//       totalUsers,
+//       totalPages: Math.ceil(totalUsers / limit),
+//       from,
+//       to,
+//       users: paginated
+//     });
+
+//   } catch (error) {
+//     console.error("userforAdmin Error:", error);
+//     return res.status(500).json({ message: error.message });
+//   }
+// };
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -2441,7 +2690,6 @@ exports.userforAdmin = async (req, res) => {
 
       let includeUser = false;
 
-     
       if (user.startDate && user.endDate) {
         const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
         const uEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
@@ -2449,9 +2697,7 @@ exports.userforAdmin = async (req, res) => {
         if (uStart.isSameOrAfter(adminStart) && uEnd.isSameOrBefore(adminEnd)) {
           includeUser = true;
         }
-      }
-
-      else if (user.createdAt) {
+      } else if (user.createdAt) {
         const createdAt = moment(user.createdAt);
         if (createdAt.isSameOrAfter(adminStart) && createdAt.isSameOrBefore(adminEnd)) {
           includeUser = true;
@@ -2499,7 +2745,8 @@ exports.userforAdmin = async (req, res) => {
         if (finalistMap[key]) computedSchoolershipstatus = "Finalist";
       }
 
-      finalUsers.push({
+      // 🔹 Base user object
+      let userObj = {
         _id: user._id,
         firstName: user.firstName,
         middleName: user.middleName,
@@ -2507,8 +2754,6 @@ exports.userforAdmin = async (req, res) => {
         mobileNumber: user.mobileNumber,
         email: user.email,
         VerifyEmail: user.VerifyEmail,
-        schoolershipstatus: computedSchoolershipstatus,
-        category,
         status: user.status,
         aadharCard: user.aadharCard,
         marksheet: user.marksheet,
@@ -2527,7 +2772,15 @@ exports.userforAdmin = async (req, res) => {
         endDate: user.endDate,
         session: user.session,
         classOrYear
-      });
+      };
+
+      
+      if (user.className) {
+        userObj.schoolershipstatus = computedSchoolershipstatus;
+        userObj.category = category;
+      }
+
+      finalUsers.push(userObj);
     }
 
     if (categoryId) {
