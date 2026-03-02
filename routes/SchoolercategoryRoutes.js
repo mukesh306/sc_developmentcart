@@ -5,7 +5,7 @@ const auth = require('../middleware/auth');
 
 
 router.post("/schooler/Categorycreate", auth, SchoolercategoryController.createSchoolercategory);
-router.get("/schooler/allcategory", SchoolercategoryController.getAllSchoolercategories);
+router.get("/schooler/allcategory", auth,SchoolercategoryController.getAllSchoolercategories);
 router.get("/schooler/category/:id", SchoolercategoryController.getSchoolercategoryById);
 router.put("/schooler/Categoryupdate/:id", auth, SchoolercategoryController.updateSchoolercategory);
 router.delete("/schooler/Categorydelete/:id", auth, SchoolercategoryController.deleteSchoolercategory);

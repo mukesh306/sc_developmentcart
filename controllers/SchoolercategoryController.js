@@ -145,19 +145,49 @@ exports.createSchoolercategory = async (req, res) => {
 
 
 
+// exports.getAllSchoolercategories = async (req, res) => {
+//   try {
+//     const categories = await Schoolercategory.find()
+//       .populate("createdBy", "firstName lastName email")
+//       .sort({ createdAt: 1 });
+
+//     res.status(200).json(categories);
+//   } catch (error) {
+//     res.status(500).json({ message: "Error fetching categories.", error });
+//   }
+// };
+
 exports.getAllSchoolercategories = async (req, res) => {
   try {
-    const categories = await Schoolercategory.find()
+
+    const createdBy = req.user?.id || req.user;
+
+    if (!createdBy || !mongoose.Types.ObjectId.isValid(createdBy)) {
+      return res.status(401).json({
+        message: "Unauthorized. Invalid token."
+      });
+    }
+
+    let query = { createdBy };
+
+    const categories = await Schoolercategory.find(query)
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
-    res.status(200).json(categories);
+    return res.status(200).json({
+      message: "Categories fetched successfully",
+      totalCategories: categories.length,
+      categories
+    });
+
   } catch (error) {
-    res.status(500).json({ message: "Error fetching categories.", error });
+    console.error("Error fetching categories:", error);
+    res.status(500).json({
+      message: "Internal Server Error",
+      error: error.message
+    });
   }
 };
-
-
 
 
 exports.getSchoolercategoryById = async (req, res) => {
