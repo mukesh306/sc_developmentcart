@@ -2222,6 +2222,7 @@ exports.getStatesFromUsers = async (req, res) => {
 
     const uniqueStateIds = [...new Set(users.map(u => u.stateId.toString()))];
 
+    
     const states = await Location.find({
       _id: { $in: uniqueStateIds },
       type: "state" 
