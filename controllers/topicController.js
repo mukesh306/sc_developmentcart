@@ -91,7 +91,7 @@ exports.createTopicWithQuiz = async (req, res) => {
     }
 
     res.status(201).json({
-      message: 'Topic and quiz saved successfully Mukesh 1',
+      message: 'Topic and quiz saved successfully Puspendra ',
       topicId: savedTopic._id
     });
   } catch (error) {

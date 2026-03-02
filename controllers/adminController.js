@@ -89,13 +89,10 @@ exports.registerAdmin = async (req, res) => {
           message: "An admin session is already active. Wait until it expires.",
         });
       } else {
-        // ✅ Expired → deactivate old admin
         existingAdmin.status = false;
         await existingAdmin.save();
       }
     }
-
-    // 🔐 Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newAdmin = new Admin1({

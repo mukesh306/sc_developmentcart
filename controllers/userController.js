@@ -154,48 +154,35 @@ exports.signup = async (req, res) => {
       confirmPassword
     } = req.body;
 
-   
-    if (!firstName) return res.status(400).json({ message: "First Name can't remain empty." });
-    if (!lastName) return res.status(400).json({ message: "Last Name can't remain empty." });
-    if (!email) return res.status(400).json({ message: "Email can't remain empty." });
-    if (!password) return res.status(400).json({ message: "Password can't remain empty." });
-    if (!confirmPassword) return res.status(400).json({ message: "Confirm Password can't remain empty." });
+    if (!firstName) return res.status(400).json({ message: 'First Name can’t remain empty.' });
+    if (!lastName) return res.status(400).json({ message: 'Last Name can’t remain empty.' });
+    if (!email) return res.status(400).json({ message: 'Email address can’t remain empty.' });
+    if (!password) return res.status(400).json({ message: 'Create Password can’t remain empty.' });
+    if (!confirmPassword) return res.status(400).json({ message: 'Confirm Password can’t remain empty.' });
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: "Invalid email format." });
+      return res.status(400).json({ message: 'Please enter a valid email address.' });
     }
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(password)) {
       return res.status(400).json({
-        message: "Password must contain 8 characters including uppercase, lowercase and number."
+        message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.'
       });
     }
 
     if (password !== confirmPassword) {
-      return res.status(400).json({ message: "Passwords do not match." });
+      return res.status(400).json({ message: 'Passwords do not match.' });
     }
 
-    
     const existingUser = await User.findOne({ email });
     if (existingUser) {
       return res.status(409).json({
-        message: "User already exists. Please login."
+        message: "User already registered. Please login."
       });
     }
-
-    const existingTempUser = await Tempuser.findOne({ email });
-    if (existingTempUser) {
-      return res.status(409).json({
-        message: "Email already registered. Please verify your email."
-      });
-    }
-
-   
     const hashedPassword = await bcrypt.hash(password, 10);
-
-   
     const allCategories = await Schoolercategory
       .find()
       .select("_id name examType")
@@ -203,7 +190,6 @@ exports.signup = async (req, res) => {
       .lean();
 
     let userDetails = [];
-
     allCategories.forEach((cat, catIndex) => {
       userDetails.push({
         category: {
@@ -221,37 +207,34 @@ exports.signup = async (req, res) => {
       });
     });
 
-   
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const otpExpire = new Date(Date.now() + 10 * 60 * 1000); // 10 min
-
-   
-    await Tempuser.create({
-      firstName,
-      middleName,
-      lastName,
-      mobileNumber,
-      email,
-      password: hashedPassword,
-      userDetails,
-      status: "no",
-      VerifyEmail: "No",
-      resetPasswordOTP: otp,
-      resetPasswordExpires: otpExpire
-    });
-
-   
+    
+    const tempUser = await Tempuser.findOneAndUpdate(
+      { email },
+      {
+        firstName,
+        middleName,
+        lastName,
+        mobileNumber,
+        password: hashedPassword,
+        userDetails,
+        status: "no",
+        VerifyEmail: "No"
+      },
+      {
+        new: true,
+        upsert: true,
+        setDefaultsOnInsert: true
+      }
+    );
 
     res.status(201).json({
-      success: true,
-      message: "Now verify Your Email."
+      message: 'Now verify Your Email.'
     });
 
   } catch (error) {
-    console.error("Signup Error:", error);
+    console.error('Signup error:', error);
     res.status(500).json({
-      success: false,
-      message: "Server error during signup.",
+      message: 'Server error during signup.',
       error: error.message
     });
   }
