@@ -68,49 +68,42 @@ exports.registerAdmin = async (req, res) => {
       });
     }
 
-    const { email, password, session, startDate, endDate, endTime } = req.body;
+    const { email, password, session, startDate, endDate } = req.body;
 
-    if (!email || !password || !session || !startDate || !endDate || !endTime) {
+    if (!email || !password || !session || !startDate || !endDate) {
       return res.status(400).json({
         message: "All fields are required.",
       });
     }
 
     const now = moment();
-
-   
     const existingAdmin = await Admin1.findOne({ status: true });
 
     if (existingAdmin) {
 
      
-      const adminEndDateTime = moment(
-        `${moment(existingAdmin.endDate, "DD-MM-YYYY").format("YYYY-MM-DD")} ${existingAdmin.endTime}`,
-        "YYYY-MM-DD HH:mm"
-      );
+      const adminEndDate = moment(existingAdmin.endDate, "DD-MM-YYYY").endOf("day");
 
-      if (now.isBefore(adminEndDateTime)) {
+      if (now.isBefore(adminEndDate)) {
         return res.status(400).json({
-          message:
-            "An admin session is already active. Wait until it expires.",
+          message: "An admin session is already active. Wait until it expires.",
         });
       } else {
-      
+        // ✅ Expired → deactivate old admin
         existingAdmin.status = false;
         await existingAdmin.save();
       }
     }
 
-   
+    // 🔐 Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newAdmin = new Admin1({
       email,
       password: hashedPassword,
       session,
-      startDate, 
-      endDate,    
-      endTime,   
+      startDate,
+      endDate,
       createdBy: req.user._id,
       status: true,
     });
