@@ -168,23 +168,17 @@ exports.getAllSchoolercategories = async (req, res) => {
       });
     }
 
-    let query = { createdBy };
-
-    const categories = await Schoolercategory.find(query)
+    const categories = await Schoolercategory.find({ createdBy })
       .populate("createdBy", "firstName lastName email")
       .sort({ createdAt: 1 });
 
-    return res.status(200).json({
-      message: "Categories fetched successfully",
-      totalCategories: categories.length,
-      categories
-    });
+   
+    res.status(200).json(categories);
 
   } catch (error) {
-    console.error("Error fetching categories:", error);
     res.status(500).json({
-      message: "Internal Server Error",
-      error: error.message
+      message: "Error fetching categories.",
+      error
     });
   }
 };
