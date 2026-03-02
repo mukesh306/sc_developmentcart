@@ -2328,7 +2328,6 @@ exports.getCategoriesFromUsers = async (req, res) => {
     res.status(500).json({ message: "Internal Server Error" });
   }
 };
-
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -2429,14 +2428,27 @@ exports.userforAdmin = async (req, res) => {
     let finalUsers = [];
 
     for (let user of users) {
-      if (!user.startDate || !user.endDate) continue;
 
-      const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
-      const uEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
+      let includeUser = false;
 
-      if (!uStart.isSameOrAfter(adminStart) || !uEnd.isSameOrBefore(adminEnd)) {
-        continue;
+     
+      if (user.startDate && user.endDate) {
+        const uStart = moment(user.startDate, "DD-MM-YYYY").startOf("day");
+        const uEnd = moment(user.endDate, "DD-MM-YYYY").endOf("day");
+
+        if (uStart.isSameOrAfter(adminStart) && uEnd.isSameOrBefore(adminEnd)) {
+          includeUser = true;
+        }
       }
+
+      else if (user.createdAt) {
+        const createdAt = moment(user.createdAt);
+        if (createdAt.isSameOrAfter(adminStart) && createdAt.isSameOrBefore(adminEnd)) {
+          includeUser = true;
+        }
+      }
+
+      if (!includeUser) continue;
 
       let classDetails = null;
       let classOrYear = "";
@@ -2451,7 +2463,6 @@ exports.userforAdmin = async (req, res) => {
         }
       }
 
-    
       let category =
         userGroupCategoryMap[user._id] ||
         defaultCategory ||
@@ -2488,7 +2499,7 @@ exports.userforAdmin = async (req, res) => {
         VerifyEmail: user.VerifyEmail,
         schoolershipstatus: computedSchoolershipstatus,
         category,
-        status: user.status, 
+        status: user.status,
         aadharCard: user.aadharCard,
         marksheet: user.marksheet,
         pincode: user.pincode,
@@ -2515,6 +2526,7 @@ exports.userforAdmin = async (req, res) => {
         u.category?._id && categoriesArray.includes(u.category._id.toString())
       );
     }
+
     if (schoolershipstatus) {
       const statusArray = schoolershipstatus.split(",").map(s => s.trim());
       finalUsers = finalUsers.filter(u =>
