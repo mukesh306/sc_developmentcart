@@ -5,37 +5,103 @@ const jwt = require('jsonwebtoken');
 const nodemailer = require('nodemailer'); 
 const moment = require('moment-timezone');
 
+
+// exports.registerAdmin = async (req, res) => {
+//   try {
+//     if (req.user.role !== 'superadmin') {
+//       return res.status(403).json({ message: 'Only superadmin can create admins.' });
+//     }
+
+//     const { email, password, session, startDate, endDate, endTime } = req.body;
+
+    
+//     const formattedEndTime = moment(endTime, 'HH:mm').format('HH:mm');
+
+    
+//     const existing = await Admin1.findOne({
+//       email,
+//       $or: [
+//         { session },
+//         {
+//           $and: [
+//             { startDate: { $lte: endDate } },
+//             { endDate: { $gte: startDate } }
+//           ]
+//         }
+//       ]
+//     });
+
+//     if (existing) {
+//       return res.status(409).json({
+//         message: 'Admin already exists with this session or overlapping dates.',
+//       });
+//     }
+
+//     const hashedPassword = await bcrypt.hash(password, 10);
+
+//     const newAdmin = new Admin1({
+//       email,
+//       password: hashedPassword,
+//       session,
+//       startDate, 
+//       endDate,  
+//       endTime: formattedEndTime, 
+//       createdBy: req.user._id,
+//     });
+
+//     await newAdmin.save();
+
+//     res.status(201).json({
+//       message: 'Admin created successfully.',
+//     });
+//   } catch (error) {
+//     console.error('Register error:', error);
+//     res.status(500).json({ message: 'Server error.', error: error.message });
+//   }
+// };
+
 exports.registerAdmin = async (req, res) => {
   try {
-    if (req.user.role !== 'superadmin') {
-      return res.status(403).json({ message: 'Only superadmin can create admins.' });
+    if (req.user.role !== "superadmin") {
+      return res.status(403).json({
+        message: "Only superadmin can create admins.",
+      });
     }
 
     const { email, password, session, startDate, endDate, endTime } = req.body;
 
-    
-    const formattedEndTime = moment(endTime, 'HH:mm').format('HH:mm');
-
-    
-    const existing = await Admin1.findOne({
-      email,
-      $or: [
-        { session },
-        {
-          $and: [
-            { startDate: { $lte: endDate } },
-            { endDate: { $gte: startDate } }
-          ]
-        }
-      ]
-    });
-
-    if (existing) {
-      return res.status(409).json({
-        message: 'Admin already exists with this session or overlapping dates.',
+    if (!email || !password || !session || !startDate || !endDate || !endTime) {
+      return res.status(400).json({
+        message: "All fields are required.",
       });
     }
 
+    const now = moment();
+
+   
+    const existingAdmin = await Admin1.findOne({ status: true });
+
+    if (existingAdmin) {
+
+     
+      const adminEndDateTime = moment(
+        `${moment(existingAdmin.endDate, "DD-MM-YYYY").format("YYYY-MM-DD")} ${existingAdmin.endTime}`,
+        "YYYY-MM-DD HH:mm"
+      );
+
+      if (now.isBefore(adminEndDateTime)) {
+        return res.status(400).json({
+          message:
+            "An admin session is already active. Wait until it expires.",
+        });
+      } else {
+      
+        existingAdmin.status = false;
+        await existingAdmin.save();
+      }
+    }
+
+   
     const hashedPassword = await bcrypt.hash(password, 10);
 
     const newAdmin = new Admin1({
@@ -43,40 +109,34 @@ exports.registerAdmin = async (req, res) => {
       password: hashedPassword,
       session,
       startDate, 
-      endDate,  
-      endTime: formattedEndTime, 
+      endDate,    
+      endTime,   
       createdBy: req.user._id,
+      status: true,
     });
 
     await newAdmin.save();
 
-    res.status(201).json({
-      message: 'Admin created successfully.',
-      // admin: newAdmin,
+    return res.status(201).json({
+      success: true,
+      message: "Admin created successfully.",
     });
+
   } catch (error) {
-    console.error('Register error:', error);
-    res.status(500).json({ message: 'Server error.', error: error.message });
+    console.error("Register error:", error);
+
+    if (error.code === 11000) {
+      return res.status(400).json({
+        message: "Admin with this email already exists.",
+      });
+    }
+
+    return res.status(500).json({
+      message: "Server error.",
+      error: error.message,
+    });
   }
 };
-
-// exports.getAllAdmins = async (req, res) => {
-//   try {
-//     const admins = await Admin1.find()
-//       .populate('createdBy', 'email') 
-//       .sort({ createdAt: -1 });
-//     res.status(200).json({
-//       message: 'Admins fetched successfully.',
-//       data: admins
-//     });
-//   } catch (error) {
-//     res.status(500).json({
-//       message: 'Server error.',
-//       error: error.message
-//     });
-//   }
-// };
-
 
 exports.getAllAdmins = async (req, res) => {
   try {

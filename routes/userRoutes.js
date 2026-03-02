@@ -7,19 +7,12 @@ const upload = require('../middleware/upload');
 const uploadMarksheetS3 = require("../middleware/marksheetUploadS3");
 
 const User = require('../models/User');
-// Signup Route   
+  
 router.post('/signup', userController.signup);
 router.put('/updateUser/:id', userController.updateUser);
 router.post('/userlogin', userController.Userlogin);
 
-// router.post(
-//     '/complete-profile',
-//     auth,upload.fields([
-//       { name: 'aadharCard', maxCount: 1 },
-//       { name: 'marksheet', maxCount: 1 }
-//     ]),
-//     userController.completeProfile
-//   );
+
 
 router.post(
   "/complete-profile",

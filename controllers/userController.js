@@ -42,36 +42,56 @@ const Payment = require("../models/payment");
 
 // exports.signup = async (req, res) => {
 //   try {
-//     const { firstName, middleName, lastName, mobileNumber, email, password, confirmPassword } = req.body;  
+//     const {
+//       firstName,
+//       middleName,
+//       lastName,
+//       mobileNumber,
+//       email,
+//       password,
+//       confirmPassword
+//     } = req.body;
+
 //     if (!firstName) return res.status(400).json({ message: 'First Name can’t remain empty.' });
 //     if (!lastName) return res.status(400).json({ message: 'Last Name can’t remain empty.' });
-//     if (!mobileNumber) return res.status(400).json({ message: 'Mobile Number can’t remain empty.' });
 //     if (!email) return res.status(400).json({ message: 'Email address can’t remain empty.' });
 //     if (!password) return res.status(400).json({ message: 'Create Password can’t remain empty.' });
 //     if (!confirmPassword) return res.status(400).json({ message: 'Confirm Password can’t remain empty.' });
 
 //     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-//     if (!emailRegex.test(email)) return res.status(400).json({ message: 'Please enter a valid email address.' });
-
-//     const mobileRegex = /^[0-9]{10}$/;
-//     if (!mobileRegex.test(mobileNumber)) return res.status(400).json({ message: 'Mobile Number must be exactly 10 digits.' });
+//     if (!emailRegex.test(email)) {
+//       return res.status(400).json({ message: 'Please enter a valid email address.' });
+//     }
 
 //     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
-//     if (!passwordRegex.test(password)) return res.status(400).json({ message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.' });
+//     if (!passwordRegex.test(password)) {
+//       return res.status(400).json({
+//         message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.'
+//       });
+//     }
 
-//     if (password !== confirmPassword) return res.status(400).json({ message: 'Passwords do not match.' });
+//     if (password !== confirmPassword) {
+//       return res.status(400).json({ message: 'Passwords do not match.' });
+//     }
 
-//     const existingUser = await Tempuser.findOne({ $or: [{ email }, { mobileNumber }] });
-//     if (existingUser) return res.status(409).json({ message: 'User with this email  already exists.' });
-
+   
 //     const hashedPassword = await bcrypt.hash(password, 10);
- 
-//     const allCategories = await Schoolercategory.find().select("_id name examType").sort({ createdAt: 1 }).lean();
+
+   
+//     const allCategories = await Schoolercategory
+//       .find()
+//       .select("_id name examType")
+//       .sort({ createdAt: 1 })
+//       .lean();
 
 //     let userDetails = [];
 //     allCategories.forEach((cat, catIndex) => {
 //       userDetails.push({
-//         category: { _id: cat._id, name: cat.name, examType: cat.examType || [] },
+//         category: {
+//           _id: cat._id,
+//           name: cat.name,
+//           examType: cat.examType || []
+//         },
 //         examTypes: (cat.examType || []).map((et, etIndex) => ({
 //           _id: et._id,
 //           name: et.name,
@@ -82,26 +102,45 @@ const Payment = require("../models/payment");
 //       });
 //     });
 
-//     const newUser = new Tempuser({
-//       firstName, middleName, lastName, mobileNumber, email, password: hashedPassword,
-//       userDetails,
-//       status: "no" 
-//     });
+  
+//     const tempUser = await Tempuser.findOneAndUpdate(
+//       { email },
+//       {
+//         firstName,
+//         middleName,
+//         lastName,
+//         mobileNumber,
+//         password: hashedPassword,
+//         userDetails,
+//         status: "no",
+//         VerifyEmail: "No"
+//       },
+//       {
+//         new: true,
+//         upsert: true,
+//         setDefaultsOnInsert: true
+//       }
+//     );
 
-//     await newUser.save();
- 
-//     const token = jwt.sign({ id: newUser._id }, process.env.JWT_SECRET, { expiresIn: '7d' });    
+//     const token = jwt.sign(
+//       { id: tempUser._id },
+//       process.env.JWT_SECRET,
+//       { expiresIn: '7d' }
+//     );
+
 //     res.status(201).json({
-//       message: 'Registered successfully. Redirecting to complete your profile.',
-//       token
+//       message: 'Now verify Your Email.',
+//       // token
 //     });
 
 //   } catch (error) {
 //     console.error('Signup error:', error);
-//     res.status(500).json({ message: 'Server error during signup.', error: error.message });
+//     res.status(500).json({
+//       message: 'Server error during signup.',
+//       error: error.message
+//     });
 //   }
 // };
-
 
 exports.signup = async (req, res) => {
   try {
@@ -115,26 +154,42 @@ exports.signup = async (req, res) => {
       confirmPassword
     } = req.body;
 
-    if (!firstName) return res.status(400).json({ message: 'First Name can’t remain empty.' });
-    if (!lastName) return res.status(400).json({ message: 'Last Name can’t remain empty.' });
-    if (!email) return res.status(400).json({ message: 'Email address can’t remain empty.' });
-    if (!password) return res.status(400).json({ message: 'Create Password can’t remain empty.' });
-    if (!confirmPassword) return res.status(400).json({ message: 'Confirm Password can’t remain empty.' });
+   
+    if (!firstName) return res.status(400).json({ message: "First Name can't remain empty." });
+    if (!lastName) return res.status(400).json({ message: "Last Name can't remain empty." });
+    if (!email) return res.status(400).json({ message: "Email can't remain empty." });
+    if (!password) return res.status(400).json({ message: "Password can't remain empty." });
+    if (!confirmPassword) return res.status(400).json({ message: "Confirm Password can't remain empty." });
 
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
-      return res.status(400).json({ message: 'Please enter a valid email address.' });
+      return res.status(400).json({ message: "Invalid email format." });
     }
 
     const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$/;
     if (!passwordRegex.test(password)) {
       return res.status(400).json({
-        message: 'Password must contain at least 8 characters including uppercase, lowercase, and number.'
+        message: "Password must contain 8 characters including uppercase, lowercase and number."
       });
     }
 
     if (password !== confirmPassword) {
-      return res.status(400).json({ message: 'Passwords do not match.' });
+      return res.status(400).json({ message: "Passwords do not match." });
+    }
+
+    
+    const existingUser = await User.findOne({ email });
+    if (existingUser) {
+      return res.status(409).json({
+        message: "User already exists. Please login."
+      });
+    }
+
+    const existingTempUser = await Tempuser.findOne({ email });
+    if (existingTempUser) {
+      return res.status(409).json({
+        message: "Email already registered. Please verify your email."
+      });
     }
 
    
@@ -148,6 +203,7 @@ exports.signup = async (req, res) => {
       .lean();
 
     let userDetails = [];
+
     allCategories.forEach((cat, catIndex) => {
       userDetails.push({
         category: {
@@ -165,46 +221,41 @@ exports.signup = async (req, res) => {
       });
     });
 
-  
-    const tempUser = await Tempuser.findOneAndUpdate(
-      { email },
-      {
-        firstName,
-        middleName,
-        lastName,
-        mobileNumber,
-        password: hashedPassword,
-        userDetails,
-        status: "no",
-        VerifyEmail: "No"
-      },
-      {
-        new: true,
-        upsert: true,
-        setDefaultsOnInsert: true
-      }
-    );
+   
+    const otp = Math.floor(100000 + Math.random() * 900000).toString();
+    const otpExpire = new Date(Date.now() + 10 * 60 * 1000); // 10 min
 
-    const token = jwt.sign(
-      { id: tempUser._id },
-      process.env.JWT_SECRET,
-      { expiresIn: '7d' }
-    );
+   
+    await Tempuser.create({
+      firstName,
+      middleName,
+      lastName,
+      mobileNumber,
+      email,
+      password: hashedPassword,
+      userDetails,
+      status: "no",
+      VerifyEmail: "No",
+      resetPasswordOTP: otp,
+      resetPasswordExpires: otpExpire
+    });
+
+   
 
     res.status(201).json({
-      message: 'Now verify Your Email.',
-      // token
+      success: true,
+      message: "Now verify Your Email."
     });
 
   } catch (error) {
-    console.error('Signup error:', error);
+    console.error("Signup Error:", error);
     res.status(500).json({
-      message: 'Server error during signup.',
+      success: false,
+      message: "Server error during signup.",
       error: error.message
     });
   }
 };
-
 
 exports.Userlogin = async (req, res) => {
   try {
