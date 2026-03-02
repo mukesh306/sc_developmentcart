@@ -4,7 +4,7 @@ services:
 
   sc_backend:
 
-    image: ${DOCKERHUB_USERNAME}/${IMAGE_NAME}:${IMAGE_TAG}
+    image: ${DOCKERHUB_USERNAME}/sc_backend:${IMAGE_TAG}
 
     container_name: sc_backend
 
@@ -25,9 +25,16 @@ services:
     networks:
       - backend_net
 
+    pull_policy: always
+
+
+
   mongo:
+
     image: mongo:6
+
     container_name: sc_mongo
+
     restart: unless-stopped
 
     volumes:
@@ -37,8 +44,12 @@ services:
       - backend_net
 
 
+
 networks:
   backend_net:
+    driver: bridge
+
+
 
 volumes:
   uploads_data:
