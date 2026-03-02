@@ -1,15 +1,18 @@
-name: SC Backend Production CI/CD
+name: SC Backend CI/CD
 
 on:
   push:
     branches:
       - dev
+      - uat
       - main
 
 env:
   IMAGE_NAME: sc_backend
 
 jobs:
+
+# ---------------- BUILD AND PUSH ----------------
 
   build-and-push:
 
@@ -29,6 +32,8 @@ jobs:
         run: |
           if [[ "${GITHUB_REF}" == "refs/heads/dev" ]]; then
             echo "tag=dev" >> $GITHUB_OUTPUT
+          elif [[ "${GITHUB_REF}" == "refs/heads/uat" ]]; then
+            echo "tag=uat" >> $GITHUB_OUTPUT
           else
             echo "tag=latest" >> $GITHUB_OUTPUT
           fi
@@ -44,8 +49,8 @@ jobs:
       - name: Build Docker image
         run: |
           docker build \
-          -t ${{ secrets.DOCKERHUB_USERNAME }}/${IMAGE_NAME}:${{ steps.tag.outputs.tag }} \
-          -t ${{ secrets.DOCKERHUB_USERNAME }}/${IMAGE_NAME}:${{ github.sha }} .
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/${IMAGE_NAME}:${{ steps.tag.outputs.tag }} \
+            -t ${{ secrets.DOCKERHUB_USERNAME }}/${IMAGE_NAME}:${{ github.sha }} .
 
 
       - name: Push Docker image
@@ -54,6 +59,8 @@ jobs:
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/${IMAGE_NAME}:${{ github.sha }}
 
 
+
+# ---------------- DEV DEPLOY ----------------
 
   deploy-dev:
 
@@ -75,12 +82,59 @@ jobs:
           port: ${{ secrets.DEV_PORT }}
 
           script: |
+
             cd /home/ubuntu/Dev-projects/shikshacart-code/Backend
-            docker-compose pull
-            docker-compose up -d
-            docker image prune -f
+
+            export IMAGE_NAME=sc_backend
+
+            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+
+            docker-compose pull sc_backend
+
+            docker-compose up -d --no-deps --force-recreate sc_backend
+
+            docker image prune -af
 
 
+
+# ---------------- UAT DEPLOY ----------------
+
+  deploy-uat:
+
+    if: github.ref == 'refs/heads/uat'
+
+    needs: build-and-push
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Deploy to UAT
+        uses: appleboy/ssh-action@v1.0.3
+
+        with:
+          host: ${{ secrets.UAT_HOST }}
+          username: ${{ secrets.UAT_USER }}
+          key: ${{ secrets.UAT_SSH_KEY }}
+          port: ${{ secrets.UAT_PORT }}
+
+          script: |
+
+            cd /home/ubuntu/shikshacart-code/Backend
+
+            export IMAGE_NAME=sc_backend
+
+            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+
+            docker compose pull sc_backend
+
+            docker compose up -d --no-deps --force-recreate sc_backend
+
+            docker image prune -af
+
+
+
+# ---------------- PROD DEPLOY ----------------
 
   deploy-prod:
 
@@ -102,7 +156,15 @@ jobs:
           port: ${{ secrets.PROD_PORT }}
 
           script: |
-            cd /home/ubuntu/Dev-projects/shikshacart-code/Backend
-            docker-compose pull
-            docker-compose up -d
-            docker image prune -f
+
+            cd /opt/shikshacart
+
+            export IMAGE_NAME=sc_backend
+
+            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_TOKEN }}
+
+            docker compose pull ${IMAGE_NAME}
+
+            docker compose up -d --no-deps --force-recreate ${IMAGE_NAME}
+
+            docker image prune -af
