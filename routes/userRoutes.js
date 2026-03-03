@@ -23,25 +23,23 @@ router.post(
 
 
 
+  // router.put(
+  //   '/update-profile',
+  //   auth,upload.fields([
+  //     { name: 'aadharCard', maxCount: 1 },
+  //     { name: 'marksheet', maxCount: 1 }
+  //   ]),
+  //   userController.updateProfile
+  // );
+
   router.put(
-    '/update-profile',
-    auth,upload.fields([
-      { name: 'aadharCard', maxCount: 1 },
-      { name: 'marksheet', maxCount: 1 }
-    ]),
-    userController.updateProfile
-  );
-
-// router.put(
-//   "/update-profile",
-//   auth,
-//   uploads3.fields([
-//     { name: "aadharCard", maxCount: 1 },
-//     { name: "marksheet", maxCount: 1 }
-//   ]),
-//   userController.updateProfile
-// );
-
+  '/update-profile',
+  auth,
+  uploadMarksheetS3.fields([
+    { name: 'marksheet', maxCount: 1 }
+  ]),
+  userController.updateProfile
+);
 
   router.put('/updateProfileStatus',auth, userController.updateProfileStatus);
   router.get('/getUserProfile',auth, userController.getUserProfile);

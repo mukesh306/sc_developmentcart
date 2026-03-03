@@ -74,10 +74,13 @@ const Payment = require("../models/payment");
 //       return res.status(400).json({ message: 'Passwords do not match.' });
 //     }
 
-   
+//     const existingUser = await User.findOne({ email });
+//     if (existingUser) {
+//       return res.status(409).json({
+//         message: "User already registered. Please login."
+//       });
+//     }
 //     const hashedPassword = await bcrypt.hash(password, 10);
-
-   
 //     const allCategories = await Schoolercategory
 //       .find()
 //       .select("_id name examType")
@@ -102,7 +105,7 @@ const Payment = require("../models/payment");
 //       });
 //     });
 
-  
+    
 //     const tempUser = await Tempuser.findOneAndUpdate(
 //       { email },
 //       {
@@ -122,15 +125,8 @@ const Payment = require("../models/payment");
 //       }
 //     );
 
-//     const token = jwt.sign(
-//       { id: tempUser._id },
-//       process.env.JWT_SECRET,
-//       { expiresIn: '7d' }
-//     );
-
 //     res.status(201).json({
-//       message: 'Now verify Your Email.',
-//       // token
+//       message: 'Now verify Your Email.'
 //     });
 
 //   } catch (error) {
@@ -141,7 +137,6 @@ const Payment = require("../models/payment");
 //     });
 //   }
 // };
-
 
 exports.signup = async (req, res) => {
   try {
@@ -183,32 +178,47 @@ exports.signup = async (req, res) => {
         message: "User already registered. Please login."
       });
     }
+
     const hashedPassword = await bcrypt.hash(password, 10);
-    const allCategories = await Schoolercategory
-      .find()
-      .select("_id name examType")
-      .sort({ createdAt: 1 })
-      .lean();
+
+  
+    const activeAdmin = await Admin1.findOne({
+      status: true
+    }).sort({ createdAt: -1 });
 
     let userDetails = [];
-    allCategories.forEach((cat, catIndex) => {
-      userDetails.push({
-        category: {
-          _id: cat._id,
-          name: cat.name,
-          examType: cat.examType || []
-        },
-        examTypes: (cat.examType || []).map((et, etIndex) => ({
-          _id: et._id,
-          name: et.name,
-          status: catIndex === 0 && etIndex === 0 ? "Eligible" : "NA",
-          result: "NA",
-          AttemptStatus: "NA"
-        }))
-      });
-    });
 
-    
+   
+    if (activeAdmin) {
+
+      const allCategories = await Schoolercategory
+        .find({ createdBy: activeAdmin._id }) 
+        .select("_id name examType")
+        .sort({ createdAt: 1 })
+        .lean();
+
+      allCategories.forEach((cat, catIndex) => {
+        userDetails.push({
+          category: {
+            _id: cat._id,
+            name: cat.name,
+            examType: cat.examType || []
+          },
+          examTypes: (cat.examType || []).map((et, etIndex) => ({
+            _id: et._id,
+            name: et.name,
+            status: catIndex === 0 && etIndex === 0 ? "Eligible" : "NA",
+            result: "NA",
+            AttemptStatus: "NA"
+          }))
+        });
+      });
+
+    } else {
+     
+      userDetails = []; 
+    }
+
     const tempUser = await Tempuser.findOneAndUpdate(
       { email },
       {
@@ -229,7 +239,9 @@ exports.signup = async (req, res) => {
     );
 
     res.status(201).json({
-      message: 'Now verify Your Email.'
+      message: activeAdmin
+        ? 'Now verify Your Email.'
+        : 'No active admin found. User created without category details. Verify your email.'
     });
 
   } catch (error) {
@@ -1353,9 +1365,9 @@ exports.updateProfile = async (req, res) => {
     if (mongoose.Types.ObjectId.isValid(className)) updatedFields.className = className;
 
     
-    if (req.files?.marksheet?.[0]) {
-      updatedFields.marksheet = req.files.marksheet[0].location; 
-    }
+   if (req.files?.marksheet?.[0]) {
+  updatedFields.marksheet = req.files.marksheet[0].key;
+}
     
 
     let classDetails = null;
@@ -1908,7 +1920,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         continue;
       }
 
-      /** 1️⃣ ADMIN FETCH */
+      
       const admin = await Admin1.findById(user.updatedBy)
         .select('startDate endDate status')
         .lean();
@@ -1920,7 +1932,7 @@ exports.getActiveSessionUsers = async (req, res) => {
 
       if (!adminStart.isValid() || !adminEnd.isValid()) continue;
 
-      /** 2️⃣ FILTER (ADMIN DATE RANGE) */
+     
       if (
         adminStart.isBefore(filterStart) ||
         adminEnd.isAfter(filterEnd)
@@ -1931,7 +1943,7 @@ exports.getActiveSessionUsers = async (req, res) => {
       const userStart = moment(user.startDate, 'DD-MM-YYYY', true);
       const userEnd   = moment(user.endDate, 'DD-MM-YYYY', true);
 
-      /** 3️⃣ ADMIN → USER DATE SYNC */
+    
       if (
         !userStart.isSame(adminStart, 'day') ||
         !userEnd.isSame(adminEnd, 'day')
@@ -1952,7 +1964,6 @@ exports.getActiveSessionUsers = async (req, res) => {
         user.status = 'yes';
       }
 
-      /** 4️⃣ STATUS EXPIRE CHECK (ADMIN DATE ONLY) */
       if (today.isAfter(adminEnd)) {
 
         if (user.status !== 'no') {
@@ -1971,7 +1982,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         }
       }
 
-      /** 5️⃣ FILE URL FORMAT */
+    
       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
       fileFields.forEach(field => {
         if (user[field]) {
@@ -1982,7 +1993,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         }
       });
 
-      /** 6️⃣ RESPONSE OBJECT */
+    
       const formattedUser = {
         ...user,
         country: user.countryId?.name || '',
@@ -1992,7 +2003,7 @@ exports.getActiveSessionUsers = async (req, res) => {
         platformDetails: user._id
       };
 
-      /** 7️⃣ FIELDS FILTER */
+    
       if (fields) {
         const requestedFields = fields.split(',');
         const limited = {};
@@ -2019,140 +2030,6 @@ exports.getActiveSessionUsers = async (req, res) => {
   }
 };
 
-
-
-// exports.getActiveSessionUsers = async (req, res) => {
-//   try {
-//     const { startDate, endDate, fields } = req.query;
-
-//     if (!startDate || !endDate) {
-//       return res.status(400).json({ message: 'Both startDate and endDate are required in DD-MM-YYYY format.' });
-//     }
-
-//     const start = moment(startDate, 'DD-MM-YYYY', true).startOf('day');
-//     const end = moment(endDate, 'DD-MM-YYYY', true).endOf('day');
-
-//     if (!start.isValid() || !end.isValid()) {
-//       return res.status(400).json({ message: 'Invalid date format. Use DD-MM-YYYY.' });
-//     }
-
-//     const baseUrl = `${req.protocol}://${req.get('host')}`;
-
-    
-//     async function getUsersFromCollection(Model, source) {
-//       const users = await Model.find({
-//         startDate: { $exists: true, $ne: '' },
-//         endDate: { $exists: true, $ne: '' }
-//       })
-//         .populate('cityId', 'name')
-//         .populate('stateId', 'name')
-//         .populate('countryId', 'name')
-//         .lean();
-
-//       return users
-//         .filter(user => {
-//           const userStart = moment(user.startDate, 'DD-MM-YYYY', true).startOf('day');
-//           const userEnd = moment(user.endDate, 'DD-MM-YYYY', true).endOf('day');
-//           if (!userStart.isValid() || !userEnd.isValid()) return false;
-//           return userStart.isSameOrAfter(start) && userEnd.isSameOrBefore(end);
-//         })
-//         .map(user => ({ ...user, _source: source }));  
-//     }
-
-
-//     const [usersFromUser, usersFromUserHistory] = await Promise.all([
-//       getUsersFromCollection(User, 'User'),
-//       getUsersFromCollection(UserHistory, 'UserHistory')
-//     ]);
-
-    
-//     const combinedMap = new Map();
-//     [...usersFromUser, ...usersFromUserHistory].forEach(user => {
-//       combinedMap.set(user._id.toString(), user);
-//     });
-//     const combinedUsers = Array.from(combinedMap.values());
-
-    
-//     const enrichedUsers = await Promise.all(combinedUsers.map(async (user) => {
-//       let classData = null;
-//       let classId = user.className;
-
-//       if (mongoose.Types.ObjectId.isValid(classId)) {
-//         const school = await School.findById(classId);
-//         const college = school ? null : await College.findById(classId);
-//         const institution = school || college;
-
-//         if (institution && institution.price != null) {
-//           classData = {
-//             id: classId,
-//             name: institution.name
-//           };
-//         } else {
-//           classId = null;
-//         }
-//       }
-
-//       const fileFields = ['aadharCard', 'marksheet', 'otherDocument', 'photo'];
-//       fileFields.forEach(field => {
-//         if (user[field]) {
-//           const match = user[field].match(/uploads\/(.+)$/);
-//           if (match && match[1]) {
-//             user[field] = `${baseUrl}/uploads/${match[1]}`;
-//           }
-//         }
-//       });
-
-     
-//       let idToUse = user._id.toString();
-//       if (user._source === 'UserHistory' && user.originalUserId) {
-//         idToUse = user.originalUserId.toString();
-//       }
-
-     
-//       const currentIST = moment().tz("Asia/Kolkata").startOf('day');
-//       const userEndDate = moment(user.endDate, 'DD-MM-YYYY', true).startOf('day');
-
-//       if (currentIST.isAfter(userEndDate) && user.status !== 'no') {
-//         await User.updateOne({ _id: user._id }, { $set: { status: 'no' } });
-//         user.status = 'no'; 
-//       }
-
-//       const formatted = {
-//         ...user,
-//         _id: idToUse,
-//         className: classData ? classData.id : null,
-//         classOrYear: classData ? classData.name : null,
-//         country: user.countryId?.name || '',
-//         state: user.stateId?.name || '',
-//         city: user.cityId?.name || '',
-//         platformDetails: idToUse
-//       };
-
-//       if (fields) {
-//         const requestedFields = fields.split(',');
-//         const limited = {};
-//         requestedFields.forEach(f => {
-//           if (formatted.hasOwnProperty(f)) {
-//             limited[f] = formatted[f];
-//           }
-//         });
-//         return limited;
-//       }
-
-//       return formatted;
-//     }));
-
-//     res.status(200).json({
-//       message: 'Filtered users fully inside session range from User and UserHistory.',
-//       count: enrichedUsers.length,
-//       users: enrichedUsers
-//     });
-
-//   } catch (error) {
-//     console.error('Error filtering users by session range:', error);
-//     res.status(500).json({ message: error.message });
-//   }
-// };
 
 
 exports.getUserHistories = async (req, res) => {
@@ -2588,6 +2465,7 @@ exports.getCategoriesFromUsers = async (req, res) => {
 //   }
 // };
 
+
 exports.userforAdmin = async (req, res) => {
   try {
     const adminId = req.user._id;
@@ -2637,24 +2515,30 @@ exports.userforAdmin = async (req, res) => {
       .populate("updatedBy", "email name role");
 
     const userIds = users.map(u => u._id);
-
     const groups = await userexamGroup.find({
       members: { $in: userIds }
     })
+      .populate({
+        path: "category",
+        match: { createdBy: adminId },
+        select: "_id name"
+      })
       .sort({ createdAt: -1 })
-      .populate("category", "_id name")
       .lean();
 
     const userGroupCategoryMap = {};
     groups.forEach(g => {
+      if (!g.category) return; 
+
       g.members.forEach(uid => {
-        if (!userGroupCategoryMap[uid] && g.category) {
+        if (!userGroupCategoryMap[uid]) {
           userGroupCategoryMap[uid] = g.category;
         }
       });
     });
-
-    const defaultCategory = await Schoolercategory.findOne()
+    const defaultCategory = await Schoolercategory.findOne({
+      createdBy: adminId
+    })
       .select("_id name")
       .sort({ createdAt: 1 })
       .lean();
@@ -2688,7 +2572,6 @@ exports.userforAdmin = async (req, res) => {
     let finalUsers = [];
 
     for (let user of users) {
-
       let includeUser = false;
 
       if (user.startDate && user.endDate) {
@@ -2700,7 +2583,10 @@ exports.userforAdmin = async (req, res) => {
         }
       } else if (user.createdAt) {
         const createdAt = moment(user.createdAt);
-        if (createdAt.isSameOrAfter(adminStart) && createdAt.isSameOrBefore(adminEnd)) {
+        if (
+          createdAt.isSameOrAfter(adminStart) &&
+          createdAt.isSameOrBefore(adminEnd)
+        ) {
           includeUser = true;
         }
       }
@@ -2719,11 +2605,8 @@ exports.userforAdmin = async (req, res) => {
           classOrYear = classDetails.name;
         }
       }
-
       let category =
-        userGroupCategoryMap[user._id] ||
-        defaultCategory ||
-        { _id: null, name: "NA" };
+        userGroupCategoryMap[user._id] || defaultCategory || null;
 
       let computedSchoolershipstatus = "NA";
 
@@ -2746,7 +2629,6 @@ exports.userforAdmin = async (req, res) => {
         if (finalistMap[key]) computedSchoolershipstatus = "Finalist";
       }
 
-      // 🔹 Base user object
       let userObj = {
         _id: user._id,
         firstName: user.firstName,
@@ -2772,22 +2654,20 @@ exports.userforAdmin = async (req, res) => {
         startDate: user.startDate,
         endDate: user.endDate,
         session: user.session,
-        classOrYear
+        classOrYear,
+        category: user.className ? (category || null) : null,
+  schoolershipstatus: user.className ? computedSchoolershipstatus : null
       };
-
-      
-      if (user.className) {
-        userObj.schoolershipstatus = computedSchoolershipstatus;
-        userObj.category = category;
-      }
 
       finalUsers.push(userObj);
     }
 
     if (categoryId) {
       const categoriesArray = categoryId.split(",");
-      finalUsers = finalUsers.filter(u =>
-        u.category?._id && categoriesArray.includes(u.category._id.toString())
+      finalUsers = finalUsers.filter(
+        u =>
+          u.category?._id &&
+          categoriesArray.includes(u.category._id.toString())
       );
     }
 
@@ -3527,16 +3407,12 @@ exports.deleteUserExamData = async (req, res) => {
 exports.getClassTimeline = async (req, res) => {
   try {
     const userId = req.user.id;
-
-    // 🔹 USER
     const user = await User.findById(userId)
       .populate('updatedBy', 'session startDate endDate');
 
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
-
-    // 🔹 USER HISTORY
     const history = await UserHistory.find({
       originalUserId: user._id
     })
@@ -3544,8 +3420,6 @@ exports.getClassTimeline = async (req, res) => {
       .sort({ clonedAt: -1 });
 
     const timeline = [];
-
-    // 🔹 CURRENT USER CLASS
     if (mongoose.Types.ObjectId.isValid(user.className)) {
       const classDetails =
         (await School.findById(user.className)) ||
@@ -3558,8 +3432,6 @@ exports.getClassTimeline = async (req, res) => {
         session: user.session || user.updatedBy?.session || ''
       });
     }
-
-    // 🔹 HISTORY CLASSES
     for (const h of history) {
       let className = '';
 
